@@ -1,0 +1,6 @@
+{
+  "name": "Mavly — AI App Builder",
+  "description": "Build apps with AI. Describe what you want, preview in real-time, deploy with one click.",
+  "permissions": [],
+  "capabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

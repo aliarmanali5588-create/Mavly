@@ -1,0 +1,896 @@
+"use client";
+
+import { useRef, useEffect, useState, useCallback } from "react";
+import { Badge } from "@/components/ui/badge";
+import {
+  Send, Square, Loader2, Bot, AlertCircle,
+  Key, FileDiff, ChevronDown, ChevronRight, ChevronUp, Paperclip, X, Check,
+  Plus, Eye, EyeOff, CheckCircle, ArrowRight, PencilIcon,
+} from "lucide-react";
+import { vcaasApi } from "@/lib/vcaas";
+import { DiffViewer } from "@/components/workspace/DiffViewer";
+import { GithubPromptButton } from "@/components/prompt/GithubPromptButton";
+import { RunOptionsMenu, RunOptionsChips, useRunOptions } from "@/components/workspace/RunOptionsMenu";
+import { AttachmentPreviews } from "@/components/workspace/AttachmentPreview";
+import { filesFromClipboard } from "@/lib/attachments";
+import { FigmaPromptButton } from "@/components/prompt/FigmaPromptButton";
+import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { ConfirmDialog } from "@/components/primitives";
+import { useT } from "@/i18n";
+import { cn } from "@/lib/utils";
+import { RunProgress } from "@/components/workspace/RunProgress";
+import { RunActivity } from "@/components/workspace/RunActivity";
+import { RestoreCodeAction } from "@/components/workspace/RestoreCodeAction";
+import type { RunProgressView } from "@/lib/run-progress";
+import { useRunClock } from "@/components/workspace/use-run-clock";
+import { uploadFilesToProjectDetailed, splitBySize, MAX_UPLOAD_MB, TOO_LARGE_ADVICE } from "@/lib/upload";
+import { toast } from "sonner";
+import type { ConversationMessage, VcaasSecret, AgentInputFile, AgentRunOptions } from "@/lib/vcaas-types";
+
+interface ChatPanelProps {
+  messages: ConversationMessage[];
+  isBuilding: boolean;
+  prompt: string;
+  setPrompt: (v: string) => void;
+  /**
+   * ⭐ `options` carries the model / effort / fast-mode choice for THIS prompt. It is
+   * `{}` unless the user opened the run-options menu, so the API's own routing applies
+   * by default — see `RunOptionsMenu`.
+   */
+  onSend: (files?: { name: string; url: string; imageDescription: string }[], options?: AgentRunOptions) => void;
+  onStop: () => void;
+  sending: boolean;
+  projectId: string;
+  projectSecrets?: VcaasSecret[];
+  /** When the in-flight run started, per `agent/status.startedAt` — the reload-proof run clock. */
+  runStartedAt?: number | null;
+  /** The engine's estimate for the in-flight run (`agent/status.expectedMinutes`); the bar fills against it. */
+  expectedMinutes?: number | null;
+  /** A new-engine project: the run options are the agent tier (Auto / Cheap / Normal / Expensive). */
+  v2?: boolean;
+  /** New engine: the live run timeline, polled by the page (`useRunProgress`). */
+  runProgress?: RunProgressView | null;
+  /** "Clear agent context": the next prompt starts a fresh agent session. */
+  onClearContext?: () => void | Promise<void>;
+
+  /**
+   * ⭐ THE ATTACHMENTS ARE THE PAGE'S, NOT THIS PANEL'S. Both composers (mobile and
+   * desktop) are mounted at once, so a list kept here would exist twice and drift;
+   * and only the page can persist it across a reload. See the workspace page.
+   */
+  attachedFiles: AgentInputFile[];
+  setAttachedFiles: React.Dispatch<React.SetStateAction<AgentInputFile[]>>;
+
+  /**
+   * ═══⭐ THE TOOL TRAY — GitHub, Figma and the visual editor live IN THE COMPOSER ═══
+   *
+   * Mirrors totalum-platform's `PromptComposer`: the row under the textarea is
+   * `attach · Figma · GitHub · edit visually`, and the header keeps only the tabs and
+   * Publish. Everything below is optional so the panel still renders on a surface that
+   * has none of it (the mobile chat, for instance, has no visual editor).
+   */
+  /** Opens the Figma modal (connect / manage). */
+  onOpenFigma?: () => void;
+  /** Tints the Figma button green and switches its popover to "add a design link". */
+  figmaConnected?: boolean;
+  /** Disconnect from the popover, without the modal. Must REJECT on failure. */
+  onDisconnectFigma?: () => void | Promise<void>;
+  /** Opens the GitHub modal (connect / manage / .env). Absent ⇒ no GitHub button. */
+  onOpenGithub?: () => void;
+  /** The button fetches its own status; this reports it up for the header. */
+  onGithubStatusChange?: (connected: boolean) => void;
+  /** "Pull from GitHub" from the popover — the workspace owns the operation. */
+  onGithubPull?: () => void;
+  githubPulling?: boolean;
+  /** Absent ⇒ no pencil. The visual editor is a desktop surface. */
+  visualEditAvailable?: boolean;
+  visualEditActive?: boolean;
+  visualEditBusy?: boolean;
+  onToggleVisualEdit?: () => void;
+
+  /**
+   * ⭐ AFTER A RESTORE. The "Restore Code" action changes the project's source
+   * on the server; the workspace owns re-reading the project, the conversation
+   * and the preview afterwards, so the panel only reports that it happened.
+   */
+  onRestored?: () => void;
+}
+
+interface MessageGroup {
+  type: "single" | "build-group";
+  messages: ConversationMessage[];
+  startMsg?: ConversationMessage;
+  finishMsg?: ConversationMessage;
+  buildMsgs?: ConversationMessage[];
+}
+
+function groupMessages(messages: ConversationMessage[]): MessageGroup[] {
+  const groups: MessageGroup[] = [];
+  let i = 0;
+  while (i < messages.length) {
+    const msg = messages[i];
+    if (msg.author === "agent" && (msg.messageType === "starting" || msg.messageType === "building")) {
+      const buildGroup: ConversationMessage[] = [];
+      let startMsg: ConversationMessage | undefined;
+      let finishMsg: ConversationMessage | undefined;
+      const buildMsgs: ConversationMessage[] = [];
+      while (i < messages.length) {
+        const current = messages[i];
+        if (current.author === "user" && buildGroup.length > 0) break;
+        buildGroup.push(current);
+        if (current.messageType === "starting") startMsg = current;
+        else if (current.messageType === "finished" || current.messageType === "error" || current.messageType === "limit-reached") { finishMsg = current; i++; break; }
+        else if (current.messageType === "building") buildMsgs.push(current);
+        i++;
+      }
+      groups.push({ type: "build-group", messages: buildGroup, startMsg, finishMsg, buildMsgs });
+    } else {
+      groups.push({ type: "single", messages: [msg] });
+      i++;
+    }
+  }
+  return groups;
+}
+
+function renderInline(text: string, keyPrefix: string = "0"): React.ReactNode[] {
+  // Split by: bold, links, inline code
+  const tokens = text.split(/(\*\*[^*]+\*\*|\[[^\]]+\]\([^)]+\)|`[^`]+`)/g);
+  return tokens.map((token, ti) => {
+    const key = `${keyPrefix}-${ti}`;
+    // Bold
+    if (token.startsWith("**") && token.endsWith("**")) {
+      return <strong key={key} className="font-semibold">{token.slice(2, -2)}</strong>;
+    }
+    // Link [text](url)
+    const linkMatch = token.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
+    if (linkMatch) {
+      return <a key={key} href={linkMatch[2]} target="_blank" rel="noopener noreferrer" className="text-foreground underline underline-offset-2 hover:opacity-80 transition-opacity">{linkMatch[1]}</a>;
+    }
+    // Inline code
+    if (token.startsWith("`") && token.endsWith("`")) {
+      return <code key={key} className="bg-gray-100 dark:bg-gray-800 px-1 py-0.5 rounded text-xs font-mono">{token.slice(1, -1)}</code>;
+    }
+    return <span key={key}>{token}</span>;
+  });
+}
+
+function FormattedText({ text }: { text: string }) {
+  const parts = text.split(/(```[\s\S]*?```)/g);
+  return (
+    <div className="text-[15px] text-gray-700 dark:text-gray-300 leading-relaxed space-y-1">
+      {parts.map((part, i) => {
+        if (part.startsWith("```") && part.endsWith("```")) {
+          const code = part.slice(3, -3).replace(/^\w+\n/, "");
+          return <pre key={i} className="bg-gray-900 text-gray-200 rounded-lg p-3 text-xs font-mono overflow-x-auto my-2">{code}</pre>;
+        }
+        return part.split("\n").map((line, li) => {
+          const lineKey = `${i}-${li}`;
+          if (line.startsWith("# ")) return <h3 key={lineKey} className="font-semibold text-base mt-2">{renderInline(line.slice(2), lineKey)}</h3>;
+          if (line.startsWith("## ")) return <h4 key={lineKey} className="font-semibold text-[15px] mt-1.5">{renderInline(line.slice(3), lineKey)}</h4>;
+          if (line.startsWith("### ")) return <h5 key={lineKey} className="font-semibold text-sm mt-1">{renderInline(line.slice(4), lineKey)}</h5>;
+          if (line.startsWith("- ") || line.startsWith("* ")) return <div key={lineKey} className="flex gap-1.5"><span className="text-gray-400 shrink-0">•</span><span>{renderInline(line.slice(2), lineKey)}</span></div>;
+          const numberedMatch = line.match(/^(\d+)\.\s+(.*)$/);
+          if (numberedMatch) return <div key={lineKey} className="flex gap-1.5"><span className="text-gray-400 shrink-0 min-w-[1.2em] text-right">{numberedMatch[1]}.</span><span>{renderInline(numberedMatch[2], lineKey)}</span></div>;
+          if (line.trim() === "") return <div key={lineKey} className="h-1" />;
+          return <p key={lineKey}>{renderInline(line, lineKey)}</p>;
+        });
+      })}
+    </div>
+  );
+}
+
+// --- User Message (with large-text preview + "See all") ---
+// When a user pastes/uploads a very large block of text, we don't want the chat
+// bubble to become a giant wall. Instead we show a generous preview (not too
+// short) and a toggle to expand/collapse the full content on demand.
+const USER_MSG_PREVIEW_CHARS = 550; // length of the preview shown when collapsed
+const USER_MSG_TRUNCATE_AT = 700;   // only truncate messages longer than this
+
+/**
+ * ⭐ WHAT WAS SENT WITH A PAST PROMPT — the same chips as the composer, read-only.
+ * An image shows itself, anything else shows its kind plate; the whole chip opens the
+ * file in a new tab. See `AttachmentPreview.tsx`.
+ */
+function UserAttachments({ files }: { files: AgentInputFile[] }) {
+  if (!files || files.length === 0) return null;
+  return (
+    <AttachmentPreviews
+      className="mt-2"
+      compact
+      items={files.map((f) => ({ name: f.name, url: f.url }))}
+    />
+  );
+}
+
+function UserMessage({ text, files }: { text: string; files?: AgentInputFile[] }) {
+  const [expanded, setExpanded] = useState(false);
+  const isLong = text.length > USER_MSG_TRUNCATE_AT;
+
+  // Cut at a whitespace boundary near the limit so we don't slice a word in half.
+  const preview = (() => {
+    if (!isLong) return text;
+    let cut = text.slice(0, USER_MSG_PREVIEW_CHARS);
+    const lastBreak = Math.max(cut.lastIndexOf(" "), cut.lastIndexOf("\n"));
+    if (lastBreak > USER_MSG_PREVIEW_CHARS * 0.6) cut = cut.slice(0, lastBreak);
+    return cut.trimEnd();
+  })();
+
+  return (
+    <div className="flex justify-end">
+      <div className="max-w-[88%] rounded-2xl rounded-br-sm px-4 py-2.5" style={{ background: "var(--user-bubble, #eeecea)" }}>
+        {text.trim() && (
+          <p className="text-[15px] leading-relaxed whitespace-pre-wrap break-words text-gray-800 dark:text-gray-200">
+            {isLong && !expanded ? (
+              <>
+                {preview}
+                <span className="text-gray-400">…</span>
+              </>
+            ) : (
+              text
+            )}
+          </p>
+        )}
+        {files && files.length > 0 && <UserAttachments files={files} />}
+        {isLong && (
+          <button
+            onClick={() => setExpanded((v) => !v)}
+            className="mt-1.5 inline-flex items-center gap-1 text-xs font-medium text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
+          >
+            {expanded ? (
+              <>
+                <ChevronDown className="w-3 h-3 rotate-180" /> {"Show less"}
+              </>
+            ) : (
+              <>
+                <ChevronDown className="w-3 h-3" /> {"See all"}
+                <span className="text-gray-400">· {text.length.toLocaleString()} {"characters"}</span>
+              </>
+            )}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// --- Interactive Secret Keys Form ---
+interface SecretEntry {
+  secretName: string;
+  description: string;
+  entries: { value: string; environment: "both" | "development" | "production"; showValue: boolean }[];
+}
+
+function SecretKeysForm({ secretKeysNeeded, projectId, onTellAi, projectSecrets }: {
+  secretKeysNeeded: Record<string, { isProvided: boolean; description: string }>;
+  projectId: string;
+  onTellAi: (count: number) => void;
+  projectSecrets?: VcaasSecret[];
+}) {
+
+  // Merge isProvided with current project secrets — if a secret exists in projectSecrets, treat it as provided
+  const existingSecretNames = new Set((projectSecrets || []).map((s) => s.secretName));
+  const mergedEntries = Object.entries(secretKeysNeeded).map(([key, val]) => {
+    const isActuallyProvided = val.isProvided || existingSecretNames.has(key);
+    return [key, { ...val, isProvided: isActuallyProvided }] as [string, { isProvided: boolean; description: string }];
+  });
+
+  const unprovided = mergedEntries.filter(([, v]) => !v.isProvided);
+  const provided = mergedEntries.filter(([, v]) => v.isProvided);
+
+  const [secrets, setSecrets] = useState<SecretEntry[]>(() =>
+    unprovided.map(([key, val]) => ({
+      secretName: key,
+      description: val.description,
+      entries: [{ value: "", environment: "both", showValue: false }],
+    }))
+  );
+  const [submitting, setSubmitting] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+
+  // No unprovided secrets → nothing to render (all set)
+  if (unprovided.length === 0 && provided.length > 0) {
+    return (
+      <div className="mt-3 p-3 rounded-xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50/50 dark:bg-emerald-900/10">
+        <div className="flex items-center gap-2 mb-2">
+          <CheckCircle className="w-4 h-4 text-emerald-500" />
+          <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-400">{"Required secrets"}</span>
+        </div>
+        {provided.map(([key]) => (
+          <div key={key} className="flex items-center gap-2 text-xs mt-1.5">
+            <code className="bg-emerald-100 dark:bg-emerald-900/30 px-1.5 py-0.5 rounded font-mono text-[10px] text-emerald-800 dark:text-emerald-300">{key}</code>
+            <Badge className="text-[9px] h-3.5 border-0 bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400">{"Already set"}</Badge>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  if (unprovided.length === 0) return null;
+
+  const updateEntry = (si: number, ei: number, field: string, val: string | boolean) => {
+    setSecrets(prev => prev.map((s, i) => i !== si ? s : {
+      ...s, entries: s.entries.map((e, j) => j !== ei ? e : { ...e, [field]: val })
+    }));
+  };
+
+  const addEntry = (si: number) => {
+    setSecrets(prev => prev.map((s, i) => {
+      if (i !== si || s.entries.length >= 2) return s;
+      // Pick a different environment than the first
+      const firstEnv = s.entries[0].environment;
+      let newEnv: "development" | "production" = "production";
+      if (firstEnv === "production") newEnv = "development";
+      else if (firstEnv === "both") newEnv = "production";
+      return { ...s, entries: [...s.entries, { value: "", environment: newEnv, showValue: false }] };
+    }));
+  };
+
+  const removeEntry = (si: number, ei: number) => {
+    setSecrets(prev => prev.map((s, i) => {
+      if (i !== si || s.entries.length <= 1) return s;
+      return { ...s, entries: s.entries.filter((_, j) => j !== ei) };
+    }));
+  };
+
+  const allFilled = secrets.every(s => s.entries.every(e => e.value.trim().length > 0));
+
+  const handleSubmit = async () => {
+    if (!allFilled) return;
+    setSubmitting(true);
+    let successCount = 0;
+    for (const secret of secrets) {
+      for (const entry of secret.entries) {
+        const res = await vcaasApi.secrets.create(projectId, {
+          secretName: secret.secretName,
+          secretValue: entry.value.trim(),
+          environment: entry.environment,
+        });
+        if (res.ok) successCount++;
+      }
+    }
+    setSubmitting(false);
+    setSubmitted(true);
+  };
+
+  const envLabel = (env: string) => {
+    if (env === "development") return "Dev";
+    if (env === "production") return "Prod";
+    return "Dev + Prod";
+  };
+
+  if (submitted) {
+    const totalKeys = secrets.length;
+    return (
+      <div className="mt-3 p-3 rounded-xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50/50 dark:bg-emerald-900/10">
+        <div className="flex items-center gap-2 mb-2">
+          <CheckCircle className="w-4 h-4 text-emerald-500" />
+          <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-400">{"Secret keys saved!"}</span>
+        </div>
+        {secrets.map((s) => (
+          <div key={s.secretName} className="flex items-center gap-2 text-xs mt-1">
+            <code className="bg-emerald-100 dark:bg-emerald-900/30 px-1.5 py-0.5 rounded font-mono text-[10px] text-emerald-800 dark:text-emerald-300">{s.secretName}</code>
+            <span className="text-emerald-500 text-[10px]">{s.entries.map(e => envLabel(e.environment)).join(", ")}</span>
+          </div>
+        ))}
+        <button
+          onClick={() => onTellAi(totalKeys)}
+          className="mt-3 w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-gray-900 dark:bg-white text-white dark:text-gray-900 text-xs font-medium hover:bg-gray-800 dark:hover:bg-gray-100 transition-colors"
+        >
+          <ArrowRight className="w-3.5 h-3.5" />
+          {"Tell AI secrets are ready"}
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-3 rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50/30 dark:bg-amber-900/10 overflow-hidden">
+      <div className="flex items-center gap-2 px-3 pt-3 pb-1">
+        <Key className="w-4 h-4 text-amber-500" />
+        <span className="text-xs font-semibold text-amber-700 dark:text-amber-400">{"Required secrets"}</span>
+        <Badge className="text-[9px] h-3.5 border-0 bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400 ml-auto">{unprovided.length} {"Missing".toLowerCase()}</Badge>
+      </div>
+
+      {/* Already provided keys */}
+      {provided.length > 0 && (
+        <div className="px-3 pt-1">
+          {provided.map(([key]) => (
+            <div key={key} className="flex items-center gap-2 text-xs mt-1">
+              <code className="bg-emerald-100 dark:bg-emerald-900/30 px-1.5 py-0.5 rounded font-mono text-[10px] text-emerald-800 dark:text-emerald-300">{key}</code>
+              <Badge className="text-[9px] h-3.5 border-0 bg-emerald-100 text-emerald-700">{"Already set"}</Badge>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Secret inputs */}
+      <div className="p-3 space-y-3">
+        {secrets.map((secret, si) => (
+          <div key={secret.secretName} className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 p-3">
+            <div className="mb-2">
+              <code className="text-xs font-mono font-semibold text-gray-800 dark:text-gray-200">{secret.secretName}</code>
+              <p className="text-[11px] text-gray-400 mt-0.5 leading-snug">{secret.description}</p>
+            </div>
+
+            {secret.entries.map((entry, ei) => (
+              <div key={ei} className="mt-2">
+                {secret.entries.length > 1 && (
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-[10px] text-gray-400 font-medium">Environment {ei + 1}</span>
+                    <button onClick={() => removeEntry(si, ei)} className="text-[10px] text-red-400 hover:text-red-600 transition-colors">
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                )}
+                <div className="flex gap-2">
+                  <div className="flex-1 relative">
+                    <input
+                      type={entry.showValue ? "text" : "password"}
+                      value={entry.value}
+                      onChange={(e) => updateEntry(si, ei, "value", e.target.value)}
+                      placeholder={"Enter value..."}
+                      className="w-full h-8 px-2.5 pr-8 text-xs rounded-md border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-800 text-gray-800 dark:text-gray-200 outline-none focus:ring-1 focus:ring-amber-300 font-mono"
+                    />
+                    <button
+                      onClick={() => updateEntry(si, ei, "showValue", !entry.showValue)}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                    >
+                      {entry.showValue ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+                    </button>
+                  </div>
+                  <select
+                    value={entry.environment}
+                    onChange={(e) => updateEntry(si, ei, "environment", e.target.value)}
+                    className="h-8 px-2 text-[11px] rounded-md border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-800 text-gray-700 dark:text-gray-300 outline-none focus:ring-1 focus:ring-amber-300 min-w-[90px]"
+                  >
+                    <option value="both">Dev + Prod</option>
+                    <option value="development">Dev only</option>
+                    <option value="production">Prod only</option>
+                  </select>
+                </div>
+              </div>
+            ))}
+
+            {secret.entries.length < 2 && (
+              <button
+                onClick={() => addEntry(si)}
+                className="flex items-center gap-1 mt-2 text-[10px] text-amber-600 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-300 transition-colors"
+              >
+                <Plus className="w-3 h-3" />
+                {"Add another environment"}
+              </button>
+            )}
+          </div>
+        ))}
+      </div>
+
+      <div className="px-3 pb-3">
+        <button
+          onClick={handleSubmit}
+          disabled={!allFilled || submitting}
+          className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-amber-500 hover:bg-amber-600 disabled:bg-gray-300 dark:disabled:bg-gray-700 text-white text-xs font-medium transition-colors disabled:cursor-not-allowed"
+        >
+          {submitting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Key className="w-3.5 h-3.5" />}
+          {submitting ? "Saving..." : "Save Secret Keys"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// --- Build Group ---
+function BuildGroup({ group, projectId, onTellAi, projectSecrets, onRestored }: { group: MessageGroup; projectId: string; onTellAi: (count: number) => void; projectSecrets?: VcaasSecret[]; onRestored?: () => void }) {
+  const [expanded, setExpanded] = useState(false);
+  const [diffOpen, setDiffOpen] = useState(false);
+  const hasBuildMsgs = (group.buildMsgs?.length || 0) > 0;
+  const isComplete = !!group.finishMsg;
+
+  return (
+    <div className="space-y-1">
+      {hasBuildMsgs && (
+        <button onClick={() => setExpanded(!expanded)} className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 py-0.5 transition-colors">
+          {expanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+          {isComplete ? `${group.buildMsgs!.length} ${"build steps"}` : `${"Building..."} (${group.buildMsgs!.length})`}
+          {!isComplete && <Loader2 className="w-3 h-3 animate-spin text-gray-400" />}
+        </button>
+      )}
+      {expanded && group.buildMsgs?.map((msg, idx) => (
+        <div key={idx} className="text-xs text-gray-400 dark:text-gray-500 pl-4 py-0.5 border-l-2 border-gray-100 dark:border-gray-700">{msg.message}</div>
+      ))}
+
+      {/* Live current build step — always visible while the run is in progress,
+          shows ONLY the latest step so the user sees progress without expanding. */}
+      {!isComplete && hasBuildMsgs && !expanded && (
+        <div className="flex items-start gap-1.5 text-xs text-gray-500 dark:text-gray-400 pl-4 py-0.5">
+          <Loader2 className="w-3 h-3 animate-spin text-gray-400 mt-0.5 shrink-0" />
+          <span className="min-w-0 break-words">{group.buildMsgs![group.buildMsgs!.length - 1].message}</span>
+        </div>
+      )}
+
+      {/* Finish message - NO background at all */}
+      {group.finishMsg && (
+        <div className="py-1">
+          {group.finishMsg.messageType === "error" ? (
+            <div className="flex items-start gap-2">
+              <AlertCircle className="w-4 h-4 text-red-500 mt-0.5 shrink-0" />
+              <FormattedText text={group.finishMsg.message} />
+            </div>
+          ) : (
+            <div>
+              <FormattedText text={group.finishMsg.message} />
+              {/* Checkmark + Completed at the end */}
+              <div className="flex items-center gap-1.5 mt-3 text-sm text-emerald-600 dark:text-emerald-400">
+                <Check className="w-4 h-4" />
+                <span className="font-medium">{"Completed"}</span>
+              </div>
+            </div>
+          )}
+          {/* Interactive Secret Keys Form */}
+          {group.finishMsg.secretKeysNeeded && Object.keys(group.finishMsg.secretKeysNeeded).length > 0 && (
+            <SecretKeysForm
+              secretKeysNeeded={group.finishMsg.secretKeysNeeded}
+              projectId={projectId}
+              onTellAi={onTellAi}
+              projectSecrets={projectSecrets}
+            />
+          )}
+          {group.finishMsg.gitDiffUrl && (
+            <>
+              <button
+                type="button"
+                onClick={() => setDiffOpen(true)}
+                className="inline-flex items-center gap-1 mt-2 text-xs text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+              >
+                <FileDiff className="w-2.5 h-2.5" /> {"View changes"}
+              </button>
+              {/*
+                ⭐ BOTH ROUTES, NOT THE URL ALONE — see `DiffSource` in `DiffViewer.tsx`.
+                The stored patch gets deleted and the sandbox goes to sleep, so the viewer
+                falls back to rebuilding the diff from the version's commit when it has to.
+              */}
+              <DiffViewer
+                open={diffOpen}
+                onOpenChange={setDiffOpen}
+                source={diffOpen ? { projectId, url: group.finishMsg.gitDiffUrl, versionId: group.finishMsg.versionId } : null}
+              />
+            </>
+          )}
+          {/*
+            ⭐ THE RESTORE ACTION, ON THE EXECUTION THAT CREATED IT. The snapshot id
+            is persisted with the message, so this button is the same button after a
+            reload — and a run that changed no files carries no id, so it has no
+            button.
+          */}
+          {group.finishMsg.restoreSnapshotId ? (
+            <RestoreCodeAction
+              className="mt-2"
+              projectId={projectId}
+              snapshotId={group.finishMsg.restoreSnapshotId}
+              onRestored={onRestored}
+            />
+          ) : null}
+        </div>
+      )}
+      {!isComplete && !hasBuildMsgs && group.startMsg && (
+        <div className="flex items-center gap-2 text-[15px] text-gray-500 py-1"><Loader2 className="w-4 h-4 animate-spin" /><span>{group.startMsg.message}</span></div>
+      )}
+    </div>
+  );
+}
+
+export function ChatPanel({
+  messages, isBuilding, prompt, setPrompt, onSend, onStop, sending, projectId, projectSecrets,
+  runStartedAt = null, expectedMinutes = null, v2 = false, runProgress = null, onClearContext,
+  attachedFiles, setAttachedFiles,
+  onOpenFigma, figmaConnected = false, onDisconnectFigma,
+  onOpenGithub, onGithubStatusChange, onGithubPull, githubPulling = false,
+  visualEditAvailable = false, visualEditActive = false, visualEditBusy = false, onToggleVisualEdit,
+  onRestored,
+}: ChatPanelProps) {
+  const t = useT();
+  /**
+   * The platform's run clock, copied: prefers the server's `startedAt`, keeps a local
+   * stamp per project, so the bar resumes at the right time after a reload.
+   */
+  const { elapsedMs } = useRunClock({ projectId, isRunning: isBuilding, startedAtFromStream: runStartedAt });
+  /** Per-project, per-tab memory of the picker — the platform's hook, copied. */
+  const [runOptions, setRunOptions] = useRunOptions(projectId);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [uploading, setUploading] = useState(false);
+  /**
+   * ⚠️ STOPPING IS CONFIRMED, BECAUSE IT IS NOT A PAUSE. The button sits exactly where
+   * Send sits, a millimetre from the key people press by reflex, and the run it kills
+   * has already been paid for and cannot be resumed — only started again.
+   */
+  const [confirmingStop, setConfirmingStop] = useState(false);
+
+  // --- Load-on-demand for long conversations ---
+  // Rather than rendering every message group (which gets heavy on long chats),
+  // we only render the most recent window and let the user load older ones.
+  const INITIAL_VISIBLE_GROUPS = 12;
+  const LOAD_STEP = 12;
+  const [visibleCount, setVisibleCount] = useState(INITIAL_VISIBLE_GROUPS);
+
+  useEffect(() => { if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight; }, [messages, isBuilding]);
+  useEffect(() => { if (textareaRef.current) { textareaRef.current.style.height = "auto"; textareaRef.current.style.height = Math.min(textareaRef.current.scrollHeight, 200) + "px"; } }, [prompt]);
+
+  const handleKeyDown = (e: React.KeyboardEvent) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); } };
+  const handleSend = () => { if (!prompt.trim() && attachedFiles.length === 0) return; onSend(attachedFiles.length > 0 ? attachedFiles : undefined, runOptions); setAttachedFiles([]); };
+
+  const handleTellAiSecretsReady = useCallback((count: number) => {
+    const msg = `I have already filled and saved ${count} secret key${count > 1 ? "s" : ""}. Please continue.`;
+    setPrompt(msg);
+    // Auto-send after a tiny delay so the prompt is set
+    setTimeout(() => { onSend(); }, 100);
+  }, [setPrompt, onSend]);
+
+  /**
+   * ⭐ A FIGMA LINK LANDS IN THE BOX, NOT IN A SEND. The popover hands us either the
+   * bare url (when the user has already written something) or a full instruction (when
+   * the box is empty) — see `FigmaPromptButton.add()`. Either way it is appended, the
+   * user's own words are never rewritten, and the caret goes to the end.
+   */
+  const appendToPrompt = useCallback((text: string) => {
+    const current = prompt;
+    const separator = current.length === 0 || /\s$/.test(current) ? "" : " ";
+    setPrompt(current + separator + text);
+    requestAnimationFrame(() => {
+      const el = textareaRef.current;
+      if (el) { el.focus(); const len = el.value.length; el.setSelectionRange(len, len); }
+    });
+  }, [prompt, setPrompt]);
+
+  /**
+   * One path for the picker and the paste, so both behave identically.
+   *
+   * ⚠️ A FILE THAT DID NOT UPLOAD IS SAID OUT LOUD. Selecting several photos used to
+   * attach only the ones that happened to be small: everything over the upload size
+   * limit was refused, dropped, and never mentioned, so the chips silently disagreed
+   * with what the user picked. Each failure now names its file and its reason.
+   */
+  const uploadAndAttach = useCallback(async (files: File[]) => {
+    if (files.length === 0) return;
+
+    /**
+     * ⭐ TOO BIG IS ANSWERED BEFORE THE UPLOAD, NOT AFTER. The API refuses these anyway,
+     * so sending them means seconds of pointless upload before the same answer — and on
+     * a phone connection a 20 MB file is a long wait for a refusal.
+     */
+    const { allowed, tooLarge } = splitBySize(files);
+    if (tooLarge.length === 1) {
+      toast.error(t("prompt.attachments.tooLarge", { name: tooLarge[0].name, size: MAX_UPLOAD_MB }), { description: TOO_LARGE_ADVICE });
+    } else if (tooLarge.length > 1) {
+      toast.error(t("prompt.attachments.tooLargeMany", { count: tooLarge.length, size: MAX_UPLOAD_MB }), { description: TOO_LARGE_ADVICE });
+    }
+    if (allowed.length === 0) return;
+
+    setUploading(true);
+    // Real multipart upload (with retry) so the agent receives publicly-fetchable URLs.
+    const { uploaded, failed } = await uploadFilesToProjectDetailed(projectId, allowed);
+    if (uploaded.length > 0) setAttachedFiles((prev) => [...prev, ...uploaded]);
+    for (const failure of failed) toast.error(`${failure.name}: ${failure.reason}`);
+    setUploading(false);
+  }, [projectId, setAttachedFiles, t]);
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files ? Array.from(e.target.files) : [];
+    e.target.value = "";
+    await uploadAndAttach(files);
+  };
+
+  /**
+   * ⭐ ⌘/Ctrl+V ATTACHES WHAT IS ON THE CLIPBOARD. A screenshot, or a file copied in the
+   * file manager, is uploaded and attached instead of being lost.
+   *
+   * ⚠️ ONLY WHEN THE CLIPBOARD IS NOT REALLY TEXT. `filesFromClipboard` (the platform's,
+   * copied) reads BOTH `files` and `items`, and refuses when a meaningful `text/plain`
+   * is present — otherwise a Word or Excel paste, which carries its own image payload,
+   * would attach a picture of what the user meant to type.
+   */
+  const handlePaste = useCallback((event: React.ClipboardEvent) => {
+    if (isBuilding) return;
+    const pasted = filesFromClipboard(event.clipboardData);
+    if (!pasted.length) return;
+    event.preventDefault();
+    void uploadAndAttach(pasted);
+  }, [isBuilding, uploadAndAttach]);
+
+  const messageGroups = groupMessages(messages);
+  const hiddenCount = Math.max(0, messageGroups.length - visibleCount);
+  // Keep original indices as keys so React reuses nodes correctly across loads.
+  const visibleGroups = messageGroups
+    .map((group, gi) => ({ group, gi }))
+    .slice(hiddenCount);
+
+  const handleLoadEarlier = () => {
+    const el = scrollRef.current;
+    const prevHeight = el ? el.scrollHeight : 0;
+    setVisibleCount((c) => c + LOAD_STEP);
+    // Preserve the scroll position so the viewport doesn't jump after older
+    // groups are prepended.
+    requestAnimationFrame(() => {
+      if (el) el.scrollTop += el.scrollHeight - prevHeight;
+    });
+  };
+
+  return (
+    <div className="flex flex-col h-full bg-inherit">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
+        {messages.length === 0 && !isBuilding && (
+          <div className="flex flex-col items-center justify-center h-full text-center px-4">
+            <div className="w-10 h-10 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center mb-3"><Bot className="w-5 h-5 text-gray-400" /></div>
+            <p className="text-[15px] text-gray-500 dark:text-gray-400 mb-1">{"What do you want to build?"}</p>
+            <p className="text-sm text-gray-400">{"Describe your idea below"}</p>
+          </div>
+        )}
+
+        {hiddenCount > 0 && (
+          <div className="flex justify-center pb-1">
+            <button
+              onClick={handleLoadEarlier}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+            >
+              <ChevronUp className="w-3.5 h-3.5" />
+              {"Load earlier messages"}
+              <span className="text-gray-400">· {hiddenCount}</span>
+            </button>
+          </div>
+        )}
+
+        {visibleGroups.map(({ group, gi }) => {
+          if (group.type === "build-group") return <BuildGroup key={gi} group={group} projectId={projectId} onTellAi={handleTellAiSecretsReady} projectSecrets={projectSecrets} onRestored={onRestored} />;
+          const msg = group.messages[0];
+          if (msg.author === "user") {
+            return <UserMessage key={gi} text={msg.message} files={msg.inputFiles} />;
+          }
+          // Agent message - NO background
+          return (
+            <div key={gi} className="max-w-full">
+              <FormattedText text={msg.message} />
+              {/*
+                ⭐ THE RESTORE ACTION ON A STANDALONE EXECUTION MESSAGE. A run that
+                starts from an empty conversation writes one "finished" message with
+                no build group around it, and the action has to be there too.
+              */}
+              {msg.restoreSnapshotId ? (
+                <RestoreCodeAction
+                  className="mt-2"
+                  projectId={projectId}
+                  snapshotId={msg.restoreSnapshotId}
+                  onRestored={onRestored}
+                />
+              ) : null}
+            </div>
+          );
+        })}
+
+        {isBuilding && (
+          <div className="py-2">
+            {/* New engine: `RunActivity` below carries the live status, so no second "Building…" line. */}
+            {!v2 && <div className="flex items-center gap-2">
+              <div className="flex gap-1">
+                <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
+                <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
+                <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
+              </div>
+              <span className="text-sm text-gray-400">{"Building..."}</span>
+            </div>}
+            {/* The platform's run progress bar, copied verbatim — see `RunProgress`. */}
+            <RunProgress elapsedMs={elapsedMs} expectedMinutes={expectedMinutes} />
+            {v2 && <RunActivity progress={runProgress} />}
+          </div>
+        )}
+      </div>
+
+      {/*
+        ⭐ THE CHOICE IS VISIBLE AT THE MOMENT OF SENDING. A Sonnet or fast-mode prompt is
+        never sent by surprise, and each chip's × clears just that option.
+      */}
+      <RunOptionsChips value={runOptions} onChange={setRunOptions} disabled={isBuilding} className="px-4 pb-1" v2={v2} />
+
+      {/* ⭐ The attachments, with a real preview for images and a kind plate otherwise. */}
+      <AttachmentPreviews
+        className="px-3 pb-1"
+        compact
+        items={attachedFiles.map((f) => ({ name: f.name, url: f.url }))}
+        onRemove={(index) => setAttachedFiles((prev) => prev.filter((_, j) => j !== index))}
+      />
+
+      <div className="shrink-0 px-3 pb-3 pt-2">
+        <div className="rounded-2xl overflow-hidden transition-all focus-within:ring-2 focus-within:ring-gray-200 dark:focus-within:ring-gray-600" style={{ background: "var(--textarea-bg, #f3f1ee)" }}>
+          <textarea data-chat-input ref={textareaRef} value={prompt} onChange={(e) => setPrompt(e.target.value)} onKeyDown={handleKeyDown} onPaste={handlePaste}
+            placeholder={isBuilding ? "Agent is working..." : "Ask anything..."}
+            className="w-full bg-transparent border-0 resize-none text-base outline-none placeholder:text-gray-400 min-h-[48px] max-h-[200px] px-4 pt-3.5 pb-1 leading-relaxed dark:text-gray-200"
+            disabled={isBuilding} rows={1} />
+          <div className="flex items-center justify-between px-2 pb-2">
+            {/*
+              ⭐ THE TOOL TRAY, in the platform's order: attach · Figma · GitHub · edit
+              visually. Same footprint for every button (`size-8`) so a connection changing
+              state — a tint, a spinner — never reflows the row.
+            */}
+            <div className="flex items-center gap-0.5">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <label className="cursor-pointer size-8 inline-flex items-center justify-center rounded-lg hover:bg-black/5 dark:hover:bg-white/10 transition-colors">
+                    <input type="file" multiple className="hidden" onChange={handleFileUpload} accept="image/*,.pdf,.svg" disabled={isBuilding} />
+                    {uploading ? <Loader2 className="w-4 h-4 text-gray-400 animate-spin" /> : <Paperclip className="w-4 h-4 text-gray-400" />}
+                    <span className="sr-only">{t("prompt.attachments.attach")}</span>
+                  </label>
+                </TooltipTrigger>
+                <TooltipContent>{t("prompt.attachments.attach")}</TooltipContent>
+              </Tooltip>
+              {onOpenFigma && (
+                <FigmaPromptButton
+                  onAdd={appendToPrompt}
+                  hasText={prompt.trim().length > 0}
+                  disabled={isBuilding}
+                  onConnect={onOpenFigma}
+                  connected={figmaConnected}
+                  onDisconnect={onDisconnectFigma}
+                />
+              )}
+              {onOpenGithub && (
+                <GithubPromptButton
+                  projectId={projectId}
+                  onOpenModal={onOpenGithub}
+                  onStatusChange={onGithubStatusChange}
+                  onPull={onGithubPull}
+                  pulling={githubPulling}
+                  disabled={isBuilding}
+                />
+              )}
+              {/* ⭐ MODEL · EFFORT · FAST MODE for the NEXT prompt — the platform's menu. */}
+              <RunOptionsMenu value={runOptions} onChange={setRunOptions} disabled={isBuilding} v2={v2} onClearContext={onClearContext} clearContextDisabled={isBuilding} />
+              {visualEditAvailable && onToggleVisualEdit && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      type="button"
+                      variant={visualEditActive ? "secondary" : "ghost"}
+                      size="icon"
+                      className={cn("size-8 shrink-0", visualEditActive && "ring-primary/40 text-primary ring-1")}
+                      disabled={visualEditBusy}
+                      aria-pressed={visualEditActive}
+                      onClick={onToggleVisualEdit}
+                    >
+                      <PencilIcon className="size-4" />
+                      <span className="sr-only">{t(visualEditActive ? "workspace.visualEditor.close" : "workspace.visualEditor.open")}</span>
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>{t(visualEditActive ? "workspace.visualEditor.close" : "workspace.visualEditor.open")}</TooltipContent>
+                </Tooltip>
+              )}
+            </div>
+            {isBuilding ? (
+              <button onClick={() => setConfirmingStop(true)} aria-label={t("workspace.chat.stop")} className="w-8 h-8 rounded-full bg-red-500 hover:bg-red-600 flex items-center justify-center transition-colors"><Square className="w-3 h-3 text-white" /></button>
+            ) : (
+              <button onClick={handleSend} disabled={(!prompt.trim() && attachedFiles.length === 0) || sending}
+                className="w-8 h-8 rounded-full bg-black text-white hover:bg-neutral-800 active:scale-95 disabled:opacity-40 disabled:pointer-events-none flex items-center justify-center transition-all shadow-xs dark:bg-white dark:text-black dark:hover:bg-neutral-200">
+                {sending ? <Loader2 className="w-3.5 h-3.5 animate-spin text-current" /> : <Send className="w-3.5 h-3.5 text-current" />}
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <ConfirmDialog
+        open={confirmingStop}
+        onOpenChange={setConfirmingStop}
+        tone="danger"
+        title={t("workspace.chat.stopConfirmTitle")}
+        description={t("workspace.chat.stopConfirmBody")}
+        confirmLabel={t("workspace.chat.stopConfirmAction")}
+        /* "Cancel" next to "Stop" is two words for the same thing. */
+        cancelLabel={t("workspace.chat.stopConfirmKeep")}
+        /*
+          ⚠️ NO TYPED PHRASE. Deleting a project asks you to type its name because it
+          destroys work irreversibly; this loses the rest of one run, and someone whose
+          build has gone off the rails needs to be able to stop it in two clicks.
+        */
+        onConfirm={onStop}
+      />
+    </div>
+  );
+}

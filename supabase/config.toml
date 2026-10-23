@@ -1,0 +1,13 @@
+# Supabase project configuration for Mavly.
+#
+# The linked project is read from `supabase/.temp/` (created by
+# `supabase link`) — that directory is git-ignored because it holds the
+# database connection details.
+#
+#   supabase db push        # apply supabase/migrations/* to the linked project
+#   supabase migration new # create a new timestamped migration
+#
+# The local stack (`supabase start`) needs Docker; it is not required to
+# apply the migrations to the hosted project.
+
+project_id = "cazmezhpanwdjgsqugzr"

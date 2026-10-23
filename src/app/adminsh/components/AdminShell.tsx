@@ -1,0 +1,95 @@
+"use client";
+
+import React, { useState } from "react";
+import { Sparkles, ShieldCheck, Terminal, X, Info } from "lucide-react";
+import { AdminNavSection } from "./types";
+import { AdminSidebar } from "./AdminSidebar";
+import { AdminHeader } from "./AdminHeader";
+
+interface AdminShellProps {
+  activeNav: AdminNavSection;
+  children: React.ReactNode;
+}
+
+export function AdminShell({ activeNav, children }: AdminShellProps) {
+  const [isOpenMobile, setIsOpenMobile] = useState(false);
+  const [showDemoNotice, setShowDemoNotice] = useState(true);
+
+  return (
+    <div className="min-h-screen bg-[#faf9f6] text-gray-950 font-sans flex flex-col lg:flex-row mavly-page-enter antialiased">
+      {/* 1. Sidebar */}
+      <AdminSidebar
+        activeNav={activeNav}
+        isOpenMobile={isOpenMobile}
+        setIsOpenMobile={setIsOpenMobile}
+      />
+
+      {/* 2. Main Content Canvas */}
+      <div className="flex-1 flex flex-col min-w-0">
+        {/* Sticky Top Header */}
+        <AdminHeader
+          activeNav={activeNav}
+          onOpenMobileSidebar={() => setIsOpenMobile(true)}
+        />
+
+        {/* Main Content Scroll Area */}
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl w-full mx-auto">
+          {/* Refined Enterprise Staging Ribbon */}
+          {showDemoNotice && (
+            <div className="px-4 py-2.5 rounded-xl bg-white border border-black/[0.08] shadow-[0_2px_8px_rgba(0,0,0,0.02)] flex items-center justify-between gap-3 text-xs">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
+                <span className="font-bold text-gray-900 tracking-tight shrink-0">
+                  Visual Admin Console
+                </span>
+                <span className="text-gray-300 hidden sm:inline">|</span>
+                <span className="text-gray-500 truncate hidden sm:inline">
+                  Active View: <strong>{activeNav}</strong>. High-fidelity frontend simulation with isolated mock telemetry.
+                </span>
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0">
+                <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold tracking-wider uppercase bg-black text-white">
+                  MOCK TELEMETRY
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setShowDemoNotice(false)}
+                  className="p-1 text-gray-400 hover:text-black rounded-lg hover:bg-black/5 cursor-pointer"
+                  title="Dismiss notice"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Page-Specific Content Body */}
+          {children}
+        </main>
+
+        {/* Enterprise System Footer */}
+        <footer className="py-5 px-6 lg:px-8 border-t border-black/[0.06] bg-white/60 text-xs text-gray-400">
+          <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <span className="font-semibold text-gray-700">Mavly Cloud Admin</span>
+              <span>·</span>
+              <span>Release v2.4.0 (Enterprise Suite)</span>
+              <span>·</span>
+              <span className="text-emerald-600 font-medium">p99: 18ms</span>
+            </div>
+
+            <div className="flex items-center gap-3 text-gray-500 font-medium">
+              <span className="flex items-center gap-1">
+                <ShieldCheck className="w-3.5 h-3.5 text-gray-400" />
+                <span>Strict Frontend Scope Lock Active</span>
+              </span>
+              <span>·</span>
+              <span>Zero Real Backend Mutations</span>
+            </div>
+          </div>
+        </footer>
+      </div>
+    </div>
+  );
+}

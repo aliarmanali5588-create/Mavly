@@ -1,0 +1,820 @@
+# MAVLY — Complete SaaS Footer, 13 Pages, Routes & Content Implementation
+
+## ROLE
+
+You are the senior frontend engineer, SaaS information architect, UX writer, and implementation owner for Mavly, an AI website builder.
+
+Your task is to transform Mavly’s existing footer navigation and implement all 13 requested pages as complete, individually designed, content-rich, production-quality routes.
+
+This is a real implementation task. Do not return only a plan, mockup, overview page, placeholder pages, or a list of recommendations. Inspect the repository, make the changes, and report the actual files and routes implemented.
+
+## 1. NON-NEGOTIABLE EXECUTION ORDER
+
+Complete these phases in order.
+
+### Phase 1 — Safe discovery and project inspection
+
+Before editing anything:
+
+1. Read `AGENTS.md`, `README.md`, `MAVLY_CLEAN_BASELINE.md`, and any relevant project instructions.
+2. Inspect the existing app structure, Next.js routing conventions, layout hierarchy, shared components, footer component, header/navigation, CSS variables, theme tokens, typography, spacing system, buttons, cards, responsive behavior, and existing page routes.
+3. Inspect the actual existing implementations of:
+   - `/`
+   - `/pricing`
+   - `/upgrade`
+   - `/credit-topup`
+   - `/support`
+   - `/integrations`
+   - `/docs`
+   - `/tutorials`
+   - `/blog`
+   - `/changelog`
+   - `/about`
+   - `/contact`
+   - `/careers`
+   - Existing legal and FAQ pages, if present.
+4. Identify which routes already exist, which are complete, which are placeholders, and which are missing.
+5. Inspect current links and preserve working functionality. Reuse existing content and components where appropriate instead of creating duplicate routes.
+
+Do not assume every existing route is incomplete. Improve or reuse existing implementations when possible.
+
+### Phase 2 — Update the global footer FIRST
+
+Before creating or rewriting the remaining pages, implement the new global footer structure.
+
+The footer must become a premium, well-organized SaaS footer—not a collection of randomly arranged links.
+
+Required structure:
+
+**Brand column**
+- Existing Mavly logo and brand identity.
+- Brand description:
+  “Mavly is an AI website builder that turns your ideas into beautiful, functional websites. We don't make websites. We make memories.”
+- Primary CTA: “Launch Builder” linking to the existing correct builder/dashboard entry route.
+- Optional social links only when their real destinations are known.
+
+**Product column**
+- Features → `/features`
+- Pricing → `/pricing`
+- Integrations → `/integrations`
+- Changelog → `/changelog`
+
+**Resources column**
+- Documentation → `/docs`
+- Tutorials → `/tutorials`
+- Blog → `/blog`
+- FAQs → `/faq`
+
+**Company column**
+- About Mavly → `/about`
+- Contact → `/contact`
+- Careers → `/careers`
+
+**Support & Legal column**
+- Help & Support → `/support`
+- Terms of Service → `/terms`
+- Privacy Policy → `/privacy`
+
+Footer requirements:
+- Keep the existing copyright year dynamic, or use the project's existing convention.
+- Include a “Back to top” action that actually works.
+- Use semantic navigation and accessible link labels.
+- Use consistent alignment, spacing, typography, hover states, focus-visible states, and responsive layouts.
+- On desktop, use a clean multi-column grid with balanced content density.
+- On mobile, stack or collapse columns accessibly without hiding important links.
+- Avoid excessive empty space, cramped columns, duplicate links, and oversized elements.
+- Do not put account-specific actions such as Upgrade Plan and Credit Top-up in the public marketing footer. Keep them in the existing authenticated account/dashboard navigation.
+- Remove footer links that point to nonexistent routes, or implement the destination before exposing the link.
+- Do not change the existing pricing, checkout, authentication, or credit logic just to reorganize the footer.
+- Do not add fake social links or invented company details.
+
+Finish the footer implementation first. Then continue with the individual pages below.
+
+## 2. DESIGN SYSTEM AND IMPLEMENTATION RULES
+
+Before any UI work, inspect the actual project's palette, theme configuration, CSS variables, typography, shared UI components, and existing design system.
+
+- Preserve the current Mavly visual identity and existing design tokens.
+- Do not introduce a new color palette or replace the entire theme.
+- Maintain the established premium, clean, predominantly light SaaS aesthetic.
+- Use subtle neumorphic/soft-UI treatment only where appropriate: restrained dual shadows, tactile interactions, subtle depth, and clear contrast.
+- Avoid excessive glassmorphism, gradients, giant empty hero sections, unnecessary animation, and repetitive generic card layouts.
+- Maintain readable contrast, keyboard navigation, accessible focus indicators, semantic HTML, reduced-motion support, and responsive behavior.
+- Reuse existing components and established conventions.
+- Use server components by default where compatible with the existing application; introduce client components only for genuine interaction.
+- Preserve existing functionality and routes.
+- Keep this task focused on the requested footer and 13 pages.
+
+## 3. ROUTE AND PAGE COMPLETION MATRIX
+
+Implement each of the following 13 routes as its own complete page.
+
+1. `/features`
+2. `/integrations`
+3. `/docs`
+4. `/tutorials`
+5. `/blog`
+6. `/changelog`
+7. `/about`
+8. `/contact`
+9. `/support`
+10. `/careers`
+11. `/faq`
+12. `/terms`
+13. `/privacy`
+
+Every route must have its own:
+- Appropriate page title and metadata.
+- Unique hero or page introduction.
+- Relevant sections and meaningful written content.
+- Page-specific visual hierarchy and layout.
+- Working internal navigation.
+- Appropriate calls to action.
+- Responsive desktop, tablet, and mobile layouts.
+- Accessible semantic structure.
+- Correct loading, empty, error, and success states where the page has interactive behavior.
+- No lorem ipsum, placeholder paragraphs, fake testimonials, fabricated statistics, or dead buttons.
+
+Do not create one universal overview page and reuse it for all routes. Each page must have a distinct purpose and content.
+
+Do not add unrequested subpages merely to inflate the site. Use the existing routes and anchors for detailed sections unless a genuinely necessary existing route already exists.
+
+---
+
+## 4. PAGE 1 — `/features`
+
+### Purpose
+Explain what Mavly does and help visitors understand the website-building workflow.
+
+### Hero copy
+
+Eyebrow: `THE MAVLY BUILDER`
+
+Headline: `From your idea to a website, with AI.`
+
+Description:
+`Describe what you want to build, shape the result in your workspace, and refine your website with an AI-assisted workflow.`
+
+Primary CTA: `Start Building Free`
+Secondary CTA: `Explore the Workflow`
+
+Link the primary CTA to the existing authenticated or onboarding-aware builder entry point. Do not invent a new route.
+
+### Sections
+
+**A. The workflow**
+1. Describe your idea.
+2. Generate an initial website.
+3. Review the live preview.
+4. Refine the project using the supported editing workflow.
+5. Publish when the required deployment configuration is available.
+
+Explain each step in concrete, user-facing language.
+
+**B. Builder capabilities**
+Describe only capabilities actually implemented in the current repository:
+- Prompt-based website generation.
+- Workspace and project management.
+- Code/file viewing and editing where supported.
+- Preview experience.
+- AI-assisted refinements where supported.
+- GitHub repository connection and synchronization where supported.
+- Supabase integration where supported.
+- Deployment/publishing, including configuration prerequisites where relevant.
+
+For every feature, distinguish between fully available functionality and features that are incomplete, gated, or unavailable.
+
+**C. Designed for different needs**
+Explain suitable use cases such as landing pages, portfolios, small business websites, product websites, and prototypes. Present these as use cases, not guaranteed generation outcomes.
+
+**D. Control and ownership**
+Explain available project/code and GitHub workflows accurately. Do not claim complete source export, deployment portability, or ownership guarantees beyond what the actual implementation supports.
+
+**E. Getting started**
+Provide a short, actionable starting guide.
+
+**F. Final CTA**
+Headline: `Your next website starts with an idea.`
+CTA: `Launch Builder`
+
+---
+
+## 5. PAGE 2 — `/integrations`
+
+### Purpose
+Explain the integrations Mavly actually supports.
+
+### Hero copy
+
+Eyebrow: `CONNECTED WORKFLOWS`
+
+Headline: `Connect your tools. Keep your workflow moving.`
+
+Description:
+`Explore how Mavly connects website projects with the tools you use to build, manage, and publish them.`
+
+### Sections
+
+**A. GitHub**
+Explain supported capabilities based on the implementation:
+- Connect a GitHub account.
+- Select an existing repository.
+- Create a repository when the GitHub App authorization and permissions allow it.
+- Handle empty repositories and first-push workflows where implemented.
+- Synchronize project source where supported.
+
+Explain that repository creation requires appropriate GitHub App permissions and authorization.
+
+**B. Supabase**
+Explain the existing supported connection flow and distinguish connecting a project from full database browsing, querying, schema editing, or migration execution. Never claim unsupported database functionality.
+
+**C. Vercel publishing**
+Explain the current Mavly-managed publishing architecture and prerequisites accurately. Publishing availability depends on server-side configuration, authorized Vercel access, domain configuration, and verified deployment readiness.
+
+Do not promise that every account can publish immediately.
+
+**D. AI provider**
+Explain the actual provider configuration in the codebase. Do not expose provider API keys or server-side configuration.
+
+**E. Integration setup**
+Provide a short connection checklist and link to `/docs`.
+
+**F. Integration availability**
+Show only integrations verified from the codebase. Clearly label partial or unavailable capabilities. Never invent integrations, logos, OAuth support, or connection statuses.
+
+---
+
+## 6. PAGE 3 — `/docs`
+
+### Purpose
+Create a practical documentation landing page, not a fake documentation portal.
+
+### Hero copy
+
+Eyebrow: `MAVLY DOCUMENTATION`
+
+Headline: `Everything you need to get started with Mavly.`
+
+Description:
+`Learn the basics, configure your workspace, connect supported services, and understand the current website-building workflow.`
+
+### Sections
+
+**A. Getting started**
+- Create an account.
+- Open the builder.
+- Describe the website you want to create.
+- Review the generated result.
+- Save and manage your project.
+
+**B. Workspace guide**
+- Project navigation.
+- Chat and generation status.
+- Preview panel.
+- Code/file panel.
+- Supported editing actions.
+- Saving and recovery behavior where implemented.
+
+**C. Integrations**
+- GitHub connection and authorization.
+- Repository selection and creation.
+- Empty repository and first-push explanation.
+- Supabase connection.
+- Vercel publishing prerequisites.
+
+**D. Credits and plans**
+Use the existing pricing and credit configuration as the source of truth. Link to `/pricing`, `/upgrade`, or `/credit-topup` only where appropriate. Explain failed-generation behavior only if supported by the actual credit implementation.
+
+**E. Troubleshooting**
+Provide actionable instructions for:
+- Generation errors.
+- Missing or empty previews.
+- GitHub authorization failures.
+- Empty repository and branch behavior.
+- Publishing configuration failures.
+- Supported browser/session recovery steps.
+
+Do not present unsupported fixes as guaranteed solutions.
+
+**F. Search and navigation**
+If documentation search exists, preserve it. If not, implement a useful category/list-based documentation navigation instead of a decorative, nonfunctional search box.
+
+Use real documentation content with headings, step-by-step instructions, and links. Do not create a page full of empty article cards.
+
+---
+
+## 7. PAGE 4 — `/tutorials`
+
+### Purpose
+Offer practical learning content for building websites with Mavly.
+
+### Hero copy
+
+Eyebrow: `LEARN BY BUILDING`
+
+Headline: `Build your first website, one step at a time.`
+
+Description:
+`Follow practical guides for turning a website idea into a project you can review and refine in Mavly.`
+
+### Tutorial categories and initial articles
+
+Create individual tutorial entries with useful, real instructions for:
+
+1. **Getting Started**
+   - Create your first website.
+   - Write a better website-generation prompt.
+   - Navigate the project workspace.
+
+2. **Design and Refinement**
+   - Refine a generated landing page.
+   - Review the preview and inspect source files.
+   - Iterate safely without losing useful work.
+
+3. **Integrations**
+   - Connect GitHub.
+   - Create or connect an empty repository.
+   - Understand the first-push workflow.
+   - Connect a supported Supabase project.
+
+4. **Publishing**
+   - Understand publishing prerequisites.
+   - Diagnose common configuration errors.
+   - Verify that a deployment and custom domain are ready.
+
+5. **Troubleshooting**
+   - Interpret common generation errors.
+   - Recover from GitHub authorization issues.
+
+Each tutorial must contain an actual introduction, prerequisites, ordered steps, expected outcome, and relevant warnings. Do not render these as empty cards with invented reading times.
+
+Use the existing route structure for articles if it already exists. Otherwise, use meaningful anchors or implement a consistent article navigation pattern without inventing extra required public routes.
+
+Mark planned tutorials as planned only if the project genuinely needs to distinguish incomplete material; prefer implementing the initial core guides with real content.
+
+---
+
+## 8. PAGE 5 — `/blog`
+
+### Purpose
+Create an honest product blog.
+
+### Hero copy
+
+Eyebrow: `IDEAS AND UPDATES`
+
+Headline: `Notes on building websites with AI.`
+
+Description:
+`Practical ideas, product learnings, and updates from the Mavly website-building workflow.`
+
+### Content requirements
+
+- Inspect the repository for real existing blog posts and content sources.
+- Reuse actual existing posts if available.
+- If no content exists, create a small initial editorial collection with useful articles about website prompting, reviewing generated websites, working with project source, and integrating GitHub.
+- Every displayed article must have a real title, excerpt, body, category, and publication date only when that date is known.
+- Never fabricate customer stories, user counts, performance statistics, endorsements, or published dates.
+- If article detail routes already exist, use them consistently.
+- Otherwise, create a well-structured listing with real article content accessible through supported page behavior.
+- Include category filters only if they genuinely work.
+- Do not create inert search or pagination controls.
+
+---
+
+## 9. PAGE 6 — `/changelog`
+
+### Purpose
+Show real Mavly product changes.
+
+### Hero copy
+
+Eyebrow: `PRODUCT UPDATES`
+
+Headline: `What’s changing in Mavly.`
+
+Description:
+`Follow shipped improvements, fixes, and changes to the website-building experience.`
+
+### Content requirements
+
+- Inspect Git history, changelog files, and existing release notes for verified shipped changes.
+- Display actual changes with their verified dates when available.
+- Organize entries by date and category where useful.
+- Clearly distinguish shipped changes from planned work.
+- Do not fabricate version numbers, release dates, or features.
+- If history is unavailable, show a truthful message that public changelog entries are being prepared instead of creating fake releases.
+- Add working links to relevant documentation where useful.
+
+---
+
+## 10. PAGE 7 — `/about`
+
+### Purpose
+Explain Mavly’s product vision and mission.
+
+### Hero copy
+
+Eyebrow: `ABOUT MAVLY`
+
+Headline: `We don't make websites. We make memories.`
+
+Description:
+`Mavly helps turn website ideas into something people can see, shape, and share through an AI-assisted website-building workflow.`
+
+### Sections
+
+**A. Why Mavly exists**
+Explain the product problem: getting from an idea to a working website can involve multiple tools, technical steps, and repetitive iteration.
+
+**B. Our mission**
+Help people move from an initial idea to a website through a more accessible, integrated workflow.
+
+**C. How we approach building**
+Discuss clarity, iteration, useful control over project source, and transparent capability boundaries.
+
+**D. Who Mavly is for**
+Describe creators, founders, freelancers, and small businesses as intended audiences, without claiming measured customer traction.
+
+**E. What we are building**
+Describe only verified product capabilities and clearly qualify ongoing work.
+
+**F. CTA**
+`Have an idea? Start building with Mavly.`
+
+Do not invent the founding date, employee count, funding, headquarters, awards, customer testimonials, or founder biography.
+
+---
+
+## 11. PAGE 8 — `/contact`
+
+### Purpose
+Make it easy to reach the correct Mavly team.
+
+### Hero copy
+
+Eyebrow: `GET IN TOUCH`
+
+Headline: `Let's get your question to the right place.`
+
+Description:
+`Choose the right contact channel for general enquiries, technical issues, billing questions, or career opportunities.`
+
+### Contact categories
+
+**General enquiries**
+`hello@mavly.xyz`
+
+**Technical support**
+`s​upport@mavly.xyz`
+
+**Billing**
+`billing@mavly.xyz`
+
+**Careers**
+`careers@mavly.xyz`
+
+Important: The technical support address must be exactly `support@mavly.xyz`, without any hidden or extra characters.
+
+### UI requirements
+
+- Every email must be a working `mailto:` link.
+- Add copy-to-clipboard actions only if supported by the existing component conventions.
+- Provide clear category descriptions.
+- Include a response-time promise only if the business has actually committed to it.
+- If an existing contact form exists, preserve and inspect its actual submission behavior. Do not show a successful-submission message unless a real submission succeeds.
+- If there is no functional backend for a form, prefer clear email links over a fake form.
+- Preserve the intended recipient `aliarmanali5588@gmail.com` in existing workflows where it is already used; do not replace or silently remove it during email cleanup.
+
+---
+
+## 12. PAGE 9 — `/support`
+
+### Purpose
+Provide a practical support center with clear routing.
+
+### Hero copy
+
+Eyebrow: `MAVLY SUPPORT`
+
+Headline: `Let's get you back to building.`
+
+Description:
+`Find guidance for your workspace, website generation, integrations, publishing, and account questions.`
+
+### Sections
+
+**A. Technical support**
+Email: `support@mavly.xyz`
+
+Include guidance for:
+- Generation and preview errors.
+- Workspace editing.
+- Project source and save behavior.
+- GitHub authorization and repository workflows.
+- Supabase connection.
+- Publishing setup.
+
+**B. Billing support**
+Email: `billing@mavly.xyz`
+
+Cover plan selection, billing questions, and credit-purchase enquiries. Do not promise refunds or payment outcomes not supported by the published policy.
+
+**C. Getting started**
+Link to `/docs` and `/tutorials`.
+
+**D. Frequently encountered problems**
+Provide clear diagnostic steps, including what information users should collect when reporting a problem. Never ask users to share API keys, passwords, access tokens, or secret environment variables.
+
+**E. Contact options**
+Use working email links and any verified support channels. Do not invent a live chat or support ticket system.
+
+Reuse the existing `/support` page if it already contains working email cards. Improve it rather than creating a duplicate.
+
+---
+
+## 13. PAGE 10 — `/careers`
+
+### Purpose
+Present Mavly's hiring information honestly.
+
+### Hero copy
+
+Eyebrow: `CAREERS AT MAVLY`
+
+Headline: `Help shape how people build for the web.`
+
+Description:
+`We're interested in people who care about useful tools, thoughtful product experiences, and making website creation more accessible.`
+
+### Sections
+
+**A. What we value**
+Discuss product thinking, craftsmanship, clarity, collaboration, and user empathy as aspirational values—not claims about an existing large team.
+
+**B. Areas of interest**
+Mention relevant disciplines only as areas of interest, not confirmed open roles.
+
+**C. Current openings**
+- Inspect the repository for actual job listings or an existing careers workflow.
+- If there are no confirmed openings, state clearly: `There are no confirmed open positions listed right now.`
+- Do not fabricate job titles, salaries, locations, benefits, or employment terms.
+
+**D. Get in touch**
+Email: `careers@mavly.xyz`
+
+Do not imply that an application has been submitted unless a real application mechanism exists.
+
+---
+
+## 14. PAGE 11 — `/faq`
+
+### Purpose
+Answer actual questions about Mavly clearly and accurately.
+
+### Hero copy
+
+Eyebrow: `FREQUENTLY ASKED QUESTIONS`
+
+Headline: `Questions about building with Mavly?`
+
+Description:
+`Find straightforward answers about getting started, project editing, integrations, publishing, plans, and credits.`
+
+### Required FAQ categories and questions
+
+**Getting started**
+1. What is Mavly?
+2. How do I create my first website?
+3. Do I need coding experience?
+4. Can I refine a generated website?
+
+**Workspace and code**
+5. How do I access my project files?
+6. What does the preview represent?
+7. Does saving a file automatically rebuild or run my application? Explain the actual current behavior honestly; do not imply rebuild support if it is unavailable.
+
+**Integrations**
+8. How do I connect GitHub?
+9. Can Mavly create a new GitHub repository?
+10. Why might repository creation fail?
+11. How does the first push to an empty repository work?
+12. What does connecting Supabase currently enable?
+
+**Publishing**
+13. How does publishing work?
+14. Why might publishing be unavailable?
+15. When is a custom domain considered ready?
+
+**Plans and credits**
+16. Where can I see plans and prices?
+17. How do credit top-ups work?
+18. What happens if generation fails?
+
+Answer every question using the current source code, configured product behavior, and actual published policies. Do not guess at pricing, refund behavior, credit deduction, rebuild support, or deployment availability.
+
+Use an accessible accordion if the project already supports one. Ensure keyboard interaction and state behavior work correctly.
+
+Link answers to the relevant existing pages.
+
+---
+
+## 15. PAGE 12 — `/terms`
+
+### Purpose
+Provide a clear Terms of Service page with appropriate legal structure.
+
+### Important legal restriction
+Do not fabricate legal entity details, jurisdiction, company address, effective date, dispute-resolution requirements, warranty terms, or refund commitments.
+
+Create a structured draft containing:
+
+1. Introduction and agreement to terms.
+2. Eligibility and account responsibilities.
+3. Acceptable use.
+4. User prompts, inputs, and generated website content.
+5. AI-generated output limitations and the user's responsibility to review output.
+6. Project source, integrations, and third-party services.
+7. Plans, billing, and credits, based only on verified policies.
+8. Availability, changes, and service limitations.
+9. Intellectual-property provisions requiring legal confirmation where uncertain.
+10. Suspension and termination.
+11. Disclaimers and limitation of liability, marked for legal review.
+12. Changes to the terms.
+13. Contact information: `hello@mavly.xyz`
+
+Use the existing legal policy if one already exists. Preserve verified provisions rather than silently replacing them.
+
+If legally material information is unknown, add an explicit internal review note in the implementation report and avoid presenting invented terms as settled policy.
+
+The page must be clearly structured and readable, with a table of contents if appropriate.
+
+Do not claim the draft has been legally reviewed.
+
+---
+
+## 16. PAGE 13 — `/privacy`
+
+### Purpose
+Provide a transparent Privacy Policy grounded in actual product behavior.
+
+### Important legal restriction
+Inspect the actual codebase and available configuration before describing data collection, storage, sharing, retention, cookies, analytics, or third-party providers.
+
+Do not invent:
+- Data retention periods.
+- Security certifications.
+- GDPR/CCPA compliance guarantees.
+- Encryption guarantees not supported by the implementation.
+- Analytics providers not present in the codebase.
+- A data deletion process that does not exist.
+- A claim that personal information is never shared.
+
+### Required sections
+
+1. Introduction and scope.
+2. Information users provide.
+3. Account and authentication data.
+4. Prompts, generated projects, and project files.
+5. GitHub, Supabase, Vercel, and other connected services actually implemented.
+6. AI providers and the data transmitted to them, based on actual integration behavior.
+7. Payments and billing data, based on the real payment implementation.
+8. Cookies, sessions, and analytics, as verified.
+9. How information is used.
+10. When information is shared with service providers.
+11. Data retention and deletion, as verified.
+12. Security practices, limited to evidence from the implementation.
+13. User privacy choices and contact procedures.
+14. Changes to the policy.
+15. Contact: `hello@mavly.xyz`
+
+Clearly identify material facts that need owner/legal confirmation. Do not publish fabricated dates or legal assurances.
+
+Use the existing privacy policy if present and preserve verified commitments.
+
+---
+
+## 17. METADATA, ROUTING, AND INTERNAL LINKING
+
+For all 13 routes:
+
+- Use the repository's established Next.js App Router conventions.
+- Create or update the correct route files without introducing duplicate routes.
+- Add unique page titles and descriptions.
+- Add canonical metadata only when the project's canonical URL convention is known.
+- Keep metadata truthful and route-specific.
+- Preserve existing root layouts and shared navigation.
+- Ensure every footer link resolves to the intended page.
+- Ensure all internal links point to the correct route.
+- Preserve authentication-aware behavior for builder CTAs.
+- Do not expose private project data on public marketing pages.
+- Do not introduce unnecessary client-side JavaScript.
+- Avoid duplicating page content in both a route and an unrelated modal.
+
+## 18. INTERACTIONS AND QUALITY REQUIREMENTS
+
+Implement real behavior for every visible control.
+
+- Buttons must navigate or perform their stated action.
+- Email links must open the correct recipient.
+- Back to top must scroll to the page top.
+- FAQ accordions must actually open and close.
+- Documentation navigation must point to real sections or routes.
+- Blog/changelog filters and pagination must work if included.
+- Forms must validate input and display truthful submission states.
+- Do not add decorative search boxes, inert tabs, fake dropdowns, or dead CTA buttons.
+- Ensure all pages work at desktop, tablet, and mobile widths.
+- Preserve accessible labels, keyboard navigation, focus states, and reduced-motion preferences.
+
+## 19. CONTENT INTEGRITY
+
+All content must be real, specific, and appropriate to Mavly.
+
+Forbidden:
+- Lorem ipsum.
+- Generic filler paragraphs.
+- Repeated identical sections across all pages.
+- Fabricated customer testimonials.
+- Invented customer counts or performance metrics.
+- Fake ratings or badges.
+- Fake release histories.
+- Fake job openings.
+- Fake integrations.
+- Unsupported feature claims.
+- Fake success messages.
+- Invented legal commitments.
+- Unsupported payment, credit, rebuild, or publishing promises.
+
+If a capability is unavailable, explain the current limitation accurately and, where useful, direct users to the supported workflow.
+
+## 20. PRESERVE EXISTING FUNCTIONALITY
+
+This task is focused on the global footer and the 13 requested pages.
+
+Do not modify:
+- Database schemas or migrations.
+- Authentication logic.
+- AI provider execution.
+- Generation pipeline.
+- Credit deduction or refund logic.
+- Payment integrations.
+- GitHub API behavior.
+- Supabase integration behavior.
+- Vercel publishing internals.
+- Domain/DNS logic.
+- Environment variables.
+- Unrelated workspace features.
+
+If a page requires functionality that does not exist, provide honest explanatory content and a supported alternative rather than implementing risky backend changes.
+
+Preserve all unrelated working-tree changes. Do not reset, revert, or overwrite unrelated user work.
+
+## 21. VALIDATION POLICY
+
+Read `AGENTS.md` and follow the repository's validation policy.
+
+Automated checks are prohibited for this task:
+- Do not run tests.
+- Do not run lint.
+- Do not run typecheck.
+- Do not run a build.
+- Do not start a dev server.
+- Do not run browser automation.
+- Do not make live API calls.
+
+Static source inspection and manual diff review are permitted. If allowed by project policy, use `git diff --check` only.
+
+Do not deploy, commit, or push to GitHub.
+
+## 22. REQUIRED FINAL REPORT
+
+After implementation, report:
+
+1. Footer changes completed.
+2. All 13 routes, each marked `implemented`, `updated`, or `reused`.
+3. Exact route/file paths.
+4. Sections and content implemented for each page.
+5. Existing routes/components reused.
+6. Any missing source information or legal content requiring owner review.
+7. Any buttons, forms, or interactions that still depend on unavailable backend functionality.
+8. Accessibility and responsive considerations addressed.
+9. Static review performed.
+10. Explicit statement that no tests, lint, typecheck, build, dev server, browser automation, live API calls, deployment, commit, or push were performed.
+
+Do not claim a page or interaction is complete unless the implementation actually exists.
+
+## FINAL ACCEPTANCE CRITERIA
+
+The task is complete only when:
+
+- The global footer is updated first and links to the correct routes.
+- All 13 requested pages have been individually inspected and implemented.
+- Each page contains unique, useful, product-specific content.
+- No route is merely an overview page or a placeholder.
+- No dead links or fake controls remain.
+- Existing product behavior is accurately represented.
+- Emails use the exact official addresses specified above.
+- Existing functionality and unrelated working-tree changes are preserved.
+- The final report lists every route individually.
+
+Start with repository discovery, update the footer first, and then implement the pages in the listed order. Do not stop after the footer or the first page.
