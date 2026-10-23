@@ -165,7 +165,7 @@ export function MockDataViews({ section }: MockDataViewProps) {
                     by {log.actor}
                   </span>
                 </div>
-                <p className="text-gray-500 mt-1">{log.details}</p>
+                <p className="text-gray-500 mt-1">{log.target}</p>
               </div>
 
               <div className="flex items-center gap-4 text-gray-400 text-[11px] shrink-0">
