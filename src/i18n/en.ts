@@ -5000,6 +5000,7 @@ const base = {
          authorization now, so there is no credential for the user to mint
          and paste. The keys below describe that flow. */
       connectAccount: "Connect GitHub",
+      reconnectAccount: "Reconnect GitHub",
       connectAccountHint:
         "Mavly opens GitHub to ask for access to the repositories you choose. Your GitHub password is never seen by Mavly.",
       accountConnected: "Connected as {login}",
@@ -5024,7 +5025,7 @@ const base = {
       createRepositoryFailed: "We couldn't create that repository",
       repositoryNameTaken: "A repository with that name already exists in your account.",
       createRepositoryPermission:
-        "Your GitHub App cannot create repositories. Install it on this account, grant Repository creation (or Administration) read and write, approve the update, then reconnect GitHub.",
+        "GitHub refused repository creation. Reconnect GitHub; if it still fails, review the installation's approved permissions and any account restrictions.",
       repositoryCreated: "Repository created and connected",
       repositoryCreatedFirstPush:
         "Repository created — first push pending. The first push will create {branch}.",
@@ -5040,6 +5041,9 @@ const base = {
       branchesFailed: "We couldn't load this repository's branches.",
       retry: "Retry",
       noRepositories: "No repositories are available for this connection yet.",
+      noRepositoriesSelected:
+        "The GitHub App installation has no repositories selected. Add repositories to the installation on GitHub, then retry.",
+      reviewInstallation: "Review the GitHub App installation",
       noBranches: "This repository has no branches Mavly can connect to yet.",
       branchHint: "Mavly pushes to and imports from {branch}.",
       branchInvalid: "Enter a valid Git branch name.",

@@ -367,10 +367,19 @@ export interface GithubOrganization {
   login: string;
 }
 
+export type GithubRepositorySelection = "all" | "selected" | null;
+
 export interface GithubUserInstallation {
+  id: number;
   targetId: number;
   targetType: string;
+  targetLogin: string | null;
+  repositorySelection: GithubRepositorySelection;
   permissions: Record<string, string> | null;
+  appId: number | null;
+  appSlug: string | null;
+  clientId: string | null;
+  suspended: boolean;
 }
 
 export interface GithubRepository {
@@ -453,35 +462,67 @@ function parseInstallationPermissions(value: unknown): Record<string, string> | 
   return permissions;
 }
 
+function parseRepositorySelection(value: unknown): GithubRepositorySelection {
+  return value === "all" || value === "selected" ? value : null;
+}
+
+function parseInstallation(item: unknown): GithubUserInstallation | null {
+  if (!item || typeof item !== "object" || Array.isArray(item)) return null;
+  const row = item as Record<string, unknown>;
+  const id = typeof row.id === "number" ? row.id : null;
+  const targetId = typeof row.target_id === "number" ? row.target_id : null;
+  const targetType = nonEmptyString(row.target_type, 100);
+  if (id === null || targetId === null || !targetType) return null;
+
+  const account = row.account as Record<string, unknown> | undefined;
+  return {
+    id,
+    targetId,
+    targetType,
+    targetLogin: nonEmptyString(account?.login, 200),
+    repositorySelection: parseRepositorySelection(row.repository_selection),
+    permissions: parseInstallationPermissions(row.permissions),
+    appId: typeof row.app_id === "number" ? row.app_id : null,
+    appSlug: nonEmptyString(row.app_slug, 200),
+    clientId: nonEmptyString(row.client_id, 200),
+    suspended: typeof row.suspended_at === "string",
+  };
+}
+
 export async function listUserInstallations(
   accessToken: string,
 ): Promise<GithubResult<GithubUserInstallation[]>> {
-  const result = await githubApi("/user/installations?per_page=100", accessToken);
-  if (isGithubFailure(result)) return result;
-  if (!result.data || typeof result.data !== "object" || Array.isArray(result.data)) {
-    return { ok: false, code: "github_invalid_response" };
-  }
-
-  const rows = (result.data as { installations?: unknown }).installations;
-  if (!Array.isArray(rows)) return { ok: false, code: "github_invalid_response" };
-
+  const perPage = 100;
   const installations: GithubUserInstallation[] = [];
-  for (const item of rows) {
-    if (!item || typeof item !== "object") continue;
-    const row = item as Record<string, unknown>;
-    const targetId = typeof row.target_id === "number" ? row.target_id : null;
-    const targetType = nonEmptyString(row.target_type, 100);
-    if (targetId === null || !targetType) continue;
-    installations.push({
-      targetId,
-      targetType,
-      permissions: parseInstallationPermissions(row.permissions),
-    });
+
+  for (let page = 1; page <= 10; page += 1) {
+    const result = await githubApi(
+      `/user/installations?per_page=${perPage}&page=${page}`,
+      accessToken,
+    );
+    if (isGithubFailure(result)) return result;
+    if (!result.data || typeof result.data !== "object" || Array.isArray(result.data)) {
+      return { ok: false, code: "github_invalid_response" };
+    }
+
+    const rows = (result.data as { installations?: unknown }).installations;
+    if (!Array.isArray(rows)) return { ok: false, code: "github_invalid_response" };
+
+    let parsed = 0;
+    for (const item of rows) {
+      const installation = parseInstallation(item);
+      if (installation) {
+        installations.push(installation);
+        parsed += 1;
+      }
+    }
+
+    if (rows.length > 0 && parsed === 0) {
+      return { ok: false, code: "github_invalid_response" };
+    }
+    if (rows.length < perPage) break;
   }
 
-  if (rows.length > 0 && installations.length === 0) {
-    return { ok: false, code: "github_invalid_response" };
-  }
   return { ok: true, data: installations };
 }
 
@@ -516,29 +557,88 @@ function parseRepository(item: unknown): GithubRepository | null {
   };
 }
 
+export interface GithubRepositoryAccess {
+  repositories: GithubRepository[];
+  installations: GithubUserInstallation[];
+}
+
 /**
- * The repositories the token can reach.
+ * The repositories the App installation can reach.
  *
- * ⚠️ `affiliation=owner,collaborator,organization_member` — the repositories
- * the user owns, collaborates on, or can reach through an organization. This is
- * what the user granted Mavly access to; nothing wider is asked for.
+ * ⚠️ `/user/repos` IS NOT THE RIGHT LIST FOR A GITHUB APP USER TOKEN. GitHub
+ * limits the token to the intersection of the user's access and the App
+ * installation, so the installation-scoped endpoint is the authoritative list.
+ * It also lets Mavly distinguish "no repositories selected" from "no account".
  */
+async function listInstallationRepositories(
+  accessToken: string,
+  installationId: number,
+): Promise<GithubResult<GithubRepository[]>> {
+  if (!Number.isSafeInteger(installationId) || installationId <= 0) {
+    return { ok: false, code: "github_invalid_response" };
+  }
+
+  const perPage = 100;
+  const repositories: GithubRepository[] = [];
+
+  for (let page = 1; page <= 10; page += 1) {
+    const result = await githubApi(
+      `/user/installations/${installationId}/repositories?per_page=${perPage}&page=${page}`,
+      accessToken,
+    );
+    if (isGithubFailure(result)) return result;
+    if (!result.data || typeof result.data !== "object" || Array.isArray(result.data)) {
+      return { ok: false, code: "github_invalid_response" };
+    }
+
+    const rows = (result.data as { repositories?: unknown }).repositories;
+    if (!Array.isArray(rows)) return { ok: false, code: "github_invalid_response" };
+
+    let parsed = 0;
+    for (const item of rows) {
+      const repository = parseRepository(item);
+      if (repository) {
+        repositories.push(repository);
+        parsed += 1;
+      }
+    }
+    if (rows.length > 0 && parsed === 0) {
+      return { ok: false, code: "github_invalid_response" };
+    }
+    if (rows.length < perPage) break;
+  }
+
+  return { ok: true, data: repositories };
+}
+
 export async function listRepositories(
   accessToken: string,
-): Promise<GithubResult<GithubRepository[]>> {
-  const result = await githubApi(
-    "/user/repos?per_page=100&affiliation=owner,collaborator,organization_member&sort=updated",
-    accessToken,
-  );
-  if (isGithubFailure(result)) return result;
-  if (!Array.isArray(result.data)) return { ok: false, code: "github_invalid_response" };
+): Promise<GithubResult<GithubRepositoryAccess>> {
+  const installations = await listUserInstallations(accessToken);
+  if (isGithubFailure(installations)) return installations;
 
-  const repositories: GithubRepository[] = [];
-  for (const item of result.data) {
-    const repository = parseRepository(item);
-    if (repository) repositories.push(repository);
+  const byId = new Map<number, GithubRepository>();
+  for (const installation of installations.data) {
+    /**
+     * A suspended installation cannot answer, and an enterprise installation
+     * has no repositories of its own. Skipping them lets the service report the
+     * suspension accurately instead of turning it into a generic 403.
+     */
+    if (installation.suspended) continue;
+    if (installation.targetType.toLowerCase() === "enterprise") continue;
+
+    const result = await listInstallationRepositories(accessToken, installation.id);
+    if (isGithubFailure(result)) return result;
+    for (const repository of result.data) {
+      if (!byId.has(repository.id)) byId.set(repository.id, repository);
+    }
   }
-  return { ok: true, data: repositories };
+
+  const repositories = [...byId.values()].sort((left, right) => {
+    const updated = (right.updatedAt ?? "").localeCompare(left.updatedAt ?? "");
+    return updated || left.fullName.localeCompare(right.fullName);
+  });
+  return { ok: true, data: { repositories, installations: installations.data } };
 }
 
 export interface CreateRepositoryInput {

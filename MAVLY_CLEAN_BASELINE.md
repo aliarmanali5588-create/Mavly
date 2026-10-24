@@ -139,6 +139,13 @@ authorizes Mavly in GitHub's own screen, Mavly stores that user's token encrypte
 with `MAVLY_INTEGRATION_ENCRYPTION_KEY`, and every repository operation runs as that
 user. It is not a personal access token of the platform owner.
 
+Repository discovery is installation-scoped: Mavly lists the user's installations and
+then each installation's repositories. A user access token cannot use `/user/repos` to
+see repositories outside the installation selection. Repository-creation failures report
+the runtime App ID/slug, installation URL and approved installation permissions, and
+distinguish a missing installation, a suspended installation, and a stale permission
+approval without exposing a token.
+
 Implemented under `/api/integrations/github/`: start, status, repositories, branches,
 connect, disconnect, push and import; the callback is `/auth/github/callback`.
 

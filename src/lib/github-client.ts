@@ -16,11 +16,19 @@
  */
 
 export interface GithubUpstreamDetails {
-  status: number;
-  message: string | null;
-  acceptedPermissions: string | null;
+  status?: number;
+  message?: string | null;
+  acceptedPermissions?: string | null;
   /** The fixed GitHub REST route that failed, e.g. `POST /user/repos`. */
-  operation: string;
+  operation?: string;
+  installationId?: number | null;
+  installationUrl?: string | null;
+  appId?: number | null;
+  appSlug?: string | null;
+  clientId?: string | null;
+  repositorySelection?: "all" | "selected" | null;
+  permissions?: Record<string, string> | null;
+  suspended?: boolean;
 }
 
 export interface GithubApiResponse<T> {
@@ -42,6 +50,13 @@ export interface GithubRepositorySummary {
   defaultBranch: string | null;
   private: boolean;
   updatedAt: string | null;
+}
+
+export interface GithubRepositoryList {
+  repositories: GithubRepositorySummary[];
+  repositorySelection: "all" | "selected" | null;
+  installationUrl: string | null;
+  installationSuspended: boolean;
 }
 
 export interface GithubBranchSummary {
@@ -158,7 +173,7 @@ export const githubApi = {
     request(`${API}/status${projectId ? `?projectId=${encodeURIComponent(projectId)}` : ""}`),
 
   /** GET …/repositories — the repositories this authorization can reach. */
-  repositories: (): Promise<GithubApiResponse<{ repositories: GithubRepositorySummary[] }>> =>
+  repositories: (): Promise<GithubApiResponse<GithubRepositoryList>> =>
     request(`${API}/repositories`),
 
   /**

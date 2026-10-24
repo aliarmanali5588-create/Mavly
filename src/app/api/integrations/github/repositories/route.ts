@@ -20,9 +20,10 @@ import {
 /**
  * The repositories the caller's GitHub authorization can reach.
  *
- * ⚠️ THIS IS THE USER'S OWN LIST. It is what they granted Mavly access to,
- * and it is never widened: the route asks GitHub who the token is and lists
- * what that token can see.
+ * ⚠️ THIS IS THE USER'S OWN LIST, SCOPED TO THE APP INSTALLATION. A GitHub
+ * App user token cannot see repositories outside the installation selection,
+ * so the route lists installations first and then each installation's
+ * repositories. It is never widened beyond what GitHub reports.
  */
 export async function GET() {
   const auth = await requireGithubUser();
@@ -33,10 +34,18 @@ export async function GET() {
 
   const repositories = await listUserRepositories(auth.userId, config.config);
   if (isGithubServiceFailure(repositories)) {
-    return githubFailure(repositories.code, { upstream: repositories.upstream });
+    return githubFailure(repositories.code, {
+      upstream: repositories.upstream,
+      diagnostics: repositories.diagnostics,
+    });
   }
 
-  return apiData({ repositories: repositories.data });
+  return apiData({
+    repositories: repositories.data.repositories,
+    repositorySelection: repositories.data.repositorySelection,
+    installationUrl: repositories.data.installationUrl,
+    installationSuspended: repositories.data.installationSuspended,
+  });
 }
 
 /**
@@ -100,7 +109,10 @@ export async function POST(request: NextRequest) {
     config.config,
   );
   if (isGithubServiceFailure(created)) {
-    return githubFailure(created.code, { upstream: created.upstream });
+    return githubFailure(created.code, {
+      upstream: created.upstream,
+      diagnostics: created.diagnostics,
+    });
   }
 
   return apiData({

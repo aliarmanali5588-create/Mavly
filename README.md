@@ -180,6 +180,13 @@ GitHub and reconnect GitHub in Mavly so a fresh user access token is issued. Kee
 user authorization (OAuth) during installation" disabled; Mavly uses the normal
 authorization callback.
 
+Mavly lists repositories through the App installation
+(`GET /user/installations/{installation_id}/repositories`), not `/user/repos`, because a
+user access token can only reach the intersection of the user's repositories and the
+installation's selection. If the list is empty, check the installation's repository
+selection. Repository-creation failures include the runtime App ID/slug, installation URL,
+and the permissions GitHub reports for that installation; they never include a token.
+
 ### Figma connection
 
 Figma is connected with a user-owned personal access token, not Mavly's own credential.

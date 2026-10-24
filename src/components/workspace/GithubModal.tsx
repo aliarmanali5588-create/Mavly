@@ -77,6 +77,8 @@ export function GithubModal({
     const [mode, setMode] = React.useState<GithubSetupMode>("connect");
     const [status, setStatus] = React.useState<GithubStatus | null>(null);
     const [repositories, setRepositories] = React.useState<GithubRepositorySummary[] | null>(null);
+    const [repositorySelection, setRepositorySelection] = React.useState<"all" | "selected" | null>(null);
+    const [installationUrl, setInstallationUrl] = React.useState<string | null>(null);
     const [branches, setBranches] = React.useState<GithubBranchSummary[] | null>(null);
     const [selectedRepository, setSelectedRepository] = React.useState<string>("");
     const [selectedBranch, setSelectedBranch] = React.useState<string>("");
@@ -157,6 +159,8 @@ export function GithubModal({
         if (open) return;
         setMode("connect");
         setRepositories(null);
+        setRepositorySelection(null);
+        setInstallationUrl(null);
         setBranches(null);
         setSelectedRepository("");
         setSelectedBranch("");
@@ -191,8 +195,12 @@ export function GithubModal({
             setRepositoryLoading(false);
             if (response.ok && response.data) {
                 setRepositories(response.data.repositories);
+                setRepositorySelection(response.data.repositorySelection);
+                setInstallationUrl(response.data.installationUrl);
                 return;
             }
+            setRepositorySelection(null);
+            setInstallationUrl(response.details?.installationUrl ?? null);
             setRepositoryError(response.error || t("workspace.github.repositoriesFailed"));
         })();
 
@@ -208,8 +216,10 @@ export function GithubModal({
      */
     React.useEffect(() => {
         if (!open || connection || !repositories) return;
-        if (repositories.length === 0) setMode("create");
-    }, [open, connection, repositories]);
+        if (repositories.length === 0 && repositorySelection !== "selected") {
+            setMode("create");
+        }
+    }, [open, connection, repositories, repositorySelection]);
 
     /** The branches of the selected repository. */
     React.useEffect(() => {
@@ -275,6 +285,7 @@ export function GithubModal({
         if (authorizing) return;
         setAuthorizing(true);
         setError(null);
+        setInstallationUrl(null);
 
         const response = await githubApi.start(
             typeof window !== "undefined" ? window.location.pathname : "/dashboard",
@@ -301,6 +312,7 @@ export function GithubModal({
 
         setCreating(true);
         setError(null);
+        setInstallationUrl(null);
 
         const response = await githubApi.createRepository(projectId, {
             name,
@@ -317,6 +329,7 @@ export function GithubModal({
                       ? t("workspace.github.createRepositoryPermission")
                       : response.error || t("workspace.github.createRepositoryFailed");
             const upstream = response.details?.message;
+            setInstallationUrl(response.details?.installationUrl ?? null);
             setError(upstream ? `${base} (${upstream})` : base);
             return;
         }
@@ -354,6 +367,7 @@ export function GithubModal({
 
         setConnecting(true);
         setError(null);
+        setInstallationUrl(null);
 
         const response = await githubApi.connect(projectId, {
             repositoryId: repository.id,
@@ -383,6 +397,7 @@ export function GithubModal({
         if (pushing) return;
         setPushing(true);
         setError(null);
+        setInstallationUrl(null);
 
         const response = await githubApi.push(projectId, { allowRemoteAdvance });
         setPushing(false);
@@ -416,6 +431,7 @@ export function GithubModal({
         if (importing) return;
         setImporting(true);
         setError(null);
+        setInstallationUrl(null);
 
         const response = await githubApi.import(projectId, false);
         setImporting(false);
@@ -454,6 +470,7 @@ export function GithubModal({
         if (disconnecting) return;
         setDisconnecting(true);
         setError(null);
+        setInstallationUrl(null);
 
         const response = await githubApi.disconnectAccount();
         setDisconnecting(false);
@@ -531,10 +548,37 @@ export function GithubModal({
                     ) : null}
 
                     {error ? (
-                        <p className="text-destructive flex items-start gap-1.5 text-xs">
-                            <TriangleAlertIcon className="mt-px size-3 shrink-0" aria-hidden />
-                            {error}
-                        </p>
+                        <div className="space-y-1.5">
+                            <p className="text-destructive flex items-start gap-1.5 text-xs">
+                                <TriangleAlertIcon className="mt-px size-3 shrink-0" aria-hidden />
+                                {error}
+                            </p>
+                            {installationUrl ? (
+                                <div className="flex flex-wrap items-center gap-3">
+                                    <a
+                                        href={installationUrl}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1 text-xs underline underline-offset-2"
+                                    >
+                                        {t("workspace.github.reviewInstallation")}
+                                        <ExternalLinkIcon className="size-3" aria-hidden />
+                                    </a>
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => void handleAuthorize()}
+                                        disabled={authorizing}
+                                    >
+                                        {authorizing ? (
+                                            <LoaderIcon className="size-3.5 animate-spin" aria-hidden />
+                                        ) : null}
+                                        {t("workspace.github.reconnectAccount")}
+                                    </Button>
+                                </div>
+                            ) : null}
+                        </div>
                     ) : null}
 
                     {!loading && !accountConnected ? (
@@ -730,9 +774,24 @@ export function GithubModal({
                                                 </Button>
                                             </div>
                                         ) : repositories && repositories.length === 0 ? (
-                                            <p className="text-muted-foreground text-xs">
-                                                {t("workspace.github.noRepositories")}
-                                            </p>
+                                            <div className="space-y-1.5">
+                                                <p className="text-muted-foreground text-xs">
+                                                    {repositorySelection === "selected"
+                                                        ? t("workspace.github.noRepositoriesSelected")
+                                                        : t("workspace.github.noRepositories")}
+                                                </p>
+                                                {repositorySelection === "selected" && installationUrl ? (
+                                                    <a
+                                                        href={installationUrl}
+                                                        target="_blank"
+                                                        rel="noreferrer"
+                                                        className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1 text-xs underline underline-offset-2"
+                                                    >
+                                                        {t("workspace.github.reviewInstallation")}
+                                                        <ExternalLinkIcon className="size-3" aria-hidden />
+                                                    </a>
+                                                ) : null}
+                                            </div>
                                         ) : repositories ? (
                                             <Select
                                                 value={selectedRepository}

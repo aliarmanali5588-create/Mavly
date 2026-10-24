@@ -11,7 +11,7 @@ import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/supabase/server";
 import { githubIntegrationConfig, type GithubIntegrationConfig } from "./config";
 import type { GithubUpstreamError } from "./oauth";
-import type { GithubServiceError } from "./service";
+import type { GithubInstallationDiagnostics, GithubServiceError } from "./service";
 
 const NO_STORE = { "cache-control": "private, no-store, max-age=0" } as const;
 
@@ -94,8 +94,10 @@ const FAILURE_MESSAGES: Record<GithubServiceError, string> = {
     "Your GitHub authorization is missing the repository permission this action needs.",
   github_app_not_installed:
     "Install the Mavly GitHub App on your personal GitHub account, approve its repository access, then reconnect GitHub.",
-  github_repository_creation_denied:
-    "The GitHub App is installed but cannot create repositories. Grant its Repository creation (or Administration) read and write permission, approve the update on GitHub, then reconnect.",
+  github_installation_suspended:
+    "The GitHub App installation on this account is suspended. Restore it on GitHub, then reconnect.",
+  github_installation_permissions_stale:
+    "GitHub reports that this App installation has not approved Repository creation (or Administration) write. Review the installation on GitHub, approve the updated permissions, then reconnect.",
   github_empty_repository: "That repository has no commits yet.",
   github_repository_exists:
     "A repository with that name already exists in your account.",
@@ -131,7 +133,8 @@ const FAILURE_STATUS: Record<GithubServiceError, number> = {
   github_failed: 502,
   github_no_write_permission: 403,
   github_app_not_installed: 403,
-  github_repository_creation_denied: 403,
+  github_installation_suspended: 403,
+  github_installation_permissions_stale: 403,
   github_empty_repository: 409,
   github_repository_exists: 409,
   github_sso_required: 403,
@@ -149,8 +152,29 @@ const FAILURE_STATUS: Record<GithubServiceError, number> = {
 
 export function githubFailure(
   code: GithubServiceError,
-  extra?: { conflict?: unknown; upstream?: GithubUpstreamError },
+  extra?: {
+    conflict?: unknown;
+    upstream?: GithubUpstreamError;
+    diagnostics?: GithubInstallationDiagnostics;
+  },
 ): NextResponse {
+  const upstream = extra?.upstream;
+  const diagnostics = extra?.diagnostics;
+  const details =
+    upstream || diagnostics
+      ? {
+          ...(upstream
+            ? {
+                status: upstream.status,
+                message: upstream.message,
+                acceptedPermissions: upstream.acceptedPermissions,
+                operation: upstream.operation,
+              }
+            : {}),
+          ...(diagnostics ?? {}),
+        }
+      : null;
+
   return NextResponse.json(
     {
       ok: false,
@@ -158,16 +182,7 @@ export function githubFailure(
       code: code.toUpperCase(),
       data: null,
       ...(extra?.conflict ? { conflict: extra.conflict } : {}),
-      ...(extra?.upstream
-        ? {
-            details: {
-              status: extra.upstream.status,
-              message: extra.upstream.message,
-              acceptedPermissions: extra.upstream.acceptedPermissions,
-              operation: extra.upstream.operation,
-            },
-          }
-        : {}),
+      ...(details ? { details } : {}),
     },
     { status: FAILURE_STATUS[code] ?? 502, headers: NO_STORE },
   );

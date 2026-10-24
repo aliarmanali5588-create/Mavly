@@ -39,7 +39,9 @@ import {
   type GithubBranch,
   type GithubOrganization,
   type GithubRepository,
+  type GithubRepositorySelection,
   type GithubUpstreamError,
+  type GithubUserInstallation,
 } from "./oauth";
 import {
   applyFilePolicy,
@@ -75,7 +77,8 @@ export type GithubServiceError =
   | "github_not_configured"
   | "github_no_write_permission"
   | "github_app_not_installed"
-  | "github_repository_creation_denied"
+  | "github_installation_suspended"
+  | "github_installation_permissions_stale"
   | "github_empty_repository"
   | "github_repository_exists"
   | "github_sso_required"
@@ -88,6 +91,17 @@ export type GithubServiceError =
   | "store_unavailable"
   | "project_not_connected";
 
+export interface GithubInstallationDiagnostics {
+  installationId: number | null;
+  installationUrl: string | null;
+  appId: number | null;
+  appSlug: string | null;
+  clientId: string | null;
+  repositorySelection: GithubRepositorySelection;
+  permissions: Record<string, string> | null;
+  suspended: boolean;
+}
+
 export type GithubServiceResult<T> =
   | { ok: true; data: T }
   | {
@@ -95,6 +109,7 @@ export type GithubServiceResult<T> =
       code: GithubServiceError;
       conflict?: PushConflict;
       upstream?: GithubUpstreamError;
+      diagnostics?: GithubInstallationDiagnostics;
     };
 
 export function isGithubServiceFailure<T>(
@@ -139,17 +154,63 @@ export async function getAccount(
   };
 }
 
-/** The repositories the user's authorization reaches. */
+export interface GithubRepositoryList {
+  repositories: GithubRepository[];
+  repositorySelection: GithubRepositorySelection;
+  installationUrl: string | null;
+  installationSuspended: boolean;
+}
+
+function installationSettingsUrl(installation: GithubUserInstallation): string {
+  if (installation.targetType.toLowerCase() === "organization" && installation.targetLogin) {
+    return `https://github.com/organizations/${encodeURIComponent(installation.targetLogin)}/settings/installations/${installation.id}`;
+  }
+  return `https://github.com/settings/installations/${installation.id}`;
+}
+
+function personalInstallation(
+  installations: GithubUserInstallation[],
+): GithubUserInstallation | null {
+  return (
+    installations.find(
+      (installation) => installation.targetType.toLowerCase() === "user",
+    ) ?? null
+  );
+}
+
+/** The repositories the App installation actually reaches. */
 export async function listUserRepositories(
   userId: string,
   config: GithubIntegrationConfig,
-): Promise<GithubServiceResult<GithubRepository[]>> {
+): Promise<GithubServiceResult<GithubRepositoryList>> {
   const token = await resolveToken(userId, config);
   if (isGithubServiceFailure(token)) return { ok: false, code: token.code };
 
-  const repositories = await listRepositories(token.data);
-  if (isGithubFailure(repositories)) return repositories;
-  return { ok: true, data: repositories.data };
+  const access = await listRepositories(token.data);
+  if (isGithubFailure(access)) return access;
+  if (access.data.installations.length === 0) {
+    return { ok: false, code: "github_app_not_installed" };
+  }
+
+  const personal = personalInstallation(access.data.installations);
+  if (personal?.suspended) {
+    return {
+      ok: false,
+      code: "github_installation_suspended",
+      diagnostics: installationDiagnostics(personal),
+    };
+  }
+
+  const installation = personal ?? access.data.installations[0] ?? null;
+  return {
+    ok: true,
+    data: {
+      repositories: access.data.repositories,
+      repositorySelection: installation?.repositorySelection ?? null,
+      installationUrl: installation ? installationSettingsUrl(installation) : null,
+      installationSuspended: installation?.suspended === true,
+    },
+  };
 }
 
 export interface RepositoryBranchList {
@@ -239,9 +300,18 @@ export async function connectRepository(
   }
 
   const repositories = await listUserRepositories(input.userId, config);
-  if (isGithubServiceFailure(repositories)) return { ok: false, code: repositories.code };
+  if (isGithubServiceFailure(repositories)) {
+    return {
+      ok: false,
+      code: repositories.code,
+      upstream: repositories.upstream,
+      diagnostics: repositories.diagnostics,
+    };
+  }
 
-  const repository = repositories.data.find((entry) => entry.id === input.repositoryId);
+  const repository = repositories.data.repositories.find(
+    (entry) => entry.id === input.repositoryId,
+  );
   if (!repository) {
     // The id does not match anything this authorization can reach.
     return { ok: false, code: "github_not_found" };
@@ -278,15 +348,43 @@ export interface CreateRepositoryConnectionInput {
 }
 
 function allowsRepositoryCreation(permissions: Record<string, string>): boolean {
+  const writes = (level: string | undefined): boolean =>
+    level === "write" || level === "admin";
   return (
-    permissions.administration === "write" ||
-    permissions.repository_creation === "write"
+    writes(permissions.administration) ||
+    writes(permissions.repository_creation)
   );
 }
 
+function installationDiagnostics(
+  installation: GithubUserInstallation | null,
+): GithubInstallationDiagnostics {
+  return {
+    installationId: installation?.id ?? null,
+    installationUrl: installation ? installationSettingsUrl(installation) : null,
+    appId: installation?.appId ?? null,
+    appSlug: installation?.appSlug ?? null,
+    clientId: installation?.clientId ?? null,
+    repositorySelection: installation?.repositorySelection ?? null,
+    permissions: installation?.permissions ?? null,
+    suspended: installation?.suspended === true,
+  };
+}
+
+interface RepositoryCreationDiagnosis {
+  code: GithubServiceError;
+  diagnostics: GithubInstallationDiagnostics;
+}
+
+/**
+ * ⚠️ A 403 IS NOT PROOF THAT THE APP LACKS THE PERMISSION. The installation
+ * row tells us which App is actually running and which permissions GitHub has
+ * approved for it. If GitHub still refuses after the permission is present,
+ * the original error is kept rather than replaced with a misleading one.
+ */
 async function diagnoseRepositoryCreationDenial(
   accessToken: string,
-): Promise<GithubServiceError | null> {
+): Promise<RepositoryCreationDiagnosis | null> {
   const viewer = await getViewer(accessToken);
   if (isGithubFailure(viewer)) return null;
 
@@ -298,11 +396,19 @@ async function diagnoseRepositoryCreationDenial(
       installation.targetType.toLowerCase() === "user" &&
       installation.targetId === viewer.data.id,
   );
-  if (!personal) return "github_app_not_installed";
-  if (personal.permissions && !allowsRepositoryCreation(personal.permissions)) {
-    return "github_repository_creation_denied";
+  const candidate = personal ?? installations.data[0] ?? null;
+  const diagnostics = installationDiagnostics(candidate);
+
+  if (!personal) {
+    return { code: "github_app_not_installed", diagnostics };
   }
-  return null;
+  if (personal.suspended) {
+    return { code: "github_installation_suspended", diagnostics };
+  }
+  if (personal.permissions && !allowsRepositoryCreation(personal.permissions)) {
+    return { code: "github_installation_permissions_stale", diagnostics };
+  }
+  return { code: "github_no_write_permission", diagnostics };
 }
 
 /**
@@ -341,9 +447,14 @@ export async function createRepositoryAndConnect(
   });
   if (isGithubFailure(created)) {
     if (created.code === "github_no_write_permission") {
-      const denial = await diagnoseRepositoryCreationDenial(token.data);
-      if (denial) {
-        return { ok: false, code: denial, upstream: created.upstream };
+      const diagnosis = await diagnoseRepositoryCreationDenial(token.data);
+      if (diagnosis) {
+        return {
+          ok: false,
+          code: diagnosis.code,
+          upstream: created.upstream,
+          diagnostics: diagnosis.diagnostics,
+        };
       }
     }
     return { ok: false, code: created.code, upstream: created.upstream };
