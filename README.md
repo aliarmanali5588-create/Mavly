@@ -163,6 +163,23 @@ domain state. `08_figma_integration.sql` creates the encrypted per-project Figma
 connection. Configure the Mavly sign-in redirect as a bare `/auth/callback` URL
 with no query string, and keep Supabase's redirect allow-list tight.
 
+### GitHub App connection
+
+Create a GitHub App with a callback URL of `/auth/github/callback` and these repository
+permissions:
+
+- **Contents: Read and write** for push and import.
+- **Repository creation: Read and write** (or the broader **Administration: Read and
+  write**) for repository creation.
+- **Metadata: Read-only**, which GitHub includes automatically.
+
+Each user must install the App on their personal account, not only authorize it, or grant
+the updated permissions if the App is already installed. Make the App public if accounts
+other than its owner will use it. After changing App permissions, approve the update on
+GitHub and reconnect GitHub in Mavly so a fresh user access token is issued. Keep "Request
+user authorization (OAuth) during installation" disabled; Mavly uses the normal
+authorization callback.
+
 ### Figma connection
 
 Figma is connected with a user-owned personal access token, not Mavly's own credential.

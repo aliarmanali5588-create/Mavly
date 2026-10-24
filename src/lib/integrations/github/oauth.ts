@@ -367,6 +367,12 @@ export interface GithubOrganization {
   login: string;
 }
 
+export interface GithubUserInstallation {
+  targetId: number;
+  targetType: string;
+  permissions: Record<string, string> | null;
+}
+
 export interface GithubRepository {
   id: number;
   name: string;
@@ -431,6 +437,52 @@ export async function listOrganizations(
     if (id !== null && login) organizations.push({ id, login });
   }
   return { ok: true, data: organizations };
+}
+
+function parseInstallationPermissions(value: unknown): Record<string, string> | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const permissions: Record<string, string> = {};
+  for (const [key, level] of Object.entries(value)) {
+    if (
+      /^[a-z][a-z0-9_]*$/.test(key) &&
+      (level === "read" || level === "write" || level === "admin")
+    ) {
+      permissions[key] = level;
+    }
+  }
+  return permissions;
+}
+
+export async function listUserInstallations(
+  accessToken: string,
+): Promise<GithubResult<GithubUserInstallation[]>> {
+  const result = await githubApi("/user/installations?per_page=100", accessToken);
+  if (isGithubFailure(result)) return result;
+  if (!result.data || typeof result.data !== "object" || Array.isArray(result.data)) {
+    return { ok: false, code: "github_invalid_response" };
+  }
+
+  const rows = (result.data as { installations?: unknown }).installations;
+  if (!Array.isArray(rows)) return { ok: false, code: "github_invalid_response" };
+
+  const installations: GithubUserInstallation[] = [];
+  for (const item of rows) {
+    if (!item || typeof item !== "object") continue;
+    const row = item as Record<string, unknown>;
+    const targetId = typeof row.target_id === "number" ? row.target_id : null;
+    const targetType = nonEmptyString(row.target_type, 100);
+    if (targetId === null || !targetType) continue;
+    installations.push({
+      targetId,
+      targetType,
+      permissions: parseInstallationPermissions(row.permissions),
+    });
+  }
+
+  if (rows.length > 0 && installations.length === 0) {
+    return { ok: false, code: "github_invalid_response" };
+  }
+  return { ok: true, data: installations };
 }
 
 /**

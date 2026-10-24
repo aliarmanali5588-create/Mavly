@@ -92,6 +92,10 @@ const FAILURE_MESSAGES: Record<GithubServiceError, string> = {
   github_failed: "GitHub rejected the request.",
   github_no_write_permission:
     "Your GitHub authorization is missing the repository permission this action needs.",
+  github_app_not_installed:
+    "Install the Mavly GitHub App on your personal GitHub account, approve its repository access, then reconnect GitHub.",
+  github_repository_creation_denied:
+    "The GitHub App is installed but cannot create repositories. Grant its Repository creation (or Administration) read and write permission, approve the update on GitHub, then reconnect.",
   github_empty_repository: "That repository has no commits yet.",
   github_repository_exists:
     "A repository with that name already exists in your account.",
@@ -126,6 +130,8 @@ const FAILURE_STATUS: Record<GithubServiceError, number> = {
   github_invalid_response: 502,
   github_failed: 502,
   github_no_write_permission: 403,
+  github_app_not_installed: 403,
+  github_repository_creation_denied: 403,
   github_empty_repository: 409,
   github_repository_exists: 409,
   github_sso_required: 403,

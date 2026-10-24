@@ -34,6 +34,7 @@ import {
   listBranches,
   listOrganizations,
   listRepositories,
+  listUserInstallations,
   refreshAccessToken,
   type GithubBranch,
   type GithubOrganization,
@@ -73,6 +74,8 @@ export type GithubServiceError =
   | "github_not_connected"
   | "github_not_configured"
   | "github_no_write_permission"
+  | "github_app_not_installed"
+  | "github_repository_creation_denied"
   | "github_empty_repository"
   | "github_repository_exists"
   | "github_sso_required"
@@ -274,6 +277,34 @@ export interface CreateRepositoryConnectionInput {
   description?: string | null;
 }
 
+function allowsRepositoryCreation(permissions: Record<string, string>): boolean {
+  return (
+    permissions.administration === "write" ||
+    permissions.repository_creation === "write"
+  );
+}
+
+async function diagnoseRepositoryCreationDenial(
+  accessToken: string,
+): Promise<GithubServiceError | null> {
+  const viewer = await getViewer(accessToken);
+  if (isGithubFailure(viewer)) return null;
+
+  const installations = await listUserInstallations(accessToken);
+  if (isGithubFailure(installations)) return null;
+
+  const personal = installations.data.find(
+    (installation) =>
+      installation.targetType.toLowerCase() === "user" &&
+      installation.targetId === viewer.data.id,
+  );
+  if (!personal) return "github_app_not_installed";
+  if (personal.permissions && !allowsRepositoryCreation(personal.permissions)) {
+    return "github_repository_creation_denied";
+  }
+  return null;
+}
+
 /**
  * ⭐ CREATE A REPOSITORY AND CONNECT IT, IN ONE JOURNEY.
  *
@@ -309,6 +340,12 @@ export async function createRepositoryAndConnect(
     description: input.description,
   });
   if (isGithubFailure(created)) {
+    if (created.code === "github_no_write_permission") {
+      const denial = await diagnoseRepositoryCreationDenial(token.data);
+      if (denial) {
+        return { ok: false, code: denial, upstream: created.upstream };
+      }
+    }
     return { ok: false, code: created.code, upstream: created.upstream };
   }
 

@@ -5024,7 +5024,7 @@ const base = {
       createRepositoryFailed: "We couldn't create that repository",
       repositoryNameTaken: "A repository with that name already exists in your account.",
       createRepositoryPermission:
-        "Your GitHub authorization cannot create repositories. Check the GitHub App's permissions, then try again.",
+        "Your GitHub App cannot create repositories. Install it on this account, grant Repository creation (or Administration) read and write, approve the update, then reconnect GitHub.",
       repositoryCreated: "Repository created and connected",
       repositoryCreatedFirstPush:
         "Repository created — first push pending. The first push will create {branch}.",
