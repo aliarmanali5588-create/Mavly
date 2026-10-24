@@ -49,6 +49,7 @@ import {
   isSafeProjectPath,
   MAX_GITHUB_FILES,
   MAX_GITHUB_FILE_BYTES,
+  TOO_MANY_FILES_REASON,
 } from "./safety";
 import {
   getRepositoryConnection,
@@ -78,7 +79,9 @@ export type GithubServiceError =
   | "github_policy_blocked"
   | "github_abuse_blocked"
   | "github_email_unverified"
+  | "github_tree_truncated"
   | "github_import_too_large"
+  | "github_too_many_files"
   | "store_unavailable"
   | "project_not_connected";
 
@@ -445,6 +448,9 @@ export async function pushProjectSource(
   const policy = applyFilePolicy(
     files.data.map((file) => ({ path: file.path, content: file.content })),
   );
+  if (policy.excluded.some((file) => file.reason === TOO_MANY_FILES_REASON)) {
+    return { ok: false, code: "github_too_many_files" };
+  }
 
   /**
    * ⭐ THE FIRST PUSH OF AN EMPTY REPOSITORY CREATES THE INTENDED BRANCH.
@@ -578,7 +584,11 @@ export async function importProjectSource(
     connection.data.repository_name,
     head.data.treeSha,
   );
-  if (isGithubFailure(tree)) return tree;
+  if (isGithubFailure(tree)) {
+    return tree.code === "github_tree_truncated"
+      ? { ok: false, code: "github_import_too_large" }
+      : tree;
+  }
 
   /**
    * ⚠️ NO EARLY BREAK. The old loop stopped at MAX_GITHUB_FILES while reading,

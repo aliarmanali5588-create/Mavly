@@ -103,8 +103,12 @@ const FAILURE_MESSAGES: Record<GithubServiceError, string> = {
     "GitHub blocked this request as suspected abuse. Check the account status on GitHub.",
   github_email_unverified:
     "Verify your GitHub email address, then try again.",
+  github_tree_truncated:
+    "GitHub returned an incomplete repository tree. Try again, or use a smaller repository.",
   github_import_too_large:
     "This repository has more files than Mavly can import in one pass. Import a smaller repository.",
+  github_too_many_files:
+    "This project has more files than Mavly can move in one pass.",
   github_not_connected: "Connect GitHub first.",
   github_not_configured:
     "The GitHub integration is not configured on this deployment.",
@@ -128,7 +132,9 @@ const FAILURE_STATUS: Record<GithubServiceError, number> = {
   github_policy_blocked: 403,
   github_abuse_blocked: 403,
   github_email_unverified: 403,
+  github_tree_truncated: 502,
   github_import_too_large: 413,
+  github_too_many_files: 413,
   github_not_connected: 409,
   github_not_configured: 503,
   store_unavailable: 500,

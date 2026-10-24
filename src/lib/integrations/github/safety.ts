@@ -83,10 +83,12 @@ export const MAX_GITHUB_TOTAL_BYTES = 1_500_000;
  * The largest number of files in one push or one import.
  *
  * ⚠️ THIS IS AN EXPLICIT LIMIT, NOT A SILENT TRUNCATION POINT. An import that
- * exceeds it fails before writing anything and tells the user why; it never
- * imports the first N files and reports success.
+ * exceeds it fails before writing anything, and a push refuses to send a
+ * partial commit; neither moves the first N files and reports success.
  */
 export const MAX_GITHUB_FILES = 2_000;
+/** The exclusion reason callers use to refuse a partial push or import. */
+export const TOO_MANY_FILES_REASON = "too many files to move at once";
 
 /**
  * Is this path one Mavly refuses to move at all?
@@ -245,7 +247,7 @@ export function applyFilePolicy<T extends { path: string; content: string }>(
   if (included.length > MAX_GITHUB_FILES) {
     const overflow = included.slice(MAX_GITHUB_FILES);
     for (const file of overflow) {
-      excluded.push({ path: file.path, reason: "too many files to move at once" });
+      excluded.push({ path: file.path, reason: TOO_MANY_FILES_REASON });
     }
     included.length = MAX_GITHUB_FILES;
   }

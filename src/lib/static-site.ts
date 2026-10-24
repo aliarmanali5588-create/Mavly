@@ -66,19 +66,94 @@ export interface StaticSiteResolution {
   unsupported: boolean;
 }
 
+const FRAMEWORK_CONFIGS: readonly [RegExp, string][] = [
+  [/(?:^|\/)next\.config\.(?:js|cjs|mjs|ts)$/i, "Next.js"],
+  [/(?:^|\/)vite\.config\.(?:js|cjs|mjs|ts)$/i, "Vite"],
+  [/(?:^|\/)nuxt\.config\.(?:js|cjs|mjs|ts)$/i, "Nuxt"],
+  [/(?:^|\/)svelte\.config\.(?:js|cjs|mjs|ts)$/i, "SvelteKit"],
+  [/(?:^|\/)astro\.config\.(?:js|cjs|mjs|ts)$/i, "Astro"],
+  [/(?:^|\/)gatsby-config\.(?:js|cjs|mjs|ts)$/i, "Gatsby"],
+  [/(?:^|\/)remix\.config\.(?:js|cjs|mjs|ts)$/i, "Remix"],
+  [/(?:^|\/)angular\.json$/i, "Angular"],
+];
+
+const FRAMEWORK_DEPENDENCIES: readonly [string, string][] = [
+  ["next", "Next.js"],
+  ["nuxt", "Nuxt"],
+  ["@sveltejs/kit", "SvelteKit"],
+  ["gatsby", "Gatsby"],
+  ["@remix-run/react", "Remix"],
+  ["astro", "Astro"],
+  ["react-scripts", "Create React App"],
+  ["@angular/core", "Angular"],
+  ["@docusaurus/core", "Docusaurus"],
+  ["vite", "Vite"],
+];
+
+function packageFramework(content: string): string | null {
+  try {
+    const parsed = JSON.parse(content) as {
+      dependencies?: Record<string, unknown>;
+      devDependencies?: Record<string, unknown>;
+    };
+    const names = new Set([
+      ...Object.keys(parsed.dependencies ?? {}),
+      ...Object.keys(parsed.devDependencies ?? {}),
+    ]);
+    for (const [dependency, label] of FRAMEWORK_DEPENDENCIES) {
+      if (names.has(dependency)) return label;
+    }
+  } catch {
+    /* A malformed package.json is not proof of a framework. */
+  }
+  return null;
+}
+
+function detectFramework(
+  files: readonly { path: string; content: string }[],
+): string | null {
+  for (const file of files) {
+    for (const [pattern, label] of FRAMEWORK_CONFIGS) {
+      if (pattern.test(file.path)) return label;
+    }
+    if (file.path === "package.json") {
+      const label = packageFramework(file.content);
+      if (label) return label;
+    }
+  }
+  return null;
+}
+
 /**
  * Resolve the preview and refuse the cases that only LOOK static.
  *
- * A Vite/CRA-style root `index.html` points at `/src/main.tsx` (or another
- * framework entry). Serving that document as-is is a blank page with a 200,
- * which is worse than saying the repository needs a build. Generated
- * `preview.html` always wins: it is already self-contained.
+ * A Vite/CRA-style entry points at `/src/main.tsx` (or another framework
+ * entry), and a Next.js repository often has no root `index.html` at all.
+ * Serving either as-is is a blank page with a 200, which is worse than saying
+ * the repository needs a build. Generated `preview.html` always wins: it is
+ * already self-contained.
  */
 export function resolveStaticPreview(
   files: readonly { path: string; content: string }[],
 ): StaticSiteResolution {
   const paths = files.map((file) => file.path);
   const site = resolveStaticSite(paths);
+  if (site?.generated) return { site, reason: "", unsupported: false };
+
+  /**
+   * ⚠️ A FRAMEWORK REPOSITORY OFTEN HAS NO ROOT index.html AT ALL (Next.js), or
+   * an index.html that only points at /src/main.js (Vite). Both need a build,
+   * so package.json and config files are checked before the entry document.
+   */
+  const framework = detectFramework(files);
+  if (framework) {
+    return {
+      site: null,
+      reason: `This repository uses ${framework} and needs a build. Mavly only previews static HTML and does not build or run imported source.`,
+      unsupported: true,
+    };
+  }
+
   if (!site) {
     return {
       site: null,
@@ -87,11 +162,10 @@ export function resolveStaticPreview(
       unsupported: false,
     };
   }
-  if (site.generated) return { site, reason: "", unsupported: false };
 
   const entry = files.find((file) => file.path === site.entryPath);
   const html = entry?.content ?? "";
-  const frameworkEntry = /<(?:script|link)\b[^>]+(?:src|href)\s*=\s*["'][^"']*(?:\/src\/|\.tsx?(?:[?#"'])|\/main\.(?:jsx?|tsx?)(?:[?#"']))/i;
+  const frameworkEntry = /<(?:script|link)\b[^>]+(?:src|href)\s*=\s*["'][^"']*(?:\.(?:ts|tsx|jsx)(?:[?#"'])|@vite\/client)/i;
   if (frameworkEntry.test(html)) {
     return {
       site: null,

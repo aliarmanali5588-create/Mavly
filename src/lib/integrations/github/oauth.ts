@@ -45,7 +45,8 @@ export type GithubErrorCode =
   | "github_sso_required"
   | "github_policy_blocked"
   | "github_abuse_blocked"
-  | "github_email_unverified";
+  | "github_email_unverified"
+  | "github_tree_truncated";
 
 export interface GithubUpstreamError {
   status: number;

@@ -171,6 +171,15 @@ export async function readTree(
   const tree = (result.data as { tree?: unknown })?.tree;
   if (!Array.isArray(tree)) return { ok: false, code: "github_invalid_response" };
 
+  /**
+   * ⚠️ GITHUB TRUNCATES LARGE TREES. A truncated response is not the whole
+   * branch, so importing it would silently write an incomplete project and a
+   * push could mistake real remote files for deletions. Both must fail.
+   */
+  if ((result.data as { truncated?: unknown }).truncated === true) {
+    return { ok: false, code: "github_tree_truncated" };
+  }
+
   const entries: RemoteTreeEntry[] = [];
   for (const item of tree) {
     if (!item || typeof item !== "object") continue;

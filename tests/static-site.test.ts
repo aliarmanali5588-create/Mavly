@@ -34,9 +34,37 @@ test("public/index.html resolves assets under public", () => {
   assert.equal(staticPreviewPath(resolved.site!, "assets/app.js"), "public/assets/app.js");
 });
 
-test("a Vite/CRA entry is reported as needing a build", () => {
+test("a TypeScript entry is reported as needing a build", () => {
   const resolved = resolveStaticPreview([
     file("index.html", '<script type="module" src="/src/main.tsx"></script>'),
+  ]);
+  assert.equal(resolved.site, null);
+  assert.equal(resolved.unsupported, true);
+});
+
+test("a framework repository without an index is reported as needing a build", () => {
+  const resolved = resolveStaticPreview([
+    file("package.json", JSON.stringify({ dependencies: { next: "16.0.0" } })),
+    file("app/page.tsx", "export default function Page() { return null; }"),
+  ]);
+  assert.equal(resolved.site, null);
+  assert.equal(resolved.unsupported, true);
+  assert.match(resolved.reason, /Next\.js/);
+});
+
+test("a static site that loads /main.js is not mistaken for a framework app", () => {
+  const resolved = resolveStaticPreview([
+    file("index.html", '<script src="/main.js"></script>'),
+    file("main.js", "console.log('ok');"),
+  ]);
+  assert.equal(resolved.site?.entryPath, "index.html");
+  assert.equal(resolved.unsupported, false);
+});
+
+test("a Vite index that points at /src/main.js is still reported as needing a build", () => {
+  const resolved = resolveStaticPreview([
+    file("package.json", JSON.stringify({ devDependencies: { vite: "7.0.0" } })),
+    file("index.html", '<script type="module" src="/src/main.js"></script>'),
   ]);
   assert.equal(resolved.site, null);
   assert.equal(resolved.unsupported, true);

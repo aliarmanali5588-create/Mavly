@@ -38,7 +38,14 @@ export function PreviewPanel({ previewUrl, onRefresh, loading, mobilePreview = f
   const [iframeLoading, setIframeLoading] = useState(true);
   /** ⚠️ The proxy wins when present — see `proxiedSrc`. */
   const base = (proxiedSrc || previewUrl || "").replace(/\/$/, "");
-  const fullIframeUrl = base ? `${base}${iframePath === "/" ? "" : iframePath}` : null;
+  const path = iframePath && iframePath !== "/"
+    ? (iframePath.startsWith("/") ? iframePath : `/${iframePath}`)
+    : "/";
+  /**
+   * ⚠️ THE ROOT KEEPS ITS TRAILING SLASH. Without it, a relative `style.css`
+   * resolves to `/api/preview/style.css` instead of `/api/preview/{id}/style.css`.
+   */
+  const fullIframeUrl = base ? `${base}${path}` : null;
 
   return (
     <div className="h-full flex flex-col overflow-hidden">
