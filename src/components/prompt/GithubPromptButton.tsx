@@ -53,7 +53,11 @@ import { cn } from "@/lib/utils";
 
 
 export interface GithubPromptButtonProps {
-    projectId: string;
+    /**
+     * The project this button reports on. Omitted on the dashboard, where no
+     * project exists yet: the button becomes the entry point to the import flow.
+     */
+    projectId?: string;
     /** Opens the full connect / manage modal. */
     onOpenModal: () => void;
     /** Lifts the real connection state so the rest of the workspace agrees with it. */
@@ -91,6 +95,8 @@ export function GithubPromptButton({
     }, []);
 
     const loadStatus = React.useCallback(async () => {
+        // No project yet: the button only opens the import flow.
+        if (!projectId) return;
         const response = await githubApi.status(projectId);
         if (!mounted.current) return;
 
@@ -168,7 +174,11 @@ export function GithubPromptButton({
                         <GithubIcon className="size-4" aria-hidden />
                     </Button>
                 </TooltipTrigger>
-                <TooltipContent>{t("workspace.github.connect")}</TooltipContent>
+                <TooltipContent>
+                    {projectId
+                        ? t("workspace.github.connect")
+                        : t("workspace.github.importFromGithub")}
+                </TooltipContent>
             </Tooltip>
         );
     }

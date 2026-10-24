@@ -14,6 +14,8 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { FigmaModal } from "@/components/workspace/FigmaModal";
 import { FigmaPromptButton } from "@/components/prompt/FigmaPromptButton";
+import { GithubModal } from "@/components/workspace/GithubModal";
+import { GithubPromptButton } from "@/components/prompt/GithubPromptButton";
 import { AuthNav } from "@/components/auth/AuthNav";
 import { AnimatedPlaceholder } from "@/components/builder/AnimatedPlaceholder";
 import { shouldAnimatePlaceholder, shouldSubmitPrompt } from "@/lib/animated-placeholder";
@@ -350,6 +352,25 @@ export default function DashboardPage({ profile }: { profile: ProfileSummary }) 
   const [figmaToken, setFigmaToken] = useState<string | null>(null);
   const [figmaModalOpen, setFigmaModalOpen] = useState(false);
 
+  /**
+   * ═══⭐ GITHUB IMPORT BEFORE A PROJECT EXISTS ═══════════════════════════════
+   *
+   * `GithubModal` connects a repository to a project, so the dashboard needs a
+   * project first. A small name step creates one through the same `projects.create`
+   * API the Build flow uses, then hands it to the existing modal. The modal still
+   * owns authorization, repository selection, the import plan, recovery points and
+   * every safety check.
+   *
+   * ⚠️ THE PROJECT OUTLIVES A CANCELLED MODAL. It is a real, empty project, not a
+   * fake id; closing the dialog before importing leaves it available in the list.
+   */
+  const [githubProjectId, setGithubProjectId] = useState<string | null>(null);
+  const [githubModalOpen, setGithubModalOpen] = useState(false);
+  const [githubNameModalOpen, setGithubNameModalOpen] = useState(false);
+  const [githubName, setGithubName] = useState("github-import");
+  const [githubNameError, setGithubNameError] = useState<string | null>(null);
+  const [githubNameCreating, setGithubNameCreating] = useState(false);
+
   /** A Figma link from the popover lands in the box, appended to whatever is there. */
   const appendToPrompt = useCallback((text: string) => {
     setFirstPrompt((current) => {
@@ -492,6 +513,50 @@ export default function DashboardPage({ profile }: { profile: ProfileSummary }) 
     const words = prompt.trim().toLowerCase().replace(/[^a-z0-9\s]/g, "").split(/\s+/).filter(Boolean).slice(0, 4).join("-");
     const base = words.length >= 3 ? words : `app-${words}`;
     return normalizeId(base) || "my-app";
+  };
+
+  /**
+   * ⭐ GITHUB FROM THE HERO COMPOSER. Once a project has been created for this
+   * attempt, reopening goes straight to the existing modal.
+   */
+  const openGithubImport = () => {
+    if (githubProjectId) {
+      setGithubModalOpen(true);
+      return;
+    }
+    setGithubName(firstPrompt.trim() ? suggestName(firstPrompt) : "github-import");
+    setGithubNameError(null);
+    setGithubNameModalOpen(true);
+  };
+
+  const confirmGithubProject = async () => {
+    const id = normalizeId(githubName);
+    if (id.length < 3) {
+      setGithubNameError("Project name must be at least 3 characters (lowercase, hyphens allowed).");
+      return;
+    }
+    setGithubNameCreating(true);
+    setGithubNameError(null);
+
+    const created = await vcaasApi.projects.create({
+      projectId: id,
+      description: "Imported from GitHub",
+      engineVersion: "v2",
+    });
+    if (!created.ok || !created.data) {
+      setGithubNameError(created.error || `Could not create "${id}".`);
+      setGithubNameCreating(false);
+      return;
+    }
+
+    const actualId = created.data.projectId;
+    if (actualId !== id) {
+      toast.info(`"${id}" was taken — your project is "${actualId}".`);
+    }
+    setGithubProjectId(actualId);
+    setGithubNameModalOpen(false);
+    setGithubNameCreating(false);
+    setGithubModalOpen(true);
   };
 
   /**
@@ -796,6 +861,8 @@ export default function DashboardPage({ profile }: { profile: ProfileSummary }) 
                     }}
                     disconnectConfirm={t("workspace.figma.disconnectPendingConfirm")}
                   />
+                  {/* ⭐ GitHub, beside Figma. Reuses the workspace's import modal. */}
+                  <GithubPromptButton onOpenModal={openGithubImport} />
                 </div>
                 <button
                   onClick={openBuildModal}
@@ -1101,6 +1168,59 @@ export default function DashboardPage({ profile }: { profile: ProfileSummary }) 
         </DialogContent>
       </Dialog>
 
+      {/* ⭐ The empty project the existing GitHub import dialog will target. */}
+      <Dialog
+        open={githubNameModalOpen}
+        onOpenChange={(open) => {
+          if (!githubNameCreating) setGithubNameModalOpen(open);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader><DialogTitle>Create a project for GitHub</DialogTitle></DialogHeader>
+          <div className="space-y-4 mt-4">
+            <p className="text-sm text-gray-500">
+              Mavly imports a repository into a project. Name the project first, then choose
+              the repository and branch in the GitHub dialog.
+            </p>
+            <div>
+              <Label>Project name</Label>
+              <Input
+                autoFocus
+                placeholder="github-import"
+                value={githubName}
+                onChange={(e) => {
+                  setGithubName(e.target.value);
+                  if (githubNameError) setGithubNameError(null);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !githubNameCreating) void confirmGithubProject();
+                }}
+                className="mt-1.5"
+              />
+              <p className="text-xs text-gray-400 mt-1">
+                3-35 chars, lowercase, hyphens allowed. Final id:{" "}
+                <span className="font-mono text-gray-500">{normalizeId(githubName) || "…"}</span>
+              </p>
+            </div>
+            {githubNameError && (
+              <div className="flex items-start gap-2 text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg p-2.5">
+                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                <span>{githubNameError}</span>
+              </div>
+            )}
+            <Button
+              className="w-full"
+              onClick={() => void confirmGithubProject()}
+              disabled={githubNameCreating || normalizeId(githubName).length < 3}
+            >
+              {githubNameCreating
+                ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Creating...</>
+                : <><ArrowRight className="w-4 h-4 mr-2" /> Continue to GitHub</>}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* Beautiful destructive confirmation modal */}
       <Dialog open={!!deleteTarget} onOpenChange={(o) => { if (!o && !deleting) setDeleteTarget(null); }}>
         <DialogContent className="sm:max-w-md overflow-hidden p-0 gap-0">
@@ -1161,6 +1281,23 @@ export default function DashboardPage({ profile }: { profile: ProfileSummary }) 
         onStatusChange={() => { /* no project yet — `figmaToken` drives the tint */ }}
         onPendingToken={token => setFigmaToken(token)}
       />
+
+      {/*
+        ⭐ THE WORKSPACE'S GITHUB DIALOG, UNCHANGED. It targets the project created
+        above and, on a completed import, sends the user to that project's workspace.
+      */}
+      {githubProjectId ? (
+        <GithubModal
+          open={githubModalOpen}
+          onOpenChange={setGithubModalOpen}
+          projectId={githubProjectId}
+          onStatusChange={() => { /* the dashboard has no connected dot */ }}
+          onProjectChanged={() => {
+            setGithubModalOpen(false);
+            router.push(`/project/${githubProjectId}`);
+          }}
+        />
+      ) : null}
 
       {/* ═══ EXPORT · IMPORT · DUPLICATE — totalum-platform's dialogs, unchanged ═══ */}
       <ExportProjectDialog
