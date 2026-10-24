@@ -79,8 +79,14 @@ const EXCLUDED_EXTENSIONS = new Set([
 export const MAX_GITHUB_FILE_BYTES = 256 * 1024;
 /** The largest total payload of one push or one import. */
 export const MAX_GITHUB_TOTAL_BYTES = 1_500_000;
-/** The largest number of files in one push or one import. */
-export const MAX_GITHUB_FILES = 100;
+/**
+ * The largest number of files in one push or one import.
+ *
+ * ⚠️ THIS IS AN EXPLICIT LIMIT, NOT A SILENT TRUNCATION POINT. An import that
+ * exceeds it fails before writing anything and tells the user why; it never
+ * imports the first N files and reports success.
+ */
+export const MAX_GITHUB_FILES = 2_000;
 
 /**
  * Is this path one Mavly refuses to move at all?
@@ -224,7 +230,7 @@ export function applyFilePolicy<T extends { path: string; content: string }>(
       continue;
     }
     if (totalBytes + bytes > MAX_GITHUB_TOTAL_BYTES) {
-      excluded.push({ path: file.path, reason: "the project is too large to push" });
+      excluded.push({ path: file.path, reason: "the project is too large" });
       continue;
     }
     if (looksLikeSecret(file.content)) {
@@ -239,7 +245,7 @@ export function applyFilePolicy<T extends { path: string; content: string }>(
   if (included.length > MAX_GITHUB_FILES) {
     const overflow = included.slice(MAX_GITHUB_FILES);
     for (const file of overflow) {
-      excluded.push({ path: file.path, reason: "too many files to push at once" });
+      excluded.push({ path: file.path, reason: "too many files to move at once" });
     }
     included.length = MAX_GITHUB_FILES;
   }

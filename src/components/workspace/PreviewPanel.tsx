@@ -30,9 +30,11 @@ interface PreviewPanelProps {
   frameRef?: RefObject<HTMLIFrameElement | null>;
   /** The run's stage in words (new engine), shown under the building loader. */
   buildStage?: string | null;
+  /** Why a source that exists cannot be previewed (for example, it needs a build). */
+  emptyMessage?: string | null;
 }
 
-export function PreviewPanel({ previewUrl, onRefresh, loading, mobilePreview = false, iframePath = "/", cached = false, proxiedSrc, frameRef, buildStage }: PreviewPanelProps) {
+export function PreviewPanel({ previewUrl, onRefresh, loading, mobilePreview = false, iframePath = "/", cached = false, proxiedSrc, frameRef, buildStage, emptyMessage }: PreviewPanelProps) {
   const [iframeLoading, setIframeLoading] = useState(true);
   /** ⚠️ The proxy wins when present — see `proxiedSrc`. */
   const base = (proxiedSrc || previewUrl || "").replace(/\/$/, "");
@@ -55,7 +57,7 @@ export function PreviewPanel({ previewUrl, onRefresh, loading, mobilePreview = f
             <div className="flex flex-col items-center justify-center text-center px-8">
               <Monitor className="w-10 h-10 text-gray-300 mb-4" />
               <p className="text-sm font-medium text-gray-500 mb-1">No preview yet</p>
-              <p className="text-xs text-gray-400">Send a prompt to start building</p>
+              <p className="text-xs text-gray-400">{emptyMessage ?? "Send a prompt or import a static site with an index.html"}</p>
             </div>
           )
         ) : (

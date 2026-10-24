@@ -5,21 +5,24 @@
  * `projectId`. This module repeats the project read through the caller's
  * RLS-scoped client, then:
  *
- *   1. reads the standalone `preview.html` from public.project_files;
+ *   1. resolves the project's static entry point (`preview.html`, `index.html`,
+ *      or `public/index.html`) from public.project_files;
  *   2. creates one deterministic Vercel project per Mavly project (or reuses it);
  *   3. attaches the derived `<project-id>.mavly.xyz` domain and verifies it;
- *   4. uploads the preview as `index.html` and creates a production deployment;
+ *   4. uploads the static site and creates a production deployment with no
+ *      framework build;
  *   5. records the Vercel ids, build state and domain state in
  *      public.project_deployments.
  *
- * ⚠️ ONLY THE STATIC PREVIEW IS PUBLISHED. The generated Next.js source is not
- * built or executed by either Mavly or Vercel. This keeps the first deployment
- * path small and avoids executing arbitrary generated dependencies.
+ * ⚠️ ONLY STATIC FILES ARE PUBLISHED. Source that needs a framework build is
+ * refused with an actionable message instead of being reported as a failed
+ * build. Neither Mavly nor Vercel executes the imported source.
  */
 
 import type { DeploymentStatus as WireDeploymentStatus } from "@/lib/vcaas-types";
+import { resolveStaticPreview, staticPublishFiles } from "@/lib/static-site";
 import { mavlyHostname } from "@/lib/mavly-hostname";
-import { getFile, getProject, isStoreFailure } from "@/lib/mavly/store";
+import { getProject, isStoreFailure, listFiles } from "@/lib/mavly/store";
 import {
   isVercelDeploymentConfigFailure,
   readVercelDeploymentConfig,
@@ -51,8 +54,8 @@ import {
   type MavlyDomainStatus,
 } from "./store";
 
-const PREVIEW_PATH = "preview.html";
-const PREVIEW_MAX_BYTES = 1_000_000;
+const PUBLISH_MAX_BYTES = 8_000_000;
+const PUBLISH_MAX_FILES = 1_000;
 const ERROR_MESSAGE_MAX = 500;
 const DOMAIN_CHECK_INTERVAL_MS = 60_000;
 
@@ -379,15 +382,39 @@ export async function publishProject(
   }
   if (!project.data) return fail(404, "PROJECT_NOT_FOUND", "Project not found.");
 
-  const preview = await getFile(projectId, PREVIEW_PATH);
-  if (isStoreFailure(preview)) {
-    return fail(500, "UNKNOWN", "Could not read the project preview.");
+  const files = await listFiles(projectId);
+  if (isStoreFailure(files)) {
+    return fail(500, "UNKNOWN", "Could not read the project source.");
   }
-  if (!preview.data) {
-    return fail(400, "VALIDATION", "This project has no preview to publish yet.");
+  const resolved = resolveStaticPreview(
+    files.data.map((file) => ({ path: file.path, content: file.content })),
+  );
+  if (!resolved.site) {
+    return fail(
+      400,
+      "VALIDATION",
+      resolved.reason,
+    );
   }
-  if (Buffer.byteLength(preview.data.content, "utf8") > PREVIEW_MAX_BYTES) {
-    return fail(400, "VALIDATION", "The preview is too large to publish.");
+  const publishFiles = staticPublishFiles(
+    files.data.map((file) => ({ path: file.path, content: file.content })),
+    resolved.site,
+  );
+  if (publishFiles.length === 0 || publishFiles.length > PUBLISH_MAX_FILES) {
+    return fail(
+      400,
+      "VALIDATION",
+      publishFiles.length === 0
+        ? "This project has no static files to publish."
+        : "This static site has too many files to publish in one pass.",
+    );
+  }
+  const totalBytes = publishFiles.reduce(
+    (total, file) => total + Buffer.byteLength(file.content, "utf8"),
+    0,
+  );
+  if (totalBytes > PUBLISH_MAX_BYTES) {
+    return fail(400, "VALIDATION", "This static site is too large to publish in one pass.");
   }
 
   const hostname = mavlyHostname(projectId);
@@ -489,16 +516,20 @@ export async function publishProject(
     return fail(500, "UNKNOWN", "Could not save the project's Mavly address.");
   }
 
-  const uploaded = await uploadDeploymentFile(config.config, "index.html", preview.data.content);
-  if (isVercelFailure(uploaded)) {
-    await recordFailure(projectId, uploaded.failure);
-    return fromVercel(uploaded.failure);
+  const uploadedFiles: { file: string; sha: string; size: number }[] = [];
+  for (const file of publishFiles) {
+    const uploaded = await uploadDeploymentFile(config.config, file.path, file.content);
+    if (isVercelFailure(uploaded)) {
+      await recordFailure(projectId, uploaded.failure);
+      return fromVercel(uploaded.failure);
+    }
+    uploadedFiles.push(uploaded.data);
   }
 
   const deployment = await createVercelDeployment(config.config, {
     name,
     project: vercelProjectId,
-    files: [uploaded.data],
+    files: uploadedFiles,
   });
   if (isVercelFailure(deployment)) {
     await recordFailure(projectId, deployment.failure);

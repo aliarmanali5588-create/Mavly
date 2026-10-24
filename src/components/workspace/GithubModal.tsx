@@ -1000,9 +1000,18 @@ export function GithubModal({
                             </p>
                         ) : null}
                         {importPlan.excluded.length > 0 ? (
-                            <p className="text-muted-foreground">
-                                {t("workspace.github.excludedFiles", { count: importPlan.excluded.length })}
-                            </p>
+                            <div className="space-y-1">
+                                <p className="text-muted-foreground">
+                                    {t("workspace.github.excludedFiles", { count: importPlan.excluded.length })}
+                                </p>
+                                <ul className="text-muted-foreground max-h-24 overflow-auto font-mono">
+                                    {importPlan.excluded.slice(0, 8).map((file) => (
+                                        <li key={`${file.path}:${file.reason}`}>
+                                            {file.path} — {file.reason}
+                                        </li>
+                                    ))}
+                                </ul>
+                            </div>
                         ) : null}
                     </div>
                 ) : null}

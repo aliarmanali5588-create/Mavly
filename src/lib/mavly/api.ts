@@ -29,6 +29,7 @@ import { isAiConfigured } from "@/lib/ai/openrouter";
 import { resolveModel } from "@/lib/ai/models";
 import { sanitizeProjectPath } from "@/lib/ai/agent";
 import { validateProjectSlug } from "@/lib/project-slug";
+import { resolveStaticPreview } from "@/lib/static-site";
 import {
   createOwnedProject,
   createRun,
@@ -36,7 +37,6 @@ import {
   finishRun,
   getFile,
   getProject,
-  hasFile,
   insertMessage,
   isStoreFailure,
   latestRun,
@@ -246,7 +246,7 @@ async function createProjectResponse(userId: string, body: unknown): Promise<Nex
   const created = await createOwnedProject(userId, requestedId, description, label);
   if (isStoreFailure(created)) return fail(created.code === "CONFLICT" ? 409 : 500, created.code ?? "UNKNOWN", created.error);
 
-  return ok(projectFromRow(created.data, null, false, null));
+  return ok(projectFromRow(created.data, null, false, null, null));
 }
 
 async function launchProjectResponse(userId: string, body: unknown): Promise<NextResponse> {
@@ -321,14 +321,15 @@ async function projectResponse(userId: string, projectId: string): Promise<NextR
 
   const run = await latestRun(projectId);
   if (isStoreFailure(run)) return fail(500, "UNKNOWN", "Could not load this project.");
-  const preview = await hasFile(projectId, "preview.html");
+  const preview = await staticPreviewState(projectId);
   const deployment = await getDeploymentRow(projectId);
 
   return ok(
     projectFromRow(
       project.data,
       run.data,
-      preview,
+      preview.available,
+      preview.reason,
       isDeploymentStoreFailure(deployment) ? null : deployment.data,
     ),
   );
@@ -343,13 +344,14 @@ async function updateProjectResponse(userId: string, projectId: string, body: un
   if (isStoreFailure(updated)) return fail(500, "UNKNOWN", "Could not update this project.");
 
   const run = await latestRun(projectId);
-  const preview = await hasFile(projectId, "preview.html");
+  const preview = await staticPreviewState(projectId);
   const deployment = await getDeploymentRow(projectId);
   return ok(
     projectFromRow(
       updated.data,
       isStoreFailure(run) ? null : run.data,
-      preview,
+      preview.available,
+      preview.reason,
       isDeploymentStoreFailure(deployment) ? null : deployment.data,
     ),
   );
@@ -794,10 +796,26 @@ async function snapshotRestoreResponse(
   };
   return ok(data);
 }
+
+async function staticPreviewState(
+  projectId: string,
+): Promise<{ available: boolean; reason: string | null }> {
+  const files = await listFiles(projectId);
+  if (!files.ok) return { available: false, reason: null };
+  const resolved = resolveStaticPreview(
+    files.data.map((file) => ({ path: file.path, content: file.content })),
+  );
+  return {
+    available: resolved.site !== null,
+    reason: resolved.unsupported ? resolved.reason : null,
+  };
+}
+
 function projectFromRow(
   row: ProjectRow,
   run: RunRow | null,
   preview: boolean,
+  previewUnavailableReason: string | null,
   deployment: DeploymentRow | null,
 ): VcaasProject {
   const previewPath = `/api/preview/${encodeURIComponent(row.project_id)}/`;
@@ -864,6 +882,7 @@ function projectFromRow(
     preview: previewUrl
       ? { temporalLinkUrl: previewUrl, url: previewUrl, deployState: "idle" }
       : null,
+    previewUnavailableReason,
     lifecycle: { state: "active", pausedAt: null, resumable: false },
     state: "active",
     busy: run && isRunActive(run) ? { kind: "agent", startedAt: run.started_at } : null,

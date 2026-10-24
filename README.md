@@ -7,10 +7,11 @@ editor surfaces and settings dialogs of an AI app builder.
 > **Current status: local AI builder.** Supabase authentication and project ownership are
 > real. OpenRouter, called only from the server, generates a complete frontend and backend
 > project. Supabase stores the generated source, conversation and run state; the workspace
-> previews the generated static `preview.html`. A user-owned Supabase account can also be
-> connected through OAuth to list and select one of its projects. An **opt-in, off-by-default**
-> publishing path can upload the standalone preview to a Mavly-managed Vercel account as a
-> static site; it is not a dynamic backend host. Other platform features still return an
+> previews the generated static `preview.html`, or an imported static site with an
+> `index.html` / `public/index.html` and local assets. A user-owned Supabase account can
+> also be connected through OAuth to list and select one of its projects. An **opt-in,
+> off-by-default** publishing path can upload those static files to a Mavly-managed Vercel
+> account as a static site; it is not a dynamic backend host. Other platform features still return an
 > explicit `503 BACKEND_NOT_CONFIGURED`.
 
 Read [`MAVLY_CLEAN_BASELINE.md`](MAVLY_CLEAN_BASELINE.md) for the authoritative record of
@@ -31,10 +32,10 @@ audits listed at the end of this file; it is not a runtime dependency.
 | Conversations and run status | Persisted in Supabase and polled by the workspace |
 | Project files | Generated source tree, file reads and file saves |
 | Source download | ZIP built from stored project files |
-| Preview | Sandboxed static `preview.html` |
+| Preview | Sandboxed static `preview.html`, or an imported static `index.html` / `public/index.html` with local assets |
 | Supabase account connection | OAuth with PKCE, encrypted server-side tokens, organization/project discovery and one selected project |
 | Figma design reference | Personal access token validated with Figma, encrypted per project, and a bounded design summary injected into generation |
-| Publishing (opt-in, disabled by default) | Static `preview.html` → deterministic Vercel project, published at `<project-id>.mavly.xyz`; deployment and domain state persisted and polled. Requires `MAVLY_VERCEL_DEPLOYMENTS_ENABLED=1`, `VERCEL_API_TOKEN` and operator-configured `mavly.xyz` DNS/SSL. See [`MAVLY_VERCEL_DEPLOYMENTS.md`](MAVLY_VERCEL_DEPLOYMENTS.md). |
+| Publishing (opt-in, disabled by default) | Static files → deterministic Vercel project, published at `<project-id>.mavly.xyz`; framework builds are not run. Deployment and domain state persisted and polled. Requires `MAVLY_VERCEL_DEPLOYMENTS_ENABLED=1`, `VERCEL_API_TOKEN` and operator-configured `mavly.xyz` DNS/SSL. See [`MAVLY_VERCEL_DEPLOYMENTS.md`](MAVLY_VERCEL_DEPLOYMENTS.md). |
 | `/api/config` | `200 { "ok": true, "data": { "configured": false } }` |
 | Visual shell | Dashboard, workspace, chat, composer, dialogs and preview frame render |
 
@@ -46,9 +47,9 @@ files, not as a running service.
 Uploads/attachments, rebuilds, database browsing, schema changes, SQL execution,
 customer-owned custom domains, logs, analytics, mobile builds, payments, cron, usage,
 credits, secrets, versions and visual edits do not have a local implementation. Publishing
-is limited to the static preview: generated Next.js source is not built, and generated API
-routes are not deployed. Dynamic hosting, customer custom domains and multi-file
-deployments remain unavailable. Each new publish does get a Mavly-owned
+is limited to static sites: generated or imported source that needs a framework build is
+not built, and generated API routes are not deployed. Dynamic hosting and customer custom
+domains remain unavailable. Each new publish does get a Mavly-owned
 `<project-id>.mavly.xyz` address once its Vercel deployment and domain are verified.
 Connecting a Supabase account and selecting a project is implemented;
 using that selection to inspect or change the project is not. Unimplemented routes answer:
@@ -83,7 +84,7 @@ browser ── src/lib/vcaas.ts (client catalog, same-origin only)
    │             ├── store.ts            project_deployments (RLS)
    │             └── service.ts → src/lib/vercel/provider.ts → api.vercel.com
    ├── /api/vcaas/source-code/{id} auth + ownership → generated ZIP
-   ├── /api/preview/{id}/…         auth + ownership → sandboxed preview.html
+   ├── /api/preview/{id}/…         auth + ownership → sandboxed static site
    ├── /api/vcaas/upload|env|git-diff
    │                               auth + ownership → 503
    ├── /api/visual-edit/.../apply  auth + ownership → 503
@@ -104,8 +105,9 @@ browser ── src/lib/vcaas.ts (client catalog, same-origin only)
 - **Generation:** `after()` in the route handler runs the agent after the response, reading
   the current files as context and validating every returned path and size before writing.
 - **Publishing:** disabled unless `MAVLY_VERCEL_DEPLOYMENTS_ENABLED` is one of
-  `1`/`true`/`yes`/`on` and `VERCEL_API_TOKEN` is set. The server uploads only
-  `preview.html` as a static `index.html`, creates one deterministic Vercel project per
+  `1`/`true`/`yes`/`on` and `VERCEL_API_TOKEN` is set. The server uploads the static
+  entry point (`preview.html`, `index.html`, or `public/index.html`) and its local assets
+  as a static site, creates one deterministic Vercel project per
   Mavly project, attaches the derived `<project-id>.mavly.xyz` domain, and records
   deployment plus domain status in `project_deployments`. Success requires both the
   deployment and the verified domain. The browser never calls Vercel and never supplies a

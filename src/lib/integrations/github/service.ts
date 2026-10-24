@@ -20,7 +20,7 @@ import type { GithubIntegrationConfig } from "./config";
 import {
   getBranchHead,
   pushSource,
-  readBlob,
+  readBlobFile,
   readTree,
   type GitFile,
   type PushConflict,
@@ -42,11 +42,13 @@ import {
 } from "./oauth";
 import {
   applyFilePolicy,
+  isExcludedPath,
   isSafeBranchName,
   isSafeOwner,
   isSafeRepoName,
   isSafeProjectPath,
   MAX_GITHUB_FILES,
+  MAX_GITHUB_FILE_BYTES,
 } from "./safety";
 import {
   getRepositoryConnection,
@@ -76,6 +78,7 @@ export type GithubServiceError =
   | "github_policy_blocked"
   | "github_abuse_blocked"
   | "github_email_unverified"
+  | "github_import_too_large"
   | "store_unavailable"
   | "project_not_connected";
 
@@ -577,21 +580,49 @@ export async function importProjectSource(
   );
   if (isGithubFailure(tree)) return tree;
 
+  /**
+   * ⚠️ NO EARLY BREAK. The old loop stopped at MAX_GITHUB_FILES while reading,
+   * so a repository with more files was imported PARTIALLY and reported as a
+   * successful import. Exclusions are now explicit, and a repository that is
+   * genuinely too large fails before the project is touched.
+   */
+  const safeEntries = tree.data.filter((entry) => isSafeProjectPath(entry.path));
+  const preExcluded: { path: string; reason: string }[] = safeEntries
+    .filter((entry) => isExcludedPath(entry.path))
+    .map((entry) => ({ path: entry.path, reason: "excluded by policy" }));
+  const eligible = safeEntries
+    .filter((entry) => !isExcludedPath(entry.path))
+    .sort((a, b) => a.path.localeCompare(b.path));
+
+  if (eligible.length > MAX_GITHUB_FILES) {
+    return { ok: false, code: "github_import_too_large" };
+  }
+
   const remoteFiles: GitFile[] = [];
-  for (const entry of tree.data) {
-    if (remoteFiles.length >= MAX_GITHUB_FILES) break;
-    if (!isSafeProjectPath(entry.path)) continue;
-    const blob = await readBlob(
+  for (const entry of eligible) {
+    if (entry.size > MAX_GITHUB_FILE_BYTES) {
+      preExcluded.push({ path: entry.path, reason: "file is too large" });
+      continue;
+    }
+    const blob = await readBlobFile(
       token.data,
       connection.data.owner_login,
       connection.data.repository_name,
       entry.sha,
     );
-    if (isGithubFailure(blob)) continue;
-    remoteFiles.push({ path: entry.path, content: blob.data });
+    if (isGithubFailure(blob)) {
+      preExcluded.push({ path: entry.path, reason: "could not be read from GitHub" });
+      continue;
+    }
+    if (blob.data.binary) {
+      preExcluded.push({ path: entry.path, reason: "binary files are not supported" });
+      continue;
+    }
+    remoteFiles.push({ path: entry.path, content: blob.data.content });
   }
 
   const policy = applyFilePolicy(remoteFiles);
+  policy.excluded.unshift(...preExcluded);
 
   const local = await listFiles(input.projectId);
   if (isStoreFailure(local)) return { ok: false, code: "store_unavailable" };

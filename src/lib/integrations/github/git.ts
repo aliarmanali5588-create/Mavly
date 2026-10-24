@@ -188,13 +188,24 @@ export async function readTree(
   return { ok: true, data: entries };
 }
 
-/** The content of one blob, as text. */
-export async function readBlob(
+export interface BlobContent {
+  content: string;
+  /**
+   * ⚠️ BINARY FILES ARE NOT TEXT WITH A FEW ODD CHARACTERS. Decoding an image
+   * or archive as UTF-8 replaces its bytes with U+FFFD, so storing it in
+   * `project_files` would silently corrupt it. The caller excludes these with
+   * an explicit reason instead.
+   */
+  binary: boolean;
+}
+
+/** The content of one blob, with a binary/UTF-8 decision. */
+export async function readBlobFile(
   accessToken: string,
   owner: string,
   repo: string,
   sha: string,
-): Promise<GithubResult<string>> {
+): Promise<GithubResult<BlobContent>> {
   const base = repoPath(owner, repo);
   if (!base || !/^[A-Za-z0-9]{7,64}$/.test(sha)) {
     return { ok: false, code: "github_not_found" };
@@ -206,14 +217,46 @@ export async function readBlob(
   const row = result.data as { content?: unknown; encoding?: unknown };
   if (typeof row.content !== "string") return { ok: false, code: "github_invalid_response" };
 
-  if (row.encoding === "base64") {
-    try {
-      return { ok: true, data: Buffer.from(row.content, "base64").toString("utf8") };
-    } catch {
-      return { ok: false, code: "github_invalid_response" };
-    }
+  if (row.encoding !== "base64") {
+    return {
+      ok: true,
+      data: {
+        content: row.content,
+        binary: row.content.includes("\0") || row.content.includes("\uFFFD"),
+      },
+    };
   }
-  return { ok: true, data: row.content };
+
+  let bytes: Buffer;
+  try {
+    bytes = Buffer.from(row.content, "base64");
+  } catch {
+    return { ok: false, code: "github_invalid_response" };
+  }
+
+  if (bytes.includes(0)) {
+    return { ok: true, data: { content: "", binary: true } };
+  }
+
+  try {
+    const content = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+    return { ok: true, data: { content, binary: false } };
+  } catch {
+    return { ok: true, data: { content: "", binary: true } };
+  }
+}
+
+/** The content of one blob, as text. */
+export async function readBlob(
+  accessToken: string,
+  owner: string,
+  repo: string,
+  sha: string,
+): Promise<GithubResult<string>> {
+  const result = await readBlobFile(accessToken, owner, repo, sha);
+  if (isGithubFailure(result)) return result;
+  if (result.data.binary) return { ok: false, code: "github_invalid_response" };
+  return { ok: true, data: result.data.content };
 }
 
 /** Create one blob. */

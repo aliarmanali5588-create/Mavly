@@ -51,6 +51,11 @@ interface CodePanelProps {
    * save on an archived project is refused and starts the server instead.
    */
   wake: ServerWake;
+  /**
+   * ⚠️ Bumped after an import or restore. The project's source was replaced on
+   * the server, so the 3-minute localStorage copy is stale and must not win.
+   */
+  sourceRevision?: number;
 }
 
 // ── In-memory byte cache (survives tab switches within the session) ──────────
@@ -101,6 +106,22 @@ function loadArchiveOnce(projectId: string): Promise<ArchiveResult> {
 // ── Cache constants ──────────────────────────────────────────────────────────
 const CACHE_PREFIX = "vibebuild-code-";
 const CACHE_TTL_MS = 3 * 60 * 1000; // 3 minutes
+
+/**
+ * Drop every client-side copy of a project's source after an import or restore.
+ * A remount is not enough: a tab that never opened the code panel could still
+ * serve the old archive from localStorage after a reload.
+ */
+export function invalidateCodeCache(projectId: string): void {
+  byteCacheByProject.delete(projectId);
+  inflightByProject.delete(projectId);
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.removeItem(`${CACHE_PREFIX}${projectId}`);
+  } catch {
+    /* ignore */
+  }
+}
 
 interface CachePayload {
   ts: number;
@@ -439,7 +460,7 @@ function TreeRow({
 }
 
 // ── Main component ───────────────────────────────────────────────────────────
-export function CodePanel({ projectId, darkMode, onAskAiEdit, wake }: CodePanelProps) {
+export function CodePanel({ projectId, darkMode, onAskAiEdit, wake, sourceRevision = 0 }: CodePanelProps) {
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -647,9 +668,10 @@ export function CodePanel({ projectId, darkMode, onAskAiEdit, wake }: CodePanelP
     [projectId, cacheKey, applyUnzipped, autoExpand]
   );
 
-  // Initial load — only once per mount; reuses cache/in-memory within 3 min.
+  // Initial load — only once per mount. After a source-changing operation the
+  // server copy wins over the old localStorage archive.
   useEffect(() => {
-    fetchCode(false);
+    fetchCode(sourceRevision > 0);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId]);
 

@@ -20,12 +20,13 @@ import { useRunProgress } from "@/components/workspace/RunActivity";
 import { isRunOver, stageText } from "@/lib/run-progress";
 import { WorkspaceMore } from "@/components/workspace/v2/WorkspaceMore";
 import { V2Banner } from "@/components/workspace/v2/V2Banner";
-import { CodePanel } from "@/components/workspace/CodePanel";
+import { CodePanel, invalidateCodeCache } from "@/components/workspace/CodePanel";
 import { LogsPanel } from "@/components/workspace/LogsPanel";
 import { VersionsModal } from "@/components/workspace/VersionsModal";
 import { SecretsModal } from "@/components/workspace/SecretsModal";
 import { DomainModal } from "@/components/workspace/DomainModal";
 import { GithubModal } from "@/components/workspace/GithubModal";
+import { CreditsIndicator } from "@/components/workspace/CreditsIndicator";
 import { DeployControl } from "@/components/workspace/DeployControl";
 import { CloneProjectDialog } from "@/components/workspace/ProjectTransferDialogs";
 import { DiffViewer, type DiffSource } from "@/components/workspace/DiffViewer";
@@ -365,6 +366,8 @@ export default function WorkspacePage() {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewCached, setPreviewCached] = useState(false);
   const [previewKey, setPreviewKey] = useState(0);
+  /** Bumped whenever an import or restore replaces the project's source. */
+  const [sourceRevision, setSourceRevision] = useState(0);
   const [chatWidth, setChatWidth] = useState(440);
   const [isResizing, setIsResizing] = useState(false);
   const [chatCollapsed, setChatCollapsed] = useState(false);
@@ -1366,7 +1369,9 @@ export default function WorkspacePage() {
   function handleRestored(): void {
     void fetchProject();
     void fetchConversation();
+    invalidateCodeCache(projectId);
     setPreviewKey((k) => k + 1);
+    setSourceRevision((revision) => revision + 1);
   }
 
   // The chat's composer props that both layouts share — the tool tray's wiring.
@@ -1468,6 +1473,7 @@ export default function WorkspacePage() {
               publishing does (public address, ~3 minutes, 1 credit) and the custom-domain
               row with its DNS-propagation notice. Copied unchanged from totalum-platform.
             */}
+            <CreditsIndicator />
             <DeployControl
               projectId={projectId}
               project={project}
@@ -1541,8 +1547,8 @@ export default function WorkspacePage() {
               </div>
             )}
             <div className={`flex-1 overflow-hidden ${activeTab === "preview" ? "rounded-none" : "m-2 sm:m-3 rounded-xl shadow-sm"}`} style={{ background: cardBg }}>
-              {activeTab === "preview" && <PreviewPanel key={previewKey} previewUrl={shownPreviewUrl} cached={previewCached} onRefresh={() => { fetchProject(); setPreviewKey((k) => k + 1); }} loading={isBuilding} buildStage={buildStage} mobilePreview={mobilePreview} iframePath={iframePath} frameRef={previewFrameRef} /* ⭐ Same-origin ONLY while the editor is open — and for the length of an apply, which outlives the panel: dropping the proxy mid-apply would reload the frame and throw away the preview-only edits the user is watching. */ proxiedSrc={visualEditorOpen || visualLocked ? `/api/preview/${encodeURIComponent(projectId)}` : null} />}
-              {activeTab === "code" && <CodePanel projectId={projectId} darkMode={darkMode} onAskAiEdit={handleAskAiEdit} wake={serverWake} />}
+              {activeTab === "preview" && <PreviewPanel key={previewKey} previewUrl={shownPreviewUrl} cached={previewCached} onRefresh={() => { fetchProject(); setPreviewKey((k) => k + 1); }} loading={isBuilding} buildStage={buildStage} emptyMessage={project?.previewUnavailableReason} mobilePreview={mobilePreview} iframePath={iframePath} frameRef={previewFrameRef} /* ⭐ Same-origin ONLY while the editor is open — and for the length of an apply, which outlives the panel: dropping the proxy mid-apply would reload the frame and throw away the preview-only edits the user is watching. */ proxiedSrc={visualEditorOpen || visualLocked ? `/api/preview/${encodeURIComponent(projectId)}` : null} />}
+              {activeTab === "code" && <CodePanel key={`${projectId}:${sourceRevision}`} projectId={projectId} sourceRevision={sourceRevision} darkMode={darkMode} onAskAiEdit={handleAskAiEdit} wake={serverWake} />}
               {activeTab === "more" && <WorkspaceMore project={project} onProjectChanged={() => void fetchProject()} onPublish={() => void handleDeploy()} />}
             </div>
             {/* The unsaved-changes bar owns the whole batch: count, undo, discard and apply. */}
@@ -1638,8 +1644,8 @@ export default function WorkspacePage() {
             </div>
           ) : (
             <div className="h-full overflow-hidden">
-              {activeTab === "preview" && <PreviewPanel key={previewKey} previewUrl={shownPreviewUrl} cached={previewCached} onRefresh={() => { fetchProject(); setPreviewKey((k) => k + 1); }} loading={isBuilding} buildStage={buildStage} mobilePreview={false} iframePath={iframePath} />}
-              {activeTab === "code" && <CodePanel projectId={projectId} darkMode={darkMode} onAskAiEdit={handleAskAiEdit} wake={serverWake} />}
+              {activeTab === "preview" && <PreviewPanel key={previewKey} previewUrl={shownPreviewUrl} cached={previewCached} onRefresh={() => { fetchProject(); setPreviewKey((k) => k + 1); }} loading={isBuilding} buildStage={buildStage} emptyMessage={project?.previewUnavailableReason} mobilePreview={false} iframePath={iframePath} />}
+              {activeTab === "code" && <CodePanel key={`${projectId}:${sourceRevision}`} projectId={projectId} sourceRevision={sourceRevision} darkMode={darkMode} onAskAiEdit={handleAskAiEdit} wake={serverWake} />}
               {activeTab === "more" && <WorkspaceMore project={project} onProjectChanged={() => void fetchProject()} onPublish={() => void handleDeploy()} />}
             </div>
           )}

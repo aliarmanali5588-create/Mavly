@@ -1,6 +1,6 @@
 # Mavly-managed Vercel publishing
 
-**Status:** implemented, **disabled by default**, and limited to the standalone preview.
+**Status:** implemented, **disabled by default**, and limited to static sites.
 **Do not enable this in a production deployment until the eligibility prerequisite below is
 confirmed by the operator.**
 
@@ -22,20 +22,23 @@ Platforms" product is the documented path for this model.
 
 ## What gets published
 
-Only the generated `preview.html` is published, uploaded as `index.html` and deployed with
-`framework: null` as a static site.
+Static files are published and deployed with `framework: null`. The generated
+`preview.html` is uploaded as `index.html`. An imported repository is accepted only when it
+already contains `index.html` or `public/index.html`; that document becomes `index.html`
+and its sibling files under the same static root are uploaded alongside it.
 
 Not published, built or executed:
 
-- the generated Next.js source;
-- generated API routes or backend code;
+- source that needs a framework build, such as `pages/`, `app/`, or a Vite/CRA entry;
+- generated or imported API routes and backend code;
 - project dependencies;
 - environment variables or secrets;
 - customer-supplied custom domains, redirects or server functions. Mavly does attach its
   own `<project-id>.mavly.xyz` hostname to the static deployment.
 
-The generated preview is standalone HTML with inline CSS/JS and no external resources, so a
-static deployment is a faithful preview. It is not the generated full-stack application.
+The generated preview is standalone HTML with inline CSS/JS and no external resources.
+An imported static site is uploaded with its local assets. Either way the deployment is a
+static site, not the generated full-stack application.
 
 ## Configuration
 
@@ -86,13 +89,13 @@ browser
   └─ src/lib/vcaas.ts → POST /api/vcaas/projects/{id}/deployments/deploy
        → session check → vcaas scope → project ownership
        → src/lib/deployments/service.ts
-            → read preview.html from project_files
+            → resolve the static entry point from project_files
              → src/lib/vercel/provider.ts (fixed https://api.vercel.com origin)
                   → create/reuse one deterministic Vercel project
                   → attach <project-id>.mavly.xyz to that project
                   → ask Vercel to verify the domain
-                  → upload index.html
-                  → create a production deployment
+                  → upload index.html and the static site's local assets
+                  → create a production deployment with no build
             → record ids/status/domain state in project_deployments
 ```
 
@@ -157,8 +160,9 @@ sanitize(prefix + "-" + mavlyProjectId) + "-" + sha256(userId + "\0" + projectId
 | Condition | Result |
 | --- | --- |
 | Flag unset or token missing | `503 BACKEND_NOT_CONFIGURED`; no Vercel request |
-| No `preview.html` | `400 VALIDATION` |
-| Preview over 1,000,000 bytes | `400 VALIDATION` |
+| No static entry point | `400 VALIDATION` with an actionable message |
+| Framework build required | `400 VALIDATION`; no build is run |
+| Static site over 1,000 files or 8,000,000 bytes | `400 VALIDATION` |
 | Publish already in flight | `409 VALIDATION`; concurrent publishes cannot both proceed |
 | Project id cannot form a Mavly hostname | `400 VALIDATION`; no Vercel resource is created |
 | Mavly hostname assigned to another Vercel project | `409 DOMAIN_CONFLICT`; no deployment is submitted |

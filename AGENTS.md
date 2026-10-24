@@ -72,9 +72,11 @@ generated app.
   without approval.
 - **Vercel publishing is an optional, off-by-default hosting path**, not a builder backend.
   It is enabled only by `MAVLY_VERCEL_DEPLOYMENTS_ENABLED` (accepted: `1`, `true`, `yes`,
-  `on`) plus `VERCEL_API_TOKEN`, and uploads only the standalone `preview.html`. Each
-  publish attaches the server-derived `<project-id>.mavly.xyz` domain; success requires
-  both the deployment and a Vercel-verified domain. The operator must configure
+  `on`) plus `VERCEL_API_TOKEN`, and uploads only static files. It prefers the generated
+  standalone `preview.html`; an imported repository is publishable only when it already
+  contains `index.html` or `public/index.html` and its sibling static assets. Each publish
+  attaches the server-derived `<project-id>.mavly.xyz` domain; success requires both the
+  deployment and a Vercel-verified domain. The operator must configure
   `mavly.xyz` DNS/wildcard resolution and confirm certificates before enabling. Do not
   enable it in a real deployment until the operator has confirmed Vercel plan/terms
   eligibility for Mavly-managed customer hosting; see `MAVLY_VERCEL_DEPLOYMENTS.md`.
@@ -141,9 +143,11 @@ generated app.
 - No route may fabricate success, mint a fake project id, return mock data, or report an
   operation as complete when no backend performed it.
 - Generated code is **never executed** on the Mavly server. There is no build sandbox, so
-  the preview is the generated static `preview.html`; backend endpoints exist only as
-  source in the project files. Publishing uploads those preview bytes as a static
-  `index.html`; it does not build the generated source.
+  the preview is a static entry point: the generated `preview.html`, or an imported
+  `index.html` / `public/index.html` with its local assets. Backend endpoints exist only as
+  source in the project files. Publishing uploads those static bytes; it does not build
+  generated or imported source. A framework entry point that needs a build is reported as
+  unsupported, not shown as a blank success.
 - `OPENROUTER_API_KEY` is server-only. `MAVLY_DEFAULT_MODEL` selects the default catalog
   model; the built-in default is `deepseek/deepseek-v4.1-flash`. `VERCEL_API_TOKEN` is also
   server-only and is never stored in the database or returned to a browser.
@@ -168,7 +172,7 @@ browser ── src/lib/vcaas.ts (client catalog, same-origin only)
    │             ├── store.ts            project_deployments (RLS)
    │             └── service.ts → src/lib/vercel/provider.ts → api.vercel.com
    ├── /api/vcaas/source-code/{id} auth + ownership → ZIP from project_files
-   ├── /api/preview/{id}/…         auth + ownership → sandboxed preview.html
+   ├── /api/preview/{id}/…         auth + ownership → sandboxed static site
    ├── /api/vcaas/upload|env|git-diff
    │                               auth + ownership → 503
    ├── /api/visual-edit/.../apply  auth + ownership → 503

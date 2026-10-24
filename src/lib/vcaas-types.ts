@@ -86,6 +86,12 @@ export interface VcaasProject {
   secrets: VcaasSecret[];
   customDomain?: VcaasDomain | null;
   temporalDevelopmentProjectUrl?: string | null;
+  /**
+   * ⚠️ SET ONLY WHEN THE SOURCE EXISTS BUT NEEDS A BUILD. It is shown in the
+   * preview panel instead of a blank frame; null means "no preview yet", not
+   * "we failed silently".
+   */
+  previewUnavailableReason?: string | null;
   cachedDevelopmentUrl?: string | null;
   developmentUrlFieldToUse?: string | null;
   productionProjectUrl?: string;
