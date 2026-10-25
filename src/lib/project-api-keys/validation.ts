@@ -2,7 +2,7 @@ export type ApiKeyEnv = "live" | "dev" | "both";
 
 const ALLOWED_SCOPES = new Set(["db:read", "db:write", "db:schema", "integrations:*"]);
 
-export function validateCreateApiKeyInput(body: unknown): { ok: true; value: { name: string; scopes: string[]; env: ApiKeyEnv } } | { ok: false; error: string } {
+export function validateCreateApiKeyInput(body: unknown): { ok: true; value: { name: string; scopes: string[]; env: ApiKeyEnv }; error?: never } | { ok: false; error: string; value?: never } {
   if (!body || typeof body !== "object" || Array.isArray(body)) {
     return { ok: false, error: "Invalid request body." };
   }

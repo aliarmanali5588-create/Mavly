@@ -16,8 +16,8 @@ export const SECRET_ENVIRONMENTS = ["development", "production", "both"] as cons
 export type SecretEnvironment = (typeof SECRET_ENVIRONMENTS)[number];
 
 export type Validation<T> =
-  | { ok: true; value: T }
-  | { ok: false; error: string };
+  | { ok: true; value: T; error?: never }
+  | { ok: false; error: string; value?: never };
 
 const NAME_ERROR =
   "Secret names must start with a letter or underscore and contain only letters, numbers and underscores (max 128 characters).";
@@ -61,11 +61,11 @@ export interface CreateSecretInput {
 export function validateCreateSecretInput(body: unknown): Validation<CreateSecretInput> {
   const record = recordOf(body);
   const name = validateSecretName(record.secretName);
-  if (!name.ok) return name;
+  if (!name.ok) return { ok: false, error: name.error };
   const value = validateSecretValue(record.secretValue);
-  if (!value.ok) return value;
+  if (!value.ok) return { ok: false, error: value.error };
   const environment = validateSecretEnvironment(record.environment);
-  if (!environment.ok) return environment;
+  if (!environment.ok) return { ok: false, error: environment.error };
 
   return {
     ok: true,
@@ -93,7 +93,7 @@ export function validateUpdateSecretInput(body: unknown): Validation<UpdateSecre
 
   if (record.secretName !== undefined) {
     const name = validateSecretName(record.secretName);
-    if (!name.ok) return name;
+    if (!name.ok) return { ok: false, error: name.error };
     patch.secretName = name.value;
   }
 

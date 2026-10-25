@@ -4,7 +4,7 @@ import * as React from "react";
 import { LayoutGridIcon } from "lucide-react";
 import { EmptyState, Modal } from "@/components/primitives";
 import { useT } from "@/i18n";
-import { isPublished, isV2Project } from "@/lib/project-status";
+import { getPreviewUrl, isPublished, isV2Project } from "@/lib/project-status";
 import type { VcaasProject } from "@/lib/vcaas-types";
 import { SupabaseDatabasePanel } from "../database-v2/SupabaseDatabasePanel";
 import { SecretsModal } from "../SecretsModal";
@@ -57,7 +57,7 @@ export function WorkspaceMore({
                     open
                     onOpenChange={noop}
                     projectId={projectId}
-                    previewUrl={project.temporalLinkUrl ?? null}
+                    previewUrl={getPreviewUrl(project)}
                     onPreviewRotated={onProjectChanged}
                 />
             ) : section === "cron" ? (

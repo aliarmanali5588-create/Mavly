@@ -18,8 +18,8 @@ export interface ProjectSecretsCryptoConfig {
 }
 
 export type ProjectSecretsConfigResult =
-  | { ok: true; config: ProjectSecretsCryptoConfig }
-  | { ok: false; error: string };
+  | { ok: true; config: ProjectSecretsCryptoConfig; error?: never }
+  | { ok: false; error: string; config?: never };
 
 /**
  * `Buffer.from` accepts malformed base64 without complaint, so the length check
