@@ -1492,8 +1492,3 @@ function clampInt(raw: string | null, min: number, max: number, fallback: number
   if (!Number.isFinite(parsed)) return fallback;
   return Math.max(min, Math.min(max, parsed));
 }
-
-
-function apiKeyFail(result: any): NextResponse {
-  return fail(result.status, result.code, result.error);
-}
