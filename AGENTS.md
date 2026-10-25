@@ -76,10 +76,11 @@ generated app.
 ## Current backend status
 
 - Website and code generation use **Groq**, called server-side from
-  `src/lib/ai/groq.ts`; `GROQ_API_KEY` is required in the Next.js server runtime. The
-  OpenRouter chat code and configuration are preserved but not wired into active
-  generation; its image API remains separate and unchanged. Do not add another model
-  provider or hosted builder backend without approval.
+  `src/lib/ai/provider.ts`, which currently selects `src/lib/ai/groq.ts`;
+  `GROQ_API_KEY` is required in the Next.js server runtime. The OpenRouter chat code and
+  configuration are preserved but not wired into active generation; its image API
+  remains separate and unchanged. Do not add another model provider or hosted builder
+  backend without approval.
 - **Vercel publishing is an optional, off-by-default hosting path**, not a builder backend.
   It is enabled only by `MAVLY_VERCEL_DEPLOYMENTS_ENABLED` (accepted: `1`, `true`, `yes`,
   `on`) plus `VERCEL_API_TOKEN`, and uploads only static files. It prefers the generated
@@ -219,7 +220,7 @@ browser ── src/lib/vcaas.ts (client catalog, same-origin only)
    │      ├── src/lib/mavly/api.ts       project/agent/file handlers
    │      ├── src/lib/mavly/store.ts     Supabase RLS-scoped persistence
    │      ├── src/lib/mavly/run-agent.ts background run after the response
-   │      │      └── src/lib/ai/agent.ts → src/lib/ai/groq.ts
+   │      │      └── src/lib/ai/agent.ts → src/lib/ai/provider.ts → src/lib/ai/groq.ts
    │      └── src/lib/deployments/*      opt-in static publish
    │             ├── store.ts            project_deployments (RLS)
    │             └── service.ts → src/lib/vercel/provider.ts → api.vercel.com
@@ -270,6 +271,7 @@ paths with `src/lib/vcaas-scope.ts`, so unknown shapes are refused before any wo
 | `src/lib/ai/openrouter.ts` | Preserved OpenRouter chat client; not imported by active website-generation paths. |
 | `src/lib/mavly/image-limits.ts` | Best-effort per-user/per-instance image-generation admission windows. |
 | `src/lib/ai/groq.ts` | The Groq chat-completions call for website/code generation; server-only key. |
+| `src/lib/ai/provider.ts` | Provider-neutral website-generation boundary, currently bound only to Groq. |
 | `src/lib/ai/models.ts` | Active Groq model catalog plus the preserved OpenRouter catalog/resolver. |
 | `src/lib/mavly-hostname.ts` | Pure derivation of `<project-id>.mavly.xyz` from the immutable, owned project id. |
 | `src/lib/vercel/` | Server-only opt-in config and the fixed-origin Vercel REST client, including project-domain assignment/verification. |

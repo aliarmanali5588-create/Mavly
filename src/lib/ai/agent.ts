@@ -33,7 +33,7 @@ import {
   type ChatCompletionMetadata,
   type ChatCompletionResult,
   type ChatMessage,
-} from "./groq";
+} from "./provider";
 import { resolveModel, type AiModel } from "./models";
 import { retryWithBackoff, type RetryDecision, type RetryPolicy } from "./retry";
 

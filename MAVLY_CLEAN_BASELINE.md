@@ -25,7 +25,7 @@ revocation or database mutation was performed while preparing this document.
 | API session gate | `/api/*` returns JSON `401 UNAUTHENTICATED` without a verified session. |
 | Project ownership | `public.projects`, RLS, `registerProjectOwnership`, `checkProjectAccess`, `enforceProjectScope`. |
 | Project CRUD | Create/list/launch/get/update/delete, stored in Supabase. |
-| AI generation | `src/lib/mavly/run-agent.ts` → `src/lib/ai/agent.ts` → `src/lib/ai/groq.ts`. |
+| AI generation | `src/lib/mavly/run-agent.ts` → `src/lib/ai/agent.ts` → `src/lib/ai/provider.ts` → `src/lib/ai/groq.ts`. |
 | Preserved provider | `src/lib/ai/openrouter.ts` and its model catalog remain available but are not used by active website-generation requests. |
 | Conversation and runs | Persisted in `project_messages` and `project_runs`, polled by the workspace. |
 | Project settings | Owner-editable name/description through `PATCH /projects/{id}`; the derived Mavly address is read-only. |
@@ -366,6 +366,8 @@ with HTTP **503** and `cache-control: private, no-store, max-age=0`.
 - `src/lib/image-generation-options.ts` — aspect-ratio/format constants shared by the
   server validation and the workspace panel.
 - `src/lib/ai/groq.ts` — the active outbound website/code-generation call; server-only key.
+- `src/lib/ai/provider.ts` — the provider-neutral website-generation boundary, currently
+  bound only to Groq.
 - `src/lib/ai/openrouter.ts` — preserved chat-completions client and OpenRouter key support;
   not called by active website-generation paths.
 - `src/lib/ai/agent.ts` — prompt, JSON parsing/repair, path and size validation.

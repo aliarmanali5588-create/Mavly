@@ -36,7 +36,7 @@ import type {
   VcaasProjectSummary,
   VcaasSecret,
 } from "@/lib/vcaas-types";
-import { isAiConfigured } from "@/lib/ai/groq";
+import { isAiConfigured } from "@/lib/ai/provider";
 import { resolveModel } from "@/lib/ai/models";
 import { parseImageGenerationRequest, resolveImageModel } from "@/lib/ai/image-models";
 import {

@@ -130,10 +130,12 @@ test("Groq is the only active website-generation provider and its key stays serv
 
   assert.equal(read("src/lib/ai/groq.ts").includes("GROQ_API_KEY"), true);
   assert.equal(read("src/lib/ai/groq.ts").includes("console."), false);
-  assert.equal(read("src/lib/ai/agent.ts").includes('"./groq"'), true);
-  assert.equal(read("src/lib/mavly/run-agent.ts").includes("@/lib/ai/groq"), true);
+  assert.equal(read("src/lib/ai/agent.ts").includes('"./provider"'), true);
+  assert.equal(read("src/lib/mavly/run-agent.ts").includes("@/lib/ai/provider"), true);
   assert.equal(read("src/lib/mavly/run-agent.ts").includes("@/lib/ai/openrouter"), false);
-  assert.equal(read("src/lib/mavly/api.ts").includes('from "@/lib/ai/openrouter"'), false);
+  assert.equal(read("src/lib/mavly/api.ts").includes('from "@/lib/ai/provider"'), true);
+  assert.equal(read("src/lib/ai/provider.ts").includes('from "./groq"'), true);
+  assert.equal(read("src/lib/ai/provider.ts").includes('from "./openrouter"'), false);
   assert.equal(read("src/lib/ai/openrouter.ts").includes("OPENROUTER_API_KEY"), true);
   assert.equal(read("src/lib/ai/openrouter-images.ts").includes("OPENROUTER_API_KEY"), true);
   assert.equal(existsSync(new URL("src/lib/ai/openrouter.ts", root)), true);

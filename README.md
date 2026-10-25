@@ -89,7 +89,7 @@ browser ── src/lib/vcaas.ts (client catalog, same-origin only)
    │      ├── src/lib/mavly/store.ts     Supabase RLS-scoped persistence
    │      ├── src/lib/mavly/run-agent.ts background generation
    │      │      ├── src/lib/integrations/figma/* → api.figma.com
-   │      │      └── src/lib/ai/agent.ts → src/lib/ai/groq.ts
+   │      │      └── src/lib/ai/agent.ts → src/lib/ai/provider.ts → src/lib/ai/groq.ts
    │      └── src/lib/deployments/*      opt-in publish orchestration
    │             ├── store.ts            project_deployments (RLS)
    │             └── service.ts → src/lib/vercel/provider.ts → api.vercel.com
