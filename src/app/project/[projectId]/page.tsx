@@ -1276,6 +1276,8 @@ export default function WorkspacePage() {
   /** New engine: the live run timeline (`agent/progress`) for the chat and the preview loader. */
   const runProgress = useRunProgress(projectId, isBuilding, isV2Project(project));
   const buildStage = runProgress && !isRunOver(runProgress.stage) ? runProgress.stage : null;
+  const buildRetrying = runProgress?.retrying ?? false;
+  const previewReady = runProgress?.previewReady ?? false;
   /**
    * During a drag the committed state is stale until pointerup, so a rerender caused by
    * anything else must still read the live width. The drag itself never waits on React.
@@ -1546,7 +1548,7 @@ export default function WorkspacePage() {
               </div>
             )}
             <div className={`flex-1 overflow-hidden ${activeTab === "preview" ? "rounded-none" : "m-2 sm:m-3 rounded-xl shadow-sm"}`} style={{ background: cardBg }}>
-              {activeTab === "preview" && <PreviewPanel key={previewKey} previewUrl={shownPreviewUrl} cached={previewCached} onRefresh={() => { fetchProject(); setPreviewKey((k) => k + 1); }} loading={isBuilding} buildStage={buildStage} emptyMessage={project?.previewUnavailableReason} mobilePreview={mobilePreview} iframePath={iframePath} frameRef={previewFrameRef} /* ⭐ Same-origin ONLY while the editor is open — and for the length of an apply, which outlives the panel: dropping the proxy mid-apply would reload the frame and throw away the preview-only edits the user is watching. */ proxiedSrc={visualEditorOpen || visualLocked ? `/api/preview/${encodeURIComponent(projectId)}` : null} />}
+              {activeTab === "preview" && <PreviewPanel key={previewKey} previewUrl={shownPreviewUrl} cached={previewCached} onRefresh={() => { fetchProject(); setPreviewKey((k) => k + 1); }} loading={isBuilding} buildStage={buildStage} buildRetrying={buildRetrying} previewReady={previewReady} emptyMessage={project?.previewUnavailableReason} mobilePreview={mobilePreview} iframePath={iframePath} frameRef={previewFrameRef} /* ⭐ Same-origin ONLY while the editor is open — and for the length of an apply, which outlives the panel: dropping the proxy mid-apply would reload the frame and throw away the preview-only edits the user is watching. */ proxiedSrc={visualEditorOpen || visualLocked ? `/api/preview/${encodeURIComponent(projectId)}` : null} />}
               {activeTab === "code" && <CodePanel key={`${projectId}:${sourceRevision}`} projectId={projectId} sourceRevision={sourceRevision} darkMode={darkMode} onAskAiEdit={handleAskAiEdit} wake={serverWake} />}
               {activeTab === "more" && <WorkspaceMore project={project} onProjectChanged={() => void fetchProject()} onPublish={() => void handleDeploy()} />}
             </div>
@@ -1643,7 +1645,7 @@ export default function WorkspacePage() {
             </div>
           ) : (
             <div className="h-full overflow-hidden">
-              {activeTab === "preview" && <PreviewPanel key={previewKey} previewUrl={shownPreviewUrl} cached={previewCached} onRefresh={() => { fetchProject(); setPreviewKey((k) => k + 1); }} loading={isBuilding} buildStage={buildStage} emptyMessage={project?.previewUnavailableReason} mobilePreview={false} iframePath={iframePath} />}
+              {activeTab === "preview" && <PreviewPanel key={previewKey} previewUrl={shownPreviewUrl} cached={previewCached} onRefresh={() => { fetchProject(); setPreviewKey((k) => k + 1); }} loading={isBuilding} buildStage={buildStage} buildRetrying={buildRetrying} previewReady={previewReady} emptyMessage={project?.previewUnavailableReason} mobilePreview={false} iframePath={iframePath} />}
               {activeTab === "code" && <CodePanel key={`${projectId}:${sourceRevision}`} projectId={projectId} sourceRevision={sourceRevision} darkMode={darkMode} onAskAiEdit={handleAskAiEdit} wake={serverWake} />}
               {activeTab === "more" && <WorkspaceMore project={project} onProjectChanged={() => void fetchProject()} onPublish={() => void handleDeploy()} />}
             </div>

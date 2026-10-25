@@ -296,7 +296,9 @@ async function execute(input: RunAgentInput, run: RunRow, claimToken: string): P
     await heartbeatRun(runId, { stage: "generating", expectedClaimedAt: claimToken });
   };
 
-  await heartbeatRun(runId, { stage: "generating", expectedClaimedAt: claimToken });
+  if (resumeManifest?.files.some((file) => !completedPaths.includes(file.path))) {
+    await heartbeatRun(runId, { stage: "generating", expectedClaimedAt: claimToken });
+  }
 
   const generated = await generateApp(
     {

@@ -26,7 +26,7 @@ revocation or database mutation was performed while preparing this document.
 | Project ownership | `public.projects`, RLS, `registerProjectOwnership`, `checkProjectAccess`, `enforceProjectScope`. |
 | Project CRUD | Create/list/launch/get/update/delete, stored in Supabase. |
 | AI generation | `src/lib/mavly/run-agent.ts` → `src/lib/ai/agent.ts` → `src/lib/ai/provider.ts` → `src/lib/ai/groq.ts`. |
-| Generation preview | New-project plans always include `preview.html`; it is generated in its own batch. Batch parsing accepts only the requested paths, and the UI reports persisted run stages without estimated completion percentages. |
+| Generation preview | New-project plans always include `preview.html`; it is generated in its own batch. Batch parsing accepts only requested paths. Progress stages use durable run state, manifest/checkpoints, and the static-preview resolver; the UI uses an indeterminate bar rather than estimated completion percentages. |
 | Preserved provider | `src/lib/ai/openrouter.ts` and its model catalog remain available but are not used by active website-generation requests. |
 | Conversation and runs | Persisted in `project_messages` and `project_runs`, polled by the workspace. |
 | Project settings | Owner-editable name/description through `PATCH /projects/{id}`; the derived Mavly address is read-only. |

@@ -6,8 +6,13 @@ import {
   ListChecksIcon, PlugIcon, SearchIcon, SquareTerminalIcon, UsersIcon,
 } from "lucide-react";
 import { vcaasApi } from "@/lib/vcaas";
-import { isRunOver, sanitizeRunProgress, stageText, stepText, type RunProgressView, type StepKind } from "@/lib/run-progress";
+import { isRunOver, sanitizeRunProgress, stepText, type RunProgressView, type StepKind } from "@/lib/run-progress";
 import { cn } from "@/lib/utils";
+import {
+  GenerationIndicator,
+  GenerationStages,
+  generationStatusText,
+} from "@/components/workspace/GenerationProgressVisuals";
 
 const POLL_MS = 3_000;
 const MAX_POLL_MS = 30_000;
@@ -63,25 +68,28 @@ const STEP_ICON: Record<StepKind, React.ComponentType<{ className?: string }>> =
  * The stage in words, then the latest steps (files read/created/edited, builds,
  * tests) and a count of files changed — the closest equivalent of totalum-platform's
  * `RunTimeline`. `progress` may still be the PREVIOUS run for one poll after a prompt
- * starts: an ended run is shown as "Starting the AI…" with no steps, never as done.
+ * starts; terminal state is never presented as active generation.
  */
 export function RunActivity({ progress }: { progress: RunProgressView | null }) {
   const live = progress && !isRunOver(progress.stage) ? progress : null;
-  const stage = live?.stage ?? "starting";
+  const stage = live?.stage ?? null;
   const recent = (live?.steps ?? []).slice(-RECENT_STEPS).reverse();
   const files = live?.files.length ?? 0;
 
   return (
-    <section aria-label="Agent activity" data-testid="run-activity" className="mt-3 rounded-xl border border-border bg-card p-3 shadow-xs">
+    <section aria-label="Agent activity" aria-busy={!!live} data-testid="run-activity" className="mt-3 rounded-xl border border-border bg-card p-3 shadow-xs">
       <div className="flex items-center gap-2">
-        <span className="size-3.5 shrink-0 rounded-full border-2 border-primary/25 border-t-primary animate-spin motion-reduce:animate-none" aria-hidden />
-        <p aria-live="polite" className="min-w-0 flex-1 truncate text-sm font-medium" data-testid="run-activity-stage">{stageText(stage)}</p>
+        <GenerationIndicator className="size-6" />
+        <p role="status" aria-live="polite" aria-atomic="true" className="min-w-0 flex-1 truncate text-sm font-medium" data-testid="run-activity-stage">
+          {generationStatusText(stage, live?.retrying)}
+        </p>
         {live && live.turns > 0 && (
           <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">
             {files > 0 ? `${files} file${files === 1 ? "" : "s"} · ` : ""}{live.totalSteps} step{live.totalSteps === 1 ? "" : "s"}
           </span>
         )}
       </div>
+      <GenerationStages stage={stage} previewReady={live?.previewReady} compact />
       {recent.length > 0 && (
         <ol className="mt-2.5 space-y-1.5">
           {recent.map((s, i) => {

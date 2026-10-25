@@ -54,6 +54,7 @@ export function RunProgress({
             <div
                 role="progressbar"
                 aria-label={t("workspace.chat.progressLabel")}
+                aria-valuetext={t("workspace.chat.progressLabel")}
                 className="bg-border/70 h-[3px] overflow-hidden rounded-full"
             >
                 <div aria-hidden className={cn(

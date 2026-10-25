@@ -48,6 +48,7 @@ import {
 import { sanitizeProjectPath } from "@/lib/ai/agent";
 import { validateProjectSlug } from "@/lib/project-slug";
 import { resolveStaticPreview } from "@/lib/static-site";
+import { projectGenerationProgressStage } from "@/lib/run-progress";
 import {
   createGenerationJob,
   createOwnedProject,
@@ -975,9 +976,35 @@ async function agentProgressResponse(projectId: string): Promise<NextResponse> {
     : Math.max(run.checkpoint_count, batches.data.length);
 
   const plannedPaths = manifestPaths(run.generation_manifest);
+  const lifecycle = stageOf(run) ?? "queued";
+  const allPathsCheckpointed =
+    plannedPaths.length > 0 && plannedPaths.every((path) => seen.has(path));
+  let previewReady = false;
+  if (
+    lifecycle === "completed" ||
+    (allPathsCheckpointed &&
+      (lifecycle === "generating" || lifecycle === "validating"))
+  ) {
+    const currentFiles = await listFiles(projectId);
+    if (isStoreFailure(currentFiles)) {
+      return fail(500, "UNKNOWN", "Could not verify the saved preview files.");
+    }
+    previewReady = !!resolveStaticPreview(
+      currentFiles.data.map((file) => ({ path: file.path, content: file.content })),
+    ).site;
+  }
+  const progress = projectGenerationProgressStage(
+    lifecycle,
+    plannedPaths.length > 0,
+    allPathsCheckpointed,
+    previewReady,
+  );
+
   return ok({
     runId: run.id,
-    stage: progressStageOf(run, plannedPaths, seen),
+    stage: progress.stage,
+    retrying: progress.retrying,
+    previewReady,
     startedAt: run.started_at,
     turns: Math.max(run.batch_count, checkpointCount),
     steps: [],
@@ -986,7 +1013,6 @@ async function agentProgressResponse(projectId: string): Promise<NextResponse> {
   });
 }
 
-/** Project durable lifecycle/checkpoint state into the client-safe progress vocabulary. */
 function manifestPaths(manifest: unknown): string[] {
   if (!manifest || typeof manifest !== "object") return [];
   const files = (manifest as { files?: unknown }).files;
@@ -997,35 +1023,6 @@ function manifestPaths(manifest: unknown): string[] {
       return sanitizeProjectPath((file as { path?: unknown }).path);
     })
     .filter((path): path is string => path !== null);
-}
-
-function progressStageOf(
-  run: RunRow,
-  plannedPaths: readonly string[],
-  checkpointedPaths: ReadonlySet<string>,
-): string {
-  const stage = stageOf(run);
-  switch (stage) {
-    case "queued":
-      return "queued";
-    case "validating":
-      return plannedPaths.length > 0 ? "validating-output" : "planning";
-    case "generating":
-      return plannedPaths.length > 0 && plannedPaths.every((path) => checkpointedPaths.has(path))
-        ? "preparing-preview"
-        : "writing-files";
-    case "retrying":
-      return "retrying";
-    case "completed":
-      return "done";
-    case "cancelled":
-      return "cancelled";
-    case "failed":
-    case "interrupted":
-      return "failed";
-    default:
-      return run.status === "done" ? "done" : "failed";
-  }
 }
 
 async function projectActivityResponse(

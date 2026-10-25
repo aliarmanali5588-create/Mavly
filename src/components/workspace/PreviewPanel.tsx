@@ -4,6 +4,7 @@ import { useState } from "react";
 import type { RefObject } from "react";
 import { Monitor, Loader2, Archive } from "lucide-react";
 import { BuildingLoader } from "@/components/workspace/BuildingLoader";
+import type { RunStage } from "@/lib/run-progress";
 
 interface PreviewPanelProps {
   previewUrl: string | null;
@@ -29,12 +30,14 @@ interface PreviewPanelProps {
   /** The editor needs the element to `postMessage` to its injected agent. */
   frameRef?: RefObject<HTMLIFrameElement | null>;
   /** The run's stage in words (new engine), shown under the building loader. */
-  buildStage?: string | null;
+  buildStage?: RunStage | null;
+  buildRetrying?: boolean;
+  previewReady?: boolean;
   /** Why a source that exists cannot be previewed (for example, it needs a build). */
   emptyMessage?: string | null;
 }
 
-export function PreviewPanel({ previewUrl, onRefresh, loading, mobilePreview = false, iframePath = "/", cached = false, proxiedSrc, frameRef, buildStage, emptyMessage }: PreviewPanelProps) {
+export function PreviewPanel({ previewUrl, onRefresh, loading, mobilePreview = false, iframePath = "/", cached = false, proxiedSrc, frameRef, buildStage, buildRetrying, previewReady, emptyMessage }: PreviewPanelProps) {
   const [iframeLoading, setIframeLoading] = useState(true);
   /** ⚠️ The proxy wins when present — see `proxiedSrc`. */
   const base = (proxiedSrc || previewUrl || "").replace(/\/$/, "");
@@ -60,7 +63,7 @@ export function PreviewPanel({ previewUrl, onRefresh, loading, mobilePreview = f
           </div>
         )}
         {!previewUrl ? (
-          loading ? <BuildingLoader stage={buildStage} /> : (
+          loading ? <BuildingLoader stage={buildStage} retrying={buildRetrying} previewReady={previewReady} /> : (
             <div className="flex flex-col items-center justify-center text-center px-8">
               <Monitor className="w-10 h-10 text-gray-300 mb-4" />
               <p className="text-sm font-medium text-gray-500 mb-1">No preview yet</p>

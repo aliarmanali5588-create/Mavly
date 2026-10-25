@@ -1,9 +1,8 @@
 /**
  * ═══ THE v2 RUN TIMELINE — WHAT THE CHAT MAY SHOW ═══════════════════════════
  *
- * `GET …/agent/progress` (new engine only, free) is a whitelist projection of a run's
- * events: stage, turns, steps, files changed. Trimmed copy of totalum-platform's
- * `lib/run-progress.ts`.
+ * `GET …/agent/progress` (new engine only, free) is a whitelist projection of durable
+ * run state and checkpoints: stage, turns, steps, and files changed.
  *
  * ⚠️ THIS IS A SECOND WALL, NOT A FORMATTER. Only known enums, finite counts and file
  * paths that look like a project file pass; anything else is dropped.
@@ -15,6 +14,109 @@ export const RUN_STAGES = [
   "entry-page", "done", "failed", "cancelled", "incomplete",
 ] as const;
 export type RunStage = (typeof RUN_STAGES)[number];
+
+export const GENERATION_STAGE_LABELS = [
+  "Understanding prompt",
+  "Planning files",
+  "Writing code",
+  "Validating website",
+  "Preparing preview",
+] as const;
+
+export type GenerationStepStatus = "pending" | "active" | "completed";
+
+export function generationStepStatuses(
+  stage: RunStage | null,
+  previewReady = false,
+): GenerationStepStatus[] {
+  let active = -1;
+  switch (stage) {
+    case "queued":
+      active = 0;
+      break;
+    case "planning":
+      active = 1;
+      break;
+    case "writing-files":
+    case "working":
+    case "build":
+      active = 2;
+      break;
+    case "validating-output":
+      active = 3;
+      break;
+    case "preparing-preview":
+    case "deploy":
+    case "wrapping-up":
+    case "entry-page":
+      active = 4;
+      break;
+    case "done":
+      active = GENERATION_STAGE_LABELS.length;
+      break;
+  }
+
+  return GENERATION_STAGE_LABELS.map<GenerationStepStatus>((_, index) => {
+    if (stage === "done") {
+      return index < 4 || previewReady ? "completed" : "pending";
+    }
+    if (active < 0) return "pending";
+    if (index < active) return "completed";
+    return index === active ? "active" : "pending";
+  });
+}
+
+export type DurableGenerationStage =
+  | "queued"
+  | "validating"
+  | "generating"
+  | "retrying"
+  | "completed"
+  | "failed"
+  | "cancelled"
+  | "interrupted";
+
+export function projectGenerationProgressStage(
+  lifecycle: DurableGenerationStage,
+  hasManifest: boolean,
+  allPathsCheckpointed: boolean,
+  previewReady: boolean,
+): { stage: RunStage; retrying: boolean } {
+  switch (lifecycle) {
+    case "queued":
+      return { stage: "queued", retrying: false };
+    case "validating":
+      return {
+        stage: !hasManifest
+          ? "planning"
+          : allPathsCheckpointed && previewReady
+            ? "preparing-preview"
+            : "validating-output",
+        retrying: false,
+      };
+    case "generating":
+      return {
+        stage: allPathsCheckpointed && previewReady ? "preparing-preview" : "writing-files",
+        retrying: false,
+      };
+    case "retrying":
+      return {
+        stage: hasManifest
+          ? allPathsCheckpointed && previewReady
+            ? "validating-output"
+            : "writing-files"
+          : "planning",
+        retrying: true,
+      };
+    case "completed":
+      return { stage: "done", retrying: false };
+    case "cancelled":
+      return { stage: "cancelled", retrying: false };
+    case "failed":
+    case "interrupted":
+      return { stage: "failed", retrying: false };
+  }
+}
 
 export const STEP_KINDS = [
   "read", "search", "create", "edit", "delete", "command", "web", "browser", "integration", "helper", "plan", "waiting",
@@ -44,6 +146,8 @@ export interface RunFile {
 export interface RunProgressView {
   runId: string;
   stage: RunStage;
+  retrying: boolean;
+  previewReady: boolean;
   startedAt: number;
   turns: number;
   steps: RunStep[];
@@ -112,6 +216,8 @@ export function sanitizeRunProgress(raw: unknown): RunProgressView | null {
   return {
     runId: r.runId,
     stage,
+    retrying: r.retrying === true,
+    previewReady: r.previewReady === true,
     startedAt,
     turns: count(r.turns),
     steps: (Array.isArray(r.steps) ? r.steps.slice(-STEPS_MAX) : []).map(step).filter((s): s is RunStep => !!s),
@@ -124,11 +230,11 @@ export const isRunOver = (stage: RunStage) =>
   stage === "done" || stage === "failed" || stage === "cancelled" || stage === "incomplete";
 
 const STAGE_TEXT: Record<RunStage, string> = {
-  queued: "Waiting for a builder…",
-  planning: "Planning the files…",
-  "writing-files": "Writing project files…",
-  "validating-output": "Validating generated files…",
-  "preparing-preview": "Preparing the preview…",
+  queued: "Understanding prompt",
+  planning: "Planning files",
+  "writing-files": "Writing code",
+  "validating-output": "Validating website",
+  "preparing-preview": "Preparing preview",
   retrying: "Retrying a generation step…",
   sandbox: "Preparing the workspace…",
   starting: "Starting the AI…",

@@ -1,7 +1,13 @@
 "use client";
 
 import * as React from "react";
-import { LightbulbIcon, Loader2 } from "lucide-react";
+import { LightbulbIcon } from "lucide-react";
+import type { RunStage } from "@/lib/run-progress";
+import {
+  GenerationIndicator,
+  GenerationStages,
+  generationStatusText,
+} from "@/components/workspace/GenerationProgressVisuals";
 
 /** Short and true for this builder on the new engine. No prices, no vendor names. */
 const TIPS = [
@@ -18,42 +24,6 @@ const TIPS = [
 ];
 const TIP_MS = 6_000;
 const FADE_MS = 400;
-const BUILD_STAGES = [
-  "Planning files",
-  "Writing project files",
-  "Validating generated files",
-  "Preparing preview",
-] as const;
-
-function stageIndex(stage?: string | null): number {
-  switch (stage) {
-    case "planning":
-    case "starting":
-    case "sandbox":
-      return 0;
-    case "writing-files":
-    case "working":
-    case "build":
-      return 1;
-    case "validating-output":
-      return 2;
-    case "preparing-preview":
-    case "deploy":
-    case "wrapping-up":
-    case "entry-page":
-      return 3;
-    default:
-      return -1;
-  }
-}
-
-function stageLabel(stage?: string | null): string {
-  if (stage === "queued") return "Waiting for generation to start";
-  if (stage === "retrying" || stage === "fixing") return "Retrying a generation step";
-  const index = stageIndex(stage);
-  return index >= 0 ? BUILD_STAGES[index] ?? "Starting generation" : "Starting generation";
-}
-
 /**
  * ═══ THE PREVIEW WHILE THE FIRST BUILD RUNS ═════════════════════════════════
  *
@@ -62,11 +32,18 @@ function stageLabel(stage?: string | null): string {
  * so it follows light/dark. With `prefers-reduced-motion` the drawing holds still and
  * the tips swap without the fade.
  */
-export function BuildingLoader({ stage }: { stage?: string | null }) {
+export function BuildingLoader({
+  stage = null,
+  retrying = false,
+  previewReady = false,
+}: {
+  stage?: RunStage | null;
+  retrying?: boolean;
+  previewReady?: boolean;
+}) {
   const [tip, setTip] = React.useState(0);
   const [shown, setShown] = React.useState(true);
-  const activeStage = stageIndex(stage);
-  const currentLabel = stageLabel(stage);
+  const currentLabel = generationStatusText(stage, retrying);
 
   React.useEffect(() => {
     setTip(Math.floor(Math.random() * TIPS.length));
@@ -103,7 +80,7 @@ export function BuildingLoader({ stage }: { stage?: string | null }) {
 
       <div className="relative w-full max-w-sm space-y-3">
         <div className="flex items-center justify-center gap-2">
-          <Loader2 className="size-4 animate-spin text-primary motion-reduce:animate-none" aria-hidden />
+          <GenerationIndicator className="size-7" />
           <p className="text-sm font-medium text-foreground">Building your app</p>
         </div>
         <p role="status" aria-live="polite" aria-atomic="true" className="text-xs text-muted-foreground">
@@ -117,26 +94,7 @@ export function BuildingLoader({ stage }: { stage?: string | null }) {
         >
           <div aria-hidden className="run-progress-indeterminate h-full rounded-full bg-primary" />
         </div>
-        <ol aria-label="Generation stages" className="grid grid-cols-2 gap-x-3 gap-y-2 pt-1 text-left sm:grid-cols-4">
-          {BUILD_STAGES.map((label, index) => {
-            const complete = activeStage >= 0 && index < activeStage;
-            const active = index === activeStage;
-            return (
-              <li key={label} aria-current={active ? "step" : undefined} className="flex min-w-0 items-center gap-1.5 text-[11px] leading-tight">
-                <span
-                  aria-hidden
-                  className={[
-                    "size-2 shrink-0 rounded-full transition-colors duration-300 motion-reduce:transition-none",
-                    complete ? "bg-primary" : active ? "bg-primary ring-4 ring-primary/15" : "bg-muted-foreground/25",
-                  ].join(" ")}
-                />
-                <span className={active || complete ? "text-foreground" : "text-muted-foreground"}>
-                  {label}
-                </span>
-              </li>
-            );
-          })}
-        </ol>
+        <GenerationStages stage={stage} previewReady={previewReady} />
       </div>
 
       <div className="relative w-full max-w-sm rounded-xl border border-border bg-card/70 px-4 py-3 text-left backdrop-blur-sm">
