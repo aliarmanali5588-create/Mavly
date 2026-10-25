@@ -545,8 +545,9 @@ export interface FileWriteResult {
  * claim the image was saved to the project.
  *
  * ⚠️ AND IT IS NOT BILLED. This build has no credit engine (see
- * `MAVLY_CLEAN_BASELINE.md`); `usage.costUsd` is the PROVIDER's price, not a
- * Mavly credit charge.
+ * `MAVLY_CLEAN_BASELINE.md`). The provider's own cost is deliberately absent
+ * from this response: it stays server-side and must never be presented as a
+ * Mavly credit price.
  */
 export interface ImageGenerationResult {
   projectId: string;
@@ -558,8 +559,7 @@ export interface ImageGenerationResult {
   /** Base64 without a `data:` prefix — build the source as `data:${mediaType};base64,${imageBase64}`. */
   imageBase64: string;
   usage: {
-    /** The provider's own USD price for this generation, when it reports one. */
-    costUsd: number | null;
+    /** Provider token counts only; the provider's price is not returned. */
     totalTokens: number | null;
   };
 }

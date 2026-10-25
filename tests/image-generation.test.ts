@@ -9,6 +9,7 @@ import {
   resolveImageModel,
 } from "../src/lib/ai/image-models";
 import {
+  MAX_IMAGE_BYTES,
   generateImage,
   parseImageResponse,
   sniffImageFormat,
@@ -114,6 +115,39 @@ test("the image model is not selectable as the website-generation model", () => 
   );
   // An explicit request naming FLUX still resolves to a text model.
   assert.notEqual(resolveModel(FLUX, "app-generation").id, FLUX);
+});
+
+test("MAVLY_IMAGE_MODEL selects a catalog entry, and only a catalog entry", () => {
+  const previousImage = process.env.MAVLY_IMAGE_MODEL;
+  const previousDefault = process.env.MAVLY_DEFAULT_MODEL;
+  try {
+    // Unset → the built-in default, so an existing deployment is unchanged.
+    delete process.env.MAVLY_IMAGE_MODEL;
+    assert.equal(resolveImageModel().id, FLUX);
+
+    // A registered entry is honoured (today the only entry is the default).
+    process.env.MAVLY_IMAGE_MODEL = FLUX;
+    assert.equal(resolveImageModel().id, FLUX);
+
+    // An unregistered slug is never forwarded to the provider…
+    process.env.MAVLY_IMAGE_MODEL = "deepseek/deepseek-v4.1-flash";
+    assert.equal(resolveImageModel().id, FLUX);
+    // …so the resolved model is always an entry in the image catalog.
+    assert.ok(
+      AI_IMAGE_MODEL_CATALOG.some((entry) => entry.id === resolveImageModel().id),
+      "the resolved image model is always a catalog entry",
+    );
+
+    // MAVLY_DEFAULT_MODEL stays the website/code-generation selector.
+    process.env.MAVLY_DEFAULT_MODEL = "qwen/qwen3-coder";
+    assert.equal(resolveImageModel().id, FLUX);
+    assert.equal(resolveModel(null, "app-generation").id, "qwen/qwen3-coder");
+  } finally {
+    if (previousImage === undefined) delete process.env.MAVLY_IMAGE_MODEL;
+    else process.env.MAVLY_IMAGE_MODEL = previousImage;
+    if (previousDefault === undefined) delete process.env.MAVLY_DEFAULT_MODEL;
+    else process.env.MAVLY_DEFAULT_MODEL = previousDefault;
+  }
 });
 
 // ── the request ─────────────────────────────────────────────────────────────
@@ -230,6 +264,20 @@ test("a URL-only response is refused, never fetched", async () => {
   } finally {
     restoreFetch();
   }
+});
+
+test("the accepted image size fits the deployment platform's response limit", () => {
+  // Mavly's own app is built for Vercel, where a Function's response body is
+  // capped at 4.5 MB. Base64 expands by 4/3; the envelope needs headroom.
+  const base64Chars = Math.ceil(MAX_IMAGE_BYTES / 3) * 4;
+  assert.ok(base64Chars + 2_000 < 4_500_000);
+});
+
+test("an image over the accepted size fails as IMAGE_TOO_LARGE", () => {
+  const parsed = parseImageResponse({ data: [{ b64_json: PNG_BASE64 }] }, { maxBytes: 10 });
+  assert.equal(parsed.ok, false);
+  if (parsed.ok) return;
+  assert.equal(parsed.code, "IMAGE_TOO_LARGE");
 });
 
 test("a data-URL prefix is stripped before the bytes are validated", () => {

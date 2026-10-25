@@ -127,7 +127,11 @@ generated app.
   **no credits are charged** (there is no credit engine). The image catalog is separate
   from `src/lib/ai/models.ts` on purpose: `resolveModel()` must never select an image
   model for website generation. Reference images are not supported, and a URL-only
-  provider response is refused rather than fetched.
+  provider response is refused rather than fetched. Admission is a best-effort,
+  per-instance request window (5 per user and 40 per instance per 10 minutes); a hard
+  cross-instance cap would need a persisted admission RPC, which does not exist. Images
+  are capped at 3 MB so the base64 JSON fits Vercel's 4.5 MB function response limit, and
+  the provider's cost stays server-side instead of being returned to the browser.
 - **The GitHub integration is implemented** as a GitHub App used with user-to-server
   tokens: OAuth start, callback, status, repository/branch discovery, connect, disconnect,
   push and import under `/api/integrations/github/`; callback at `/auth/github/callback`.
@@ -184,7 +188,10 @@ generated app.
   generated or imported source. A framework entry point that needs a build is reported as
   unsupported, not shown as a blank success.
 - `OPENROUTER_API_KEY` is server-only. `MAVLY_DEFAULT_MODEL` selects the default catalog
-  model; the built-in default is `deepseek/deepseek-v4.1-flash`. `VERCEL_API_TOKEN` is also
+  model; the built-in default is `deepseek/deepseek-v4.1-flash`. `MAVLY_IMAGE_MODEL` selects
+  the image model from the separate image catalog and defaults to
+  `black-forest-labs/flux.2-klein-4b`; a value that is not a catalog entry is ignored
+  (default) and never forwarded. `VERCEL_API_TOKEN` is also
   server-only and is never stored in the database or returned to a browser.
 - Obsolete operator secrets (`TOTALUM_VCAAS_API_KEY`, `VCAAS_API_KEY`, `TOTALUM_API_URL`)
   are not read. Their revocation/removal is a manual operator task; do not print, copy,
@@ -249,7 +256,8 @@ paths with `src/lib/vcaas-scope.ts`, so unknown shapes are refused before any wo
 | `src/lib/github-client.ts` | The browser's GitHub catalog. It never carries a credential. |
 | `src/lib/ai/agent.ts` | Prompt, JSON parsing/repair, path and size validation. |
 | `src/lib/ai/image-models.ts` | Image-model catalog and image-request validation, kept apart from the text catalog. |
-| `src/lib/ai/openrouter-images.ts` | The OpenRouter image API client: response validation, bounded retry, server-only key. |
+| `src/lib/ai/openrouter-images.ts` | The OpenRouter image API client: response validation, size cap, bounded retry, server-only key. |
+| `src/lib/mavly/image-limits.ts` | Best-effort per-user/per-instance image-generation admission windows. |
 | `src/lib/ai/openrouter.ts` | The chat-completions call for website generation; server-only key. |
 | `src/lib/ai/models.ts` | Text-model catalog and task routing scaffold. |
 | `src/lib/mavly-hostname.ts` | Pure derivation of `<project-id>.mavly.xyz` from the immutable, owned project id. |

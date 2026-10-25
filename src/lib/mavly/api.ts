@@ -72,6 +72,7 @@ import {
   type RunStage,
 } from "./store";
 import { runAgent } from "./run-agent";
+import { imageGenerationLimiter, type ImageGenerationLimitDecision } from "./image-limits";
 import {
   getDeploymentRow,
   isDeploymentStoreFailure,
@@ -329,7 +330,7 @@ export async function handleMavlyVcaasRequest(input: MavlyRequest): Promise<Next
    * types; nothing here claims the image was saved.
    */
   if (action === "images/generate" && method === "POST") {
-    return imageGenerationResponse(projectId, body);
+    return imageGenerationResponse(userId, projectId, body);
   }
 
   if (action === "rebuild" && method === "POST") {
@@ -1250,6 +1251,7 @@ async function fileWriteResponse(userId: string, projectId: string, body: unknow
  * decision, not something this handler may assume.
  */
 async function imageGenerationResponse(
+  userId: string,
   projectId: string,
   body: unknown,
 ): Promise<NextResponse> {
@@ -1264,6 +1266,19 @@ async function imageGenerationResponse(
   const model = resolveImageModel();
   const parsed = parseImageGenerationRequest(body, model);
   if (parsed.ok === false) return fail(400, "VALIDATION", parsed.error);
+
+  /**
+   * ⚠️ BEFORE THE PROVIDER CALL, AFTER VALIDATION. A malformed request costs
+   * nothing upstream, so it must not spend the user's window. A provider failure
+   * does spend it: that is deliberate, so a broken key or a hanging provider
+   * cannot be retried in a tight loop.
+   *
+   * ⚠️ THE CEILING IS BEST-EFFORT AND PER INSTANCE. See `image-limits.ts`: a hard
+   * cross-instance cap needs the persisted admission RPC described there, which
+   * this change deliberately does not add.
+   */
+  const allowance = imageGenerationLimiter.consume(userId);
+  if (allowance.ok === false) return imageLimitResponse(allowance);
 
   const generated = await generateImage({
     model,
@@ -1282,11 +1297,28 @@ async function imageGenerationResponse(
     bytes: generated.image.bytes,
     imageBase64: generated.image.base64,
     usage: {
-      costUsd: generated.usage.costUsd,
+      // ⚠️ THE PROVIDER'S COST IS NOT RETURNED. It stays in the server-side
+      // `generated.usage` for future accounting only; exposing it would publish
+      // the operator's per-image cost and margin to the browser.
       totalTokens: generated.usage.totalTokens,
     },
   };
   return ok(data);
+}
+
+/**
+ * A refusal from the in-memory admission window. Nothing reached OpenRouter, so
+ * "nothing was generated" is true here and the retry hint is the window reset.
+ */
+function imageLimitResponse(denial: ImageGenerationLimitDecision): NextResponse {
+  return fail(
+    429,
+    "RATE_LIMITED",
+    denial.scope === "user"
+      ? "You've reached the image generation limit for now. Try again in a few minutes."
+      : "Image generation is at capacity right now. Try again shortly.",
+    { "retry-after": String(denial.retryAfterSeconds) },
+  );
 }
 
 /**
@@ -1332,17 +1364,40 @@ function imageGenerationFailureResponse(failure: ImageGenerationFailure): NextRe
         "The image provider is busy right now. Nothing was generated; try again shortly.",
         retryAfter,
       );
+    case "IMAGE_TOO_LARGE":
+      return fail(
+        502,
+        "IMAGE_TOO_LARGE",
+        "The generated image was too large to deliver. Try a smaller aspect ratio.",
+      );
+    case "EMPTY_RESPONSE":
+      return fail(
+        502,
+        "IMAGE_PROVIDER_ERROR",
+        "The image provider returned an empty response. Try again.",
+      );
+    case "INVALID_RESPONSE":
+      return fail(
+        502,
+        "IMAGE_PROVIDER_ERROR",
+        "The image provider's response was not a usable image. Try again.",
+      );
     case "TIMEOUT":
       return fail(
         504,
         "IMAGE_TIMEOUT",
-        "The image took too long to generate. Check again before retrying — nothing was returned to Mavly.",
+        "The image request timed out before the provider answered. Nothing was returned to Mavly.",
       );
     default:
+      /**
+       * `PROVIDER_ERROR`, `TRANSIENT`, `NETWORK`, `UNKNOWN`. We know Mavly did
+       * not receive an image; we do NOT know that nothing was generated upstream,
+       * so this copy must not claim it was.
+       */
       return fail(
         502,
         "IMAGE_PROVIDER_ERROR",
-        "The image provider could not complete this request. Nothing was generated.",
+        "The image request failed and Mavly received no image. Try again.",
       );
   }
 }

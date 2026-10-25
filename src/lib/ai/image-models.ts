@@ -11,7 +11,9 @@
  * parameters. A request with an unsupported key is a provider 400 — there is no
  * fallback and no "best effort" mapping.
  *
- * `black-forest-labs/flux.2-klein-4b`, verified against
+ * `black-forest-labs/flux.2-klein-4b` is the DEFAULT and the only registered
+ * entry today; `MAVLY_IMAGE_MODEL` may select another entry once one is added
+ * here (see `resolveImageModel`). Its parameters were verified against
  * `GET https://openrouter.ai/api/v1/images/models/black-forest-labs/flux.2-klein-4b/endpoints`:
  *
  *   aspect_ratio      1:1, 4:3, 3:4, 3:2, 2:3, 16:9, 9:16, 21:9, auto
@@ -59,6 +61,11 @@ export interface AiImageModel {
   providerUsdPerMegapixel: number | null;
 }
 
+/**
+ * Used whenever `MAVLY_IMAGE_MODEL` is unset or does not name a catalog entry.
+ * Changing it changes the fallback for every deployment that has not set the
+ * variable.
+ */
 export const DEFAULT_IMAGE_MODEL_ID = "black-forest-labs/flux.2-klein-4b";
 
 export const AI_IMAGE_MODEL_CATALOG: readonly AiImageModel[] = [
@@ -76,9 +83,35 @@ export const AI_IMAGE_MODEL_CATALOG: readonly AiImageModel[] = [
   },
 ];
 
-/** The image model this build uses. One entry today, resolved in one place. */
+/**
+ * The image model id this build uses: `MAVLY_IMAGE_MODEL` when it names a
+ * catalog entry, otherwise the built-in default.
+ *
+ * ⚠️ VALIDATED, NOT TRUSTED. The variable is a SELECTOR over
+ * `AI_IMAGE_MODEL_CATALOG`, not a way to inject a slug. A value that is not
+ * registered here (a typo, a chat-completions model, another provider's slug) is
+ * never forwarded to OpenRouter; it resolves to the default, exactly as an unset
+ * variable does. Validation is also what keeps the route honest: every
+ * capability it enforces — aspect ratios, output formats, `n`, seed support,
+ * price — comes from the catalog entry, so a model with no entry would be sent
+ * options nobody verified against its endpoint record.
+ *
+ * ⚠️ IT IS NOT `MAVLY_DEFAULT_MODEL`. That variable selects the website/code
+ * generation model in `src/lib/ai/models.ts` and is never read here. The two
+ * catalogs share no entry, so neither variable can select the other's model.
+ */
+export function configuredImageModelId(): string {
+  const override = process.env.MAVLY_IMAGE_MODEL?.trim();
+  if (override && AI_IMAGE_MODEL_CATALOG.some((model) => model.id === override)) {
+    return override;
+  }
+  return DEFAULT_IMAGE_MODEL_ID;
+}
+
+/** The image model this build uses, resolved in one place. */
 export function resolveImageModel(): AiImageModel {
-  return AI_IMAGE_MODEL_CATALOG[0];
+  const id = configuredImageModelId();
+  return AI_IMAGE_MODEL_CATALOG.find((model) => model.id === id) ?? AI_IMAGE_MODEL_CATALOG[0];
 }
 
 export function imageModelIds(): string[] {

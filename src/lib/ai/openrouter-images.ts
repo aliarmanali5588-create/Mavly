@@ -41,11 +41,20 @@ const OPENROUTER_IMAGES_URL = "https://openrouter.ai/api/v1/images";
 
 const DEFAULT_TIMEOUT_MS = 120_000;
 
-/** A generated image larger than this is refused rather than shipped to the browser. */
-const MAX_IMAGE_BYTES = 12 * 1024 * 1024;
-
-/** Base64 expands by 4/3; this bounds the JSON body before decoding it. */
-const MAX_BASE64_CHARS = Math.ceil(MAX_IMAGE_BYTES / 3) * 4 + 64;
+/**
+ * A generated image larger than this is refused rather than shipped to the
+ * browser.
+ *
+ * ⚠️ SIZED FOR THE DEPLOYMENT PLATFORM, NOT FOR MEMORY. Mavly's own app is
+ * built for Vercel (`vercel.json`, and `next.config.ts` keys off `VERCEL`), and a
+ * Vercel Function's response body is limited to 4.5 MB. Base64 expands by 4/3,
+ * so 3,000,000 decoded bytes become ~4,000,000 characters of JSON — inside that
+ * limit with headroom for the envelope. A bigger provider image is reported as
+ * `IMAGE_TOO_LARGE` instead of becoming a paid generation that dies at the
+ * platform layer. Raise this only with a delivery change (streaming or stored
+ * assets) or on a host without that cap.
+ */
+export const MAX_IMAGE_BYTES = 3_000_000;
 
 export const DEFAULT_IMAGE_RETRY_POLICY: RetryPolicy = {
   maxAttempts: 2,
@@ -67,6 +76,7 @@ export type ImageGenerationErrorCode =
   | "CONTENT_FILTER"
   | "EMPTY_RESPONSE"
   | "INVALID_RESPONSE"
+  | "IMAGE_TOO_LARGE"
   | "PROVIDER_ERROR"
   | "UNKNOWN";
 
@@ -345,7 +355,11 @@ function classifyHttpFailure(status: number): {
 
 export type ImageResponseParse =
   | { ok: true; image: GeneratedImage; usage: ImageGenerationUsage }
-  | { ok: false; code: "EMPTY_RESPONSE" | "INVALID_RESPONSE"; error: string };
+  | {
+      ok: false;
+      code: "EMPTY_RESPONSE" | "INVALID_RESPONSE" | "IMAGE_TOO_LARGE";
+      error: string;
+    };
 
 /**
  * Read one image out of the provider's buffered response.
@@ -354,7 +368,16 @@ export type ImageResponseParse =
  * returned (this model accepts `n: 1`, so a second would mean the provider
  * ignored the cap — still only one is ever shown or billed into a response).
  */
-export function parseImageResponse(payload: unknown): ImageResponseParse {
+export function parseImageResponse(
+  payload: unknown,
+  limits: { maxBytes?: number } = {},
+): ImageResponseParse {
+  const maxBytes =
+    typeof limits.maxBytes === "number" && Number.isFinite(limits.maxBytes) && limits.maxBytes > 0
+      ? Math.floor(limits.maxBytes)
+      : MAX_IMAGE_BYTES;
+  const maxBase64Chars = Math.ceil(maxBytes / 3) * 4 + 64;
+
   if (!payload || typeof payload !== "object") {
     return { ok: false, code: "EMPTY_RESPONSE", error: "OpenRouter returned no response body." };
   }
@@ -381,10 +404,10 @@ export function parseImageResponse(payload: unknown): ImageResponseParse {
     }
 
     const base64 = stripDataUrlPrefix(raw);
-    if (base64.length > MAX_BASE64_CHARS) {
+    if (base64.length > maxBase64Chars) {
       return {
         ok: false,
-        code: "INVALID_RESPONSE",
+        code: "IMAGE_TOO_LARGE",
         error: "OpenRouter returned an image larger than Mavly accepts.",
       };
     }
@@ -404,10 +427,10 @@ export function parseImageResponse(payload: unknown): ImageResponseParse {
         error: "OpenRouter returned an empty image.",
       };
     }
-    if (bytes.length > MAX_IMAGE_BYTES) {
+    if (bytes.length > maxBytes) {
       return {
         ok: false,
-        code: "INVALID_RESPONSE",
+        code: "IMAGE_TOO_LARGE",
         error: "OpenRouter returned an image larger than Mavly accepts.",
       };
     }

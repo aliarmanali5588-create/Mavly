@@ -139,17 +139,37 @@ and `seed`. `resolution`, `quality`, `background`, streaming and reference image
 refused rather than silently ignored; reference images would need an upload path (not
 implemented) or a server-side URL fetcher (an SSRF surface).
 
+`MAVLY_IMAGE_MODEL` selects which catalog entry the route uses. The built-in default is
+`black-forest-labs/flux.2-klein-4b`, so an unset variable changes nothing. The value is
+**validated against the catalog rather than forwarded**: a slug with no entry (a typo, a
+chat-completions model, another provider's model) resolves to the default and never
+reaches OpenRouter. Catalog validation is what makes the enforced options trustworthy —
+aspect ratios, formats, `n` and seed support all come from the entry. `MAVLY_DEFAULT_MODEL`
+is a different variable for the website/code-generation model and is never read by the
+image path; the two catalogs share no entry.
+
 The response is validated, not trusted: the base64 has to decode, be non-empty, be within
-12 MB, and start with a PNG or JPEG signature. A URL-only response is refused instead of
-fetched. At most one retry is made, and only after a 429/502/503 — the provider's
-documented "nothing was generated" answers. A timeout is never retried, because the first
-generation may already have completed and been billed upstream.
+**3,000,000 bytes**, and start with a PNG or JPEG signature. The size cap is set by the
+delivery path, not by memory: Mavly's own app builds for Vercel, whose Function response
+body is limited to 4.5 MB, and base64 expands by 4/3. A larger provider image is reported
+as `IMAGE_TOO_LARGE` instead of becoming a paid generation that fails at the platform
+layer. A URL-only response is refused instead of fetched. At most one retry is made, and
+only after a 429/502/503 — the provider's documented "nothing was generated" answers. A
+timeout is never retried, because the first generation may already have completed and been
+billed upstream.
+
+Admission is a best-effort, per-instance request window: **5 per user per 10 minutes** and
+**40 per instance per 10 minutes**, consumed after validation and before the provider call
+(`src/lib/mavly/image-limits.ts`). It lives in module memory, so it does not coordinate
+across serverless instances; a hard cap needs a persisted admission RPC and a migration,
+which is not implemented. Over-limit requests answer `429 RATE_LIMITED` with `retry-after`.
 
 The image is returned as base64 and is **not stored**: there is no binary asset pipeline
 (`project_files` is text served as text by the static preview), so the workspace shows it
 for the session and offers a download. There is also **no credit charge** — this build has
 no credit engine (no balance, reservation, finalisation or refund), and inventing a price
-would be a fake debit. `usage.costUsd` in the response is the provider's own price.
+would be a fake debit. The provider's own cost stays inside its server-side metadata and
+is deliberately **not** returned to the browser.
 
 ### Restore points
 
@@ -338,6 +358,7 @@ with HTTP **503** and `cache-control: private, no-store, max-age=0`.
 - `src/lib/ai/image-models.ts` — image-model catalog and image-request validation.
 - `src/lib/ai/openrouter-images.ts` — the image API client (`/api/v1/images`), response
   validation and bounded retry. Server-only key.
+- `src/lib/mavly/image-limits.ts` — best-effort per-user/per-instance request admission.
 - `src/lib/image-generation-options.ts` — aspect-ratio/format constants shared by the
   server validation and the workspace panel.
 - `src/lib/ai/openrouter.ts` — the only outbound builder call; server-only key.
