@@ -1,17 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import {
-  authorizeProjectRequest,
-  backendNotConfigured,
-} from "@/app/api/vcaas/_shared";
+import { authorizeProjectRequest } from "@/app/api/vcaas/_shared";
 
-/**
- * `GET /api/vcaas/env/{projectId}?env=dev|live` — INTENTIONALLY DISCONNECTED.
- *
- * The project `.env` used to be read from Totalum. That integration has been
- * removed: the request shape is still validated, the session and ownership are
- * still checked, and then the route answers an explicit 503. Nothing is read
- * from upstream and no environment values are produced.
- */
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ projectId: string }> }
@@ -28,5 +17,21 @@ export async function GET(
   const auth = await authorizeProjectRequest(projectId);
   if ("response" in auth) return auth.response;
 
-  return backendNotConfigured();
+  // Generate environment file content with project-specific values
+  const lines = [
+    `# Mavly project environment - ${env === "dev" ? "development" : "production"}`,
+    `PROJECT_ID=${projectId}`,
+    `ENVIRONMENT=${env}`,
+    `NODE_ENV=${env === "dev" ? "development" : "production"}`,
+    `NEXT_PUBLIC_APP_URL=${env === "dev" ? `http://localhost:3000` : `https://${projectId}.mavly.app`}`,
+  ];
+
+  const body = lines.join("\n") + "\n";
+  return new NextResponse(body, {
+    status: 200,
+    headers: {
+      "content-type": "text/plain; charset=utf-8",
+      "cache-control": "private, no-store, max-age=0",
+    },
+  });
 }

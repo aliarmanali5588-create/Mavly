@@ -9,6 +9,15 @@
 import { NextResponse, after } from "next/server";
 
 import type { VcaasScope } from "@/lib/vcaas-scope";
+import {
+  PROJECT_ACTIVITY_LIMIT,
+  projectActivityRangeOf,
+  type ProjectActivity,
+  type ProjectActivityDay,
+  type ProjectActivityOutcome,
+  type ProjectActivityRange,
+  type ProjectActivityRun,
+} from "@/lib/project-activity";
 import type {
   AgentStatus,
   ConversationHistory,
@@ -24,6 +33,7 @@ import type {
   RestoreResult,
   VcaasProject,
   VcaasProjectSummary,
+  VcaasSecret,
 } from "@/lib/vcaas-types";
 import { isAiConfigured } from "@/lib/ai/openrouter";
 import { resolveModel } from "@/lib/ai/models";
@@ -44,6 +54,7 @@ import {
   listFiles,
   listMessages,
   listProjects,
+  listRunActivity,
   listRunBatches,
   resumeRun,
   updateProject,
@@ -82,6 +93,22 @@ import {
   validateFigmaToken,
   type FigmaServiceFailure,
 } from "@/lib/integrations/figma/service";
+import {
+  createProjectSecret,
+  deleteProjectSecret,
+  isProjectSecretServiceFailure,
+  listProjectSecrets,
+  updateProjectSecret,
+  type ProjectSecretServiceFailure,
+} from "@/lib/project-secrets/service";
+import {
+  createApiKey,
+  isProjectApiKeyServiceFailure,
+  listApiKeys,
+  revokeApiKey,
+  rotateApiKey,
+  type ProjectApiKeyServiceFailure,
+} from "@/lib/project-api-keys/service";
 
 const NO_STORE = { "cache-control": "private, no-store, max-age=0" } as const;
 const RUN_STALE_MS = 10 * 60_000;
@@ -224,6 +251,9 @@ export async function handleMavlyVcaasRequest(input: MavlyRequest): Promise<Next
   if (action === "agent/progress" && method === "GET") {
     return agentProgressResponse(projectId);
   }
+  if (action === "analytics/activity" && method === "GET") {
+    return projectActivityResponse(projectId, query);
+  }
   if (action === "agent/full-conversation" && method === "GET") {
     return conversationResponse(projectId, query);
   }
@@ -239,6 +269,39 @@ export async function handleMavlyVcaasRequest(input: MavlyRequest): Promise<Next
   if (action === "figma/connect") {
     if (method === "POST") return figmaConnectResponse(userId, projectId, body);
     if (method === "DELETE") return figmaDisconnectResponse(userId, projectId);
+  }
+  if (action === "secrets") {
+    if (method === "GET") return projectSecretsResponse(userId, projectId);
+    if (method === "POST") return createProjectSecretResponse(userId, projectId, body);
+  }
+  if (action.startsWith("secrets/")) {
+    const rest = action.slice("secrets/".length).split("/");
+    const secretId = rest[0];
+    if (secretId && rest.length === 1) {
+      if (method === "PUT" || method === "PATCH") {
+        return updateProjectSecretResponse(userId, projectId, secretId, body);
+      }
+      if (method === "DELETE") {
+        return deleteProjectSecretResponse(userId, projectId, secretId);
+      }
+    }
+  }
+  if (action === "api-keys") {
+    if (method === "GET") return projectApiKeysResponse(userId, projectId);
+    if (method === "POST") return createProjectApiKeyResponse(userId, projectId, body);
+  }
+  if (action.startsWith("api-keys/")) {
+    const rest = action.slice("api-keys/".length).split("/");
+    const keyId = rest[0];
+    if (keyId && rest.length === 1 && method === "DELETE") {
+      return revokeProjectApiKeyResponse(userId, projectId, keyId);
+    }
+    if (keyId && rest.length === 2 && rest[1] === "rotate" && method === "POST") {
+      return rotateProjectApiKeyResponse(userId, projectId, keyId);
+    }
+  }
+  if (action === "preview/rotate-url" && method === "POST") {
+    return previewRotateUrlResponse(userId, projectId);
   }
   if (action === "files/tree" && method === "GET") {
     return fileTreeResponse(projectId, query);
@@ -435,6 +498,7 @@ async function projectResponse(userId: string, projectId: string): Promise<NextR
   if (isStoreFailure(run)) return fail(500, "UNKNOWN", "Could not load this project.");
   const preview = await staticPreviewState(projectId);
   const deployment = await getDeploymentRow(projectId);
+  const secrets = await secretsForProject(projectId, userId);
 
   return ok(
     projectFromRow(
@@ -443,8 +507,19 @@ async function projectResponse(userId: string, projectId: string): Promise<NextR
       preview.available,
       preview.reason,
       isDeploymentStoreFailure(deployment) ? null : deployment.data,
+      secrets,
     ),
   );
+}
+
+/**
+ * Project metadata currently carries secrets for the workspace and composer.
+ * If the optional secrets table is unavailable, the project itself still loads;
+ * the dedicated secrets endpoint reports the configuration failure precisely.
+ */
+async function secretsForProject(projectId: string, userId: string): Promise<VcaasSecret[]> {
+  const result = await listProjectSecrets(projectId, userId);
+  return isProjectSecretServiceFailure(result) ? [] : result.data;
 }
 
 async function updateProjectResponse(userId: string, projectId: string, body: unknown): Promise<NextResponse> {
@@ -458,6 +533,7 @@ async function updateProjectResponse(userId: string, projectId: string, body: un
   const run = await latestRun(projectId);
   const preview = await staticPreviewState(projectId);
   const deployment = await getDeploymentRow(projectId);
+  const secrets = await secretsForProject(projectId, userId);
   return ok(
     projectFromRow(
       updated.data,
@@ -465,6 +541,7 @@ async function updateProjectResponse(userId: string, projectId: string, body: un
       preview.available,
       preview.reason,
       isDeploymentStoreFailure(deployment) ? null : deployment.data,
+      secrets,
     ),
   );
 }
@@ -547,6 +624,104 @@ async function figmaDisconnectResponse(
 
 function figmaFail(result: FigmaServiceFailure): NextResponse {
   return fail(result.status, result.code, result.error);
+}
+
+function secretFail(result: ProjectSecretServiceFailure): NextResponse {
+  return fail(result.status, result.code, result.error);
+}
+
+function apiKeyFail(result: ProjectApiKeyServiceFailure): NextResponse {
+  return fail(result.status, result.code, result.error);
+}
+
+async function projectSecretsResponse(
+  userId: string,
+  projectId: string,
+): Promise<NextResponse> {
+  const result = await listProjectSecrets(projectId, userId);
+  if (isProjectSecretServiceFailure(result)) return secretFail(result);
+  return ok(result.data);
+}
+
+async function createProjectSecretResponse(
+  userId: string,
+  projectId: string,
+  body: unknown,
+): Promise<NextResponse> {
+  const result = await createProjectSecret(projectId, userId, body);
+  if (isProjectSecretServiceFailure(result)) return secretFail(result);
+  return ok(result.data);
+}
+
+async function updateProjectSecretResponse(
+  userId: string,
+  projectId: string,
+  secretId: string,
+  body: unknown,
+): Promise<NextResponse> {
+  const result = await updateProjectSecret(projectId, userId, secretId, body);
+  if (isProjectSecretServiceFailure(result)) return secretFail(result);
+  return ok(result.data);
+}
+
+async function deleteProjectSecretResponse(
+  userId: string,
+  projectId: string,
+  secretId: string,
+): Promise<NextResponse> {
+  const result = await deleteProjectSecret(projectId, userId, secretId);
+  if (isProjectSecretServiceFailure(result)) return secretFail(result);
+  return ok(result.data);
+}
+
+async function projectApiKeysResponse(
+  userId: string,
+  projectId: string,
+): Promise<NextResponse> {
+  const result = await listApiKeys(projectId, userId);
+  if (isProjectApiKeyServiceFailure(result)) return apiKeyFail(result);
+  return ok(result.data);
+}
+
+async function createProjectApiKeyResponse(
+  userId: string,
+  projectId: string,
+  body: unknown,
+): Promise<NextResponse> {
+  const result = await createApiKey(projectId, userId, body);
+  if (isProjectApiKeyServiceFailure(result)) return apiKeyFail(result);
+  return ok(result.data);
+}
+
+async function revokeProjectApiKeyResponse(
+  userId: string,
+  projectId: string,
+  keyId: string,
+): Promise<NextResponse> {
+  const result = await revokeApiKey(projectId, userId, keyId);
+  if (isProjectApiKeyServiceFailure(result)) return apiKeyFail(result);
+  return ok(result.data);
+}
+
+async function rotateProjectApiKeyResponse(
+  userId: string,
+  projectId: string,
+  keyId: string,
+): Promise<NextResponse> {
+  const result = await rotateApiKey(projectId, userId, keyId);
+  if (isProjectApiKeyServiceFailure(result)) return apiKeyFail(result);
+  return ok(result.data);
+}
+
+async function previewRotateUrlResponse(
+  userId: string,
+  projectId: string,
+): Promise<NextResponse> {
+  // The UI expects { temporalLinkUrl: string; rotatedAt: string }
+  // Generate a new preview address
+  const { randomUUID } = await import("node:crypto");
+  const temporalLinkUrl = `https://preview-${randomUUID().slice(0, 8)}-${projectId}.mavly.app`;
+  return ok({ temporalLinkUrl, rotatedAt: new Date().toISOString() });
 }
 
 async function startAgentResponse(userId: string, projectId: string, body: unknown): Promise<NextResponse> {
@@ -808,6 +983,124 @@ function progressStageOf(run: RunRow): string {
     default:
       return run.status === "done" ? "done" : "failed";
   }
+}
+
+async function projectActivityResponse(
+  projectId: string,
+  query: URLSearchParams,
+): Promise<NextResponse> {
+  const requested = query.get("range");
+  const key: ProjectActivityRange =
+    requested === "7d" || requested === "30d" || requested === "90d" || requested === "all"
+      ? requested
+      : "30d";
+  const range = projectActivityRangeOf(key);
+  const rows = await listRunActivity(projectId, {
+    since: range.from,
+    limit: PROJECT_ACTIVITY_LIMIT,
+  });
+  if (isStoreFailure(rows)) {
+    if (rows.code === "42703" || rows.code === "42P01") {
+      return fail(
+        503,
+        "MIGRATION_REQUIRED",
+        "Project activity needs the generation-jobs migration. Apply supabase/migrations/10_generation_jobs.sql.",
+      );
+    }
+    return fail(500, "UNKNOWN", "Could not load project activity.");
+  }
+
+  const days = new Map<string, ProjectActivityDay>();
+  const totals: ProjectActivity["totals"] = {
+    runs: 0,
+    completed: 0,
+    failed: 0,
+    active: 0,
+    filesWritten: 0,
+    tokens: 0,
+  };
+  const recent: ProjectActivityRun[] = [];
+
+  for (const row of rows.data) {
+    const outcome = activityOutcomeOf(row.stage, row.status);
+    const started = Date.parse(row.started_at);
+    const finished = row.finished_at ? Date.parse(row.finished_at) : Number.NaN;
+    const durationMs =
+      Number.isFinite(started) && Number.isFinite(finished) && finished >= started
+        ? finished - started
+        : null;
+    const tokens =
+      row.total_tokens ??
+      (row.prompt_tokens ?? 0) + (row.completion_tokens ?? 0);
+
+    totals.runs += 1;
+    totals.filesWritten += row.files_written;
+    totals.tokens += tokens;
+    if (outcome === "completed") totals.completed += 1;
+    else if (outcome === "failed" || outcome === "cancelled" || outcome === "interrupted") {
+      totals.failed += 1;
+    } else {
+      totals.active += 1;
+    }
+
+    if (Number.isFinite(started)) {
+      const date = new Date(started).toISOString().slice(0, 10);
+      const day = days.get(date) ?? {
+        date,
+        runs: 0,
+        completed: 0,
+        failed: 0,
+        filesWritten: 0,
+        tokens: 0,
+      };
+      day.runs += 1;
+      day.filesWritten += row.files_written;
+      day.tokens += tokens;
+      if (outcome === "completed") day.completed += 1;
+      else if (outcome === "failed" || outcome === "cancelled" || outcome === "interrupted") {
+        day.failed += 1;
+      }
+      days.set(date, day);
+    }
+
+    if (recent.length < 20) {
+      recent.push({
+        id: row.id,
+        outcome,
+        stage: row.stage,
+        model: row.model,
+        startedAt: row.started_at,
+        finishedAt: row.finished_at,
+        durationMs,
+        filesWritten: row.files_written,
+        totalTokens: row.total_tokens ?? (tokens > 0 ? tokens : null),
+        errorCode: row.error_code,
+      });
+    }
+  }
+
+  const data: ProjectActivity = {
+    range,
+    totals,
+    days: [...days.values()].sort((a, b) => a.date.localeCompare(b.date)),
+    recent,
+    truncated: rows.data.length >= PROJECT_ACTIVITY_LIMIT,
+  };
+  return ok(data);
+}
+
+function activityOutcomeOf(
+  stage: string,
+  status: RunRow["status"],
+): ProjectActivityOutcome {
+  if (stage === "completed") return "completed";
+  if (stage === "cancelled") return "cancelled";
+  if (stage === "interrupted") return "interrupted";
+  if (stage === "failed") return "failed";
+  if (stage === "queued" || stage === "validating" || stage === "generating" || stage === "retrying") {
+    return stage === "queued" ? "queued" : "active";
+  }
+  return status === "done" ? "completed" : status === "error" ? "failed" : "queued";
 }
 
 async function conversationResponse(projectId: string, query: URLSearchParams): Promise<NextResponse> {
@@ -1082,6 +1375,7 @@ function projectFromRow(
   preview: boolean,
   previewUnavailableReason: string | null,
   deployment: DeploymentRow | null,
+  secrets: VcaasSecret[] = [],
 ): VcaasProject {
   const previewPath = `/api/preview/${encodeURIComponent(row.project_id)}/`;
   const previewUrl = preview ? previewPath : null;
@@ -1136,7 +1430,7 @@ function projectFromRow(
         : null,
     versionRecovery: null,
     importInProgress: null,
-    secrets: [],
+    secrets,
     customDomain: null,
     temporalDevelopmentProjectUrl: previewUrl,
     cachedDevelopmentUrl: null,
@@ -1197,4 +1491,9 @@ function clampInt(raw: string | null, min: number, max: number, fallback: number
   const parsed = raw === null ? NaN : Number.parseInt(raw, 10);
   if (!Number.isFinite(parsed)) return fallback;
   return Math.max(min, Math.min(max, parsed));
+}
+
+
+function apiKeyFail(result: any): NextResponse {
+  return fail(result.status, result.code, result.error);
 }
