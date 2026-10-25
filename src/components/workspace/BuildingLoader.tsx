@@ -26,7 +26,13 @@ export function BuildingLoader({
       : "Waiting for generation status";
   const stageStatuses = generationStepStatuses(stage, previewReady);
   const activeStageIndex = stageStatuses.indexOf("active");
-  const assemblyStage = activeStageIndex < 0 ? "idle" : String(activeStageIndex);
+  const completedStageCount = stageStatuses.filter((status) => status === "completed").length;
+  const assemblyStage =
+    activeStageIndex >= 0
+      ? String(activeStageIndex)
+      : completedStageCount > 0
+        ? String(Math.min(completedStageCount - 1, 4))
+        : "idle";
 
   return (
     <div
@@ -48,60 +54,28 @@ export function BuildingLoader({
           <span>MAVLY <i /> GENERATION</span>
         </div>
 
-        <div
-          className="preview-assembly"
-          data-stage={assemblyStage}
-          data-retrying={retrying || undefined}
-          aria-hidden="true"
-        >
-          <div className="preview-canvas">
-            <div className="preview-canvas-header preview-assembly-piece">
-              <span className="preview-canvas-wordmark" />
-              <span className="preview-canvas-navigation">
-                <i />
-                <i />
-                <i />
-              </span>
-              <span className="preview-canvas-action" />
-            </div>
-            <div className="preview-canvas-hero">
-              <div className="preview-canvas-copy">
-                <span className="preview-canvas-kicker preview-assembly-piece" />
-                <span className="preview-canvas-heading preview-assembly-piece" />
-                <span className="preview-canvas-heading preview-canvas-heading-short preview-assembly-piece" />
-                <span className="preview-canvas-description preview-assembly-piece" />
-                <span className="preview-canvas-description preview-canvas-description-short preview-assembly-piece" />
-                <span className="preview-canvas-button preview-assembly-piece" />
-              </div>
-              <div className="preview-canvas-image preview-assembly-piece">
-                <span className="preview-canvas-image-outline" />
-                <span className="preview-canvas-image-detail" />
-              </div>
-            </div>
-            <div className="preview-canvas-rule" />
-            <div className="preview-canvas-content">
-              <span className="preview-canvas-section-title preview-assembly-piece" />
-              <div className="preview-canvas-grid">
-                <span className="preview-canvas-card preview-assembly-piece">
-                  <i />
-                  <b />
-                  <em />
-                  <em />
-                </span>
-                <span className="preview-canvas-card preview-assembly-piece">
-                  <i />
-                  <b />
-                  <em />
-                  <em />
-                </span>
-                <span className="preview-canvas-card preview-assembly-piece">
-                  <i />
-                  <b />
-                  <em />
-                  <em />
-                </span>
-              </div>
-            </div>
+        <div className="preview-morph" data-stage={assemblyStage} aria-hidden="true">
+          <span className="preview-morph-mark">
+            <Image
+              src="/logo/Mavly.png"
+              alt=""
+              width={38}
+              height={38}
+              className="h-full w-full rounded object-contain"
+            />
+          </span>
+          <div className="preview-morph-layout">
+            <span className="preview-morph-nav preview-morph-line" />
+            <span className="preview-morph-nav-action preview-morph-outline" />
+            <span className="preview-morph-heading preview-morph-line" />
+            <span className="preview-morph-heading-short preview-morph-line" />
+            <span className="preview-morph-copy preview-morph-line" />
+            <span className="preview-morph-copy-short preview-morph-line" />
+            <span className="preview-morph-image preview-morph-outline" />
+            <span className="preview-morph-divider" />
+            <span className="preview-morph-panel preview-morph-outline" />
+            <span className="preview-morph-panel preview-morph-panel-middle preview-morph-outline" />
+            <span className="preview-morph-panel preview-morph-panel-last preview-morph-outline" />
           </div>
         </div>
 
