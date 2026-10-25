@@ -528,9 +528,24 @@ export default function WorkspacePage() {
     if (resizeFrameRef.current !== null) window.cancelAnimationFrame(resizeFrameRef.current);
   }, []);
 
-  async function fetchProject(): Promise<VcaasProject | null> {
+  async function fetchProject(
+    options: { preservePreviewOnUnsuccessfulRun?: boolean } = {},
+  ): Promise<VcaasProject | null> {
     const res = await vcaasApi.projects.get(projectId);
-    if (res.ok && res.data && mountedRef.current) { lastProjectReadAt.current = Date.now(); setProject(res.data); setPreviewUrl(getPreviewUrlFromProject(res.data)); setPreviewCached(isCachedPreview(res.data)); return res.data; } return null;
+    if (res.ok && res.data && mountedRef.current) {
+      lastProjectReadAt.current = Date.now();
+      const nextPreviewUrl = getPreviewUrlFromProject(res.data);
+      setProject(res.data);
+      setPreviewUrl((current) => (
+        options.preservePreviewOnUnsuccessfulRun &&
+        (res.data.currentRun?.status !== "done" || !nextPreviewUrl)
+          ? current
+          : nextPreviewUrl
+      ));
+      setPreviewCached(isCachedPreview(res.data));
+      return res.data;
+    }
+    return null;
   }
   async function fetchConversation(): Promise<void> {
     const res = await vcaasApi.agent.fullConversation(projectId);
@@ -608,8 +623,16 @@ export default function WorkspacePage() {
       }
       if (terminal) {
         setRunStartedAt(null); setExpectedMinutes(null);
-        const proj = await fetchProject(); await fetchConversation();
-        if (proj && mountedRef.current) setPreviewKey((k) => k + 1); return;
+        const proj = await fetchProject({ preservePreviewOnUnsuccessfulRun: true });
+        await fetchConversation();
+        if (
+          proj?.currentRun?.status === "done" &&
+          getPreviewUrlFromProject(proj) &&
+          mountedRef.current
+        ) {
+          setPreviewKey((k) => k + 1);
+        }
+        return;
       }
     }
     pollingRef.current = setTimeout(pollAgentOnce, 10000);
@@ -1256,22 +1279,20 @@ export default function WorkspacePage() {
   };
 
   const isBuilding = project?.agentProcessStatus === "init";
-  /**
-   * Hide an unready first-build URL, but let the V2 static preview appear as soon as the
-   * backend confirms its planned files are checkpointed and the preview entry point exists.
-   */
-  const isFirstBuild = isBuilding && !messages.some((m) => m.messageType === "finished");
   /** New engine: the live run timeline (`agent/progress`) for the chat and the preview loader. */
   const isV2 = isV2Project(project);
   const runProgress = useRunProgress(projectId, isBuilding, isV2);
   const buildStage = runProgress && !isRunOver(runProgress.stage) ? runProgress.stage : null;
   const buildRetrying = runProgress?.retrying ?? false;
   const previewReady = runProgress?.previewReady ?? false;
-  const shownPreviewUrl = isFirstBuild
-    ? isV2 && previewReady
-      ? `/api/preview/${encodeURIComponent(projectId)}/`
-      : null
-    : previewUrl;
+  const hasSuccessfulWebsite =
+    Boolean(previewUrl) ||
+    messages.some((message) => message.messageType === "finished");
+  const showInitialGenerationLoader = isBuilding && !hasSuccessfulWebsite;
+  const verifiedInitialPreviewUrl = showInitialGenerationLoader && isV2 && previewReady
+    ? `/api/preview/${encodeURIComponent(projectId)}/`
+    : null;
+  const shownPreviewUrl = previewUrl ?? verifiedInitialPreviewUrl;
   /**
    * During a drag the committed state is stale until pointerup, so a rerender caused by
    * anything else must still read the live width. The drag itself never waits on React.
@@ -1542,7 +1563,7 @@ export default function WorkspacePage() {
               </div>
             )}
             <div className={`flex-1 overflow-hidden ${activeTab === "preview" ? "rounded-none" : "m-2 sm:m-3 rounded-xl shadow-sm"}`} style={{ background: cardBg }}>
-              {activeTab === "preview" && <PreviewPanel key={previewKey} previewUrl={shownPreviewUrl} cached={previewCached} onRefresh={() => { fetchProject(); setPreviewKey((k) => k + 1); }} loading={isBuilding} buildStage={buildStage} buildRetrying={buildRetrying} previewReady={previewReady} emptyMessage={project?.previewUnavailableReason} mobilePreview={mobilePreview} iframePath={iframePath} frameRef={previewFrameRef} /* ⭐ Same-origin ONLY while the editor is open — and for the length of an apply, which outlives the panel: dropping the proxy mid-apply would reload the frame and throw away the preview-only edits the user is watching. */ proxiedSrc={visualEditorOpen || visualLocked ? `/api/preview/${encodeURIComponent(projectId)}` : null} />}
+              {activeTab === "preview" && <PreviewPanel key={previewKey} previewUrl={shownPreviewUrl} cached={previewCached} onRefresh={() => { fetchProject(); setPreviewKey((k) => k + 1); }} loading={showInitialGenerationLoader} buildStage={buildStage} buildRetrying={buildRetrying} previewReady={previewReady} emptyMessage={project?.previewUnavailableReason} mobilePreview={mobilePreview} iframePath={iframePath} frameRef={previewFrameRef} /* ⭐ Same-origin ONLY while the editor is open — and for the length of an apply, which outlives the panel: dropping the proxy mid-apply would reload the frame and throw away the preview-only edits the user is watching. */ proxiedSrc={visualEditorOpen || visualLocked ? `/api/preview/${encodeURIComponent(projectId)}` : null} />}
               {activeTab === "code" && <CodePanel key={`${projectId}:${sourceRevision}`} projectId={projectId} sourceRevision={sourceRevision} darkMode={darkMode} onAskAiEdit={handleAskAiEdit} wake={serverWake} />}
               {activeTab === "more" && <WorkspaceMore project={project} onProjectChanged={() => void fetchProject()} onPublish={() => void handleDeploy()} />}
             </div>
@@ -1639,7 +1660,7 @@ export default function WorkspacePage() {
             </div>
           ) : (
             <div className="h-full overflow-hidden">
-              {activeTab === "preview" && <PreviewPanel key={previewKey} previewUrl={shownPreviewUrl} cached={previewCached} onRefresh={() => { fetchProject(); setPreviewKey((k) => k + 1); }} loading={isBuilding} buildStage={buildStage} buildRetrying={buildRetrying} previewReady={previewReady} emptyMessage={project?.previewUnavailableReason} mobilePreview={false} iframePath={iframePath} />}
+              {activeTab === "preview" && <PreviewPanel key={previewKey} previewUrl={shownPreviewUrl} cached={previewCached} onRefresh={() => { fetchProject(); setPreviewKey((k) => k + 1); }} loading={showInitialGenerationLoader} buildStage={buildStage} buildRetrying={buildRetrying} previewReady={previewReady} emptyMessage={project?.previewUnavailableReason} mobilePreview={false} iframePath={iframePath} />}
               {activeTab === "code" && <CodePanel key={`${projectId}:${sourceRevision}`} projectId={projectId} sourceRevision={sourceRevision} darkMode={darkMode} onAskAiEdit={handleAskAiEdit} wake={serverWake} />}
               {activeTab === "more" && <WorkspaceMore project={project} onProjectChanged={() => void fetchProject()} onPublish={() => void handleDeploy()} />}
             </div>
