@@ -27,6 +27,7 @@ import type {
   FileTree,
   FileTreeEntry,
   FileWriteResult,
+  ImageGenerationResult,
   ProjectLaunchResult,
   ProjectSnapshot,
   ProjectSnapshotDetail,
@@ -37,6 +38,12 @@ import type {
 } from "@/lib/vcaas-types";
 import { isAiConfigured } from "@/lib/ai/openrouter";
 import { resolveModel } from "@/lib/ai/models";
+import { parseImageGenerationRequest, resolveImageModel } from "@/lib/ai/image-models";
+import {
+  generateImage,
+  isImageGenerationFailure,
+  type ImageGenerationFailure,
+} from "@/lib/ai/openrouter-images";
 import { sanitizeProjectPath } from "@/lib/ai/agent";
 import { validateProjectSlug } from "@/lib/project-slug";
 import { resolveStaticPreview } from "@/lib/static-site";
@@ -310,6 +317,21 @@ export async function handleMavlyVcaasRequest(input: MavlyRequest): Promise<Next
     if (method === "GET") return fileContentResponse(projectId, query);
     if (method === "PUT") return fileWriteResponse(userId, projectId, body);
   }
+  /**
+   * ═══ IMAGE GENERATION ═════════════════════════════════════════════════════
+   *
+   *   POST …/images/generate — one image from the server-side image model.
+   *
+   * The catch-all already verified the session and that this project belongs to
+   * the caller. The image is returned as base64 and is NOT written anywhere:
+   * there is no binary asset pipeline in this build (`project_files` is text
+   * served as text) and no credit engine to charge. The response says so in its
+   * types; nothing here claims the image was saved.
+   */
+  if (action === "images/generate" && method === "POST") {
+    return imageGenerationResponse(projectId, body);
+  }
+
   if (action === "rebuild" && method === "POST") {
     return rebuildUnavailable();
   }
@@ -1212,6 +1234,117 @@ async function fileWriteResponse(userId: string, projectId: string, body: unknow
     rebuildRequired: false,
   };
   return ok(data);
+}
+
+/**
+ * ═══ ONE IMAGE, FROM THE SERVER'S IMAGE MODEL ═══════════════════════════════
+ *
+ * The provider call is server-side only (`OPENROUTER_API_KEY` never leaves the
+ * server), the prompt is bounded, and the model's own supported parameters are
+ * the only ones accepted. There is no user-supplied URL anywhere on this path,
+ * so it opens no fetch-to-arbitrary-host surface.
+ *
+ * ⚠️ NO CREDIT CHARGE. This build has no credit engine — no reservation, no
+ * balance, no refund — so inventing a price here would be a fake debit. The
+ * feature is unbilled until a real credit policy exists; that is a product
+ * decision, not something this handler may assume.
+ */
+async function imageGenerationResponse(
+  projectId: string,
+  body: unknown,
+): Promise<NextResponse> {
+  if (!isAiConfigured()) {
+    return fail(
+      503,
+      "BACKEND_NOT_CONFIGURED",
+      "OpenRouter is not configured. Add OPENROUTER_API_KEY on the server.",
+    );
+  }
+
+  const model = resolveImageModel();
+  const parsed = parseImageGenerationRequest(body, model);
+  if (parsed.ok === false) return fail(400, "VALIDATION", parsed.error);
+
+  const generated = await generateImage({
+    model,
+    prompt: parsed.request.prompt,
+    aspectRatio: parsed.request.aspectRatio,
+    outputFormat: parsed.request.outputFormat,
+    seed: parsed.request.seed,
+  });
+  if (isImageGenerationFailure(generated)) return imageGenerationFailureResponse(generated);
+
+  const data: ImageGenerationResult = {
+    projectId,
+    model: generated.model,
+    mediaType: generated.image.mediaType,
+    format: generated.image.format,
+    bytes: generated.image.bytes,
+    imageBase64: generated.image.base64,
+    usage: {
+      costUsd: generated.usage.costUsd,
+      totalTokens: generated.usage.totalTokens,
+    },
+  };
+  return ok(data);
+}
+
+/**
+ * Every provider failure becomes a sanitised `{ ok: false, code }` answer. The
+ * provider's message is never forwarded verbatim: it can name hosts, accounts
+ * or internal request ids.
+ */
+function imageGenerationFailureResponse(failure: ImageGenerationFailure): NextResponse {
+  const retryAfter =
+    failure.retryAfterMs && failure.retryAfterMs > 0
+      ? { "retry-after": String(Math.max(1, Math.min(Math.ceil(failure.retryAfterMs / 1_000), 900))) }
+      : undefined;
+
+  switch (failure.code) {
+    case "CONFIGURATION":
+      return fail(
+        503,
+        "BACKEND_NOT_CONFIGURED",
+        "Image generation is not configured on this server.",
+      );
+    case "AUTHENTICATION":
+      return fail(
+        502,
+        "IMAGE_PROVIDER_ERROR",
+        "The image provider rejected Mavly's credentials. Nothing was generated.",
+      );
+    case "INVALID_REQUEST":
+      return fail(
+        400,
+        "VALIDATION",
+        "The image provider rejected that request. Try a different prompt, aspect ratio or format.",
+      );
+    case "CONTENT_FILTER":
+      return fail(
+        422,
+        "CONTENT_REJECTED",
+        "The image provider blocked this prompt. Nothing was generated.",
+      );
+    case "RATE_LIMITED":
+      return fail(
+        429,
+        "RATE_LIMITED",
+        "The image provider is busy right now. Nothing was generated; try again shortly.",
+        retryAfter,
+      );
+    case "TIMEOUT":
+      return fail(
+        504,
+        "IMAGE_TIMEOUT",
+        "The image took too long to generate. Check again before retrying — nothing was returned to Mavly.",
+      );
+    default:
+      return fail(
+        502,
+        "IMAGE_PROVIDER_ERROR",
+        "The image provider could not complete this request. Nothing was generated.",
+      );
+  }
 }
 
 /**

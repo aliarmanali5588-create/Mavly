@@ -28,6 +28,7 @@ revocation or database mutation was performed while preparing this document.
 | Project secrets | Write-only AES-256-GCM ciphertext per project/environment; API responses carry metadata only. Values are not injected into the static output. |
 | Project activity | Real run history aggregated from `project_runs`; visitor analytics are not collected. |
 | Project files | `project_files`; tree/content reads and content writes. |
+| Image generation | `POST …/images/generate` asks `black-forest-labs/flux.2-klein-4b` through OpenRouter's dedicated image API, validates the returned PNG/JPEG and returns it as base64 to the workspace. Nothing is persisted and nothing is billed. |
 | Source archive | ZIP built from `project_files`. |
 | Restore points | `project_snapshots` + `project_snapshot_files`; a "Restore Code" action in the chat. |
 | GitHub | A GitHub App with user-to-server tokens: connect, push, import. |
@@ -108,6 +109,7 @@ The project routes run authentication → path scope → ownership → handler:
 | `GET /api/vcaas/projects/{id}/agent/full-conversation` | Windowed message history. |
 | `GET /api/vcaas/projects/{id}/files/tree` | Flat folders + files, filtered/paged. |
 | `GET/PUT /api/vcaas/projects/{id}/files/content` | Read a file; save UTF-8 or base64 content. |
+| `POST /api/vcaas/projects/{id}/images/generate` | One image from the server-side image model; returned as base64, not stored. |
 | `GET /api/vcaas/source-code/{id}` | ZIP of the generated files. |
 | `GET/HEAD /api/preview/{id}/…` | Sandboxed static preview: `preview.html`, `index.html`, or `public/index.html` plus local assets. |
 
@@ -123,6 +125,31 @@ ownership is not involved because the connection is not attached to a Mavly proj
 | `POST /api/integrations/supabase/select` | Re-fetches projects, then stores verified selection metadata. |
 | `POST /api/integrations/supabase/disconnect` | Revokes the grant, then deletes the local encrypted row. |
 | `GET /auth/supabase/callback` | Verifies the Mavly session, consumes state, exchanges code and stores tokens. |
+
+### Image generation
+
+`POST /api/vcaas/projects/{id}/images/generate` generates one image with
+`black-forest-labs/flux.2-klein-4b` on OpenRouter's **dedicated image API**
+(`POST https://openrouter.ai/api/v1/images`), which is a different contract from chat
+completions. The catalog lives in `src/lib/ai/image-models.ts` — deliberately separate
+from `models.ts`, so the website-generation model cannot resolve to an image model — and
+records only the parameters the provider's endpoint record accepts: `aspect_ratio`
+(1:1, 4:3, 3:4, 3:2, 2:3, 16:9, 9:16, 21:9, auto), `output_format` (png, jpeg), `n: 1`
+and `seed`. `resolution`, `quality`, `background`, streaming and reference images are
+refused rather than silently ignored; reference images would need an upload path (not
+implemented) or a server-side URL fetcher (an SSRF surface).
+
+The response is validated, not trusted: the base64 has to decode, be non-empty, be within
+12 MB, and start with a PNG or JPEG signature. A URL-only response is refused instead of
+fetched. At most one retry is made, and only after a 429/502/503 — the provider's
+documented "nothing was generated" answers. A timeout is never retried, because the first
+generation may already have completed and been billed upstream.
+
+The image is returned as base64 and is **not stored**: there is no binary asset pipeline
+(`project_files` is text served as text by the static preview), so the workspace shows it
+for the session and offers a download. There is also **no credit charge** — this build has
+no credit engine (no balance, reservation, finalisation or refund), and inventing a price
+would be a fake debit. `usage.costUsd` in the response is the provider's own price.
 
 ### Restore points
 
@@ -307,7 +334,12 @@ with HTTP **503** and `cache-control: private, no-store, max-age=0`.
 
 ## 6. Files involved in implemented features
 
-- `src/lib/ai/models.ts` — model catalog, default resolution, task routing scaffold.
+- `src/lib/ai/models.ts` — text-model catalog, default resolution, task routing scaffold.
+- `src/lib/ai/image-models.ts` — image-model catalog and image-request validation.
+- `src/lib/ai/openrouter-images.ts` — the image API client (`/api/v1/images`), response
+  validation and bounded retry. Server-only key.
+- `src/lib/image-generation-options.ts` — aspect-ratio/format constants shared by the
+  server validation and the workspace panel.
 - `src/lib/ai/openrouter.ts` — the only outbound builder call; server-only key.
 - `src/lib/ai/agent.ts` — prompt, JSON parsing/repair, path and size validation.
 - `src/lib/mavly/store.ts` — Supabase persistence through the caller's client.
@@ -388,6 +420,11 @@ The Totalum client `src/lib/vcaas-server.ts` remains deleted and must not be rec
 - Project secrets require `supabase/migrations/11_project_secrets.sql` and the server-only
   `MAVLY_PROJECT_SECRETS_ENCRYPTION_KEY` (32 random bytes, base64). The migration and key
   are not applied automatically.
+- Image generation is operator-cost-bearing but user-unbilled: it uses the same
+  `OPENROUTER_API_KEY` and no credit policy exists to charge against. Enabling billing for
+  it is a product decision that needs a real credit engine first. Generated images are not
+  saved to the project and are not available to the generated app; they are shown in the
+  More view's Image generation section until the user leaves it.
 - A real Supabase OAuth app is required. Scopes are app-level:
   `organizations:read` and `projects:read`.
 - Changing `MAVLY_INTEGRATION_ENCRYPTION_KEY`, the OAuth client ID or the OAuth app makes

@@ -118,6 +118,16 @@ generated app.
   and `POST /api/vcaas/projects/{id}/snapshots/{snapshotId}/restore` puts the project back
   to the state from BEFORE the run. The restore captures the pre-restore state first, so a
   restore is itself recoverable. It needs no GitHub connection.
+- **Image generation is implemented as a separate, unbilled path.**
+  `POST /api/vcaas/projects/{id}/images/generate` calls
+  `black-forest-labs/flux.2-klein-4b` on OpenRouter's dedicated image API
+  (`POST https://openrouter.ai/api/v1/images`), validates that the response is real
+  PNG/JPEG bytes, and returns them as base64 to the workspace's More view. The image
+  is **not persisted** (there is no binary asset pipeline; `project_files` is text) and
+  **no credits are charged** (there is no credit engine). The image catalog is separate
+  from `src/lib/ai/models.ts` on purpose: `resolveModel()` must never select an image
+  model for website generation. Reference images are not supported, and a URL-only
+  provider response is refused rather than fetched.
 - **The GitHub integration is implemented** as a GitHub App used with user-to-server
   tokens: OAuth start, callback, status, repository/branch discovery, connect, disconnect,
   push and import under `/api/integrations/github/`; callback at `/auth/github/callback`.
@@ -238,8 +248,10 @@ paths with `src/lib/vcaas-scope.ts`, so unknown shapes are refused before any wo
 | `src/lib/figma-url.ts` | Pure, host-anchored Figma link parsing shared by the composer and the server. |
 | `src/lib/github-client.ts` | The browser's GitHub catalog. It never carries a credential. |
 | `src/lib/ai/agent.ts` | Prompt, JSON parsing/repair, path and size validation. |
-| `src/lib/ai/openrouter.ts` | The only outbound builder call; server-only key. |
-| `src/lib/ai/models.ts` | Model catalog and task routing scaffold. |
+| `src/lib/ai/image-models.ts` | Image-model catalog and image-request validation, kept apart from the text catalog. |
+| `src/lib/ai/openrouter-images.ts` | The OpenRouter image API client: response validation, bounded retry, server-only key. |
+| `src/lib/ai/openrouter.ts` | The chat-completions call for website generation; server-only key. |
+| `src/lib/ai/models.ts` | Text-model catalog and task routing scaffold. |
 | `src/lib/mavly-hostname.ts` | Pure derivation of `<project-id>.mavly.xyz` from the immutable, owned project id. |
 | `src/lib/vercel/` | Server-only opt-in config and the fixed-origin Vercel REST client, including project-domain assignment/verification. |
 | `src/lib/deployments/` | Publish orchestration, domain gating and RLS-scoped deployment mapping. |

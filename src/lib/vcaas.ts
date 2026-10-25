@@ -34,6 +34,7 @@ import type {
   FileTree,
   FileContent,
   FileWriteResult,
+  ImageGenerationResult,
   GithubStatus,
   GithubPullStatus,
   GithubConnectResult,
@@ -873,6 +874,31 @@ export const vcaasApi = {
         content: toBase64(content),
         encoding: "base64",
       }),
+  },
+
+  // ─────────────────────── Images (server-side OpenRouter) ───────────────────
+  //
+  // ⚠️ NOT THE WEBSITE-GENERATION MODEL. `images.generate` asks
+  // `black-forest-labs/flux.2-klein-4b` on OpenRouter's dedicated image API for
+  // one image. The app-generation model is unchanged and is chosen by
+  // `resolveModel` on the server only.
+  //
+  // ⚠️ NOTHING IS PERSISTED AND NOTHING IS BILLED. The image comes back as
+  // base64 in this response; it is not written to `project_files` (which holds
+  // text served as text) and no credit engine exists in this build. See
+  // `ImageGenerationResult` in `vcaas-types.ts`.
+  images: {
+    /** POST …/images/generate — one image; validate and display it, do not assume it was saved. */
+    generate: (
+      projectId: string,
+      body: {
+        prompt: string;
+        aspectRatio?: string;
+        outputFormat?: "png" | "jpeg";
+        seed?: number;
+      },
+    ): Promise<VcaasResponse<ImageGenerationResult>> =>
+      proxy.post<ImageGenerationResult>(`${project(projectId)}/images/generate`, body),
   },
 
   // ─────────────────────── Rebuild (not available) ───────────────────────────

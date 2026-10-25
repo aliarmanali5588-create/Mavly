@@ -536,6 +536,34 @@ export interface FileWriteResult {
     rebuildRequired: boolean;
 }
 
+/**
+ * `POST …/images/generate` — one image from the server-side image model.
+ *
+ * ⚠️ NOTHING IS PERSISTED. There is no image-asset table and `project_files`
+ * holds text served as text, so the bytes exist only in this response: the
+ * workspace shows a `data:` URL and the user downloads it to keep it. Do not
+ * claim the image was saved to the project.
+ *
+ * ⚠️ AND IT IS NOT BILLED. This build has no credit engine (see
+ * `MAVLY_CLEAN_BASELINE.md`); `usage.costUsd` is the PROVIDER's price, not a
+ * Mavly credit charge.
+ */
+export interface ImageGenerationResult {
+  projectId: string;
+  /** The OpenRouter slug that generated it. */
+  model: string;
+  mediaType: "image/png" | "image/jpeg";
+  format: "png" | "jpeg";
+  bytes: number;
+  /** Base64 without a `data:` prefix — build the source as `data:${mediaType};base64,${imageBase64}`. */
+  imageBase64: string;
+  usage: {
+    /** The provider's own USD price for this generation, when it reports one. */
+    costUsd: number | null;
+    totalTokens: number | null;
+  };
+}
+
 export interface ProjectVersion {
   _id: string;
   name: string;

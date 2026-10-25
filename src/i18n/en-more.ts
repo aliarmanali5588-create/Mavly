@@ -1225,5 +1225,32 @@ export const enMore = {
     callbackStorage: "The Supabase connection could not be saved.",
     connectedAt: "Connected {date}",
     accountScope: "This selection is stored on your Mavly account."
+  },
+  /**
+   * The image-generation panel this app adds to the More view. Local keys, merged over the copied
+   * platform dictionary — see `en.ts`.
+   */
+  more: {
+    imageGeneration: {
+      title: "Image generation",
+      description:
+        "Create an image with FLUX.2 Klein 4B. It is generated on Mavly's server and shown here — it is not written into the project.",
+      promptLabel: "What should the image show?",
+      promptHint: "Describe the subject, the style and the light. The clearer the prompt, the closer the result.",
+      promptPlaceholder: "A quiet street corner at dusk, warm light in the windows, wet pavement…",
+      aspectRatio: "Aspect ratio",
+      format: "Format",
+      model: "Model: {model}",
+      generate: "Generate image",
+      generating: "Generating…",
+      emptyPrompt: "Describe the image first.",
+      failed: "The image could not be generated. Nothing was changed.",
+      resultAlt: "The image generated from your prompt",
+      resultMeta: "{format} · {size}",
+      download: "Download",
+      emptyState: "Your generated image will appear here.",
+      notSaved:
+        "This image is not saved to the project. It stays here until you leave the section, and it is not used by your generated app — download it to keep it."
+    }
   }
 };

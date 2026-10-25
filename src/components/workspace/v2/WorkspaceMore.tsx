@@ -15,6 +15,7 @@ import { ProjectDomainPanel } from "./ProjectDomainPanel";
 import { UsageLimitsModal } from "./UsageLimitsModal";
 import { V2ProjectSettings } from "./V2ProjectSettings";
 import { ProjectApiKeysModal } from "./ProjectApiKeysModal";
+import { ImageGenerationPanel } from "./ImageGenerationPanel";
 
 const noop = () => {};
 
@@ -48,6 +49,10 @@ export function WorkspaceMore({
         <MoreView section={section} onSection={setSection}>
             {section === "database" ? (
                 <SupabaseDatabasePanel />
+            ) : section === "images" ? (
+                <Modal open onOpenChange={noop} size="lg" title={t("more.imageGeneration.title")} description={t("more.imageGeneration.description")}>
+                    <ImageGenerationPanel projectId={projectId} />
+                </Modal>
             ) : section === "analytics" ? (
                 <ProjectActivityModal open onOpenChange={noop} projectId={projectId} />
             ) : section === "usage" ? (

@@ -1,18 +1,19 @@
 "use client";
 
 import * as React from "react";
-import { ChartColumnIcon, CreditCardIcon, DatabaseIcon, GaugeIcon, GlobeIcon, KeyIcon, KeySquareIcon, SettingsIcon, SmartphoneIcon, TerminalIcon, TimerIcon } from "lucide-react";
+import { ChartColumnIcon, CreditCardIcon, DatabaseIcon, GaugeIcon, GlobeIcon, ImageIcon, KeyIcon, KeySquareIcon, SettingsIcon, SmartphoneIcon, TerminalIcon, TimerIcon } from "lucide-react";
 import { InlineModals } from "@/components/primitives";
 import { useT } from "@/i18n";
 import type { TranslationKey } from "@/i18n/types";
 import { cn } from "@/lib/utils";
 
 /** The v2 workspace "More" view: the project's sections in an aside, the chosen one in the main area. */
-/** This app adds the custom domain and the logs, which the platform keeps elsewhere in its workspace. */
-export type MoreSection = "database" | "analytics" | "usage" | "apiKeys" | "cron" | "secrets" | "mobile" | "payments" | "domain" | "logs" | "settings";
+/** This app adds image generation, the custom domain and the logs, which the platform keeps elsewhere in its workspace. */
+export type MoreSection = "database" | "images" | "analytics" | "usage" | "apiKeys" | "cron" | "secrets" | "mobile" | "payments" | "domain" | "logs" | "settings";
 
 export const MORE_SECTIONS: { id: MoreSection; labelKey: TranslationKey; icon: typeof DatabaseIcon }[] = [
     { id: "database", labelKey: "workspace.tabs.database", icon: DatabaseIcon },
+    { id: "images", labelKey: "more.imageGeneration.title", icon: ImageIcon },
     { id: "analytics", labelKey: "engineV2.analytics.open", icon: ChartColumnIcon },
     { id: "usage", labelKey: "engineV2.usage.title", icon: GaugeIcon },
     { id: "apiKeys", labelKey: "engineV2.apiKeys.title", icon: KeySquareIcon },

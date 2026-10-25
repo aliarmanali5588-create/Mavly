@@ -235,3 +235,84 @@ Agents must not run any of these. The repository owner should:
 9. Verify a second account cannot read or publish the first account's project, including its
    Mavly hostname.
 10. Run `npx tsc --noEmit`, `npm run lint`, `npm test` and `npm run build` per `AGENTS.md`.
+
+## Custom-hostname 522 — external investigation (NOT fixed by this repository)
+
+**Status: open.** A production host such as `https://meri-ek-car-ki.mavly.xyz/` answering
+Cloudflare `522` is an edge-to-origin problem. This repository cannot change Cloudflare
+routing, a Worker's configuration or DNS, so **no change here fixes or explains that
+response**. The site is not resolved until the hostname serves the correct generated page
+over HTTPS, end to end, and that has not been demonstrated.
+
+### What this repository does establish
+
+- `mavly.xyz` is expected to be served by **Vercel** (see "Public addresses and DNS"
+  above). This repository contains **no Cloudflare Worker, route or origin
+  configuration**. (`public/_headers` is a Workers static-assets convention and is inert
+  under Next.js/Vercel.) Any Worker in front of `*.mavly.xyz` is external and cannot be
+  reviewed from this codebase.
+- `public.project_deployments.url` stores the `url` Vercel returns for the deployment
+  created by that publish. The create request uses `target: "production"` and
+  `projectSettings.framework: null`. It is a **per-deployment host** — it changes on every
+  publish — not the project's production alias and not the verified custom hostname. It is
+  written after the deployment is created, cleared (`url = null`) when a re-publish claims
+  the row, refreshed by status polling, and rewritten once the next deployment is
+  recorded. It is therefore also **null while a publish is in flight**.
+- `deploymentHost()` / `wireDeploymentStatus()` never read `row.url`. The published
+  address is the Vercel-verified `<project-id>.mavly.xyz`, or — for a legacy row with no
+  Mavly hostname — `<vercel_project_name>.vercel.app`. A publish is `success` only when
+  the deployment is ready **and** `mavly_domain_status = 'verified'`.
+- `tests/deployment-host.test.ts` pins these rules down: derivation, the unverified-host
+  gate, the legacy fallback, and that `row.url` never becomes the published address.
+
+### Why `row.url` is not a routing origin
+
+It identifies the deployment that one publish created, but it is not stable enough to be
+an origin: it is `null` during a re-publish, it changes with every publish, and it says
+nothing about whether the custom hostname is attached or verified. The stable identities
+for a project are its Vercel project (`vercel_project_id` / `vercel_project_name`) and its
+verified Vercel project domain (`mavly_hostname`). Any external router should be checked
+against those, not against the saved deployment URL.
+
+### Hypothesis (UNVERIFIED)
+
+Cloudflare proxies `*.mavly.xyz` and a Worker/route resolves its origin to a hostname that
+itself resolves back through the same Cloudflare edge — for example the same custom
+hostname, or `mavly.xyz` — so the edge never reaches an origin and reports `522`. This is
+consistent with the symptom but is **not confirmed by this repository**. A `522` can
+equally be a genuine origin timeout, an origin DNS/firewall failure, or an origin that is
+not publicly resolvable.
+
+### Operator checklist (external — inspect before changing anything)
+
+Record what you observe at each step; do not infer it from the expected setup.
+
+1. **DNS.** Resolve the custom hostname and `mavly.xyz` (`dig +short`, and the `CNAME` /
+   `NS` records). Note whether the answer is Cloudflare-proxied addresses, Vercel, or
+   nothing. Confirm which zone actually serves `mavly.xyz`.
+2. **Edge response.** `curl -sSI https://meri-ek-car-ki.mavly.xyz/` and a full GET. Capture
+   `server: cloudflare`, `cf-ray`, the status, and whether the body is Cloudflare's error
+   page. A `522` means the edge could not open a connection to the configured origin.
+3. **Worker routing.** In the Cloudflare dashboard, read the route/trigger pattern that
+   matches the hostname and the literal upstream/origin the Worker is configured to use.
+   Do not change it yet.
+4. **Loop check.** If that upstream is the same custom hostname or another `*.mavly.xyz`
+   host that itself resolves through the same proxy, the origin is self-referential — the
+   unverified hypothesis above. If it is a different host, record what it is.
+5. **Origin reachability.** From outside Cloudflare, request the origin directly and
+   confirm it returns the expected generated page (and note any Vercel authentication or
+   deployment-protection response). If it does not answer at all, the `522` is an origin
+   problem, not a routing loop.
+6. **Vercel state.** For the project's Vercel project, confirm `meri-ek-car-ki.mavly.xyz`
+   is attached, `verified: true`, and has an issued certificate; confirm the latest
+   deployment is `READY`. Compare with `project_deployments` (`status`, `url`,
+   `mavly_domain_status`).
+7. **Smallest safe fix.** Change one hop only, after step 3–6 identify it: point the
+   Worker's origin at the intended Vercel target (project host or verified project
+   domain) that is reachable directly, or stop intercepting that hostname so it reaches
+   Vercel directly. **Do not delete existing production DNS records** and do not rewrite
+   unrelated hostnames.
+8. **Verify end to end.** Request the hostname again: correct generated HTML (compare a
+   distinctive string from the project's `preview.html`), valid TLS, no redirect loop, a
+   second path (for example `/index.html`), and a second project's host to confirm the fix
+   did not break other tenants. Only then is the issue resolved.
