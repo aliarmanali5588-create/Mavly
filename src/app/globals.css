@@ -373,13 +373,13 @@ button {
 }
 
 .preview-assembly-piece {
-  opacity: 0.2;
-  transform: translateY(5px);
+  opacity: 0.14;
+  transform: translateY(8px) scale(0.985);
   transition:
-    opacity 700ms cubic-bezier(0.2, 0.7, 0.2, 1),
-    transform 700ms cubic-bezier(0.2, 0.7, 0.2, 1),
-    background-color 700ms ease,
-    border-color 700ms ease;
+    opacity 760ms cubic-bezier(0.2, 0.75, 0.25, 1),
+    transform 760ms cubic-bezier(0.2, 0.75, 0.25, 1),
+    background-color 760ms ease,
+    border-color 760ms ease;
 }
 
 .preview-assembly-nav {
@@ -388,6 +388,7 @@ button {
   align-items: center;
   justify-content: space-between;
   margin-bottom: clamp(19px, 4vw, 34px);
+  transition-delay: 0ms;
 }
 
 .preview-assembly-nav-brand {
@@ -430,6 +431,30 @@ button {
   flex-direction: column;
   align-items: flex-start;
   gap: 8px;
+}
+
+.preview-assembly-eyebrow {
+  transition-delay: 0ms;
+}
+
+.preview-assembly-title {
+  transition-delay: 70ms;
+}
+
+.preview-assembly-title-short {
+  transition-delay: 130ms;
+}
+
+.preview-assembly-copy-line {
+  transition-delay: 50ms;
+}
+
+.preview-assembly-copy-short {
+  transition-delay: 105ms;
+}
+
+.preview-assembly-cta {
+  transition-delay: 160ms;
 }
 
 .preview-assembly-eyebrow {
@@ -477,6 +502,7 @@ button {
   display: grid;
   min-height: 128px;
   place-items: center;
+  transition-delay: 150ms;
 }
 
 .preview-assembly-art-orbit {
@@ -568,6 +594,15 @@ button {
   border-radius: 7px;
   background: color-mix(in oklab, var(--card) 76%, var(--muted));
   padding: 8px;
+  transition-delay: 0ms;
+}
+
+.preview-assembly-card:nth-child(2) {
+  transition-delay: 75ms;
+}
+
+.preview-assembly-card:nth-child(3) {
+  transition-delay: 150ms;
 }
 
 .preview-assembly-card i {
@@ -611,47 +646,35 @@ button {
 }
 
 .preview-assembly[data-stage="0"] .preview-assembly-nav,
-.preview-assembly[data-stage="1"] .preview-assembly-nav,
-.preview-assembly[data-stage="2"] .preview-assembly-nav,
-.preview-assembly[data-stage="3"] .preview-assembly-nav,
-.preview-assembly[data-stage="4"] .preview-assembly-nav {
+.preview-assembly:is([data-stage="1"], [data-stage="2"], [data-stage="3"], [data-stage="4"]) .preview-assembly-nav {
   opacity: 1;
-  transform: translateY(0);
+  transform: translateY(0) scale(1);
 }
 
-.preview-assembly[data-stage="1"] .preview-assembly-eyebrow,
-.preview-assembly[data-stage="1"] .preview-assembly-title,
-.preview-assembly[data-stage="2"] .preview-assembly-eyebrow,
-.preview-assembly[data-stage="2"] .preview-assembly-title,
-.preview-assembly[data-stage="3"] .preview-assembly-eyebrow,
-.preview-assembly[data-stage="3"] .preview-assembly-title,
-.preview-assembly[data-stage="4"] .preview-assembly-eyebrow,
-.preview-assembly[data-stage="4"] .preview-assembly-title {
+.preview-assembly:is([data-stage="1"], [data-stage="2"], [data-stage="3"], [data-stage="4"]) .preview-assembly-eyebrow,
+.preview-assembly:is([data-stage="1"], [data-stage="2"], [data-stage="3"], [data-stage="4"]) .preview-assembly-title {
   opacity: 1;
-  transform: translateY(0);
+  transform: translateY(0) scale(1);
 }
 
-.preview-assembly[data-stage="2"] .preview-assembly-copy-line,
-.preview-assembly[data-stage="2"] .preview-assembly-cta,
-.preview-assembly[data-stage="2"] .preview-assembly-art,
-.preview-assembly[data-stage="3"] .preview-assembly-copy-line,
-.preview-assembly[data-stage="3"] .preview-assembly-cta,
-.preview-assembly[data-stage="3"] .preview-assembly-art,
-.preview-assembly[data-stage="4"] .preview-assembly-copy-line,
-.preview-assembly[data-stage="4"] .preview-assembly-cta,
-.preview-assembly[data-stage="4"] .preview-assembly-art {
+.preview-assembly:is([data-stage="2"], [data-stage="3"], [data-stage="4"]) .preview-assembly-copy-line,
+.preview-assembly:is([data-stage="2"], [data-stage="3"], [data-stage="4"]) .preview-assembly-cta,
+.preview-assembly:is([data-stage="2"], [data-stage="3"], [data-stage="4"]) .preview-assembly-art {
   opacity: 1;
-  transform: translateY(0);
+  transform: translateY(0) scale(1);
 }
 
-.preview-assembly[data-stage="3"] .preview-assembly-card,
-.preview-assembly[data-stage="4"] .preview-assembly-card {
+.preview-assembly:is([data-stage="3"], [data-stage="4"]) .preview-assembly-card {
   opacity: 1;
-  transform: translateY(0);
+  transform: translateY(0) scale(1);
 }
 
 .preview-assembly[data-stage="4"] .preview-assembly-browser {
   border-color: color-mix(in oklab, var(--primary) 17%, var(--border));
+  box-shadow:
+    0 22px 60px -38px color-mix(in oklab, var(--foreground) 28%, transparent),
+    0 0 0 3px color-mix(in oklab, var(--primary) 4%, transparent),
+    0 2px 8px color-mix(in oklab, var(--foreground) 4%, transparent);
 }
 
 .preview-loader-progress {
@@ -793,18 +816,16 @@ button {
   .preview-panel-enter {
     animation: preview-panel-enter 220ms ease-out both;
   }
-  .preview-assembly[data-stage="2"] .preview-assembly-light,
-  .preview-assembly[data-stage="3"] .preview-assembly-light,
   .preview-assembly[data-stage="4"] .preview-assembly-light {
-    animation: preview-assembly-sweep 4.8s ease-in-out infinite;
+    animation: preview-assembly-sweep 1.8s 220ms ease-out both;
   }
   @keyframes preview-loader-spin {
     to { transform: rotate(360deg); }
   }
   @keyframes preview-assembly-sweep {
-    0%, 22% { opacity: 0; transform: translateX(0) skewX(-14deg); }
-    35% { opacity: 1; }
-    65%, 100% { opacity: 0; transform: translateX(650%) skewX(-14deg); }
+    0% { opacity: 0; transform: translateX(0) skewX(-14deg); }
+    28% { opacity: 1; }
+    100% { opacity: 0; transform: translateX(650%) skewX(-14deg); }
   }
   @keyframes preview-panel-enter {
     from { opacity: 0.72; transform: translateY(3px); }
