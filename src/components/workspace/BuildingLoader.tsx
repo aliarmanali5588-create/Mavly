@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import {
   generationStepStatuses,
   stageText,
@@ -34,17 +35,15 @@ export function BuildingLoader({
       className="preview-loader absolute inset-0 overflow-y-auto bg-background px-4 py-5 sm:px-6"
     >
       <div className="preview-loader-content">
-        <div className="preview-loader-brand" aria-hidden="true">
+        <div className="preview-loader-brand">
           <span className="preview-loader-mark">
-            <svg viewBox="0 0 24 24" fill="none">
-              <path
-                d="M4.5 17V7l7.5 7 7.5-7v10"
-                stroke="currentColor"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth="1.7"
-              />
-            </svg>
+            <Image
+              src="/logo/Mavly.png"
+              alt="Mavly"
+              width={25}
+              height={25}
+              className="h-full w-full rounded object-contain"
+            />
           </span>
           <span>MAVLY <i /> GENERATION</span>
         </div>
@@ -128,16 +127,14 @@ export function BuildingLoader({
 
         <section className="preview-loader-progress" aria-label="Website generation progress">
           <div className="preview-loader-status">
-            <span className="preview-loader-status-mark" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none">
-                <path
-                  d="M5 17V7l7 6.5L19 7v10"
-                  stroke="currentColor"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth="1.7"
-                />
-              </svg>
+            <span className="preview-loader-status-mark">
+              <Image
+                src="/logo/Mavly.png"
+                alt="Mavly"
+                width={30}
+                height={30}
+                className="h-full w-full rounded object-contain"
+              />
             </span>
             <div className="min-w-0">
               <p className="text-sm font-medium text-foreground">Your website is taking shape</p>

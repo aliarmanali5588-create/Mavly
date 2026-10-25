@@ -285,9 +285,12 @@ button {
   color: var(--primary);
 }
 
-.preview-loader-mark svg {
-  width: 18px;
-  height: 18px;
+.preview-loader-mark img,
+.preview-loader-status-mark img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
 }
 
 .preview-assembly {
@@ -673,11 +676,6 @@ button {
   border-radius: 9px;
   background: color-mix(in oklab, var(--primary) 5%, var(--card));
   color: var(--primary);
-}
-
-.preview-loader-status-mark svg {
-  width: 20px;
-  height: 20px;
 }
 
 .preview-loader-timeline {
