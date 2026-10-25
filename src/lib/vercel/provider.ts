@@ -90,10 +90,14 @@ async function rawRequest(
   timeoutMs = REQUEST_TIMEOUT_MS,
 ): Promise<VercelResult<RawResponse>> {
   try {
+    let token = config.token || "";
+    if (token.toLowerCase().startsWith("bearer ")) {
+      token = token.slice(7).trim();
+    }
     const response = await fetch(apiUrl(config, path), {
       ...init,
       headers: {
-        Authorization: `Bearer ${config.token}`,
+        Authorization: `Bearer ${token}`,
         ...(init.headers ?? {}),
       },
       cache: "no-store",

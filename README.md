@@ -30,6 +30,9 @@ audits listed at the end of this file; it is not a runtime dependency.
 | Project create/launch/list/get/update/delete | Stored in Supabase |
 | Agent generation | OpenRouter, server-side; durable run rows, bounded batches, per-batch checkpoints, resume and cooperative cancel |
 | Conversations and run status | Persisted in Supabase and polled by the workspace |
+| Project settings | Owner-editable project name and description; the derived Mavly address is read-only |
+| Project secrets | Write-only AES-256-GCM encrypted values per project/environment; list returns metadata only and update replaces without retrieval; **not injected into previews or published static sites** |
+| Project activity | Real generation-run history from `project_runs` (runs, outcomes, files, tokens). Visitor analytics are not collected |
 | Project files | Generated source tree, file reads and file saves |
 | Source download | ZIP built from stored project files |
 | Preview | Sandboxed static `preview.html`, or an imported static `index.html` / `public/index.html` with local assets |
@@ -45,9 +48,13 @@ files, not as a running service.
 ## What does not work yet
 
 Uploads/attachments, rebuilds, database browsing, schema changes, SQL execution,
-customer-owned custom domains, logs, analytics, mobile builds, payments, cron, usage,
-credits, secrets, versions and visual edits do not have a local implementation. Publishing
-is limited to static sites: generated or imported source that needs a framework build is
+customer-owned custom domains, runtime logs, visitor analytics, mobile builds, payments,
+cron, usage, credits, versions and visual edits do not have a local
+implementation. Secrets are stored and managed, but are not injected into generated
+sites (the preview and published output are static). The workspace still offers real
+project metadata editing and generation
+activity; unsupported settings sections state that they are unavailable instead of
+calling fabricated endpoints. Publishing is limited to static sites: generated or imported source that needs a framework build is
 not built, and generated API routes are not deployed. Dynamic hosting and customer custom
 domains remain unavailable. Each new publish does get a Mavly-owned
 `<project-id>.mavly.xyz` address once its Vercel deployment and domain are verified.
@@ -209,6 +216,7 @@ SUPABASE_OAUTH_CLIENT_ID=your-oauth-app-client-id
 SUPABASE_OAUTH_CLIENT_SECRET=your-oauth-app-client-secret
 SUPABASE_OAUTH_REDIRECT_URI=http://localhost:3000/auth/supabase/callback
 MAVLY_INTEGRATION_ENCRYPTION_KEY=your-32-byte-base64-key
+MAVLY_PROJECT_SECRETS_ENCRYPTION_KEY=your-32-byte-base64-key
 
 # Optional, off by default. Read the eligibility warning first.
 MAVLY_VERCEL_DEPLOYMENTS_ENABLED=
@@ -218,9 +226,11 @@ VERCEL_PROJECT_PREFIX=mavly
 ```
 
 Only the two `NEXT_PUBLIC_SUPABASE_*` values and `NEXT_PUBLIC_APP_URL` are public.
-`OPENROUTER_API_KEY`, the OAuth client secrets, `MAVLY_INTEGRATION_ENCRYPTION_KEY` and
-`VERCEL_API_TOKEN` are server-only: never prefix them with `NEXT_PUBLIC_`, never commit
-them, and set a spend limit at OpenRouter. Never put a service-role key in this app.
+`OPENROUTER_API_KEY`, the OAuth client secrets, `MAVLY_INTEGRATION_ENCRYPTION_KEY`,
+`MAVLY_PROJECT_SECRETS_ENCRYPTION_KEY` and `VERCEL_API_TOKEN` are server-only: never prefix
+them with `NEXT_PUBLIC_`, never commit them, and set a spend limit at OpenRouter. Never put
+a service-role key in this app. The project-secrets key must not be stored in the database:
+losing it makes existing saved values unrecoverable.
 
 Apply the schema in `supabase/migrations/` with the Supabase CLI (`supabase db push`) or by
 pasting the migrations into the Supabase SQL editor. `03_ai_builder.sql` creates the file,
@@ -230,7 +240,8 @@ when publishing is enabled, and `09_mavly_deployment_domains.sql` adds the Mavly
 domain state. `08_figma_integration.sql` creates the encrypted per-project Figma
 connection. `10_generation_jobs.sql` adds the durable run lifecycle, per-batch checkpoints
 and the atomic admission function; **apply it before deploying code that reads those
-columns.** Configure the Mavly sign-in redirect as a bare `/auth/callback` URL
+columns.** `11_project_secrets.sql` creates encrypted project-secret storage with RLS and
+metadata-only column grants; apply it before using the Secrets section. Configure the Mavly sign-in redirect as a bare `/auth/callback` URL
 with no query string, and keep Supabase's redirect allow-list tight.
 
 ### GitHub App connection

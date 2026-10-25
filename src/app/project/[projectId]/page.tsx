@@ -21,10 +21,9 @@ import { isRunOver, stageText } from "@/lib/run-progress";
 import { WorkspaceMore } from "@/components/workspace/v2/WorkspaceMore";
 import { V2Banner } from "@/components/workspace/v2/V2Banner";
 import { CodePanel, invalidateCodeCache } from "@/components/workspace/CodePanel";
-import { LogsPanel } from "@/components/workspace/LogsPanel";
 import { VersionsModal } from "@/components/workspace/VersionsModal";
 import { SecretsModal } from "@/components/workspace/SecretsModal";
-import { DomainModal } from "@/components/workspace/DomainModal";
+import { ProjectDomainPanel } from "@/components/workspace/v2/ProjectDomainPanel";
 import { GithubModal } from "@/components/workspace/GithubModal";
 import { CreditsIndicator } from "@/components/workspace/CreditsIndicator";
 import { DeployControl } from "@/components/workspace/DeployControl";
@@ -1712,12 +1711,10 @@ export default function WorkspacePage() {
         secrets={project.secrets ?? []}
         onChanged={() => void fetchProject()}
       />
-      <DomainModal
+      <ProjectDomainPanel
         open={openModal === "domain"}
         onOpenChange={open => setOpenModal(open ? "domain" : null)}
-        projectId={projectId}
         project={project}
-        onChanged={() => void fetchProject()}
       />
       <GithubModal
         open={openModal === "github"}
@@ -1742,25 +1739,20 @@ export default function WorkspacePage() {
         onStatusChange={setFigmaConnected}
       />
       {/*
-        ⭐ LOGS — development AND production. The panel is the platform's: two sources,
-        server-side regex search over the production window, auto-refresh. `flush` + a
-        fixed height because the panel owns its own scroller.
+        Runtime logs have no local backend: Mavly does not execute generated code, so
+        there is no server or preview log to search. The dialog states that instead of
+        calling the removed platform's log endpoints.
       */}
       <Modal
         open={logsOpen}
         onOpenChange={setLogsOpen}
         size="xl"
         title={translate("workspace.logs.title")}
-        description={translate("workspace.logs.modalDescription")}
-        flush
+        description={translate("engineV2.unavailable.lead")}
       >
-        <div className="h-[70vh]">
-          <LogsPanel
-            projectId={projectId}
-            /* "you haven't published yet" vs "nothing was logged" are different answers. */
-            hasBeenDeployed={project.deployment?.status === "success" || Boolean(project.productionProjectUrl)}
-          />
-        </div>
+        <p className="text-muted-foreground border-border rounded-xl border p-4 text-sm leading-relaxed">
+          {translate("engineV2.unavailable.logs")}
+        </p>
       </Modal>
       {/*
         ═══⭐⭐ THE IMPORT OVERLAY — the one operation that covers the screen ═══════

@@ -59,7 +59,10 @@ Apply `supabase/migrations/10_generation_jobs.sql` before deploying the durable 
 jobs, `03_ai_builder.sql` before using the builder,
 `04_supabase_integration.sql` before using the Supabase connection,
 `07_project_deployments.sql` and `09_mavly_deployment_domains.sql` before enabling
-publishing, and `08_figma_integration.sql` before using Figma. `npm test` covers the pure
+publishing, `08_figma_integration.sql` before using Figma, and
+`11_project_secrets.sql` before using project secrets. Project-secret encryption also
+requires the server-only `MAVLY_PROJECT_SECRETS_ENCRYPTION_KEY` (32 random bytes,
+base64-encoded); without it create/update fail closed. `npm test` covers the pure
 auth/redirect/ownership/scope modules and static route invariants. It does not exercise a
 real Supabase session, OpenRouter, the Supabase OAuth connection, Vercel publishing, or a
 generated app.
@@ -137,8 +140,18 @@ generated app.
   the run fails with an actionable request for a “Copy link to selection” frame link. The
   stored token is never returned to the browser, never reaches the model, and is never
   logged.
+- **Project secrets are implemented as write-only encrypted storage.** Create, list
+  (metadata only), update/replace and delete live under
+  `…/projects/{id}/secrets[/{secretId}]`. Values are AES-256-GCM ciphertext in
+  `project_secrets` (migration `11`), encrypted with the server-only
+  `MAVLY_PROJECT_SECRETS_ENCRYPTION_KEY`; the authenticated role has no SELECT grant on
+  `value_ciphertext`. Listing never returns a value or ciphertext, and no reveal endpoint
+  exists. **Secrets are not injected into generated sites**: the preview and published
+  output are static, generated server code is not executed, and the UI says so. Do not
+  claim generated apps can read saved secrets until a real server-side injection path and
+  tests exist.
 - Anything not implemented (uploads, rebuild, dynamic hosting, domains,
-  versions, secrets, usage, visual-edit apply, …) still authenticates and authorizes, then
+  versions, usage, visual-edit apply, …) still authenticates and authorizes, then
   returns:
 
   ```json
@@ -220,6 +233,8 @@ paths with `src/lib/vcaas-scope.ts`, so unknown shapes are refused before any wo
 | `src/lib/mavly/restore.ts` | Restoring a source state, with the pre-restore recovery point and the stale-restore check. |
 | `src/lib/integrations/github/` | The GitHub App client: config, encryption, OAuth, the Git database API, the file policy, the store, the service. |
 | `src/lib/integrations/figma/` | The Figma PAT client: config, encryption, token store, `/v1/me` validation, frame reading, file-link resolution and the agent's bounded design context. |
+| `src/lib/project-secrets/` | Server-only write-only secret storage: validation, AES-256-GCM with owner/project/row AAD, RLS-scoped CRUD and metadata-only mapping. No value is returned to a route. |
+| `supabase/migrations/11_project_secrets.sql` | Encrypted project-secret table, ownership RLS and metadata-only column grants. |
 | `src/lib/figma-url.ts` | Pure, host-anchored Figma link parsing shared by the composer and the server. |
 | `src/lib/github-client.ts` | The browser's GitHub catalog. It never carries a credential. |
 | `src/lib/ai/agent.ts` | Prompt, JSON parsing/repair, path and size validation. |
@@ -236,7 +251,7 @@ paths with `src/lib/vcaas-scope.ts`, so unknown shapes are refused before any wo
 | `src/lib/integrations/supabase/` | Server-only OAuth client, encryption, state/token storage, token refresh and browser API client. |
 | `src/app/api/integrations/supabase/` | Account-level start/status/discovery/select/disconnect routes. |
 | `src/app/auth/supabase/callback/route.ts` | User-owned Supabase OAuth callback. |
-| `supabase/migrations/` | `profiles`, `projects`, AI builder tables/RLS, Supabase connection/state tables, GitHub/Figma connections, deployment mapping and Mavly domain state, backfill template. |
+| `supabase/migrations/` | `profiles`, `projects`, AI builder tables/RLS, Supabase connection/state tables, GitHub/Figma connections, encrypted project secrets, deployment mapping and Mavly domain state, backfill template. |
 
 ## Security invariants
 
@@ -267,17 +282,19 @@ paths with `src/lib/vcaas-scope.ts`, so unknown shapes are refused before any wo
    destination rides in the `mavly_oauth_next` cookie. Keep Supabase's allowed-redirect
    list tight. The user-owned Supabase integration has its own callback
    (`/auth/supabase/callback`) where a custom state is required and verified.
-8. **Integration tokens are ciphertext.** AES-256-GCM encryption uses
-   `MAVLY_INTEGRATION_ENCRYPTION_KEY`, which is server-only. OAuth access/refresh tokens,
-   PKCE verifiers and stored Figma access tokens must never be returned to the browser or
-   written to logs.
+8. **Integration tokens and project secret values are ciphertext.** AES-256-GCM
+   encryption uses `MAVLY_INTEGRATION_ENCRYPTION_KEY` for integration tokens and
+   `MAVLY_PROJECT_SECRETS_ENCRYPTION_KEY` for project secrets; both are server-only, and
+   neither may be stored in the database or given a `NEXT_PUBLIC_` prefix. OAuth
+   access/refresh tokens, PKCE verifiers, stored Figma access tokens and project secret
+   values/ciphertext must never be returned to the browser or written to logs.
    `SUPABASE_OAUTH_CLIENT_SECRET` is also server-only. Scopes are `organizations:read` and
    `projects:read`; do not add write scopes without explicit approval.
 9. **Child tables inherit ownership through `projects` RLS.** `project_files`,
-   `project_messages`, `project_runs`, `project_deployments` and `figma_connections` are
-   never queried with a service-role key; their policies require an owned parent row.
-   `supabase_integrations` and `supabase_oauth_states` are user-scoped through their own
-   RLS policies.
+   `project_messages`, `project_runs`, `project_deployments`, `figma_connections` and
+   `project_secrets` are never queried with a service-role key; their policies require an
+   owned parent row. `supabase_integrations` and `supabase_oauth_states` are user-scoped
+   through their own RLS policies.
 
 ## UI conventions
 

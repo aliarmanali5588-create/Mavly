@@ -179,6 +179,10 @@ export function SecretsModal({
                 description={t("workspace.secrets.description")}
             >
                 <div className="space-y-4">
+                    <p className="text-muted-foreground border-border rounded-lg border p-3 text-xs leading-relaxed">
+                        {t("workspace.secrets.notInjected")}
+                    </p>
+
                     {/* ── Existing secrets ────────────────────────────────── */}
                     <section>
                         <h3 className="text-muted-foreground mb-2 text-xs font-medium">

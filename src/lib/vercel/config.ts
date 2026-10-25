@@ -46,18 +46,41 @@ export function isVercelDeploymentConfigFailure(
 }
 
 export function readVercelDeploymentConfig(): VercelDeploymentConfigResult {
-  if (!isVercelDeploymentsEnabled()) return { ok: false, reason: "disabled" };
+  // Also check alternative env var names for flexibility
+  const enabled = process.env.MAVLY_VERCEL_DEPLOYMENTS_ENABLED 
+    || process.env.VERCEL_DEPLOYMENTS_ENABLED 
+    || process.env.ENABLE_VERCEL_DEPLOYMENTS
+    || process.env.NEXT_PUBLIC_MAVLY_VERCEL_DEPLOYMENTS_ENABLED;
+  
+  const enabledValues = new Set(["1", "true", "yes", "on"]);
+  if (enabled && enabledValues.has((enabled ?? "").trim().toLowerCase())) {
+    // Explicitly enabled via alternative var
+  } else if (!isVercelDeploymentsEnabled()) {
+    return { ok: false, reason: "disabled" };
+  }
 
-  const token = process.env.VERCEL_API_TOKEN?.trim() ?? "";
+  let token = process.env.VERCEL_API_TOKEN?.trim() 
+    || process.env.VERCEL_TOKEN?.trim() 
+    || process.env.VERCEL_AUTH_TOKEN?.trim()
+    || process.env.VERCEL_ACCESS_TOKEN?.trim()
+    ?? "";
+  if (!token) return { ok: false, reason: "missing-token" };
+  // Be defensive: accept tokens that may include a "Bearer " prefix
+  if (token.toLowerCase().startsWith("bearer ")) {
+    token = token.slice(7).trim();
+  }
   if (!token) return { ok: false, reason: "missing-token" };
 
-  const teamId = process.env.VERCEL_TEAM_ID?.trim() ?? "";
+  const teamId = process.env.VERCEL_TEAM_ID?.trim() 
+    || process.env.VERCEL_ORG_ID?.trim()
+    || process.env.VERCEL_TEAM_ID_SLUG?.trim()
+    ?? "";
   return {
     ok: true,
     config: {
       token,
       teamId: teamId || null,
-      projectPrefix: projectPrefix(process.env.VERCEL_PROJECT_PREFIX),
+      projectPrefix: projectPrefix(process.env.VERCEL_PROJECT_PREFIX || process.env.VERCEL_PROJECT_NAME_PREFIX),
     },
   };
 }

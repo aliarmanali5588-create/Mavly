@@ -24,6 +24,9 @@ revocation or database mutation was performed while preparing this document.
 | Project CRUD | Create/list/launch/get/update/delete, stored in Supabase. |
 | AI generation | `src/lib/mavly/run-agent.ts` → `src/lib/ai/agent.ts` → `src/lib/ai/openrouter.ts`. |
 | Conversation and runs | Persisted in `project_messages` and `project_runs`, polled by the workspace. |
+| Project settings | Owner-editable name/description through `PATCH /projects/{id}`; the derived Mavly address is read-only. |
+| Project secrets | Write-only AES-256-GCM ciphertext per project/environment; API responses carry metadata only. Values are not injected into the static output. |
+| Project activity | Real run history aggregated from `project_runs`; visitor analytics are not collected. |
 | Project files | `project_files`; tree/content reads and content writes. |
 | Source archive | ZIP built from `project_files`. |
 | Restore points | `project_snapshots` + `project_snapshot_files`; a "Restore Code" action in the chat. |
@@ -238,8 +241,8 @@ the explicit 503. No mock data, fabricated id or fake success is returned.
 | Dynamic deploy / hosting | building generated source, server/API hosting, customer custom domains, deployment logs. Static preview publishing with a Mavly-owned address is implemented behind an operator flag. |
 | Versions / visual edits | versions, Git diff, `/api/visual-edit/.../apply` |
 | Data platform | database browsing, SQL execution, schema changes, migrations, backups, backup download |
-| Integrations | customer-owned domains/DNS, secrets, environment files |
-| Account/product | usage, credits, payments, cron, mobile builds, analytics, webhooks |
+| Integrations | customer-owned domains/DNS, environment files. Project secrets are stored and managed (see above) but not injected into generated sites. |
+| Account/product | usage, credits, payments, cron, mobile builds, visitor analytics, webhooks |
 | Project transfer | export, import, duplicate |
 
 Those routes return:
@@ -343,6 +346,8 @@ with HTTP **503** and `cache-control: private, no-store, max-age=0`.
 - `src/app/api/integrations/supabase/*` — start/status/discovery/select/disconnect routes.
 - `src/app/auth/supabase/callback/route.ts` — Supabase connection callback.
 - `src/components/workspace/database-v2/SupabaseDatabasePanel.tsx` — Database-tab panel.
+- `src/lib/project-activity.ts` — shared project-activity types and range helper.
+- `src/components/workspace/v2/ProjectActivityModal.tsx` — real generation-run activity panel.
 - `.env.example` — model placeholder plus server-only Supabase OAuth/encryption key
   placeholders. It contains no real secrets.
 
@@ -375,6 +380,14 @@ The Totalum client `src/lib/vcaas-server.ts` remains deleted and must not be rec
   an orphan Vercel project and does not fail the local delete.
 - The Supabase connection is account-level. It is not linked to individual Mavly
   `projects.project_id` rows, and it grants no SQL/schema/data access in Phase 1.
+- The workspace More view supports project metadata editing, project secrets, the derived
+  Mavly address and real generation activity. API keys, cron, mobile builds, runtime logs,
+  visitor analytics and custom domains have no local backend and render an explicit
+  unavailable state instead of calling the former platform routes. Usage and payments
+  remain deferred with the credits/billing scope.
+- Project secrets require `supabase/migrations/11_project_secrets.sql` and the server-only
+  `MAVLY_PROJECT_SECRETS_ENCRYPTION_KEY` (32 random bytes, base64). The migration and key
+  are not applied automatically.
 - A real Supabase OAuth app is required. Scopes are app-level:
   `organizations:read` and `projects:read`.
 - Changing `MAVLY_INTEGRATION_ENCRYPTION_KEY`, the OAuth client ID or the OAuth app makes

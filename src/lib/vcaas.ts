@@ -15,6 +15,7 @@
 // Type-only import: erased at compile time, so it creates NO runtime dependency on
 // the `"use client"` `@/lib/api` module.
 import type { SiteAnalyticsAnswer } from "./site-analytics";
+import type { ProjectActivity, ProjectActivityRange } from "./project-activity";
 import { toBase64 } from "@/lib/base64";
 import type { ApiResponse } from "@/lib/api";
 import type { VcaasErrorCode, VcaasErrorDetails } from "@/lib/vcaas-errors";
@@ -45,6 +46,7 @@ import type {
   FigmaConnectResult,
   FigmaValidateResult,
   VcaasWebhook,
+  VcaasSecret,
   ProjectLaunchResult,
   ProjectSnapshot,
   ProjectSnapshotDetail,
@@ -687,13 +689,28 @@ export const vcaasApi = {
 
   // ──────────────────────────── Secrets ───────────────────────────
   // Final VCaaS endpoints: /vcaas/projects/{id}/secrets[/{secretId}]
+  //
+  // Values are write-only: list answers metadata only, and there is no reveal
+  // call. A saved value can be replaced with `update` without reading it.
   secrets: {
+    /** GET …/secrets — metadata only; never a value or ciphertext. */
+    list: (projectId: string): Promise<VcaasResponse<VcaasSecret[]>> =>
+      proxy.get(`${project(projectId)}/secrets`),
+
     /** POST …/secrets — create an env secret for `development`/`production`/`both`. */
     create: (
       projectId: string,
       body: { secretName: string; secretValue: string; environment: string }
-    ): Promise<VcaasResponse<unknown>> =>
+    ): Promise<VcaasResponse<VcaasSecret>> =>
       proxy.post(`${project(projectId)}/secrets`, body),
+
+    /** PUT …/secrets/{secretId} — replace a value, rename, or move environment. */
+    update: (
+      projectId: string,
+      secretId: string,
+      body: { secretName?: string; secretValue?: string; environment?: string }
+    ): Promise<VcaasResponse<VcaasSecret>> =>
+      proxy.put(`${project(projectId)}/secrets/${encodeURIComponent(secretId)}`, body),
 
     /** DELETE …/secrets/{secretId} — delete a secret. */
     remove: (projectId: string, secretId: string): Promise<VcaasResponse<unknown>> =>
@@ -1018,6 +1035,10 @@ export const vcaasApi = {
 
     /** A6.16, free: one site-analytics read (the query from `analyticsQuery` in `@/lib/site-analytics`). */
     siteAnalytics: (projectId: string, query: string) => proxy.get<SiteAnalyticsAnswer>(`${project(projectId)}/analytics/site?${query}`),
+
+    /** Real generation activity persisted in `project_runs` (not visitor analytics). */
+    projectActivity: (projectId: string, range: ProjectActivityRange) =>
+      proxy.get<ProjectActivity>(`${project(projectId)}/analytics/activity?range=${range}`),
 
     cronJobs: (projectId: string) => proxy.get<{ items: CronJob[] }>(`${project(projectId)}/cron-jobs`),
     createCronJob: (projectId: string, body: Pick<CronJob, "name" | "schedule" | "request" | "timezone" | "pauseAfterFailures">) =>

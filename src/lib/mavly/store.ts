@@ -325,6 +325,68 @@ export async function latestRun(projectId: string): Promise<StoreResult<RunRow |
   return { ok: true, data: (data as RunRow | null) ?? null };
 }
 
+export interface RunActivityRow {
+  id: string;
+  status: RunRow["status"];
+  stage: RunStage;
+  model: string;
+  started_at: string;
+  finished_at: string | null;
+  error_code: string | null;
+  files_written: number;
+  prompt_tokens: number | null;
+  completion_tokens: number | null;
+  total_tokens: number | null;
+}
+
+/**
+ * The newest runs of one project, bounded for the activity panel. This is the caller's
+ * RLS-scoped read of `project_runs`; it never widens beyond an owned project and never
+ * returns prompts, generated content or provider error messages.
+ */
+export async function listRunActivity(
+  projectId: string,
+  options: { since: string | null; limit?: number },
+): Promise<StoreResult<RunActivityRow[]>> {
+  const supabase = await client();
+  if (!supabase) return { ok: false, error: "Supabase is not configured", code: "UNAVAILABLE" };
+
+  const limit = Math.max(1, Math.min(options.limit ?? 500, 500));
+  /**
+   * `all` passes no lower bound; the epoch is an explicit, harmless lower bound that keeps
+   * the query one PostgREST chain (and avoids a union of two builder types).
+   */
+  const since = options.since ?? "1970-01-01T00:00:00.000Z";
+  const { data, error } = await supabase
+    .from("project_runs")
+    .select(
+      "id,status,stage,model,started_at,finished_at,error_code,files_written,prompt_tokens,completion_tokens,total_tokens",
+    )
+    .eq("project_id", projectId)
+    .gte("started_at", since)
+    .order("started_at", { ascending: false })
+    .limit(limit);
+
+  if (error) return dbError("list run activity", error.message, error.code);
+  return {
+    ok: true,
+    data: ((data ?? []) as Record<string, unknown>[]).map((row) => ({
+      id: String(row.id ?? ""),
+      status: row.status === "done" ? "done" : row.status === "error" ? "error" : "init",
+      stage: (row.stage as RunStage | null) ?? "queued",
+      model: String(row.model ?? ""),
+      started_at: String(row.started_at ?? ""),
+      finished_at: typeof row.finished_at === "string" ? row.finished_at : null,
+      error_code: typeof row.error_code === "string" ? row.error_code : null,
+      files_written: Number(row.files_written ?? 0),
+      prompt_tokens: typeof row.prompt_tokens === "number" ? row.prompt_tokens : null,
+      completion_tokens:
+        typeof row.completion_tokens === "number" ? row.completion_tokens : null,
+      total_tokens: typeof row.total_tokens === "number" ? row.total_tokens : null,
+    })),
+  };
+}
+
 function boundedAttempts(attempts: readonly unknown[]): unknown[] {
   return attempts.slice(-60).map((attempt) => {
     if (!attempt || typeof attempt !== "object" || Array.isArray(attempt)) return {};

@@ -433,6 +433,57 @@ export const enMore = {
       nothingYet: "Nothing yet.",
       fineprint: "Counted by Totalum's servers, without cookies or tracking scripts, on your published site and its domains only (opening the preview never counts). A visitor is an anonymous code that changes every day (we never store IP addresses), so one person is one visit per day and coming back on another day is a new visit. Bots and crawlers are left out. Updated about every minute, kept for {days} days; days are in UTC."
     },
+    address: {
+      title: "Mavly address",
+      intro: "The address Mavly creates when you publish this project. It is derived from the project id and served by the configured static host.",
+      notPublished: "Not published yet. Use Publish to create the Mavly address.",
+      customTitle: "Custom domains",
+      customUnavailable: "Custom domains are not available in this Mavly build. No domain purchase, attachment or DNS verification is implemented, so this page does not pretend to manage one."
+    },
+    projectSettings: {
+      name: "Project name",
+      nameHint: "Shown in the workspace and project list. The project id stays the same.",
+      description: "Description",
+      descriptionHint: "A short summary of what this project is for.",
+      save: "Save changes",
+      unavailable: "Agent system prompt, MCP tools and project pausing are not available in this Mavly build. The project name, description and live address below are real."
+    },
+    activity: {
+      title: "Project activity",
+      intro: "Real generation runs saved for this project. These are not visitor analytics: Mavly publishes static files and does not collect visits to the published site.",
+      rangeLabel: "Period",
+      range_7d: "7 days",
+      range_30d: "30 days",
+      range_90d: "90 days",
+      range_all: "All time",
+      runs: "Runs",
+      completed: "Completed",
+      failed: "Failed",
+      active: "Active",
+      files: "Files written",
+      tokens: "Tokens",
+      chart: "Runs per day",
+      recent: "Recent runs",
+      emptyTitle: "No generation runs yet",
+      emptyBody: "Send the AI a prompt to create the first run. Real run history appears here.",
+      unavailable: "Project activity could not be loaded.",
+      retry: "Try again",
+      queued: "Queued",
+      cancelled: "Cancelled",
+      interrupted: "Interrupted",
+      duration: "Duration",
+      started: "Started",
+      inProgress: "In progress",
+      truncated: "Showing the most recent {count} runs. Older runs are not included.",
+      visitorsNote: "Visitor analytics are not collected by this build."
+    },
+    unavailable: {
+      lead: "Not available in this Mavly deployment.",
+      apiKeys: "Project API keys are not implemented. This build has no API gateway that could authenticate them, so issuing a key would not protect any endpoint.",
+      cron: "Scheduled jobs are not implemented. Mavly has no scheduler or worker that could run them.",
+      mobile: "Mobile builds are not implemented. This build has no mobile build or app-store integration.",
+      logs: "Runtime logs are not available. Mavly does not execute generated code, so there is no server or preview request log to show."
+    },
     usage: {
       title: "Usage & limits",
       intro: "What this project spent in credits, and the limits that keep its spending under control.",

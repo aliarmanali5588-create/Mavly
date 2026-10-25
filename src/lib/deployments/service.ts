@@ -101,7 +101,7 @@ function fromVercel(failure: VercelFailure): DeploymentServiceResult<never> {
     );
   }
   if (failure.status === 401 || failure.status === 403) {
-    return fail(503, "BACKEND_NOT_CONFIGURED", "Publishing is not authorized on this Mavly deployment.");
+    return fail(503, "BACKEND_NOT_CONFIGURED", "Publishing is not authorized on this Mavly deployment. Verify VERCEL_API_TOKEN has access to the target account/team and MAVLY_VERCEL_DEPLOYMENTS_ENABLED is set correctly.");
   }
   if (failure.status === 0) {
     return fail(504, "UNKNOWN", "Vercel did not respond in time.");
