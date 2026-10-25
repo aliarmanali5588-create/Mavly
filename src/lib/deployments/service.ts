@@ -57,6 +57,7 @@ import {
   type DeploymentStatus as StoredDeploymentStatus,
   type MavlyDomainStatus,
 } from "./store";
+import { resolveVercelProject } from "./vercel-project";
 import { publicDeploymentFailure } from "./vercel-failure";
 
 const PUBLISH_MAX_BYTES = 8_000_000;
@@ -451,47 +452,41 @@ export async function publishProject(
    * not exist.
    */
   const name = began.data.vercel_project_name || requestedName;
-  let vercelProjectId = began.data.vercel_project_id;
 
   /**
-   * The Vercel project can be deleted outside Mavly. A stale id would make every
-   * later publish fail, so clear only a confirmed 404 and recreate below. Other
-   * read failures are ignored; the deployment call will decide.
+   * Recover from a saved id that the current credentials cannot read. This never
+   * deletes or overwrites the remote project; it only replaces the local mapping
+   * after the deterministic name is accessible or has been created in the
+   * currently configured scope. A domain still attached to the old project is
+   * reported as a conflict later rather than being silently stolen.
    */
-  if (vercelProjectId) {
-    const exists = await getVercelProject(config.config, vercelProjectId);
-    if (isVercelFailure(exists) && exists.failure.status === 404) {
-      vercelProjectId = null;
-      const cleared = await updateDeploymentRow(projectId, { vercel_project_id: null });
-      if (isDeploymentStoreFailure(cleared)) {
-        return fail(500, "UNKNOWN", "Could not save the deployment mapping.");
-      }
-    }
+  const resolvedProject = await resolveVercelProject(
+    {
+      getProject: (idOrName) => getVercelProject(config.config, idOrName),
+      createProject: (projectName) => createVercelProject(config.config, projectName),
+    },
+    { storedId: began.data.vercel_project_id, name },
+  );
+  if (resolvedProject.ok === false) {
+    await recordFailure(projectId, resolvedProject.failure);
+    return fromVercel(resolvedProject.failure);
   }
 
-  if (!vercelProjectId) {
-    const created = await createVercelProject(config.config, name);
-    if (isVercelFailure(created)) {
-      /**
-       * A previous attempt may have created the Vercel project and then failed
-       * before recording its id. Recover by name instead of creating a second
-       * project; any other failure is terminal for this publish.
-       */
-      if (created.failure.status === 409) {
-        const existing = await getVercelProject(config.config, name);
-        if (!isVercelFailure(existing)) vercelProjectId = existing.data.id;
-      }
-      if (!vercelProjectId) {
-        await recordFailure(projectId, created.failure);
-        return fromVercel(created.failure);
-      }
-    } else {
-      vercelProjectId = created.data.id;
+  const vercelProject = resolvedProject.data.project;
+  const vercelProjectId = vercelProject.id;
+  if (
+    resolvedProject.data.replacedStoredId ||
+    began.data.vercel_project_id !== vercelProject.id ||
+    began.data.vercel_project_name !== vercelProject.name
+  ) {
+    if (resolvedProject.data.replacedStoredId) {
+      console.warn(
+        "[deployments] saved Vercel project was inaccessible; recovered the deterministic project target",
+      );
     }
-
     const saved = await updateDeploymentRow(projectId, {
-      vercel_project_id: vercelProjectId,
-      vercel_project_name: name,
+      vercel_project_id: vercelProject.id,
+      vercel_project_name: vercelProject.name,
     });
     if (isDeploymentStoreFailure(saved)) {
       return fail(500, "UNKNOWN", "Could not save the deployment mapping.");

@@ -24,8 +24,9 @@ import {
   sanitizeVercelDiagnosticText,
   vercelConfigPresence,
 } from "./diagnostics";
+import { VERCEL_API_ORIGIN, vercelRequestUrl } from "./request-url";
 
-const API_ORIGIN = "https://api.vercel.com";
+const API_ORIGIN = VERCEL_API_ORIGIN;
 const REQUEST_TIMEOUT_MS = 20_000;
 const MAX_ERROR_MESSAGE = 500;
 
@@ -84,9 +85,7 @@ interface RawResponse {
 }
 
 function apiUrl(config: VercelDeploymentConfig, path: string): URL {
-  const url = new URL(path, API_ORIGIN);
-  if (config.teamId) url.searchParams.set("teamId", config.teamId);
-  return url;
+  return vercelRequestUrl(path, config.teamId);
 }
 
 function endpointPath(path: string): string {
