@@ -551,7 +551,7 @@ export interface FileWriteResult {
  */
 export interface ImageGenerationResult {
   projectId: string;
-  /** The OpenRouter slug that generated it. */
+  /** The provider model ID that generated it. */
   model: string;
   mediaType: "image/png" | "image/jpeg";
   format: "png" | "jpeg";

@@ -19,11 +19,11 @@ import { MarketingPageShell } from "@/components/common/MarketingPageShell";
 export const metadata: Metadata = {
   title: "Integrations — Mavly AI Website Builder",
   description:
-    "Connect your tools. Keep your workflow moving. Connect GitHub repositories, Supabase databases, Vercel publishing, and OpenRouter AI models.",
+    "Connect GitHub repositories and Supabase projects, publish static sites, and generate website code with Groq.",
   openGraph: {
     title: "Integrations — Mavly AI Website Builder",
     description:
-      "Connect your tools. Keep your workflow moving. Connect GitHub repositories, Supabase databases, Vercel publishing, and OpenRouter AI models.",
+      "Connect GitHub repositories and Supabase projects, publish static sites, and generate website code with Groq.",
     images: ["/logo/Mavly.png"],
   },
 };
@@ -187,34 +187,34 @@ export default function IntegrationsPage() {
             </div>
           </div>
 
-          {/* OpenRouter AI Models */}
+          {/* Groq code generation */}
           <div className="p-8 rounded-3xl bg-white border border-black/[0.08] shadow-[0_4px_20px_rgba(0,0,0,0.02)] space-y-6">
             <div className="flex items-center justify-between">
               <div className="w-12 h-12 rounded-2xl bg-purple-600 text-white flex items-center justify-center">
                 <Cpu className="w-6 h-6" />
               </div>
               <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-full">
-                Active Provider
+                Website/code provider
               </span>
             </div>
 
             <div className="space-y-2">
-              <h3 className="text-xl font-bold text-gray-950">OpenRouter Orchestration</h3>
+              <h3 className="text-xl font-bold text-gray-950">Groq Code Generation</h3>
               <p className="text-xs text-gray-600 leading-relaxed">
-                The builder connects directly to leading foundation models through server-only OpenRouter API proxying.
+                Website and code-generation requests use Groq from the server-side Next.js runtime.
               </p>
             </div>
 
             <div className="space-y-2.5 text-xs text-gray-700 border-t border-black/[0.06] pt-4">
-              <h4 className="font-semibold text-gray-900">Configured Models:</h4>
+              <h4 className="font-semibold text-gray-900">Configured Model:</h4>
               <ul className="space-y-2">
                 <li className="flex items-start gap-2">
                   <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-                  <span><strong>DeepSeek V4.1 Flash:</strong> Fast default model for HTML &amp; styling structure.</span>
+                  <span><strong>GPT-OSS 120B:</strong> Groq-hosted default model for website creation and follow-up code edits.</span>
                 </li>
                 <li className="flex items-start gap-2">
                   <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-                  <span><strong>Claude 3.5 Sonnet:</strong> Premium fallback for complex code architecture.</span>
+                  <span>Generation fails explicitly if Groq is unavailable; no provider fallback is configured.</span>
                 </li>
                 <li className="flex items-start gap-2">
                   <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />

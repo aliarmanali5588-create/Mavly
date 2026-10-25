@@ -3,7 +3,7 @@
  * mapped to a same-origin `/api/vcaas/*` route.
  *
  * The Totalum upstream stays removed. Implemented operations are served by
- * Mavly's own routes (OpenRouter + Supabase); the rest keep their session and
+ * Mavly's own routes (Groq + Supabase); the rest keep their session and
  * ownership checks and answer `503 BACKEND_NOT_CONFIGURED`. The catalogs below
  * are unchanged so the existing UI compiles and each missing capability fails
  * through its normal error path. They never contact Totalum.

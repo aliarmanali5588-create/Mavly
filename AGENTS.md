@@ -1,11 +1,13 @@
 # AGENTS.md — Mavly
 
 Mavly is an AI app-builder built with Next.js 16, React 19, TypeScript and Tailwind 4.
-Supabase Auth (Google + GitHub OAuth) is real and gates the builder pages. The builder now
-has a local, server-side AI implementation: OpenRouter generates frontend and backend
-source files, Supabase stores projects/files/messages/runs, and the workspace previews a
-generated static `preview.html`. A separate user-owned Supabase connection lets a signed-in
-user authorize read-only organization/project access and select one external project.
+Supabase Auth (Google + GitHub OAuth) is real and gates the builder pages. The builder has
+a local, server-side AI implementation: Groq generates frontend and backend source files,
+Supabase stores projects/files/messages/runs, and the workspace previews a generated static
+`preview.html`. The existing OpenRouter chat client, model catalog and key support remain
+available but are not called by active website generation; the separate image-generation
+API still uses OpenRouter. A separate user-owned Supabase connection lets a signed-in user
+authorize read-only organization/project access and select one external project.
 
 Read `MAVLY_CLEAN_BASELINE.md` before changing anything under `src/app/api/`,
 `src/lib/ai/`, `src/lib/mavly/` or `src/lib/vcaas*`. It records what was removed and what
@@ -13,8 +15,10 @@ the current implementation does.
 
 > **Do not reconnect Totalum or add another hosted builder backend implicitly.** The old
 > Totalum integration stays removed and is documented only for historical context below.
-> OpenRouter is the approved model provider. Any additional provider or backend is a
-> product decision that needs explicit approval and a security review.
+> Groq is the active website/code-generation provider. Keep OpenRouter out of active
+> website-generation paths unless explicitly approved. Its existing chat client and image
+> path are retained. Any additional provider or backend is a product decision that needs
+> explicit approval and a security review.
 
 ---
 
@@ -46,7 +50,7 @@ for that person, not for agents.
 
 ```bash
 npm install                      # Node 20+
-cp .env.example .env.local       # Supabase + OpenRouter + OAuth + optional publishing
+cp .env.example .env.local       # Supabase + Groq + OpenRouter images + OAuth + publishing
 npm run dev                      # http://localhost:3000
 npx tsc --noEmit                 # typecheck
 npx tsc --noEmit --noUnusedLocals --noUnusedParameters
@@ -64,16 +68,18 @@ publishing, `08_figma_integration.sql` before using Figma, and
 requires the server-only `MAVLY_PROJECT_SECRETS_ENCRYPTION_KEY` (32 random bytes,
 base64-encoded); without it create/update fail closed. `npm test` covers the pure
 auth/redirect/ownership/scope modules and static route invariants. It does not exercise a
-real Supabase session, OpenRouter, the Supabase OAuth connection, Vercel publishing, or a
+real Supabase session, Groq, the Supabase OAuth connection, Vercel publishing, or a
 generated app.
 
 ---
 
 ## Current backend status
 
-- The builder's only model dependency is **OpenRouter**, called server-side from
-  `src/lib/ai/openrouter.ts`. Do not add another model provider or hosted builder backend
-  without approval.
+- Website and code generation use **Groq**, called server-side from
+  `src/lib/ai/groq.ts`; `GROQ_API_KEY` is required in the Next.js server runtime. The
+  OpenRouter chat code and configuration are preserved but not wired into active
+  generation; its image API remains separate and unchanged. Do not add another model
+  provider or hosted builder backend without approval.
 - **Vercel publishing is an optional, off-by-default hosting path**, not a builder backend.
   It is enabled only by `MAVLY_VERCEL_DEPLOYMENTS_ENABLED` (accepted: `1`, `true`, `yes`,
   `on`) plus `VERCEL_API_TOKEN`, and uploads only static files. It prefers the generated
@@ -187,8 +193,12 @@ generated app.
   source in the project files. Publishing uploads those static bytes; it does not build
   generated or imported source. A framework entry point that needs a build is reported as
   unsupported, not shown as a blank success.
-- `OPENROUTER_API_KEY` is server-only. `MAVLY_DEFAULT_MODEL` selects the default catalog
-  model; the built-in default is `deepseek/deepseek-v4.1-flash`. `MAVLY_IMAGE_MODEL` selects
+- `GROQ_API_KEY` is server-only and is required by the Vercel/Next.js generation runtime;
+  no Supabase Edge Function or worker reads it. `MAVLY_DEFAULT_MODEL` selects the default
+  Groq catalog model; the built-in default is `openai/gpt-oss-120b`.
+  `OPENROUTER_API_KEY` remains server-only; active use is image generation, while the
+  preserved OpenRouter chat client is not wired into the active generation path.
+  `MAVLY_IMAGE_MODEL` selects
   the image model from the separate image catalog and defaults to
   `black-forest-labs/flux.2-klein-4b`; a value that is not a catalog entry is ignored
   (default) and never forwarded. `VERCEL_API_TOKEN` is also
@@ -209,7 +219,7 @@ browser ── src/lib/vcaas.ts (client catalog, same-origin only)
    │      ├── src/lib/mavly/api.ts       project/agent/file handlers
    │      ├── src/lib/mavly/store.ts     Supabase RLS-scoped persistence
    │      ├── src/lib/mavly/run-agent.ts background run after the response
-   │      │      └── src/lib/ai/agent.ts → src/lib/ai/openrouter.ts
+   │      │      └── src/lib/ai/agent.ts → src/lib/ai/groq.ts
    │      └── src/lib/deployments/*      opt-in static publish
    │             ├── store.ts            project_deployments (RLS)
    │             └── service.ts → src/lib/vercel/provider.ts → api.vercel.com
@@ -256,10 +266,11 @@ paths with `src/lib/vcaas-scope.ts`, so unknown shapes are refused before any wo
 | `src/lib/github-client.ts` | The browser's GitHub catalog. It never carries a credential. |
 | `src/lib/ai/agent.ts` | Prompt, JSON parsing/repair, path and size validation. |
 | `src/lib/ai/image-models.ts` | Image-model catalog and image-request validation, kept apart from the text catalog. |
-| `src/lib/ai/openrouter-images.ts` | The OpenRouter image API client: response validation, size cap, bounded retry, server-only key. |
+| `src/lib/ai/openrouter-images.ts` | The separate OpenRouter image API client: response validation, size cap, bounded retry, server-only key. |
+| `src/lib/ai/openrouter.ts` | Preserved OpenRouter chat client; not imported by active website-generation paths. |
 | `src/lib/mavly/image-limits.ts` | Best-effort per-user/per-instance image-generation admission windows. |
-| `src/lib/ai/openrouter.ts` | The chat-completions call for website generation; server-only key. |
-| `src/lib/ai/models.ts` | Text-model catalog and task routing scaffold. |
+| `src/lib/ai/groq.ts` | The Groq chat-completions call for website/code generation; server-only key. |
+| `src/lib/ai/models.ts` | Active Groq model catalog plus the preserved OpenRouter catalog/resolver. |
 | `src/lib/mavly-hostname.ts` | Pure derivation of `<project-id>.mavly.xyz` from the immutable, owned project id. |
 | `src/lib/vercel/` | Server-only opt-in config and the fixed-origin Vercel REST client, including project-domain assignment/verification. |
 | `src/lib/deployments/` | Publish orchestration, domain gating and RLS-scoped deployment mapping. |
@@ -281,16 +292,18 @@ paths with `src/lib/vcaas-scope.ts`, so unknown shapes are refused before any wo
    through the caller's RLS-scoped Supabase client. Missing and foreign rows must return
    the same non-enumerating 403. Lookup errors fail closed with 500.
 3. **No secret reaches the browser.** Only `NEXT_PUBLIC_SUPABASE_URL` and
-   `NEXT_PUBLIC_SUPABASE_ANON_KEY` are public. `OPENROUTER_API_KEY` and
-   `VERCEL_API_TOKEN` are server-only and must never be renamed with a `NEXT_PUBLIC_`
+   `NEXT_PUBLIC_SUPABASE_ANON_KEY` are public. `GROQ_API_KEY`,
+   `OPENROUTER_API_KEY` (currently used by images) and `VERCEL_API_TOKEN` are server-only
+   and must never be renamed with a `NEXT_PUBLIC_`
    prefix. Never commit `.env*` files.
 4. **Any future server route that fetches a client-supplied URL is an SSRF hole until it
    calls `publicUrlRejectionReason` (async, resolves DNS) from `src/lib/safe-url.ts`, with
    `redirect: "error"` and a timeout.** The synchronous `urlRejectionReason` is for IP
-   literals only. Both must cover IPv4-mapped IPv6 and every private range. OpenRouter and
-   the Vercel API are fixed server-side URLs, not client-supplied ones.
-5. **Never build an upstream URL from decoded route params.** The OpenRouter and Vercel API
-   origins are constant; route params only select a Supabase row after ownership is
+   literals only. Both must cover IPv4-mapped IPv6 and every private range. Groq,
+   OpenRouter's image API and the Vercel API use fixed server-side URLs, not client-supplied
+   ones.
+5. **Never build an upstream URL from decoded route params.** The Groq, OpenRouter image,
+   and Vercel API origins are constant; route params only select a Supabase row after ownership is
    proved, and Vercel ids/names come from that row or server-side derivation. The Mavly
    hostname is derived only from the immutable, owned project id; a browser never supplies
    a hostname.

@@ -139,9 +139,9 @@ test("MAVLY_IMAGE_MODEL selects a catalog entry, and only a catalog entry", () =
     );
 
     // MAVLY_DEFAULT_MODEL stays the website/code-generation selector.
-    process.env.MAVLY_DEFAULT_MODEL = "qwen/qwen3-coder";
+    process.env.MAVLY_DEFAULT_MODEL = "provider/unsupported-model";
     assert.equal(resolveImageModel().id, FLUX);
-    assert.equal(resolveModel(null, "app-generation").id, "qwen/qwen3-coder");
+    assert.equal(resolveModel(null, "app-generation").id, "openai/gpt-oss-120b");
   } finally {
     if (previousImage === undefined) delete process.env.MAVLY_IMAGE_MODEL;
     else process.env.MAVLY_IMAGE_MODEL = previousImage;

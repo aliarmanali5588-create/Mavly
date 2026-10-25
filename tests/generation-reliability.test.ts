@@ -12,7 +12,7 @@ import {
   type ChatCompletionResult,
   type ChatCompletionSuccess,
   type ChatMessage,
-} from "../src/lib/ai/openrouter";
+} from "../src/lib/ai/groq";
 import { resolveModel } from "../src/lib/ai/models";
 
 /**
@@ -159,6 +159,32 @@ test("a truncated batch is split; only validated content is checkpointed", async
     ["a.ts", "b.ts"],
   );
   assert.equal(outcome.result.usage.completionTokens > 0, true);
+});
+
+test("follow-up edits resolve legacy model IDs to the Groq catalog", async () => {
+  const calledModels: string[] = [];
+  const outcome = await generateApp(
+    {
+      prompt: "Change the existing page title.",
+      mode: "update",
+      requestedModel: "deepseek/deepseek-v4.1-flash",
+      existingFiles: [{ path: "app/page.tsx", content: "old page" }],
+    },
+    {
+      complete: async (selectedModel, messages) => {
+        calledModels.push(selectedModel.id);
+        return success(
+          isPlanner(messages)
+            ? manifestJson(["app/page.tsx"])
+            : batchJson([["app/page.tsx", "updated page"]]),
+        );
+      },
+      sleep: noop,
+    },
+  );
+
+  assert.equal(isGenerationFailure(outcome), false);
+  assert.deepEqual(calledModels, ["openai/gpt-oss-120b", "openai/gpt-oss-120b"]);
 });
 
 test("a truncated single file gets exactly one compact retry", async () => {

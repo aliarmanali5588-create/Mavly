@@ -36,11 +36,12 @@ import type {
   VcaasProjectSummary,
   VcaasSecret,
 } from "@/lib/vcaas-types";
-import { isAiConfigured } from "@/lib/ai/openrouter";
+import { isAiConfigured } from "@/lib/ai/groq";
 import { resolveModel } from "@/lib/ai/models";
 import { parseImageGenerationRequest, resolveImageModel } from "@/lib/ai/image-models";
 import {
   generateImage,
+  isImageProviderConfigured,
   isImageGenerationFailure,
   type ImageGenerationFailure,
 } from "@/lib/ai/openrouter-images";
@@ -406,7 +407,7 @@ async function createProjectResponse(userId: string, body: unknown): Promise<Nex
 
 async function launchProjectResponse(userId: string, body: unknown): Promise<NextResponse> {
   if (!isAiConfigured()) {
-    return fail(503, "BACKEND_NOT_CONFIGURED", "OpenRouter is not configured. Add OPENROUTER_API_KEY on the server.");
+    return fail(503, "BACKEND_NOT_CONFIGURED", "Groq is not configured. Add GROQ_API_KEY to the server runtime.");
   }
 
   const record = recordOf(body);
@@ -749,7 +750,7 @@ async function previewRotateUrlResponse(
 
 async function startAgentResponse(userId: string, projectId: string, body: unknown): Promise<NextResponse> {
   if (!isAiConfigured()) {
-    return fail(503, "BACKEND_NOT_CONFIGURED", "OpenRouter is not configured. Add OPENROUTER_API_KEY on the server.");
+    return fail(503, "BACKEND_NOT_CONFIGURED", "Groq is not configured. Add GROQ_API_KEY to the server runtime.");
   }
 
   const record = recordOf(body);
@@ -815,7 +816,7 @@ async function startAgentResponse(userId: string, projectId: string, body: unkno
 
 async function resumeAgentResponse(userId: string, projectId: string): Promise<NextResponse> {
   if (!isAiConfigured()) {
-    return fail(503, "BACKEND_NOT_CONFIGURED", "OpenRouter is not configured. Add OPENROUTER_API_KEY on the server.");
+    return fail(503, "BACKEND_NOT_CONFIGURED", "Groq is not configured. Add GROQ_API_KEY to the server runtime.");
   }
 
   const current = await latestRun(projectId);
@@ -1255,7 +1256,7 @@ async function imageGenerationResponse(
   projectId: string,
   body: unknown,
 ): Promise<NextResponse> {
-  if (!isAiConfigured()) {
+  if (!isImageProviderConfigured()) {
     return fail(
       503,
       "BACKEND_NOT_CONFIGURED",

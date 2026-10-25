@@ -21,7 +21,7 @@
  * ⚠️ NO GENERATED CODE IS EXECUTED HERE.
  */
 
-import { chatCompletion } from "@/lib/ai/openrouter";
+import { chatCompletion } from "@/lib/ai/groq";
 import {
   generateApp,
   isGenerationFailure,

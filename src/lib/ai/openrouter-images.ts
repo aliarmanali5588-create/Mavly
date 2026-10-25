@@ -151,6 +151,10 @@ export function isImageGenerationFailure(
   return result.ok === false;
 }
 
+export function isImageProviderConfigured(): boolean {
+  return !!process.env.OPENROUTER_API_KEY?.trim();
+}
+
 /**
  * Generate ONE image. Bounded: at most two provider requests, and only the
  * second one may follow a 429/502/503.

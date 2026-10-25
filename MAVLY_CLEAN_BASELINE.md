@@ -3,8 +3,11 @@
 **Status:** local AI builder, Phase 1 user-owned Supabase connection, and an off-by-default
 static-publishing path implemented; the rest of the platform backend remains unavailable.
 **Scope:** the Totalum VCaaS integration stays removed. Supabase authentication, OAuth,
-sessions, project ownership and RLS are preserved. OpenRouter is the approved, server-only
-model provider. Vercel is used only when an operator explicitly enables publishing.
+sessions, project ownership and RLS are preserved. Groq is the active server-only
+website/code-generation provider. The existing OpenRouter chat client, model catalog and
+key support are preserved but are not called by the active generation path; image
+generation continues to use OpenRouter. Vercel is used only when an operator explicitly
+enables publishing.
 
 No Totalum endpoint is called. No deployment, GitHub push, production SQL, secret
 revocation or database mutation was performed while preparing this document.
@@ -22,7 +25,8 @@ revocation or database mutation was performed while preparing this document.
 | API session gate | `/api/*` returns JSON `401 UNAUTHENTICATED` without a verified session. |
 | Project ownership | `public.projects`, RLS, `registerProjectOwnership`, `checkProjectAccess`, `enforceProjectScope`. |
 | Project CRUD | Create/list/launch/get/update/delete, stored in Supabase. |
-| AI generation | `src/lib/mavly/run-agent.ts` → `src/lib/ai/agent.ts` → `src/lib/ai/openrouter.ts`. |
+| AI generation | `src/lib/mavly/run-agent.ts` → `src/lib/ai/agent.ts` → `src/lib/ai/groq.ts`. |
+| Preserved provider | `src/lib/ai/openrouter.ts` and its model catalog remain available but are not used by active website-generation requests. |
 | Conversation and runs | Persisted in `project_messages` and `project_runs`, polled by the workspace. |
 | Project settings | Owner-editable name/description through `PATCH /projects/{id}`; the derived Mavly address is read-only. |
 | Project secrets | Write-only AES-256-GCM ciphertext per project/environment; API responses carry metadata only. Values are not injected into the static output. |
@@ -259,9 +263,8 @@ and the stored token never reaches the model or a log.
 ### Generation
 
 - `MAVLY_DEFAULT_MODEL` selects the default catalog model; the built-in default is
-  `deepseek/deepseek-v4.1-flash`.
-- The catalog in `src/lib/ai/models.ts` contains five models for future routing. Only the
-  default is used automatically.
+  `openai/gpt-oss-120b`, served by Groq. The only catalog entry is sent to Groq; an
+  unsupported explicit or configured model never selects another provider.
 - The run plans a manifest, then requests bounded file batches. The model must return JSON
   with full file contents; one focused repair is made per malformed/empty response.
 - `finish_reason: "length"` is always a failure. The truncated response is discarded, the
@@ -316,7 +319,7 @@ with HTTP **503** and `cache-control: private, no-store, max-age=0`.
 - **Unknown API path:** `404 NOT_FOUND` from the scope allowlist.
 - **Authenticated, authorized, unimplemented:** `503 BACKEND_NOT_CONFIGURED`.
 - **Agent run conflicts:** `409`; stale in-flight runs are closed after ten minutes.
-- **Missing OpenRouter key:** `503 BACKEND_NOT_CONFIGURED`, before any project is created.
+- **Missing Groq key:** `503 BACKEND_NOT_CONFIGURED`, before any project is created or run admitted.
 - **Supabase integration not configured:** `503 SUPABASE_INTEGRATION_NOT_CONFIGURED`.
 - **Not connected / reconnect required:** `409`; no upstream call is attempted after a
   terminal refresh failure.
@@ -332,10 +335,11 @@ with HTTP **503** and `cache-control: private, no-store, max-age=0`.
    presence, URL, body or header.
 2. Project access is an owned row read through the caller's RLS client. Missing and foreign
    rows are indistinguishable.
-3. `OPENROUTER_API_KEY` is server-only. Only the `NEXT_PUBLIC_*` Supabase/URL values are
-   public. No secret is committed.
-4. The OpenRouter URL is constant. Route parameters only select a Supabase row after
-   ownership is proved.
+3. `GROQ_API_KEY` is server-only for active generation; `OPENROUTER_API_KEY` remains
+   server-only for the separate image feature and the preserved, inactive chat client.
+   Only the `NEXT_PUBLIC_*` Supabase/URL values are public. No secret is committed.
+4. The Groq and OpenRouter image URLs are constant. Route parameters only select a Supabase
+   row after ownership is proved.
 5. Generated output is text. It is validated and stored; it is never imported, transpiled,
    evaluated or executed.
 6. The preview has a CSP `sandbox` without `allow-same-origin`, plus `default-src 'none'`,
@@ -361,7 +365,9 @@ with HTTP **503** and `cache-control: private, no-store, max-age=0`.
 - `src/lib/mavly/image-limits.ts` — best-effort per-user/per-instance request admission.
 - `src/lib/image-generation-options.ts` — aspect-ratio/format constants shared by the
   server validation and the workspace panel.
-- `src/lib/ai/openrouter.ts` — the only outbound builder call; server-only key.
+- `src/lib/ai/groq.ts` — the active outbound website/code-generation call; server-only key.
+- `src/lib/ai/openrouter.ts` — preserved chat-completions client and OpenRouter key support;
+  not called by active website-generation paths.
 - `src/lib/ai/agent.ts` — prompt, JSON parsing/repair, path and size validation.
 - `src/lib/mavly/store.ts` — Supabase persistence through the caller's client.
 - `src/lib/mavly/run-agent.ts` — claim → baseline → checkpointed batches → complete/fail.
@@ -441,8 +447,14 @@ The Totalum client `src/lib/vcaas-server.ts` remains deleted and must not be rec
 - Project secrets require `supabase/migrations/11_project_secrets.sql` and the server-only
   `MAVLY_PROJECT_SECRETS_ENCRYPTION_KEY` (32 random bytes, base64). The migration and key
   are not applied automatically.
-- Image generation is operator-cost-bearing but user-unbilled: it uses the same
-  `OPENROUTER_API_KEY` and no credit policy exists to charge against. Enabling billing for
+- Website/code generation uses `GROQ_API_KEY` from the Next.js server runtime. The runtime
+  is Vercel/Next.js `nodejs` with `after()` scheduling; this repository has no Supabase
+  Edge Function or autonomous worker that needs the key. Configure it in Vercel Project
+  Environment Variables and redeploy, and in local `.env.local` for development.
+- Image generation is operator-cost-bearing but user-unbilled: it uses
+  `OPENROUTER_API_KEY` and no credit policy exists to charge against. The restored
+  OpenRouter chat client also reads that server key, but the active generation path never
+  calls it. Enabling billing for
   it is a product decision that needs a real credit engine first. Generated images are not
   saved to the project and are not available to the generated app; they are shown in the
   More view's Image generation section until the user leaves it.
@@ -450,7 +462,8 @@ The Totalum client `src/lib/vcaas-server.ts` remains deleted and must not be rec
   `organizations:read` and `projects:read`.
 - Changing `MAVLY_INTEGRATION_ENCRYPTION_KEY`, the OAuth client ID or the OAuth app makes
   stored connections undecryptable; users must reconnect.
-- The non-default model slugs in the catalog are placeholders until verified in OpenRouter.
+- `MAVLY_DEFAULT_MODEL` selects from the Groq catalog; the verified default is
+  `openai/gpt-oss-120b`. The client refuses a model ID outside that catalog.
 
 ---
 
@@ -490,7 +503,8 @@ Static inspection and `git diff` remain allowed. See `AGENTS.md`
    suite.
 2. Run a real OAuth check with a configured Supabase app: connect, discover, select,
    refresh, disconnect and confirm revocation.
-3. Verify the non-default OpenRouter slugs before wiring model selection.
+3. Verify any future Groq model IDs against the official Groq model catalog before adding
+   them to `src/lib/ai/models.ts`.
 4. Add a real build/run sandbox if generated backends must execute; do not fake it.
 5. Implement uploads and rebuild status only behind explicit product approval. Static
    publishing already exists behind an operator flag; confirm Vercel plan eligibility

@@ -2,9 +2,9 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import { chatCompletion, completionUsage } from "../src/lib/ai/openrouter";
-import { resolveModel } from "../src/lib/ai/models";
+import { resolveOpenRouterModel } from "../src/lib/ai/models";
 
-const model = resolveModel();
+const model = resolveOpenRouterModel();
 const originalFetch = globalThis.fetch;
 
 function stubFetch(status: number, body: unknown, headers: Record<string, string> = {}) {

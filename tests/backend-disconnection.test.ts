@@ -8,13 +8,13 @@ import { isVcaasErrorCode } from "../src/lib/vcaas-errors";
 /**
  * ═══ THE BACKEND BOUNDARY ══════════════════════════════════════════════════
  *
- * Mavly now has one local builder backend (OpenRouter + Supabase) plus the
+ * Mavly now has one local builder backend (Groq + Supabase) plus the
  * unchanged explicit 503 for everything else. These tests pin the boundary:
  *
  *  · Totalum stays removed, and no runtime reads its key or host;
  *  · unimplemented paths still answer the agreed 503;
  *  · generated code is stored as text, never executed;
- *  · the preview is sandboxed and the OpenRouter key stays server-only.
+ *  · the preview is sandboxed and provider keys stay server-only.
  *
  * Authentication and ownership are covered by `api-guards.test.ts` and
  * `route-authorization.test.ts`.
@@ -105,7 +105,7 @@ test("the proxy no longer trusts any Totalum host for CORS", () => {
 
 // ── The local builder boundary ─────────────────────────────────────────────
 
-test("OpenRouter is called from one server module and never from the browser", () => {
+test("Groq is the only active website-generation provider and its key stays server-only", () => {
   const files = [
     ...(readdirSync(new URL("src", root), { recursive: true }) as string[])
       .filter((entry) => entry.endsWith(".ts") || entry.endsWith(".tsx"))
@@ -115,24 +115,32 @@ test("OpenRouter is called from one server module and never from the browser", (
   for (const file of files) {
     const source = read(file);
     assert.equal(
-      source.includes("NEXT_PUBLIC_OPENROUTER"),
+      source.includes("NEXT_PUBLIC_GROQ"),
       false,
-      `${file} must not make the OpenRouter key public`,
+      `${file} must not make the Groq key public`,
     );
     if (file.endsWith(".tsx")) {
       assert.equal(
-        source.includes("OPENROUTER_API_KEY"),
+        source.includes("GROQ_API_KEY"),
         false,
-        `${file} is a component and must not read the server key`,
+        `${file} is a component and must not read the Groq server key`,
       );
     }
   }
 
+  assert.equal(read("src/lib/ai/groq.ts").includes("GROQ_API_KEY"), true);
+  assert.equal(read("src/lib/ai/groq.ts").includes("console."), false);
+  assert.equal(read("src/lib/ai/agent.ts").includes('"./groq"'), true);
+  assert.equal(read("src/lib/mavly/run-agent.ts").includes("@/lib/ai/groq"), true);
+  assert.equal(read("src/lib/mavly/run-agent.ts").includes("@/lib/ai/openrouter"), false);
+  assert.equal(read("src/lib/mavly/api.ts").includes('from "@/lib/ai/openrouter"'), false);
   assert.equal(read("src/lib/ai/openrouter.ts").includes("OPENROUTER_API_KEY"), true);
+  assert.equal(read("src/lib/ai/openrouter-images.ts").includes("OPENROUTER_API_KEY"), true);
+  assert.equal(existsSync(new URL("src/lib/ai/openrouter.ts", root)), true);
 });
 
 test("the AI modules do not execute generated output", () => {
-  for (const file of ["src/lib/ai/agent.ts", "src/lib/ai/openrouter.ts", "src/lib/mavly/run-agent.ts"]) {
+  for (const file of ["src/lib/ai/agent.ts", "src/lib/ai/groq.ts", "src/lib/mavly/run-agent.ts"]) {
     const source = read(file);
     for (const dangerous of ["eval(", "new Function(", "child_process", "execSync("]) {
       assert.equal(source.includes(dangerous), false, `${file} must not use ${dangerous}`);

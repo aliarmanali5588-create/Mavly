@@ -3,8 +3,8 @@
  *
  * Authentication, path classification and project ownership run first, in that
  * order. Only a verified owner reaches a handler. Implemented paths read and
- * write Supabase through the caller's RLS-scoped client and may call OpenRouter
- * from the server. Anything else answers the explicit `BACKEND_NOT_CONFIGURED`
+ * write Supabase through the caller's RLS-scoped client and calls Groq for
+ * website/code generation. Anything else answers the explicit `BACKEND_NOT_CONFIGURED`
  * 503 rather than pretending it worked.
  */
 import { NextRequest, NextResponse } from "next/server";
