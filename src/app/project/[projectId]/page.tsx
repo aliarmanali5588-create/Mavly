@@ -17,7 +17,7 @@ import { toast } from "sonner";
 import { ChatPanel } from "@/components/workspace/ChatPanel";
 import { PreviewPanel } from "@/components/workspace/PreviewPanel";
 import { useRunProgress } from "@/components/workspace/RunActivity";
-import { isRunOver, stageText } from "@/lib/run-progress";
+import { isRunOver } from "@/lib/run-progress";
 import { WorkspaceMore } from "@/components/workspace/v2/WorkspaceMore";
 import { V2Banner } from "@/components/workspace/v2/V2Banner";
 import { CodePanel, invalidateCodeCache } from "@/components/workspace/CodePanel";
@@ -1275,7 +1275,7 @@ export default function WorkspacePage() {
   const shownPreviewUrl = isFirstBuild ? null : previewUrl;
   /** New engine: the live run timeline (`agent/progress`) for the chat and the preview loader. */
   const runProgress = useRunProgress(projectId, isBuilding, isV2Project(project));
-  const buildStage = runProgress && !isRunOver(runProgress.stage) ? stageText(runProgress.stage) : null;
+  const buildStage = runProgress && !isRunOver(runProgress.stage) ? runProgress.stage : null;
   /**
    * During a drag the committed state is stale until pointerup, so a rerender caused by
    * anything else must still read the live width. The drag itself never waits on React.
@@ -1492,7 +1492,7 @@ export default function WorkspacePage() {
             style={chatCollapsed ? {} : { width: liveChatWidth, background: cardBg }}
           >
             <ChatPanel
-              messages={messages} isBuilding={isBuilding} prompt={prompt} setPrompt={setPrompt} onSend={handleSendPrompt} onStop={handleStopAgent} sending={sending} projectId={projectId} projectSecrets={project?.secrets}
+              messages={messages} isBuilding={isBuilding} prompt={prompt} setPrompt={setPrompt} onSend={handleSendPrompt} onRetryPrompt={(text, files) => { void sendPromptText(text, files); }} onStop={handleStopAgent} sending={sending} projectId={projectId} projectSecrets={project?.secrets}
               runStartedAt={runStartedAt} expectedMinutes={expectedMinutes}
               {...composerProps}
               visualEditAvailable
@@ -1639,7 +1639,7 @@ export default function WorkspacePage() {
           {mobileTab === "chat" ? (
             <div className="flex flex-col h-full">
               {/* ⚠️ No pencil here: the visual editor is a desktop surface (see the frame-ref note). */}
-              <ChatPanel messages={messages} isBuilding={isBuilding} prompt={prompt} setPrompt={setPrompt} onSend={handleSendPrompt} onStop={handleStopAgent} sending={sending} projectId={projectId} projectSecrets={project?.secrets} runStartedAt={runStartedAt} expectedMinutes={expectedMinutes} {...composerProps} />
+              <ChatPanel messages={messages} isBuilding={isBuilding} prompt={prompt} setPrompt={setPrompt} onSend={handleSendPrompt} onRetryPrompt={(text, files) => { void sendPromptText(text, files); }} onStop={handleStopAgent} sending={sending} projectId={projectId} projectSecrets={project?.secrets} runStartedAt={runStartedAt} expectedMinutes={expectedMinutes} {...composerProps} />
             </div>
           ) : (
             <div className="h-full overflow-hidden">

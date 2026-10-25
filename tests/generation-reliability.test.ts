@@ -161,6 +161,73 @@ test("a truncated batch is split; only validated content is checkpointed", async
   assert.equal(outcome.result.usage.completionTokens > 0, true);
 });
 
+async function assertPreviewStaysInItsOwnBatch(mode: "create" | "update") {
+  const persisted: Array<[string, string]> = [];
+  let returnedPreviewEarly = false;
+  const plan = mode === "create"
+    ? ["package.json", "app/layout.tsx", "app/page.tsx"]
+    : ["app/page.tsx", "preview.html"];
+
+  const outcome = await generateApp(
+    {
+      prompt: mode === "create" ? "Build a landing page." : "Change the visible page heading.",
+      mode,
+      existingFiles: mode === "update"
+        ? [
+            { path: "app/page.tsx", content: "old page" },
+            { path: "preview.html", content: "old preview" },
+          ]
+        : [],
+      onBatch: (batch) => {
+        persisted.push(
+          ...batch.files.map(({ path, content }) => [path, content] as [string, string]),
+        );
+      },
+    },
+    {
+      complete: async (_selectedModel, messages) => {
+        if (isPlanner(messages)) return success(manifestJson(plan));
+        const requested = requestedPaths(messages.slice(0, 2));
+        if (isRepair(messages)) {
+          assert.match(messages.at(-1)?.content ?? "", /only allowed file paths are/i);
+          assert.equal(requested.includes("preview.html"), false);
+          return success(
+            batchJson(requested.map((path) => [path, `valid:${path}`] as [string, string])),
+          );
+        }
+        if (!requested.includes("preview.html") && !returnedPreviewEarly) {
+          returnedPreviewEarly = true;
+          return success(batchJson([
+            ...requested.map((path) => [path, `valid:${path}`] as [string, string]),
+            ["preview.html", "preview from the wrong batch"],
+          ]));
+        }
+        return success(batchJson(requested.map((path) => [
+          path,
+          path === "preview.html" ? "preview from its requested batch" : `valid:${path}`,
+        ] as [string, string])));
+      },
+      sleep: noop,
+    },
+  );
+
+  assert.equal(isGenerationFailure(outcome), false);
+  assert.equal(returnedPreviewEarly, true);
+  assert.equal(persisted.filter(([path]) => path === "preview.html").length, 1);
+  assert.equal(
+    persisted.find(([path]) => path === "preview.html")?.[1],
+    "preview from its requested batch",
+  );
+}
+
+test("initial generation repairs preview.html returned outside its batch", async () => {
+  await assertPreviewStaysInItsOwnBatch("create");
+});
+
+test("follow-up edits keep preview.html in its planned batch", async () => {
+  await assertPreviewStaysInItsOwnBatch("update");
+});
+
 test("follow-up edits resolve legacy model IDs to the Groq catalog", async () => {
   const calledModels: string[] = [];
   const outcome = await generateApp(

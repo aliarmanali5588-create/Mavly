@@ -3794,7 +3794,7 @@ const base = {
          ("~25 min") that every real run then contradicted. Both numbers come from
          `RUN_ESTIMATE_MIN_MS` / `RUN_ESTIMATE_MS`; never hard-code them here. */
       progressEstimate: "{from} to {minutes} minutes",
-      progressLabel: "How long this run has been going",
+      progressLabel: "Generation in progress",
       progressOverrun: "Longer than usual",
 
       /* ── The stalled-run notice ───────────────────────────────────────── */

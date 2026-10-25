@@ -12,61 +12,21 @@ import {
 } from "@/lib/agent-progress";
 import { cn } from "@/lib/utils";
 
-/**
- * ═══ HOW LONG THIS RUN HAS BEEN GOING ═══════════════════════════════════════
- *
- * Under "The agent is working…", which until now was the whole of what the chat
- * said about a process that routinely takes twenty minutes. Three bouncing dots
- * answer "is it alive"; they do not answer "should I wait or go and do something
- * else", which is the question people actually have.
- *
- * ── WHAT IT IS ALLOWED TO CLAIM ─────────────────────────────────────────────
- *
- * ⚠️ THE ESTIMATE IS LABELLED AS AN ESTIMATE, IN THE UI, IN WORDS. The agent
- * reports `init` / `done` and nothing else — there is no real percentage to show
- * — so the label quotes a whole realistic window, "4 to 10 minutes". Dressing that
- * up as a measured percentage would be the same lie the first-build loader
- * deliberately refuses to tell.
- *
- * ⚠️⚠️ AND THE WINDOW EXTENDS ITSELF WHEN A RUN OUTLIVES IT — see
- * `RUN_ESTIMATE_LADDER`. Both numbers in the label come from the SAME call that
- * drives the bar, so the two can never quote different durations.
- *
- * ⚠️⚠️ BOTH NUMBERS ARE READ FROM `@/lib/agent-progress`, NEVER TYPED INTO THE
- * COPY. They are the same constants the first-build loader weights its phase table
- * against (`STAGE_WEIGHTS`), so the two screens cannot drift into quoting different
- * durations for the same run — which is exactly what happened when this said 25.
- *
- * ⚠️ IT STOPS SHORT OF THE END AND THEN CHANGES ITS COPY. At the estimate the fill
- * holds at 97 % and the label becomes "Longer than usual" — see `PROGRESS_CEILING`.
- * A bar sitting full while the run continues is what makes people reload mid-run.
- *
- * ── SIZE ────────────────────────────────────────────────────────────────────
- *
- * ⚠️ ONE LINE OF TEXT AND A 3 PX TRACK. This sits above the composer in a panel
- * that is 320 px wide on a laptop, under a conversation the user is reading. It is
- * a status line, not a dashboard: no card, no border, no icon of its own.
- */
+/** Shows elapsed time and a clearly labeled estimate; generation has no measured percentage. */
 export function RunProgress({
     elapsedMs,
     expectedMinutes,
     className,
 }: {
     elapsedMs: number;
-    /** The engine's estimate for this run; the bar fills against it when present. */
+    /** The engine's estimated duration, when available. */
     expectedMinutes?: number | null;
     className?: string;
 }) {
     const t = useT();
-    const { ratio, percent, overrun, estimateMs, previousEstimateMs } = expectedMinutes
+    const { overrun, estimateMs, previousEstimateMs } = expectedMinutes
         ? expectedRunProgress(elapsedMs, expectedMinutes * 60_000)
         : runProgress(elapsedMs);
-    /**
-     * ⭐ BOTH NUMBERS MOVE NOW. While the run is inside the original window this reads
-     * "4 to 10 minutes", exactly as before; once the run outlives it the range walks up
-     * the ladder — "10 to 12", then "12 to 15" — so the line beside the clock keeps
-     * saying something true instead of freezing on a figure the run has already passed.
-     */
     const estimateMinutes = Math.round(estimateMs / 60_000);
     const estimateFloorMinutes = Math.round(previousEstimateMs / 60_000);
 
@@ -74,9 +34,6 @@ export function RunProgress({
         <div className={cn("mt-1.5 space-y-1", className)}>
             <div className="flex items-baseline justify-between gap-2">
                 <p data-tabular className="text-muted-foreground text-2xs">
-                    {/* The elapsed time is a FACT; the estimate beside it is a RANGE,
-                        and never a deadline. A single "~25 min" read as a promise —
-                        and was wrong besides. See `RUN_ESTIMATE_MIN_MS`. */}
                     <span className="text-foreground font-medium">{formatDuration(elapsedMs)}</span>
                     <span className="mx-1">/</span>
                     <span>
@@ -87,42 +44,22 @@ export function RunProgress({
                     </span>
                 </p>
 
-                <p
-                    data-tabular
-                    className={cn(
-                        "text-2xs shrink-0",
-                        overrun ? "text-warning-subtle-foreground font-medium" : "text-muted-foreground"
-                    )}
-                >
-                    {overrun ? t("workspace.chat.progressOverrun") : `${percent}%`}
-                </p>
+                {overrun && (
+                    <p data-tabular className="text-2xs shrink-0 font-medium text-warning-subtle-foreground">
+                        {t("workspace.chat.progressOverrun")}
+                    </p>
+                )}
             </div>
 
             <div
                 role="progressbar"
-                aria-valuemin={0}
-                aria-valuemax={100}
-                /* ⚠️ Past the estimate there is no meaningful value to announce, so
-                   the bar becomes indeterminate to a screen reader rather than
-                   repeating "97 per cent" every few seconds for ten minutes. */
-                aria-valuenow={overrun ? undefined : percent}
                 aria-label={t("workspace.chat.progressLabel")}
                 className="bg-border/70 h-[3px] overflow-hidden rounded-full"
             >
-                <div
-                    className={cn(
-                        "relative h-full rounded-full transition-[width] duration-1000 ease-linear",
-                        overrun ? "bg-warning" : "bg-primary"
-                    )}
-                    style={{ width: `${Math.max(2, ratio * 100)}%` }}
-                >
-                    {/*
-                      ⭐ THE HEAD OF THE BAR BREATHES, so a bar that gains 0.07 % a
-                      second still reads as moving. `tp-run-shine` lives in
-                      globals.css and only exists inside `no-preference`.
-                    */}
-                    <span aria-hidden className="tp-run-shine" />
-                </div>
+                <div aria-hidden className={cn(
+                    "run-progress-indeterminate h-full rounded-full",
+                    overrun ? "bg-warning" : "bg-primary",
+                )} />
             </div>
         </div>
     );

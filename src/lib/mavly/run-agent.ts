@@ -267,6 +267,7 @@ async function execute(input: RunAgentInput, run: RunRow, claimToken: string): P
       // rewrite the same idempotent paths and create the checkpoint.
       throw new Error(`Could not record the batch checkpoint: ${checkpoint.error}`);
     }
+    await heartbeatRun(runId, { stage: "generating", expectedClaimedAt: claimToken });
   };
 
   const onProgress = async (event: AgentProgressEvent): Promise<void> => {
@@ -286,6 +287,10 @@ async function execute(input: RunAgentInput, run: RunRow, claimToken: string): P
         errorCode: event.reason === "truncated" ? "GENERATION_TRUNCATED" : "GENERATION_COMPACT_RETRY",
         expectedClaimedAt: claimToken,
       });
+      return;
+    }
+    if (event.type === "validating") {
+      await heartbeatRun(runId, { stage: "validating", expectedClaimedAt: claimToken });
       return;
     }
     await heartbeatRun(runId, { stage: "generating", expectedClaimedAt: claimToken });

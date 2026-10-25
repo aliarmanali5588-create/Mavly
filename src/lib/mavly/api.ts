@@ -974,9 +974,10 @@ async function agentProgressResponse(projectId: string): Promise<NextResponse> {
     ? run.checkpoint_count
     : Math.max(run.checkpoint_count, batches.data.length);
 
+  const plannedPaths = manifestPaths(run.generation_manifest);
   return ok({
     runId: run.id,
-    stage: progressStageOf(run),
+    stage: progressStageOf(run, plannedPaths, seen),
     startedAt: run.started_at,
     turns: Math.max(run.batch_count, checkpointCount),
     steps: [],
@@ -985,18 +986,36 @@ async function agentProgressResponse(projectId: string): Promise<NextResponse> {
   });
 }
 
-/** The client only knows a small stage vocabulary; map the durable stage onto it. */
-function progressStageOf(run: RunRow): string {
+/** Project durable lifecycle/checkpoint state into the client-safe progress vocabulary. */
+function manifestPaths(manifest: unknown): string[] {
+  if (!manifest || typeof manifest !== "object") return [];
+  const files = (manifest as { files?: unknown }).files;
+  if (!Array.isArray(files)) return [];
+  return files
+    .map((file) => {
+      if (!file || typeof file !== "object") return null;
+      return sanitizeProjectPath((file as { path?: unknown }).path);
+    })
+    .filter((path): path is string => path !== null);
+}
+
+function progressStageOf(
+  run: RunRow,
+  plannedPaths: readonly string[],
+  checkpointedPaths: ReadonlySet<string>,
+): string {
   const stage = stageOf(run);
   switch (stage) {
     case "queued":
       return "queued";
     case "validating":
-      return "starting";
+      return plannedPaths.length > 0 ? "validating-output" : "planning";
     case "generating":
-      return "working";
+      return plannedPaths.length > 0 && plannedPaths.every((path) => checkpointedPaths.has(path))
+        ? "preparing-preview"
+        : "writing-files";
     case "retrying":
-      return "fixing";
+      return "retrying";
     case "completed":
       return "done";
     case "cancelled":

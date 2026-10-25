@@ -78,6 +78,9 @@ export type AgentProgressEvent =
       message: string;
     }
   | {
+      type: "validating";
+    }
+  | {
       type: "retrying";
       phase: "manifest" | "batch" | "repair";
       code: string;
@@ -250,7 +253,8 @@ Requirements:
 - Keep the project focused and reasonably small: a polished usable first version, not a giant scaffold.
 
 Preview requirement:
-- Always include a root file named preview.html.
+- For a new project, include the root file preview.html in the project plan.
+- When updating a project, update preview.html only when it is included in the current batch.
 - preview.html must be a single standalone frontend prototype of the requested product, with inline CSS and inline JavaScript only. No external scripts, fonts, images, or network calls.
 - It runs inside an opaque-origin sandbox: do not use cookies, localStorage, sessionStorage, service workers, or fetch/XHR. Keep all state in memory.
 - It must visually represent the requested UI and include working client-side interactions where practical. It is a design/runtime preview only; the real backend lives in the Next.js files.
@@ -266,7 +270,7 @@ When a Figma design reference is provided:
 When updating an existing project:
 - Return only files you changed or created, plus deletedPaths.
 - Preserve existing behavior and architecture unless the user explicitly asks to change it.
-- Update preview.html whenever the user-visible UI changes.`;
+- Never return a file that is not explicitly requested in the current batch. Project-wide requirements do not add files to an individual batch.`;
 
 const PLANNER_PROMPT = `You are Mavly's project planner. You do NOT write file contents.
 
@@ -283,7 +287,7 @@ Rules:
 - Plan a complete, runnable Next.js App Router + TypeScript project.
 - A new project must include package.json, app/layout.tsx, app/page.tsx, app/globals.css, README.md, preview.html, and at least one app/api/**/route.ts when the product needs data or actions.
 - preview.html is required and must be a single standalone prototype with inline CSS/JS.
-- For an update, list only files that must change or be created, plus deletedPaths. Do not list unchanged files.
+- For an update, list only files that must change or be created, plus deletedPaths. Include preview.html when the requested changes alter user-visible UI; do not list unchanged files.
 - Keep the plan focused and small. At most 80 files.
 - Paths must be relative, use forward slashes, contain no "..", and must not be node_modules/.git/.next/lockfiles/build output/.env.
 - estimatedBytes is your honest estimate of the complete file size; it is used to split the work into safe batches.
@@ -576,6 +580,7 @@ export async function generateApp(
       };
     } else {
       previousContent = call.content;
+      await emitProgress(input.onProgress, { type: "validating" });
       parsed = parseBatch(call.content, requestedPaths, state);
     }
 
@@ -584,7 +589,7 @@ export async function generateApp(
       const repaired = await callModel(
         "repair",
         model,
-        repairMessages(messages, previousContent),
+        repairMessages(messages, previousContent, requestedPaths),
         {
           timeoutMs: REPAIR_TIMEOUT_MS,
           maxTokens: Math.min(model.maxOutputTokens, BATCH_OUTPUT_TOKENS),
@@ -606,6 +611,7 @@ export async function generateApp(
         }
         return fail(mapped.code, repaired.error);
       }
+      await emitProgress(input.onProgress, { type: "validating" });
       parsed = parseBatch(repaired.content, requestedPaths, state);
     }
 
@@ -1292,6 +1298,8 @@ function buildBatchMessages(
     .join("\n");
   const completed = [...state.completedPaths].sort((a, b) => a.localeCompare(b));
   const user = [
+    "Batch contract: the requested paths below are the complete allowlist for this response. Return no other files, even if a project-wide requirement mentions them.",
+    "",
     input.mode === "create" ? "Create part of a new application." : "Update part of the existing application.",
     `Target model: ${model.id}`,
     "",
@@ -1319,11 +1327,18 @@ function buildBatchMessages(
   ];
 }
 
-function repairMessages(messages: readonly ChatMessage[], previous: string): ChatMessage[] {
+function repairMessages(
+  messages: readonly ChatMessage[],
+  previous: string,
+  allowedPaths?: readonly string[],
+): ChatMessage[] {
+  const pathConstraint = allowedPaths
+    ? `\nFor this batch, the only allowed file paths are:\n${allowedPaths.map((path) => `- ${path}`).join("\n")}\nDo not return preview.html or any other path unless it appears in this list.`
+    : "";
   return [
     ...messages,
     { role: "assistant", content: previous.slice(0, 40_000) },
-    { role: "user", content: REPAIR_PROMPT },
+    { role: "user", content: `${REPAIR_PROMPT}${pathConstraint}` },
   ];
 }
 

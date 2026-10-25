@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import {
   Send, Square, Loader2, Bot, AlertCircle,
   Key, FileDiff, ChevronDown, ChevronRight, ChevronUp, Paperclip, X, Check,
-  Plus, Eye, EyeOff, CheckCircle, ArrowRight, PencilIcon,
+  Plus, Eye, EyeOff, CheckCircle, ArrowRight, PencilIcon, RotateCcw,
 } from "lucide-react";
 import { vcaasApi } from "@/lib/vcaas";
 import { DiffViewer } from "@/components/workspace/DiffViewer";
@@ -39,6 +39,7 @@ interface ChatPanelProps {
    * by default — see `RunOptionsMenu`.
    */
   onSend: (files?: { name: string; url: string; imageDescription: string }[], options?: AgentRunOptions) => void;
+  onRetryPrompt?: (text: string, files?: AgentInputFile[]) => void;
   onStop: () => void;
   sending: boolean;
   projectId: string;
@@ -580,7 +581,7 @@ function BuildGroup({ group, projectId, onTellAi, projectSecrets, onRestored }: 
 }
 
 export function ChatPanel({
-  messages, isBuilding, prompt, setPrompt, onSend, onStop, sending, projectId, projectSecrets,
+  messages, isBuilding, prompt, setPrompt, onSend, onRetryPrompt, onStop, sending, projectId, projectSecrets,
   runStartedAt = null, expectedMinutes = null, v2 = false, runProgress = null, onClearContext,
   attachedFiles, setAttachedFiles,
   onOpenFigma, figmaConnected = false, onDisconnectFigma,
@@ -745,6 +746,35 @@ export function ChatPanel({
           if (msg.author === "user") {
             return <UserMessage key={gi} text={msg.message} files={msg.inputFiles} />;
           }
+          if (msg.messageType === "error") {
+            const previousUser = messageGroups
+              .slice(0, gi)
+              .flatMap((previous) => previous.messages)
+              .reverse()
+              .find((previous) => previous.author === "user");
+            const retryFiles = previousUser?.inputFiles ?? previousUser?.files;
+            return (
+              <div key={gi} role="alert" className="rounded-xl border border-destructive/25 bg-destructive/5 p-3">
+                <div className="flex items-start gap-2 text-sm text-foreground">
+                  <AlertCircle className="mt-0.5 size-4 shrink-0 text-destructive" aria-hidden />
+                  <div className="min-w-0"><FormattedText text={msg.message} /></div>
+                </div>
+                {previousUser && onRetryPrompt && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="mt-3"
+                    disabled={isBuilding || sending}
+                    onClick={() => onRetryPrompt(previousUser.message, retryFiles)}
+                  >
+                    <RotateCcw className="mr-1.5 size-3.5" aria-hidden />
+                    Try again
+                  </Button>
+                )}
+              </div>
+            );
+          }
           // Agent message - NO background
           return (
             <div key={gi} className="max-w-full">
@@ -771,9 +801,9 @@ export function ChatPanel({
             {/* New engine: `RunActivity` below carries the live status, so no second "Building…" line. */}
             {!v2 && <div className="flex items-center gap-2">
               <div className="flex gap-1">
-                <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
-                <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
-                <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
+                <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce motion-reduce:animate-none" style={{ animationDelay: "0ms" }} />
+                <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce motion-reduce:animate-none" style={{ animationDelay: "150ms" }} />
+                <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce motion-reduce:animate-none" style={{ animationDelay: "300ms" }} />
               </div>
               <span className="text-sm text-gray-400">{"Building..."}</span>
             </div>}

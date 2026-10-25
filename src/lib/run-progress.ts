@@ -10,8 +10,9 @@
  */
 
 export const RUN_STAGES = [
-  "queued", "sandbox", "starting", "thinking", "working", "build", "deploy", "fixing",
-  "wrapping-up", "entry-page", "done", "failed", "cancelled", "incomplete",
+  "queued", "planning", "writing-files", "validating-output", "preparing-preview", "retrying",
+  "sandbox", "starting", "thinking", "working", "build", "deploy", "fixing", "wrapping-up",
+  "entry-page", "done", "failed", "cancelled", "incomplete",
 ] as const;
 export type RunStage = (typeof RUN_STAGES)[number];
 
@@ -124,6 +125,11 @@ export const isRunOver = (stage: RunStage) =>
 
 const STAGE_TEXT: Record<RunStage, string> = {
   queued: "Waiting for a builder…",
+  planning: "Planning the files…",
+  "writing-files": "Writing project files…",
+  "validating-output": "Validating generated files…",
+  "preparing-preview": "Preparing the preview…",
+  retrying: "Retrying a generation step…",
   sandbox: "Preparing the workspace…",
   starting: "Starting the AI…",
   thinking: "Thinking…",

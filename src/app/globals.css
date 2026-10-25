@@ -241,7 +241,14 @@ button {
   background: radial-gradient(closest-side, color-mix(in oklab, var(--primary) 14%, transparent), transparent);
 }
 
+.run-progress-indeterminate {
+  width: 32%;
+}
+
 @media (prefers-reduced-motion: no-preference) {
+  .run-progress-indeterminate {
+    animation: run-progress-sweep 1.8s var(--ease-in-out-soft) infinite;
+  }
   .bl-glow {
     animation: bl-breathe 5s var(--ease-in-out-soft) infinite;
   }
@@ -266,6 +273,10 @@ button {
     18% { transform: scaleX(1); opacity: 1; }
     80% { transform: scaleX(1); opacity: 1; }
     100% { transform: scaleX(1); opacity: 0; }
+  }
+  @keyframes run-progress-sweep {
+    from { transform: translateX(-110%); }
+    to { transform: translateX(420%); }
   }
 }
 
@@ -440,4 +451,3 @@ body::-webkit-scrollbar {
   width: 0;
   height: 0;
 }
-
