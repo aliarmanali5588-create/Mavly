@@ -1310,7 +1310,9 @@ async function imageGenerationResponse(
  * A refusal from the in-memory admission window. Nothing reached OpenRouter, so
  * "nothing was generated" is true here and the retry hint is the window reset.
  */
-function imageLimitResponse(denial: ImageGenerationLimitDecision): NextResponse {
+function imageLimitResponse(
+  denial: Extract<ImageGenerationLimitDecision, { ok: false }>,
+): NextResponse {
   return fail(
     429,
     "RATE_LIMITED",
