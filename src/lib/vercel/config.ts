@@ -59,11 +59,11 @@ export function readVercelDeploymentConfig(): VercelDeploymentConfigResult {
     return { ok: false, reason: "disabled" };
   }
 
-  let token = process.env.VERCEL_API_TOKEN?.trim() 
-    || process.env.VERCEL_TOKEN?.trim() 
+  let token = (process.env.VERCEL_API_TOKEN?.trim()
+    || process.env.VERCEL_TOKEN?.trim()
     || process.env.VERCEL_AUTH_TOKEN?.trim()
-    || process.env.VERCEL_ACCESS_TOKEN?.trim()
-    ?? "";
+    || process.env.VERCEL_ACCESS_TOKEN?.trim())
+    || "";
   if (!token) return { ok: false, reason: "missing-token" };
   // Be defensive: accept tokens that may include a "Bearer " prefix
   if (token.toLowerCase().startsWith("bearer ")) {
@@ -71,10 +71,10 @@ export function readVercelDeploymentConfig(): VercelDeploymentConfigResult {
   }
   if (!token) return { ok: false, reason: "missing-token" };
 
-  const teamId = process.env.VERCEL_TEAM_ID?.trim() 
+  const teamId = (process.env.VERCEL_TEAM_ID?.trim()
     || process.env.VERCEL_ORG_ID?.trim()
-    || process.env.VERCEL_TEAM_ID_SLUG?.trim()
-    ?? "";
+    || process.env.VERCEL_TEAM_ID_SLUG?.trim())
+    || "";
   return {
     ok: true,
     config: {
