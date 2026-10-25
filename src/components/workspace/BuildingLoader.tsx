@@ -1,12 +1,12 @@
 "use client";
 
-import { stageText, type RunStage } from "@/lib/run-progress";
+import {
+  generationStepStatuses,
+  stageText,
+  type RunStage,
+} from "@/lib/run-progress";
 import { PreviewGenerationTimeline } from "@/components/workspace/PreviewGenerationTimeline";
 
-/**
- * Compact preview-only loading state. Stage data is projected from the durable run
- * lifecycle; the chat uses its separate RunActivity presentation.
- */
 export function BuildingLoader({
   stage = null,
   retrying = false,
@@ -23,6 +23,9 @@ export function BuildingLoader({
         ? "Waiting for the preview to be ready"
         : stageText(stage)
       : "Waiting for generation status";
+  const stageStatuses = generationStepStatuses(stage, previewReady);
+  const activeStageIndex = stageStatuses.indexOf("active");
+  const assemblyStage = activeStageIndex < 0 ? "idle" : String(activeStageIndex);
 
   return (
     <div
@@ -30,44 +33,123 @@ export function BuildingLoader({
       aria-busy="true"
       className="preview-loader absolute inset-0 overflow-y-auto bg-background px-4 py-5 sm:px-6"
     >
-      <div className="preview-loader-glow" aria-hidden />
       <div className="preview-loader-content">
-        <div className="preview-loader-browser" aria-hidden>
-          <div className="preview-loader-browser-chrome">
-            <span className="preview-loader-dot" />
-            <span className="preview-loader-dot" />
-            <span className="preview-loader-dot" />
-            <span className="preview-loader-address preview-skeleton-shimmer" />
-          </div>
-          <div className="preview-loader-browser-body">
-            <span className="preview-skeleton-shimmer preview-loader-line preview-loader-line-title" />
-            <span className="preview-skeleton-shimmer preview-loader-line preview-loader-line-wide" />
-            <span className="preview-skeleton-shimmer preview-loader-line preview-loader-line-short" />
-            <div className="preview-loader-cards">
-              <span className="preview-skeleton-shimmer preview-loader-card" />
-              <span className="preview-skeleton-shimmer preview-loader-card" />
+        <div className="preview-loader-brand" aria-hidden="true">
+          <span className="preview-loader-mark">
+            <svg viewBox="0 0 24 24" fill="none">
+              <path
+                d="M4.5 17V7l7.5 7 7.5-7v10"
+                stroke="currentColor"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth="1.7"
+              />
+            </svg>
+          </span>
+          <span>MAVLY <i /> GENERATION</span>
+        </div>
+
+        <div
+          className="preview-assembly"
+          data-stage={assemblyStage}
+          data-retrying={retrying || undefined}
+          aria-hidden="true"
+        >
+          <div className="preview-assembly-browser">
+            <div className="preview-assembly-chrome">
+              <span className="preview-assembly-window-dots">
+                <i />
+                <i />
+                <i />
+              </span>
+              <span className="preview-assembly-address">
+                <span />
+              </span>
+              <span className="preview-assembly-menu">
+                <i />
+                <i />
+              </span>
             </div>
-            <span className="preview-skeleton-shimmer preview-loader-button" />
+            <div className="preview-assembly-page">
+              <div className="preview-assembly-nav preview-assembly-piece">
+                <span className="preview-assembly-nav-brand" />
+                <span className="preview-assembly-nav-links">
+                  <i />
+                  <i />
+                  <i />
+                </span>
+                <span className="preview-assembly-nav-action" />
+              </div>
+              <div className="preview-assembly-hero">
+                <div className="preview-assembly-hero-copy">
+                  <span className="preview-assembly-eyebrow preview-assembly-piece" />
+                  <span className="preview-assembly-title preview-assembly-piece" />
+                  <span className="preview-assembly-title preview-assembly-title-short preview-assembly-piece" />
+                  <span className="preview-assembly-copy-line preview-assembly-piece" />
+                  <span className="preview-assembly-copy-line preview-assembly-copy-short preview-assembly-piece" />
+                  <span className="preview-assembly-cta preview-assembly-piece" />
+                </div>
+                <div className="preview-assembly-art preview-assembly-piece">
+                  <span className="preview-assembly-art-orbit" />
+                  <span className="preview-assembly-art-card preview-assembly-art-card-back" />
+                  <span className="preview-assembly-art-card preview-assembly-art-card-front">
+                    <i />
+                    <i />
+                    <i />
+                  </span>
+                  <span className="preview-assembly-art-spark preview-assembly-art-spark-one" />
+                  <span className="preview-assembly-art-spark preview-assembly-art-spark-two" />
+                </div>
+              </div>
+              <div className="preview-assembly-cards">
+                <span className="preview-assembly-card preview-assembly-piece">
+                  <i />
+                  <b />
+                  <em />
+                  <em />
+                </span>
+                <span className="preview-assembly-card preview-assembly-piece">
+                  <i />
+                  <b />
+                  <em />
+                  <em />
+                </span>
+                <span className="preview-assembly-card preview-assembly-piece">
+                  <i />
+                  <b />
+                  <em />
+                  <em />
+                </span>
+              </div>
+            </div>
+            <span className="preview-assembly-light" />
           </div>
         </div>
 
         <section className="preview-loader-progress" aria-label="Website generation progress">
           <div className="preview-loader-status">
-            <span className="preview-loader-ring" aria-hidden />
+            <span className="preview-loader-status-mark" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none">
+                <path
+                  d="M5 17V7l7 6.5L19 7v10"
+                  stroke="currentColor"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="1.7"
+                />
+              </svg>
+            </span>
             <div className="min-w-0">
-              <p className="text-sm font-medium text-foreground">Building your app</p>
-              <p role="status" aria-live="polite" aria-atomic="true" className="mt-0.5 truncate text-xs text-muted-foreground">
+              <p className="text-sm font-medium text-foreground">Your website is taking shape</p>
+              <p
+                role="status"
+                aria-live="polite"
+                aria-atomic="true"
+                className="mt-0.5 truncate text-xs text-muted-foreground"
+              >
                 {currentLabel}
               </p>
             </div>
-          </div>
-          <div
-            role="progressbar"
-            aria-label="Website generation"
-            aria-valuetext={currentLabel}
-            className="preview-loader-track"
-          >
-            <span className="preview-loader-track-indicator" aria-hidden />
           </div>
           <PreviewGenerationTimeline stage={stage} previewReady={previewReady} />
         </section>

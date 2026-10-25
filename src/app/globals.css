@@ -235,156 +235,529 @@ button {
     }
   }
 }
-/* Preview-only generation loader. The chat uses separate progress visuals. */
+/* Preview-only assembly scene; shared chat progress visuals are intentionally separate. */
 .preview-loader {
   isolation: isolate;
-}
-
-.preview-loader-glow {
-  position: absolute;
-  top: 12%;
-  left: 50%;
-  width: min(72vw, 280px);
-  aspect-ratio: 1;
-  transform: translateX(-50%);
-  pointer-events: none;
-  border-radius: 50%;
-  background: radial-gradient(
-    closest-side,
-    color-mix(in oklab, var(--primary) 9%, transparent),
-    transparent
-  );
+  background:
+    radial-gradient(ellipse at 50% 36%, color-mix(in oklab, var(--primary) 4%, transparent), transparent 58%),
+    var(--background);
 }
 
 .preview-loader-content {
-  position: relative;
-  z-index: 1;
   display: flex;
-  width: min(100%, 360px);
+  width: min(100%, 760px);
   min-height: 100%;
   margin-inline: auto;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: clamp(14px, 3vh, 22px);
+  gap: clamp(18px, 3.5vh, 30px);
+  padding-block: 18px;
 }
 
-.preview-loader-browser {
-  width: min(100%, 216px);
+.preview-loader-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  color: var(--muted-foreground);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.17em;
+}
+
+.preview-loader-brand i {
+  display: inline-block;
+  width: 3px;
+  height: 3px;
+  margin: 0 6px 2px;
+  border-radius: 50%;
+  background: color-mix(in oklab, var(--muted-foreground) 55%, transparent);
+}
+
+.preview-loader-mark {
+  display: grid;
+  width: 25px;
+  height: 25px;
+  place-items: center;
+  border: 1px solid color-mix(in oklab, var(--primary) 14%, var(--border));
+  border-radius: 8px;
+  background: color-mix(in oklab, var(--primary) 5%, var(--card));
+  color: var(--primary);
+}
+
+.preview-loader-mark svg {
+  width: 18px;
+  height: 18px;
+}
+
+.preview-assembly {
+  width: min(100%, 660px);
+  perspective: 1200px;
+}
+
+.preview-assembly-browser {
+  position: relative;
   overflow: hidden;
-  border: 1px solid color-mix(in oklab, var(--border) 80%, transparent);
+  transform: rotateX(1.5deg);
+  border: 1px solid color-mix(in oklab, var(--border) 88%, transparent);
   border-radius: 14px;
   background: var(--card);
-  box-shadow: 0 2px 12px color-mix(in oklab, var(--foreground) 5%, transparent);
+  box-shadow:
+    0 22px 60px -38px color-mix(in oklab, var(--foreground) 28%, transparent),
+    0 2px 8px color-mix(in oklab, var(--foreground) 4%, transparent);
 }
 
-.preview-loader-browser-chrome {
+.preview-assembly-chrome {
+  display: grid;
+  height: 35px;
+  grid-template-columns: 1fr minmax(100px, 0.8fr) 1fr;
+  align-items: center;
+  gap: 12px;
+  border-bottom: 1px solid color-mix(in oklab, var(--border) 80%, transparent);
+  background: color-mix(in oklab, var(--card) 92%, var(--muted));
+  padding-inline: 13px;
+}
+
+.preview-assembly-window-dots,
+.preview-assembly-menu {
   display: flex;
-  height: 27px;
   align-items: center;
   gap: 5px;
-  border-bottom: 1px solid color-mix(in oklab, var(--border) 75%, transparent);
-  padding-inline: 9px;
 }
 
-.preview-loader-dot {
+.preview-assembly-window-dots i {
   width: 5px;
   height: 5px;
   border-radius: 50%;
-  background: color-mix(in oklab, var(--muted-foreground) 35%, transparent);
+  background: color-mix(in oklab, var(--muted-foreground) 30%, transparent);
 }
 
-.preview-loader-address {
+.preview-assembly-address {
+  display: flex;
+  height: 15px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid color-mix(in oklab, var(--border) 55%, transparent);
+  border-radius: 5px;
+  background: color-mix(in oklab, var(--background) 90%, transparent);
+}
+
+.preview-assembly-address span {
+  width: 38%;
+  height: 3px;
+  border-radius: 4px;
+  background: color-mix(in oklab, var(--muted-foreground) 20%, transparent);
+}
+
+.preview-assembly-menu {
+  justify-content: flex-end;
+}
+
+.preview-assembly-menu i {
+  width: 12px;
+  height: 3px;
+  border-radius: 4px;
+  background: color-mix(in oklab, var(--muted-foreground) 22%, transparent);
+}
+
+.preview-assembly-page {
   position: relative;
-  height: 9px;
-  flex: 1;
-  margin-left: 5px;
   overflow: hidden;
-  border-radius: 999px;
-  background: color-mix(in oklab, var(--muted) 78%, transparent);
+  padding: clamp(14px, 3.2vw, 25px) clamp(16px, 5.2vw, 42px) 24px;
+  background:
+    radial-gradient(ellipse at 79% 34%, color-mix(in oklab, var(--primary) 7%, transparent), transparent 40%),
+    var(--card);
 }
 
-.preview-loader-browser-body {
+.preview-assembly-piece {
+  opacity: 0.2;
+  transform: translateY(5px);
+  transition:
+    opacity 700ms cubic-bezier(0.2, 0.7, 0.2, 1),
+    transform 700ms cubic-bezier(0.2, 0.7, 0.2, 1),
+    background-color 700ms ease,
+    border-color 700ms ease;
+}
+
+.preview-assembly-nav {
+  display: flex;
+  height: 15px;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: clamp(19px, 4vw, 34px);
+}
+
+.preview-assembly-nav-brand {
+  width: 43px;
+  height: 7px;
+  border-radius: 4px;
+  background: color-mix(in oklab, var(--foreground) 62%, var(--muted));
+}
+
+.preview-assembly-nav-links {
+  display: flex;
+  gap: 12px;
+}
+
+.preview-assembly-nav-links i {
+  width: 20px;
+  height: 4px;
+  border-radius: 4px;
+  background: color-mix(in oklab, var(--muted-foreground) 24%, transparent);
+}
+
+.preview-assembly-nav-action {
+  width: 52px;
+  height: 15px;
+  border: 1px solid color-mix(in oklab, var(--primary) 22%, var(--border));
+  border-radius: 5px;
+  background: color-mix(in oklab, var(--primary) 7%, transparent);
+}
+
+.preview-assembly-hero {
+  display: grid;
+  min-height: 142px;
+  grid-template-columns: minmax(0, 1fr) minmax(140px, 0.72fr);
+  align-items: center;
+  gap: clamp(16px, 5vw, 48px);
+}
+
+.preview-assembly-hero-copy {
   display: flex;
   flex-direction: column;
+  align-items: flex-start;
   gap: 8px;
-  padding: 13px;
 }
 
-.preview-loader-line,
-.preview-loader-card,
-.preview-loader-button {
+.preview-assembly-eyebrow {
+  width: 58px;
+  height: 5px;
+  margin-bottom: 4px;
+  border-radius: 4px;
+  background: color-mix(in oklab, var(--primary) 46%, var(--muted));
+}
+
+.preview-assembly-title {
+  width: min(100%, 210px);
+  height: clamp(12px, 2.1vw, 17px);
+  border-radius: 4px;
+  background: color-mix(in oklab, var(--foreground) 68%, var(--muted));
+}
+
+.preview-assembly-title-short {
+  width: 70%;
+  margin-top: -3px;
+}
+
+.preview-assembly-copy-line {
+  width: min(100%, 178px);
+  height: 5px;
+  border-radius: 4px;
+  background: color-mix(in oklab, var(--muted-foreground) 24%, transparent);
+}
+
+.preview-assembly-copy-short {
+  width: 62%;
+  margin-top: -3px;
+}
+
+.preview-assembly-cta {
+  width: 62px;
+  height: 19px;
+  margin-top: 7px;
+  border-radius: 5px;
+  background: color-mix(in oklab, var(--primary) 72%, var(--foreground));
+}
+
+.preview-assembly-art {
   position: relative;
-  display: block;
-  overflow: hidden;
-  border-radius: 5px;
-  background: color-mix(in oklab, var(--muted) 78%, transparent);
-}
-
-.preview-loader-line {
-  height: 6px;
-}
-
-.preview-loader-line-title {
-  width: 58%;
-  height: 8px;
-  margin-bottom: 2px;
-  background: color-mix(in oklab, var(--primary) 18%, var(--muted));
-}
-
-.preview-loader-line-wide {
-  width: 92%;
-}
-
-.preview-loader-line-short {
-  width: 68%;
-}
-
-.preview-loader-cards {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 7px;
-  margin-top: 2px;
+  min-height: 128px;
+  place-items: center;
 }
 
-.preview-loader-card {
-  height: 34px;
-  border: 1px solid color-mix(in oklab, var(--border) 55%, transparent);
-  border-radius: 7px;
-  background: color-mix(in oklab, var(--muted) 55%, transparent);
-}
-
-.preview-loader-button {
-  width: 33%;
-  height: 16px;
-  margin-top: 1px;
-  border-radius: 5px;
-  background: color-mix(in oklab, var(--primary) 22%, var(--muted));
-}
-
-.preview-skeleton-shimmer::after {
+.preview-assembly-art-orbit {
   position: absolute;
-  inset: 0;
-  transform: translateX(-120%);
-  background: linear-gradient(
-    90deg,
-    transparent,
-    color-mix(in oklab, white 42%, transparent),
-    transparent
-  );
+  width: min(100%, 178px);
+  aspect-ratio: 1.25;
+  border: 1px solid color-mix(in oklab, var(--primary) 12%, transparent);
+  border-radius: 48%;
+  background: radial-gradient(ellipse, color-mix(in oklab, var(--primary) 7%, transparent), transparent 68%);
+  transform: rotate(-15deg);
+}
+
+.preview-assembly-art-card {
+  position: absolute;
+  width: 76px;
+  height: 92px;
+  border: 1px solid color-mix(in oklab, var(--border) 85%, transparent);
+  border-radius: 8px;
+  background: color-mix(in oklab, var(--card) 94%, var(--muted));
+  box-shadow: 0 10px 22px -15px color-mix(in oklab, var(--foreground) 30%, transparent);
+}
+
+.preview-assembly-art-card-back {
+  margin: 14px 0 0 32px;
+  transform: rotate(8deg);
+}
+
+.preview-assembly-art-card-front {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 8px;
+  transform: rotate(-5deg);
+}
+
+.preview-assembly-art-card-front::before {
+  width: 100%;
+  height: 30px;
+  border-radius: 4px;
+  background: linear-gradient(135deg, color-mix(in oklab, var(--primary) 30%, var(--muted)), var(--muted));
   content: "";
 }
 
+.preview-assembly-art-card-front i {
+  width: 70%;
+  height: 3px;
+  border-radius: 3px;
+  background: color-mix(in oklab, var(--muted-foreground) 26%, transparent);
+}
+
+.preview-assembly-art-card-front i:last-child {
+  width: 46%;
+}
+
+.preview-assembly-art-spark {
+  position: absolute;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: color-mix(in oklab, var(--primary) 62%, white);
+  box-shadow: 0 0 12px color-mix(in oklab, var(--primary) 34%, transparent);
+}
+
+.preview-assembly-art-spark-one {
+  top: 20%;
+  right: 8%;
+}
+
+.preview-assembly-art-spark-two {
+  bottom: 19%;
+  left: 10%;
+  width: 3px;
+  height: 3px;
+}
+
+.preview-assembly-cards {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: clamp(16px, 3vw, 27px);
+}
+
+.preview-assembly-card {
+  display: flex;
+  min-height: 61px;
+  flex-direction: column;
+  gap: 6px;
+  border: 1px solid color-mix(in oklab, var(--border) 72%, transparent);
+  border-radius: 7px;
+  background: color-mix(in oklab, var(--card) 76%, var(--muted));
+  padding: 8px;
+}
+
+.preview-assembly-card i {
+  width: 14px;
+  height: 14px;
+  margin-bottom: 1px;
+  border-radius: 4px;
+  background: color-mix(in oklab, var(--primary) 14%, var(--muted));
+}
+
+.preview-assembly-card b,
+.preview-assembly-card em {
+  height: 3px;
+  border-radius: 3px;
+  background: color-mix(in oklab, var(--muted-foreground) 24%, transparent);
+}
+
+.preview-assembly-card b {
+  width: 57%;
+  background: color-mix(in oklab, var(--foreground) 34%, var(--muted));
+}
+
+.preview-assembly-card em {
+  width: 82%;
+}
+
+.preview-assembly-card em:last-child {
+  width: 59%;
+}
+
+.preview-assembly-light {
+  position: absolute;
+  top: 35px;
+  bottom: 0;
+  left: -28%;
+  width: 24%;
+  pointer-events: none;
+  opacity: 0;
+  background: linear-gradient(90deg, transparent, color-mix(in oklab, var(--primary) 6%, transparent), transparent);
+  transform: skewX(-14deg);
+}
+
+.preview-assembly[data-stage="0"] .preview-assembly-nav,
+.preview-assembly[data-stage="1"] .preview-assembly-nav,
+.preview-assembly[data-stage="2"] .preview-assembly-nav,
+.preview-assembly[data-stage="3"] .preview-assembly-nav,
+.preview-assembly[data-stage="4"] .preview-assembly-nav {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.preview-assembly[data-stage="1"] .preview-assembly-eyebrow,
+.preview-assembly[data-stage="1"] .preview-assembly-title,
+.preview-assembly[data-stage="2"] .preview-assembly-eyebrow,
+.preview-assembly[data-stage="2"] .preview-assembly-title,
+.preview-assembly[data-stage="3"] .preview-assembly-eyebrow,
+.preview-assembly[data-stage="3"] .preview-assembly-title,
+.preview-assembly[data-stage="4"] .preview-assembly-eyebrow,
+.preview-assembly[data-stage="4"] .preview-assembly-title {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.preview-assembly[data-stage="2"] .preview-assembly-copy-line,
+.preview-assembly[data-stage="2"] .preview-assembly-cta,
+.preview-assembly[data-stage="2"] .preview-assembly-art,
+.preview-assembly[data-stage="3"] .preview-assembly-copy-line,
+.preview-assembly[data-stage="3"] .preview-assembly-cta,
+.preview-assembly[data-stage="3"] .preview-assembly-art,
+.preview-assembly[data-stage="4"] .preview-assembly-copy-line,
+.preview-assembly[data-stage="4"] .preview-assembly-cta,
+.preview-assembly[data-stage="4"] .preview-assembly-art {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.preview-assembly[data-stage="3"] .preview-assembly-card,
+.preview-assembly[data-stage="4"] .preview-assembly-card {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.preview-assembly[data-stage="4"] .preview-assembly-browser {
+  border-color: color-mix(in oklab, var(--primary) 17%, var(--border));
+}
+
 .preview-loader-progress {
-  width: min(100%, 300px);
+  width: min(100%, 430px);
 }
 
 .preview-loader-status {
   display: flex;
-  min-height: 34px;
+  min-height: 38px;
   align-items: center;
-  gap: 10px;
+  gap: 11px;
   text-align: left;
+}
+
+.preview-loader-status-mark {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid color-mix(in oklab, var(--primary) 13%, var(--border));
+  border-radius: 9px;
+  background: color-mix(in oklab, var(--primary) 5%, var(--card));
+  color: var(--primary);
+}
+
+.preview-loader-status-mark svg {
+  width: 20px;
+  height: 20px;
+}
+
+.preview-loader-timeline {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  margin: 18px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.preview-loader-step {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.preview-loader-step-connector {
+  position: absolute;
+  top: 6px;
+  right: 0;
+  left: 13px;
+  height: 1px;
+  background: color-mix(in oklab, var(--border) 85%, transparent);
+  transition: background-color 500ms ease;
+}
+
+.preview-loader-step:last-child .preview-loader-step-connector {
+  display: none;
+}
+
+.preview-loader-step-completed .preview-loader-step-connector {
+  background: color-mix(in oklab, var(--primary) 54%, var(--border));
+}
+
+.preview-loader-step-marker {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  width: 13px;
+  height: 13px;
+  place-items: center;
+  border: 1px solid color-mix(in oklab, var(--muted-foreground) 26%, var(--border));
+  border-radius: 50%;
+  background: var(--background);
+  color: var(--primary-foreground);
+  transition:
+    background-color 400ms ease,
+    border-color 400ms ease,
+    box-shadow 400ms ease,
+    transform 400ms ease;
+}
+
+.preview-loader-step-completed .preview-loader-step-marker {
+  border-color: var(--primary);
+  background: var(--primary);
+}
+
+.preview-loader-step-active .preview-loader-step-marker {
+  transform: scale(1.14);
+  border-color: var(--primary);
+  background: var(--background);
+  box-shadow: 0 0 0 4px color-mix(in oklab, var(--primary) 9%, transparent);
+}
+
+.preview-loader-step-label {
+  color: var(--muted-foreground);
+  font-size: 9px;
+  line-height: 1.2;
+  transition: color 400ms ease;
+}
+
+.preview-loader-step-active .preview-loader-step-label {
+  color: var(--foreground);
+  font-weight: 600;
+}
+
+.preview-frame-loading {
+  transition: opacity 240ms ease;
 }
 
 .preview-loader-ring {
@@ -395,95 +768,6 @@ button {
   border: 1.5px solid color-mix(in oklab, var(--primary) 22%, transparent);
   border-top-color: var(--primary);
   border-radius: 50%;
-}
-
-.preview-loader-track {
-  position: relative;
-  height: 3px;
-  margin-block: 11px 12px;
-  overflow: hidden;
-  border-radius: 999px;
-  background: color-mix(in oklab, var(--border) 70%, transparent);
-}
-
-.preview-loader-track-indicator {
-  position: absolute;
-  inset-block: 0;
-  left: 0;
-  width: 30%;
-  border-radius: inherit;
-  background: var(--primary);
-}
-
-.preview-loader-timeline {
-  display: grid;
-  gap: 4px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.preview-loader-step {
-  position: relative;
-  display: grid;
-  min-height: 25px;
-  grid-template-columns: 16px minmax(0, 1fr);
-  align-items: center;
-  column-gap: 9px;
-  color: var(--muted-foreground);
-  font-size: 12px;
-  line-height: 1.35;
-}
-
-.preview-loader-step:not(:last-child)::after {
-  position: absolute;
-  top: 17px;
-  bottom: -5px;
-  left: 7px;
-  width: 1px;
-  background: color-mix(in oklab, var(--border) 82%, transparent);
-  content: "";
-}
-
-.preview-loader-step-marker {
-  z-index: 1;
-  display: flex;
-  width: 15px;
-  height: 15px;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid color-mix(in oklab, var(--muted-foreground) 28%, transparent);
-  border-radius: 50%;
-  background: var(--background);
-  color: var(--primary-foreground);
-  transition:
-    background-color 220ms ease,
-    border-color 220ms ease,
-    color 220ms ease;
-}
-
-.preview-loader-step-completed .preview-loader-step-marker {
-  border-color: var(--primary);
-  background: var(--primary);
-}
-
-.preview-loader-step-active {
-  color: var(--foreground);
-  font-weight: 600;
-}
-
-.preview-loader-step-active .preview-loader-step-marker {
-  border: 2px solid var(--primary);
-  background: color-mix(in oklab, var(--primary) 12%, var(--background));
-  box-shadow: 0 0 0 3px color-mix(in oklab, var(--primary) 10%, transparent);
-}
-
-.preview-loader-step-label {
-  min-width: 0;
-}
-
-.preview-frame-loading {
-  transition: opacity 240ms ease;
 }
 
 .run-progress-indeterminate {
@@ -505,27 +789,24 @@ button {
   .generation-indicator-core {
     animation: generation-core 1.8s var(--ease-in-out-soft) infinite;
   }
-  .preview-skeleton-shimmer::after {
-    animation: preview-skeleton-shimmer 1.8s ease-in-out infinite;
-  }
   .preview-loader-ring {
     animation: preview-loader-spin 1.5s linear infinite;
-  }
-  .preview-loader-track-indicator {
-    animation: preview-loader-sweep 2s ease-in-out infinite;
   }
   .preview-panel-enter {
     animation: preview-panel-enter 220ms ease-out both;
   }
-  @keyframes preview-skeleton-shimmer {
-    to { transform: translateX(120%); }
+  .preview-assembly[data-stage="2"] .preview-assembly-light,
+  .preview-assembly[data-stage="3"] .preview-assembly-light,
+  .preview-assembly[data-stage="4"] .preview-assembly-light {
+    animation: preview-assembly-sweep 4.8s ease-in-out infinite;
   }
   @keyframes preview-loader-spin {
     to { transform: rotate(360deg); }
   }
-  @keyframes preview-loader-sweep {
-    from { transform: translateX(-120%); }
-    to { transform: translateX(440%); }
+  @keyframes preview-assembly-sweep {
+    0%, 22% { opacity: 0; transform: translateX(0) skewX(-14deg); }
+    35% { opacity: 1; }
+    65%, 100% { opacity: 0; transform: translateX(650%) skewX(-14deg); }
   }
   @keyframes preview-panel-enter {
     from { opacity: 0.72; transform: translateY(3px); }
@@ -545,32 +826,101 @@ button {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .preview-assembly-piece,
+  .preview-loader-step-connector,
   .preview-loader-step-marker,
+  .preview-loader-step-label,
   .preview-frame-loading {
     transition: none;
+  }
+
+  .preview-assembly-light {
+    display: none;
+  }
+}
+
+@media (max-width: 540px) {
+  .preview-loader-content {
+    gap: 18px;
+  }
+
+  .preview-assembly-chrome {
+    grid-template-columns: 1fr minmax(90px, 0.9fr) 1fr;
+    height: 30px;
+    padding-inline: 9px;
+  }
+
+  .preview-assembly-page {
+    padding: 14px 15px 17px;
+  }
+
+  .preview-assembly-nav {
+    margin-bottom: 18px;
+  }
+
+  .preview-assembly-nav-links {
+    gap: 6px;
+  }
+
+  .preview-assembly-nav-links i {
+    width: 13px;
+  }
+
+  .preview-assembly-hero {
+    min-height: 108px;
+    grid-template-columns: minmax(0, 1fr) minmax(92px, 0.62fr);
+    gap: 8px;
+  }
+
+  .preview-assembly-art {
+    min-height: 104px;
+  }
+
+  .preview-assembly-art-card {
+    width: 63px;
+    height: 77px;
+  }
+
+  .preview-assembly-art-card-front::before {
+    height: 23px;
+  }
+
+  .preview-assembly-cards {
+    gap: 6px;
+    margin-top: 14px;
+  }
+
+  .preview-assembly-card {
+    min-height: 52px;
+    gap: 5px;
+    padding: 6px;
   }
 }
 
 @media (max-height: 560px) {
   .preview-loader-content {
-    gap: 10px;
+    gap: 12px;
+    padding-block: 8px;
   }
 
-  .preview-loader-browser {
-    width: min(100%, 184px);
+  .preview-assembly-page {
+    padding-block: 12px;
   }
 
-  .preview-loader-browser-body {
-    gap: 6px;
-    padding: 9px;
+  .preview-assembly-nav {
+    margin-bottom: 14px;
   }
 
-  .preview-loader-card {
-    height: 26px;
+  .preview-assembly-hero {
+    min-height: 110px;
   }
 
-  .preview-loader-step {
-    min-height: 22px;
+  .preview-assembly-art {
+    min-height: 100px;
+  }
+
+  .preview-loader-timeline {
+    margin-top: 12px;
   }
 }
 

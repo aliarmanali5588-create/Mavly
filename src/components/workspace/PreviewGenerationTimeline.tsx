@@ -7,6 +7,8 @@ import {
   type RunStage,
 } from "@/lib/run-progress";
 
+const SHORT_STAGE_LABELS = ["Prompt", "Plan", "Code", "Check", "Preview"] as const;
+
 export function PreviewGenerationTimeline({
   stage,
   previewReady = false,
@@ -32,12 +34,15 @@ export function PreviewGenerationTimeline({
             aria-current={active ? "step" : undefined}
             className={`preview-loader-step preview-loader-step-${status}`}
           >
-            <span className="preview-loader-step-marker" aria-hidden>
-              {complete ? <CheckIcon className="size-3" strokeWidth={2.25} /> : null}
+            <span className="preview-loader-step-connector" aria-hidden="true" />
+            <span className="preview-loader-step-marker" aria-hidden="true">
+              {complete ? <CheckIcon className="size-2.5" strokeWidth={2.5} /> : null}
             </span>
-            <span className="preview-loader-step-label">
-              <span className="sr-only">{status}: </span>
-              {label}
+            <span aria-hidden="true" className="preview-loader-step-label">
+              {SHORT_STAGE_LABELS[index]}
+            </span>
+            <span className="sr-only">
+              {label}: {status}
             </span>
           </li>
         );
