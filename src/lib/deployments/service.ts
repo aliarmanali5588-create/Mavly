@@ -29,6 +29,10 @@ import {
   type VercelDeploymentConfig,
 } from "@/lib/vercel/config";
 import {
+  formatVercelFailureDiagnostic,
+  vercelConfigPresence,
+} from "@/lib/vercel/diagnostics";
+import {
   addVercelProjectDomain,
   createVercelDeployment,
   createVercelProject,
@@ -53,6 +57,7 @@ import {
   type DeploymentStatus as StoredDeploymentStatus,
   type MavlyDomainStatus,
 } from "./store";
+import { publicDeploymentFailure } from "./vercel-failure";
 
 const PUBLISH_MAX_BYTES = 8_000_000;
 const PUBLISH_MAX_FILES = 1_000;
@@ -92,24 +97,7 @@ function fail(
 }
 
 function fromVercel(failure: VercelFailure): DeploymentServiceResult<never> {
-  if (failure.status === 429) {
-    return fail(
-      429,
-      "RATE_LIMITED",
-      "Publishing is temporarily rate limited. Try again shortly.",
-      failure.retryAfterSeconds,
-    );
-  }
-  if (failure.status === 401 || failure.status === 403) {
-    return fail(503, "BACKEND_NOT_CONFIGURED", "Publishing is not authorized on this Mavly deployment. Verify VERCEL_API_TOKEN has access to the target account/team and MAVLY_VERCEL_DEPLOYMENTS_ENABLED is set correctly.");
-  }
-  if (failure.status === 0) {
-    return fail(504, "UNKNOWN", "Vercel did not respond in time.");
-  }
-  if (failure.status === 400 || failure.status === 409 || failure.status === 422) {
-    return fail(400, "VALIDATION", failure.message || "Vercel rejected the publish.");
-  }
-  return fail(502, "UNKNOWN", "Vercel could not complete the publish.");
+  return { ok: false, ...publicDeploymentFailure(failure) };
 }
 
 function storedStatusFor(readyState: string): StoredDeploymentStatus {
@@ -196,10 +184,18 @@ export function wireDeploymentStatus(row: DeploymentRow): WireDeploymentStatus {
 }
 
 async function recordFailure(projectId: string, failure: VercelFailure): Promise<void> {
+  /**
+   * Authorization failures are diagnosed in server logs. Persisting the upstream
+   * message would later surface it to the project owner through the status card,
+   * so only a generic, non-sensitive statement reaches the database.
+   */
+  const authorizationFailure = failure.status === 401 || failure.status === 403;
   const updated = await updateDeploymentRow(projectId, {
     status: "error",
-    error_code: failure.code.slice(0, 120),
-    error_message: failure.message.slice(0, ERROR_MESSAGE_MAX),
+    error_code: authorizationFailure ? "publishing_not_authorized" : failure.code.slice(0, 120),
+    error_message: authorizationFailure
+      ? "Vercel did not authorize this publish."
+      : failure.message.slice(0, ERROR_MESSAGE_MAX),
   });
   if (isDeploymentStoreFailure(updated)) {
     console.error("[deployments] could not record deployment failure:", updated.error);
@@ -367,6 +363,25 @@ export async function publishProject(
 ): Promise<DeploymentServiceResult<WireDeploymentStatus>> {
   const config = readVercelDeploymentConfig();
   if (isVercelDeploymentConfigFailure(config)) {
+    /**
+     * Presence only: no token, no value, no request content. This is the line
+     * that tells an operator whether the flag or the token name is the mismatch.
+     */
+    console.warn(
+      `[deployments] configuration failure ${formatVercelFailureDiagnostic({
+        operation: "read_config",
+        method: "CONFIG",
+        endpoint: "environment",
+        status: 0,
+        upstreamCode: config.reason,
+        upstreamMessage:
+          config.reason === "disabled"
+            ? "MAVLY_VERCEL_DEPLOYMENTS_ENABLED is not enabled."
+            : "VERCEL_API_TOKEN is missing or empty.",
+        requestId: null,
+        config: vercelConfigPresence(),
+      })}`,
+    );
     return fail(
       503,
       "BACKEND_NOT_CONFIGURED",

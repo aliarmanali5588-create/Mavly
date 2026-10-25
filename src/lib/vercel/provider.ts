@@ -19,6 +19,11 @@
 
 import { createHash } from "node:crypto";
 import type { VercelDeploymentConfig } from "./config";
+import {
+  formatVercelFailureDiagnostic,
+  sanitizeVercelDiagnosticText,
+  vercelConfigPresence,
+} from "./diagnostics";
 
 const API_ORIGIN = "https://api.vercel.com";
 const REQUEST_TIMEOUT_MS = 20_000;
@@ -75,6 +80,7 @@ interface RawResponse {
   status: number;
   text: string;
   retryAfter: number | null;
+  requestId: string | null;
 }
 
 function apiUrl(config: VercelDeploymentConfig, path: string): URL {
@@ -83,8 +89,48 @@ function apiUrl(config: VercelDeploymentConfig, path: string): URL {
   return url;
 }
 
+function endpointPath(path: string): string {
+  try {
+    return new URL(path, API_ORIGIN).pathname;
+  } catch {
+    return path.split("?")[0];
+  }
+}
+
+/**
+ * Logs one failed Vercel operation. The token is passed only so it can be
+ * redacted if upstream echoed it; it is never itself written to the line.
+ */
+function logVercelFailure(
+  config: VercelDeploymentConfig,
+  operation: string,
+  method: string,
+  path: string,
+  raw: RawResponse,
+): void {
+  const failure = failureFrom(raw);
+  const line = formatVercelFailureDiagnostic({
+    operation,
+    method: method.toUpperCase(),
+    endpoint: endpointPath(path),
+    status: raw.status,
+    upstreamCode: sanitizeVercelDiagnosticText(failure.code, config.token, 120),
+    upstreamMessage: sanitizeVercelDiagnosticText(failure.message, config.token, 300),
+    requestId: raw.requestId
+      ? sanitizeVercelDiagnosticText(raw.requestId, config.token, 160)
+      : null,
+    config: vercelConfigPresence(),
+  });
+  if (raw.status === 401 || raw.status === 403) {
+    console.error(`[vercel] authorization failure ${line}`);
+  } else {
+    console.warn(`[vercel] request failed ${line}`);
+  }
+}
+
 async function rawRequest(
   config: VercelDeploymentConfig,
+  operation: string,
   path: string,
   init: RequestInit,
   timeoutMs = REQUEST_TIMEOUT_MS,
@@ -107,16 +153,28 @@ async function rawRequest(
 
     const text = await response.text();
     const retryAfterRaw = Number(response.headers.get("retry-after"));
-    return {
-      ok: true,
-      data: {
-        status: response.status,
-        text,
-        retryAfter: Number.isFinite(retryAfterRaw) && retryAfterRaw > 0 ? retryAfterRaw : null,
-      },
+    const data: RawResponse = {
+      status: response.status,
+      text,
+      retryAfter: Number.isFinite(retryAfterRaw) && retryAfterRaw > 0 ? retryAfterRaw : null,
+      requestId:
+        response.headers.get("x-vercel-id") ?? response.headers.get("x-request-id"),
     };
+    if (!isSuccess(data.status)) logVercelFailure(config, operation, init.method ?? "GET", path, data);
+    return { ok: true, data };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
+    const line = formatVercelFailureDiagnostic({
+      operation,
+      method: (init.method ?? "GET").toUpperCase(),
+      endpoint: endpointPath(path),
+      status: 0,
+      upstreamCode: "network_error",
+      upstreamMessage: sanitizeVercelDiagnosticText(message, config.token),
+      requestId: null,
+      config: vercelConfigPresence(),
+    });
+    console.error(`[vercel] transport failure ${line}`);
     return {
       ok: false,
       failure: {
@@ -244,6 +302,7 @@ export async function createVercelProject(
 ): Promise<VercelResult<VercelProject>> {
   const raw = await rawRequest(
     config,
+    "create_project",
     "/v11/projects",
     jsonInit("POST", { name, framework: null }),
   );
@@ -266,6 +325,7 @@ export async function getVercelProject(
 ): Promise<VercelResult<VercelProject>> {
   const raw = await rawRequest(
     config,
+    "get_project",
     `/v9/projects/${encodeURIComponent(idOrName)}`,
     { method: "GET" },
   );
@@ -289,6 +349,7 @@ export async function addVercelProjectDomain(
 ): Promise<VercelResult<VercelProjectDomain>> {
   const raw = await rawRequest(
     config,
+    "add_project_domain",
     `/v10/projects/${encodeURIComponent(idOrName)}/domains`,
     jsonInit("POST", { name: domain }),
   );
@@ -312,6 +373,7 @@ export async function getVercelProjectDomain(
 ): Promise<VercelResult<VercelProjectDomain>> {
   const raw = await rawRequest(
     config,
+    "get_project_domain",
     `/v9/projects/${encodeURIComponent(idOrName)}/domains/${encodeURIComponent(domain)}`,
     { method: "GET" },
   );
@@ -335,6 +397,7 @@ export async function verifyVercelProjectDomain(
 ): Promise<VercelResult<VercelProjectDomain>> {
   const raw = await rawRequest(
     config,
+    "verify_project_domain",
     `/v9/projects/${encodeURIComponent(idOrName)}/domains/${encodeURIComponent(domain)}/verify`,
     { method: "POST" },
   );
@@ -358,6 +421,7 @@ export async function deleteVercelProject(
 ): Promise<VercelResult<void>> {
   const raw = await rawRequest(
     config,
+    "delete_project",
     `/v9/projects/${encodeURIComponent(idOrName)}`,
     { method: "DELETE" },
   );
@@ -375,7 +439,7 @@ export async function uploadDeploymentFile(
   const bytes = Buffer.from(content, "utf8");
   const digest = createHash("sha1").update(bytes).digest("hex");
 
-  const raw = await rawRequest(config, "/v2/files", {
+  const raw = await rawRequest(config, "upload_file", "/v2/files", {
     method: "POST",
     headers: {
       "Content-Type": "application/octet-stream",
@@ -400,6 +464,7 @@ export async function createVercelDeployment(
 ): Promise<VercelResult<VercelDeployment>> {
   const raw = await rawRequest(
     config,
+    "create_deployment",
     "/v13/deployments?forceNew=1",
     jsonInit("POST", {
       name: input.name,
@@ -428,6 +493,7 @@ export async function getVercelDeployment(
 ): Promise<VercelResult<VercelDeployment>> {
   const raw = await rawRequest(
     config,
+    "get_deployment",
     `/v13/deployments/${encodeURIComponent(deploymentId)}`,
     { method: "GET" },
   );
