@@ -1,36 +1,11 @@
 "use client";
 
-import * as React from "react";
-import { LightbulbIcon } from "lucide-react";
-import type { RunStage } from "@/lib/run-progress";
-import {
-  GenerationIndicator,
-  GenerationStages,
-  generationStatusText,
-} from "@/components/workspace/GenerationProgressVisuals";
+import { stageText, type RunStage } from "@/lib/run-progress";
+import { PreviewGenerationTimeline } from "@/components/workspace/PreviewGenerationTimeline";
 
-/** Short and true for this builder on the new engine. No prices, no vendor names. */
-const TIPS = [
-  "Connect your own domain from More → Custom domain.",
-  "Sync the code with GitHub from the GitHub button under the chat box.",
-  "Browse and edit your app's data in More → Database.",
-  "Keep API keys out of your code: add them in More → Secrets.",
-  "Every change is saved as a version, so you can always go back.",
-  "Open the Code tab to read or edit any file the AI wrote.",
-  "Use the pencil in the chat box to edit text and styles right in the preview.",
-  "Attach screenshots or a Figma link to show the AI exactly what you want.",
-  "Your app comes with a database, file storage and sign-in built in.",
-  "Publish puts your app online at its own address in a few minutes.",
-];
-const TIP_MS = 6_000;
-const FADE_MS = 400;
 /**
- * ═══ THE PREVIEW WHILE THE FIRST BUILD RUNS ═════════════════════════════════
- *
- * A wireframe of an app assembling itself (pure CSS, `globals.css` → `.bl-*`) over a
- * soft glow, the current stage, and a rotating "Did you know?" tip. Theme tokens only,
- * so it follows light/dark. With `prefers-reduced-motion` the drawing holds still and
- * the tips swap without the fade.
+ * Compact preview-only loading state. Stage data is projected from the durable run
+ * lifecycle; the chat uses its separate RunActivity presentation.
  */
 export function BuildingLoader({
   stage = null,
@@ -41,73 +16,61 @@ export function BuildingLoader({
   retrying?: boolean;
   previewReady?: boolean;
 }) {
-  const [tip, setTip] = React.useState(0);
-  const [shown, setShown] = React.useState(true);
-  const currentLabel = generationStatusText(stage, retrying);
-
-  React.useEffect(() => {
-    setTip(Math.floor(Math.random() * TIPS.length));
-    let swap: ReturnType<typeof setTimeout> | undefined;
-    const id = setInterval(() => {
-      setShown(false);
-      swap = setTimeout(() => { setTip((i) => (i + 1) % TIPS.length); setShown(true); }, FADE_MS);
-    }, TIP_MS);
-    return () => { clearInterval(id); clearTimeout(swap); };
-  }, []);
+  const currentLabel = retrying
+    ? "Retrying a generation step"
+    : stage
+      ? stage === "done" && !previewReady
+        ? "Waiting for the preview to be ready"
+        : stageText(stage)
+      : "Waiting for generation status";
 
   return (
-    <div data-testid="building-loader" aria-busy="true" className="absolute inset-0 flex flex-col items-center justify-center gap-5 overflow-y-auto bg-background px-4 py-8 text-center sm:gap-7 sm:px-6">
-      <div className="bl-glow pointer-events-none absolute left-1/2 top-1/2 size-[420px] -translate-x-1/2 -translate-y-[62%] rounded-full" aria-hidden />
-
-      <div className="bl-window relative w-full max-w-[220px] rounded-2xl border border-border bg-card p-3 shadow-sm" aria-hidden>
-        <div className="mb-3 flex gap-1">
-          <span className="size-1.5 rounded-full bg-muted-foreground/25" />
-          <span className="size-1.5 rounded-full bg-muted-foreground/25" />
-          <span className="size-1.5 rounded-full bg-muted-foreground/25" />
-        </div>
-        <div className="space-y-2">
-          <span className="bl-bar block h-2 w-2/3 rounded-full bg-primary/30" style={{ animationDelay: "0ms" }} />
-          <span className="bl-bar block h-1.5 w-full rounded-full bg-muted-foreground/15" style={{ animationDelay: "250ms" }} />
-          <span className="bl-bar block h-1.5 w-5/6 rounded-full bg-muted-foreground/15" style={{ animationDelay: "500ms" }} />
-          <div className="flex gap-2 pt-1">
-            <span className="bl-bar block h-10 flex-1 rounded-lg bg-muted-foreground/10" style={{ animationDelay: "750ms" }} />
-            <span className="bl-bar block h-10 flex-1 rounded-lg bg-muted-foreground/10" style={{ animationDelay: "900ms" }} />
-            <span className="bl-bar block h-10 flex-1 rounded-lg bg-muted-foreground/10" style={{ animationDelay: "1050ms" }} />
+    <div
+      data-testid="building-loader"
+      aria-busy="true"
+      className="preview-loader absolute inset-0 overflow-y-auto bg-background px-4 py-5 sm:px-6"
+    >
+      <div className="preview-loader-glow" aria-hidden />
+      <div className="preview-loader-content">
+        <div className="preview-loader-browser" aria-hidden>
+          <div className="preview-loader-browser-chrome">
+            <span className="preview-loader-dot" />
+            <span className="preview-loader-dot" />
+            <span className="preview-loader-dot" />
+            <span className="preview-loader-address preview-skeleton-shimmer" />
           </div>
-          <span className="bl-bar block h-5 w-1/3 rounded-md bg-primary/40" style={{ animationDelay: "1300ms" }} />
+          <div className="preview-loader-browser-body">
+            <span className="preview-skeleton-shimmer preview-loader-line preview-loader-line-title" />
+            <span className="preview-skeleton-shimmer preview-loader-line preview-loader-line-wide" />
+            <span className="preview-skeleton-shimmer preview-loader-line preview-loader-line-short" />
+            <div className="preview-loader-cards">
+              <span className="preview-skeleton-shimmer preview-loader-card" />
+              <span className="preview-skeleton-shimmer preview-loader-card" />
+            </div>
+            <span className="preview-skeleton-shimmer preview-loader-button" />
+          </div>
         </div>
-      </div>
 
-      <div className="relative w-full max-w-sm space-y-3">
-        <div className="flex items-center justify-center gap-2">
-          <GenerationIndicator className="size-7" />
-          <p className="text-sm font-medium text-foreground">Building your app</p>
-        </div>
-        <p role="status" aria-live="polite" aria-atomic="true" className="text-xs text-muted-foreground">
-          {currentLabel}
-        </p>
-        <div
-          role="progressbar"
-          aria-label="Website generation"
-          aria-valuetext={currentLabel}
-          className="h-1.5 overflow-hidden rounded-full bg-muted"
-        >
-          <div aria-hidden className="run-progress-indeterminate h-full rounded-full bg-primary" />
-        </div>
-        <GenerationStages stage={stage} previewReady={previewReady} />
-      </div>
-
-      <div className="relative w-full max-w-sm rounded-xl border border-border bg-card/70 px-4 py-3 text-left backdrop-blur-sm">
-        <p className="mb-1 flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-          <LightbulbIcon className="size-3.5" aria-hidden /> Did you know?
-        </p>
-        <p
-          data-testid="building-loader-tip"
-          className="min-h-[2.5rem] text-[13px] leading-snug text-foreground transition-opacity duration-400 ease-out motion-reduce:transition-none"
-          style={{ opacity: shown ? 1 : 0 }}
-        >
-          {TIPS[tip]}
-        </p>
+        <section className="preview-loader-progress" aria-label="Website generation progress">
+          <div className="preview-loader-status">
+            <span className="preview-loader-ring" aria-hidden />
+            <div className="min-w-0">
+              <p className="text-sm font-medium text-foreground">Building your app</p>
+              <p role="status" aria-live="polite" aria-atomic="true" className="mt-0.5 truncate text-xs text-muted-foreground">
+                {currentLabel}
+              </p>
+            </div>
+          </div>
+          <div
+            role="progressbar"
+            aria-label="Website generation"
+            aria-valuetext={currentLabel}
+            className="preview-loader-track"
+          >
+            <span className="preview-loader-track-indicator" aria-hidden />
+          </div>
+          <PreviewGenerationTimeline stage={stage} previewReady={previewReady} />
+        </section>
       </div>
     </div>
   );

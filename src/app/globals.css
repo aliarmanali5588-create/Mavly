@@ -235,10 +235,255 @@ button {
     }
   }
 }
-/* The preview's first-build loader (`BuildingLoader`): a wireframe that assembles itself
-   over a soft glow. Reduced motion shows the finished drawing, still. */
-.bl-glow {
-  background: radial-gradient(closest-side, color-mix(in oklab, var(--primary) 14%, transparent), transparent);
+/* Preview-only generation loader. The chat uses separate progress visuals. */
+.preview-loader {
+  isolation: isolate;
+}
+
+.preview-loader-glow {
+  position: absolute;
+  top: 12%;
+  left: 50%;
+  width: min(72vw, 280px);
+  aspect-ratio: 1;
+  transform: translateX(-50%);
+  pointer-events: none;
+  border-radius: 50%;
+  background: radial-gradient(
+    closest-side,
+    color-mix(in oklab, var(--primary) 9%, transparent),
+    transparent
+  );
+}
+
+.preview-loader-content {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  width: min(100%, 360px);
+  min-height: 100%;
+  margin-inline: auto;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(14px, 3vh, 22px);
+}
+
+.preview-loader-browser {
+  width: min(100%, 216px);
+  overflow: hidden;
+  border: 1px solid color-mix(in oklab, var(--border) 80%, transparent);
+  border-radius: 14px;
+  background: var(--card);
+  box-shadow: 0 2px 12px color-mix(in oklab, var(--foreground) 5%, transparent);
+}
+
+.preview-loader-browser-chrome {
+  display: flex;
+  height: 27px;
+  align-items: center;
+  gap: 5px;
+  border-bottom: 1px solid color-mix(in oklab, var(--border) 75%, transparent);
+  padding-inline: 9px;
+}
+
+.preview-loader-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: color-mix(in oklab, var(--muted-foreground) 35%, transparent);
+}
+
+.preview-loader-address {
+  position: relative;
+  height: 9px;
+  flex: 1;
+  margin-left: 5px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--muted) 78%, transparent);
+}
+
+.preview-loader-browser-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 13px;
+}
+
+.preview-loader-line,
+.preview-loader-card,
+.preview-loader-button {
+  position: relative;
+  display: block;
+  overflow: hidden;
+  border-radius: 5px;
+  background: color-mix(in oklab, var(--muted) 78%, transparent);
+}
+
+.preview-loader-line {
+  height: 6px;
+}
+
+.preview-loader-line-title {
+  width: 58%;
+  height: 8px;
+  margin-bottom: 2px;
+  background: color-mix(in oklab, var(--primary) 18%, var(--muted));
+}
+
+.preview-loader-line-wide {
+  width: 92%;
+}
+
+.preview-loader-line-short {
+  width: 68%;
+}
+
+.preview-loader-cards {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+  margin-top: 2px;
+}
+
+.preview-loader-card {
+  height: 34px;
+  border: 1px solid color-mix(in oklab, var(--border) 55%, transparent);
+  border-radius: 7px;
+  background: color-mix(in oklab, var(--muted) 55%, transparent);
+}
+
+.preview-loader-button {
+  width: 33%;
+  height: 16px;
+  margin-top: 1px;
+  border-radius: 5px;
+  background: color-mix(in oklab, var(--primary) 22%, var(--muted));
+}
+
+.preview-skeleton-shimmer::after {
+  position: absolute;
+  inset: 0;
+  transform: translateX(-120%);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in oklab, white 42%, transparent),
+    transparent
+  );
+  content: "";
+}
+
+.preview-loader-progress {
+  width: min(100%, 300px);
+}
+
+.preview-loader-status {
+  display: flex;
+  min-height: 34px;
+  align-items: center;
+  gap: 10px;
+  text-align: left;
+}
+
+.preview-loader-ring {
+  display: inline-block;
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+  border: 1.5px solid color-mix(in oklab, var(--primary) 22%, transparent);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+}
+
+.preview-loader-track {
+  position: relative;
+  height: 3px;
+  margin-block: 11px 12px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--border) 70%, transparent);
+}
+
+.preview-loader-track-indicator {
+  position: absolute;
+  inset-block: 0;
+  left: 0;
+  width: 30%;
+  border-radius: inherit;
+  background: var(--primary);
+}
+
+.preview-loader-timeline {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.preview-loader-step {
+  position: relative;
+  display: grid;
+  min-height: 25px;
+  grid-template-columns: 16px minmax(0, 1fr);
+  align-items: center;
+  column-gap: 9px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.preview-loader-step:not(:last-child)::after {
+  position: absolute;
+  top: 17px;
+  bottom: -5px;
+  left: 7px;
+  width: 1px;
+  background: color-mix(in oklab, var(--border) 82%, transparent);
+  content: "";
+}
+
+.preview-loader-step-marker {
+  z-index: 1;
+  display: flex;
+  width: 15px;
+  height: 15px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid color-mix(in oklab, var(--muted-foreground) 28%, transparent);
+  border-radius: 50%;
+  background: var(--background);
+  color: var(--primary-foreground);
+  transition:
+    background-color 220ms ease,
+    border-color 220ms ease,
+    color 220ms ease;
+}
+
+.preview-loader-step-completed .preview-loader-step-marker {
+  border-color: var(--primary);
+  background: var(--primary);
+}
+
+.preview-loader-step-active {
+  color: var(--foreground);
+  font-weight: 600;
+}
+
+.preview-loader-step-active .preview-loader-step-marker {
+  border: 2px solid var(--primary);
+  background: color-mix(in oklab, var(--primary) 12%, var(--background));
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--primary) 10%, transparent);
+}
+
+.preview-loader-step-label {
+  min-width: 0;
+}
+
+.preview-frame-loading {
+  transition: opacity 240ms ease;
 }
 
 .run-progress-indeterminate {
@@ -260,30 +505,31 @@ button {
   .generation-indicator-core {
     animation: generation-core 1.8s var(--ease-in-out-soft) infinite;
   }
-  .bl-glow {
-    animation: bl-breathe 5s var(--ease-in-out-soft) infinite;
+  .preview-skeleton-shimmer::after {
+    animation: preview-skeleton-shimmer 1.8s ease-in-out infinite;
   }
-  .bl-window {
-    animation: bl-float 6s var(--ease-in-out-soft) infinite;
+  .preview-loader-ring {
+    animation: preview-loader-spin 1.5s linear infinite;
   }
-  .bl-bar {
-    transform-origin: left center;
-    animation: bl-draw 3.2s var(--ease-in-out-soft) infinite both;
+  .preview-loader-track-indicator {
+    animation: preview-loader-sweep 2s ease-in-out infinite;
   }
-
-  @keyframes bl-breathe {
-    0%, 100% { opacity: 0.55; transform: scale(0.92); }
-    50% { opacity: 1; transform: scale(1.05); }
+  .preview-panel-enter {
+    animation: preview-panel-enter 220ms ease-out both;
   }
-  @keyframes bl-float {
-    0%, 100% { transform: translateY(0); }
-    50% { transform: translateY(-6px); }
+  @keyframes preview-skeleton-shimmer {
+    to { transform: translateX(120%); }
   }
-  @keyframes bl-draw {
-    0% { transform: scaleX(0); opacity: 0; }
-    18% { transform: scaleX(1); opacity: 1; }
-    80% { transform: scaleX(1); opacity: 1; }
-    100% { transform: scaleX(1); opacity: 0; }
+  @keyframes preview-loader-spin {
+    to { transform: rotate(360deg); }
+  }
+  @keyframes preview-loader-sweep {
+    from { transform: translateX(-120%); }
+    to { transform: translateX(440%); }
+  }
+  @keyframes preview-panel-enter {
+    from { opacity: 0.72; transform: translateY(3px); }
+    to { opacity: 1; transform: translateY(0); }
   }
   @keyframes run-progress-sweep {
     from { transform: translateX(-110%); }
@@ -295,6 +541,36 @@ button {
   @keyframes generation-core {
     0%, 100% { transform: scale(0.82); opacity: 0.7; }
     50% { transform: scale(1.1); opacity: 1; }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .preview-loader-step-marker,
+  .preview-frame-loading {
+    transition: none;
+  }
+}
+
+@media (max-height: 560px) {
+  .preview-loader-content {
+    gap: 10px;
+  }
+
+  .preview-loader-browser {
+    width: min(100%, 184px);
+  }
+
+  .preview-loader-browser-body {
+    gap: 6px;
+    padding: 9px;
+  }
+
+  .preview-loader-card {
+    height: 26px;
+  }
+
+  .preview-loader-step {
+    min-height: 22px;
   }
 }
 

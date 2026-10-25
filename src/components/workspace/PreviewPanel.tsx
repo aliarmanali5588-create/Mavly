@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { RefObject } from "react";
-import { Monitor, Loader2, Archive } from "lucide-react";
+import { Monitor, Archive } from "lucide-react";
 import { BuildingLoader } from "@/components/workspace/BuildingLoader";
 import type { RunStage } from "@/lib/run-progress";
 
@@ -50,6 +50,10 @@ export function PreviewPanel({ previewUrl, onRefresh, loading, mobilePreview = f
    */
   const fullIframeUrl = base ? `${base}${path}` : null;
 
+  useEffect(() => {
+    if (fullIframeUrl) setIframeLoading(true);
+  }, [fullIframeUrl]);
+
   return (
     <div className="h-full flex flex-col overflow-hidden">
       {/* iframe - no URL bar here, it's in the header now */}
@@ -71,14 +75,21 @@ export function PreviewPanel({ previewUrl, onRefresh, loading, mobilePreview = f
             </div>
           )
         ) : (
-          <div className={`bg-white transition-all duration-300 relative ${
+          <div className={`preview-panel-enter bg-white transition-all duration-300 relative ${
             mobilePreview ? "w-[375px] h-[667px] rounded-[2rem] border-[8px] border-gray-800 overflow-hidden shadow-2xl" : "w-full h-full"
           }`}>
-            {iframeLoading && (
-              <div className="absolute inset-0 flex items-center justify-center bg-white z-10">
-                <Loader2 className="w-6 h-6 text-gray-400 animate-spin" />
-              </div>
-            )}
+            <div
+              role="status"
+              aria-live="polite"
+              aria-atomic="true"
+              aria-hidden={!iframeLoading}
+              className={`preview-frame-loading absolute inset-0 z-10 flex items-center justify-center bg-white ${
+                iframeLoading ? "opacity-100" : "pointer-events-none opacity-0"
+              }`}
+            >
+              <span className="preview-loader-ring" />
+              <span className="sr-only">Loading website preview</span>
+            </div>
             <iframe
               /* ⚠️ REMOUNT WHEN THE ORIGIN CHANGES. Swapping the `src` between the direct
                  URL and the proxy without a new element leaves the old document (and its

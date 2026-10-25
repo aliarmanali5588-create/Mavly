@@ -1257,27 +1257,21 @@ export default function WorkspacePage() {
 
   const isBuilding = project?.agentProcessStatus === "init";
   /**
-   * ═══⭐ THE FIRST BUILD SHOWS THE LOADER, NEVER THE TEMPORAL PREVIEW ═════════
-   *
-   * ⚠️⚠️ VCaaS PUBLISHES `temporalDevelopmentProjectUrl` AS SOON AS THE SANDBOX EXISTS,
-   * minutes before the very first build serves anything. So on the FIRST prompt, a page
-   * reload would set `previewUrl` from that link and point an iframe at a server that is
-   * not up yet — the user watching their first build gets a broken preview instead of the
-   * loader. A not-yet-built app is the EXPECTED state during the first run, not an error.
-   *
-   * "Has never completed a build" = the conversation carries no `finished` message. It is
-   * refetched on every load (the page's full-screen `loading` gate holds render until the
-   * conversation has resolved), so this is reload-proof. ONLY the first build: a follow-up
-   * run has a prior `finished` message, so it keeps showing the existing preview while it
-   * rebuilds. And it self-releases anyway the moment `isBuilding` turns false.
+   * Hide an unready first-build URL, but let the V2 static preview appear as soon as the
+   * backend confirms its planned files are checkpointed and the preview entry point exists.
    */
   const isFirstBuild = isBuilding && !messages.some((m) => m.messageType === "finished");
-  const shownPreviewUrl = isFirstBuild ? null : previewUrl;
   /** New engine: the live run timeline (`agent/progress`) for the chat and the preview loader. */
-  const runProgress = useRunProgress(projectId, isBuilding, isV2Project(project));
+  const isV2 = isV2Project(project);
+  const runProgress = useRunProgress(projectId, isBuilding, isV2);
   const buildStage = runProgress && !isRunOver(runProgress.stage) ? runProgress.stage : null;
   const buildRetrying = runProgress?.retrying ?? false;
   const previewReady = runProgress?.previewReady ?? false;
+  const shownPreviewUrl = isFirstBuild
+    ? isV2 && previewReady
+      ? `/api/preview/${encodeURIComponent(projectId)}/`
+      : null
+    : previewUrl;
   /**
    * During a drag the committed state is stale until pointerup, so a rerender caused by
    * anything else must still read the live width. The drag itself never waits on React.
