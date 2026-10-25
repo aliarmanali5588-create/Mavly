@@ -55,7 +55,8 @@ npm run lint
 npm run build && npm start
 ```
 
-Apply `supabase/migrations/03_ai_builder.sql` before using the builder,
+Apply `supabase/migrations/10_generation_jobs.sql` before deploying the durable generation
+jobs, `03_ai_builder.sql` before using the builder,
 `04_supabase_integration.sql` before using the Supabase connection,
 `07_project_deployments.sql` and `09_mavly_deployment_domains.sql` before enabling
 publishing, and `08_figma_integration.sql` before using Figma. `npm test` covers the pure
@@ -97,6 +98,17 @@ generated app.
   `/auth/supabase/callback`. Tokens are AES-256-GCM ciphertext in
   `supabase_integrations`; single-use OAuth state lives in `supabase_oauth_states`.
   Database browsing, SQL, schema changes and per-project linking are not implemented.
+- **Generation jobs are durable per run.** `project_runs.stage` records
+  `queued/validating/generating/retrying/completed/failed/cancelled/interrupted`;
+  `project_run_batches` stores a validated batch and per-path SHA-256 hashes. A run plans a
+  manifest, generates bounded batches and checkpoints each one; `finish_reason: "length"`
+  is never success, and a resume skips only paths whose current content still matches.
+  `create_generation_job` is the atomic admission gate (one active run per project, 2 per
+  user, 8 global, serialized with a Postgres advisory lock; a trigger re-checks the
+  limits on resume). `agent/resume` and `agent/stop` are user-authenticated. Run,
+  manifest and heartbeat writes carry the run's `claimed_at` lease (checkpoints are
+  written between lease checks), so a resumed run cannot be finalized by a stale worker. `after()` is still opportunistic: there is no
+  autonomous worker, so an external worker would need a service-role design and review.
 - **Restore points are implemented.** Every completed AI execution that changes the
   project's source leaves a durable snapshot (`project_snapshots` +
   `project_snapshot_files`). The chat renders a **Restore Code** action on that execution,
@@ -200,7 +212,10 @@ paths with `src/lib/vcaas-scope.ts`, so unknown shapes are refused before any wo
 | `src/app/api/vcaas/[...path]/route.ts` | Auth → scope → ownership → `handleMavlyVcaasRequest` or 503. |
 | `src/lib/mavly/api.ts` | Implemented project/agent/file handlers and response mapping. |
 | `src/lib/mavly/store.ts` | Project, file, message and run persistence through the caller's client. |
-| `src/lib/mavly/run-agent.ts` | Background run: read files → snapshot the baseline → generate → validate → write. |
+| `src/lib/mavly/run-agent.ts` | Background run: claim → baseline → checkpointed batches → complete/fail; cooperative cancel. |
+| `src/lib/ai/retry.ts` | Bounded exponential retry, jitter and `Retry-After` parsing. |
+| `src/lib/mavly/checkpoints.ts` | Pure verification of resumed batch hashes. |
+| `supabase/migrations/10_generation_jobs.sql` | Run lifecycle columns, batch checkpoints, admission RPC and RLS. |
 | `src/lib/mavly/snapshots.ts` | Restore points: create, list, read, and the content hash of a source state. |
 | `src/lib/mavly/restore.ts` | Restoring a source state, with the pre-restore recovery point and the stale-restore check. |
 | `src/lib/integrations/github/` | The GitHub App client: config, encryption, OAuth, the Git database API, the file policy, the store, the service. |

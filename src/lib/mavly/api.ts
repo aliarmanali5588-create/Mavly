@@ -31,23 +31,27 @@ import { sanitizeProjectPath } from "@/lib/ai/agent";
 import { validateProjectSlug } from "@/lib/project-slug";
 import { resolveStaticPreview } from "@/lib/static-site";
 import {
+  createGenerationJob,
   createOwnedProject,
-  createRun,
   deleteProject,
   finishRun,
   getFile,
   getProject,
+  getRun,
   insertMessage,
   isStoreFailure,
   latestRun,
   listFiles,
   listMessages,
   listProjects,
+  listRunBatches,
+  resumeRun,
   updateProject,
   writeFiles,
   type MessageRow,
   type ProjectRow,
   type RunRow,
+  type RunStage,
 } from "./store";
 import { runAgent } from "./run-agent";
 import {
@@ -81,6 +85,12 @@ import {
 
 const NO_STORE = { "cache-control": "private, no-store, max-age=0" } as const;
 const RUN_STALE_MS = 10 * 60_000;
+const ACTIVE_STAGES: ReadonlySet<RunStage> = new Set([
+  "queued",
+  "validating",
+  "generating",
+  "retrying",
+]);
 
 function rebuildUnavailable(): NextResponse {
   return NextResponse.json(
@@ -94,11 +104,64 @@ function rebuildUnavailable(): NextResponse {
   );
 }
 
-/** An `init` run older than the route budget is treated as dead, not as running forever. */
+function stageOf(run: RunRow | null): RunStage | null {
+  if (!run) return null;
+  if (
+    run.stage === "completed" ||
+    run.stage === "failed" ||
+    run.stage === "cancelled" ||
+    run.stage === "interrupted"
+  ) {
+    return run.stage;
+  }
+  if (run.finished_at) return run.status === "done" ? "completed" : "failed";
+  if (run.stage && ACTIVE_STAGES.has(run.stage)) return run.stage;
+  return "queued";
+}
+
+/** A run is active only while it is unfinished, in an active stage, and heartbeating. */
 function isRunActive(run: RunRow | null): boolean {
-  if (run?.status !== "init") return false;
-  const started = Date.parse(run.started_at);
-  return Number.isFinite(started) && Date.now() - started < RUN_STALE_MS;
+  if (!run || run.finished_at) return false;
+  const stage = stageOf(run);
+  if (!stage || !ACTIVE_STAGES.has(stage)) return false;
+  const last = Date.parse(run.heartbeat_at ?? run.started_at);
+  return Number.isFinite(last) && Date.now() - last < RUN_STALE_MS;
+}
+
+function isRunStale(run: RunRow | null): boolean {
+  if (!run || run.finished_at) return false;
+  const stage = stageOf(run);
+  if (!stage || !ACTIVE_STAGES.has(stage)) return false;
+  const last = Date.parse(run.heartbeat_at ?? run.started_at);
+  return Number.isFinite(last) && Date.now() - last >= RUN_STALE_MS;
+}
+
+/** Close an abandoned run once, so it cannot remain "generating" forever. */
+async function interruptIfStale(run: RunRow | null): Promise<RunRow | null> {
+  if (!run || !isRunStale(run)) return run;
+  const changed = await finishRun(
+    run.id,
+    "error",
+    "The run was interrupted before completion. You can resume it.",
+    {
+      stage: "interrupted",
+      errorCode: "RUN_INTERRUPTED",
+    },
+  );
+  if (!changed) {
+    // Another process finished this run while we were deciding it was stale.
+    const fresh = await getRun(run.project_id, run.id);
+    if (!isStoreFailure(fresh)) return fresh.data ?? run;
+    return run;
+  }
+  return {
+    ...run,
+    status: "error",
+    stage: "interrupted",
+    finished_at: new Date().toISOString(),
+    error_message: "The run was interrupted before completion. You can resume it.",
+    error_code: "RUN_INTERRUPTED",
+  };
 }
 
 export interface MavlyRequest {
@@ -148,6 +211,12 @@ export async function handleMavlyVcaasRequest(input: MavlyRequest): Promise<Next
 
   if (action === "agent/start" && method === "POST") {
     return startAgentResponse(userId, projectId, body);
+  }
+  if (action === "agent/resume" && method === "POST") {
+    return resumeAgentResponse(userId, projectId);
+  }
+  if ((action === "agent/cancel" || action === "agent/stop") && method === "POST") {
+    return cancelAgentResponse(userId, projectId);
   }
   if (action === "agent/status" && method === "GET") {
     return agentStatusResponse(projectId);
@@ -283,14 +352,29 @@ async function launchProjectResponse(userId: string, body: unknown): Promise<Nex
   }
 
   const model = resolveModel(stringOf(record.model), "app-generation");
-  const run = await createRun(created.data.project_id, model.id, prompt);
-  if (isStoreFailure(run)) {
+  const admission = await createGenerationJob({
+    projectId: created.data.project_id,
+    model: model.id,
+    prompt,
+    idempotencyKey: idempotencyKeyOf(record),
+  });
+  if (isStoreFailure(admission)) {
     await deleteProject(userId, created.data.project_id);
-    return fail(500, "UNKNOWN", "Could not start the agent.");
+    return admissionFailure(admission);
+  }
+  if (admission.data.status === "rate_limited") {
+    await deleteProject(userId, created.data.project_id);
+    return rateLimited(admission.data.scope, admission.data.retryAfterSeconds);
+  }
+  if (admission.data.status === "conflict" || admission.data.status === "existing") {
+    await deleteProject(userId, created.data.project_id);
+    return fail(409, "CONFLICT", "A generation is already active for this project.");
   }
 
+  const run = admission.data.run;
   const message = await insertMessage(created.data.project_id, "user", prompt);
   if (isStoreFailure(message)) {
+    await finishRun(run.id, "error", "Could not save the prompt.", { stage: "failed", errorCode: "RUN_PROMPT_SAVE_FAILED" });
     await deleteProject(userId, created.data.project_id);
     return fail(500, "UNKNOWN", "Could not start the agent.");
   }
@@ -299,7 +383,7 @@ async function launchProjectResponse(userId: string, body: unknown): Promise<Nex
     runAgent({
       userId,
       projectId: created.data.project_id,
-      runId: run.data.id,
+      runId: run.id,
       prompt,
       requestedModel: stringOf(record.model),
     }),
@@ -312,6 +396,34 @@ async function launchProjectResponse(userId: string, body: unknown): Promise<Nex
     warnings,
   };
   return ok(data);
+}
+
+function idempotencyKeyOf(body: Record<string, unknown>): string | null {
+  const raw = stringOf(body.clientRequestId) ?? stringOf(body.idempotencyKey);
+  const key = raw?.trim().slice(0, 200) ?? "";
+  return key || null;
+}
+
+function admissionFailure(failure: { error: string; code?: string }): NextResponse {
+  if (failure.code === "MIGRATION_REQUIRED") {
+    return fail(503, "MIGRATION_REQUIRED", failure.error);
+  }
+  if (failure.code === "UNAUTHENTICATED") return fail(401, "UNAUTHENTICATED", failure.error);
+  if (failure.code === "FORBIDDEN") return fail(403, "FORBIDDEN", failure.error);
+  if (failure.code === "CONFLICT") return fail(409, "CONFLICT", failure.error);
+  return fail(500, "UNKNOWN", "Could not start the agent.");
+}
+
+function rateLimited(scope: "user" | "global", retryAfterSeconds: number): NextResponse {
+  const retry = Math.max(1, Math.min(Math.ceil(retryAfterSeconds), 900));
+  return fail(
+    429,
+    "RATE_LIMITED",
+    scope === "user"
+      ? "You already have the maximum number of generations running. Wait for one to finish and try again."
+      : "Mavly is at capacity right now. Your request was not started; try again shortly.",
+    { "retry-after": String(retry) },
+  );
 }
 
 async function projectResponse(userId: string, projectId: string): Promise<NextResponse> {
@@ -446,24 +558,47 @@ async function startAgentResponse(userId: string, projectId: string, body: unkno
   const prompt = (stringOf(record.prompt)?.trim() ?? "").slice(0, 32_000);
   if (!prompt) return fail(400, "VALIDATION", "A prompt is required.");
 
-  const current = await latestRun(projectId);
-  if (isStoreFailure(current)) return fail(500, "UNKNOWN", "Could not start the agent.");
-  if (isRunActive(current.data)) {
-    return fail(409, "VALIDATION", "An agent run is already in progress.");
+  const model = resolveModel(stringOf(record.model), "app-generation");
+  const admission = await createGenerationJob({
+    projectId,
+    model: model.id,
+    prompt,
+    idempotencyKey: idempotencyKeyOf(record),
+  });
+  if (isStoreFailure(admission)) return admissionFailure(admission);
+
+  if (admission.data.status === "rate_limited") {
+    return rateLimited(admission.data.scope, admission.data.retryAfterSeconds);
   }
-  if (current.data?.status === "init") {
-    await finishRun(current.data.id, "error", "The previous run timed out.");
+  if (admission.data.status === "conflict") {
+    return fail(
+      409,
+      "CONFLICT",
+      "An agent run is already in progress for this project.",
+    );
   }
 
-  const model = resolveModel(stringOf(record.model), "app-generation");
-  const run = await createRun(projectId, model.id, prompt);
-  if (isStoreFailure(run)) {
-    return fail(run.code === "23505" ? 409 : 500, "VALIDATION", "Could not start the agent.");
+  const run = admission.data.run;
+
+  /**
+   * A repeated request with the same idempotency key returns the existing run.
+   * Do not insert the user's prompt twice and do not start a second worker.
+   */
+  if (admission.data.status === "existing") {
+    return ok({
+      status: run.finished_at ? "done" : "init",
+      stage: stageOf(run),
+      runId: run.id,
+      idempotent: true,
+    });
   }
 
   const message = await insertMessage(projectId, "user", prompt);
   if (isStoreFailure(message)) {
-    await finishRun(run.data.id, "error", "Could not save the prompt.");
+    await finishRun(run.id, "error", "Could not save the prompt.", {
+      stage: "failed",
+      errorCode: "RUN_PROMPT_SAVE_FAILED",
+    });
     return fail(500, "UNKNOWN", "Could not start the agent.");
   }
 
@@ -471,19 +606,92 @@ async function startAgentResponse(userId: string, projectId: string, body: unkno
     runAgent({
       userId,
       projectId,
-      runId: run.data.id,
+      runId: run.id,
       prompt,
       requestedModel: stringOf(record.model),
     }),
   );
 
-  return ok({ status: "init", runId: run.data.id });
+  return ok({ status: "init", stage: "queued", runId: run.id });
+}
+
+async function resumeAgentResponse(userId: string, projectId: string): Promise<NextResponse> {
+  if (!isAiConfigured()) {
+    return fail(503, "BACKEND_NOT_CONFIGURED", "OpenRouter is not configured. Add OPENROUTER_API_KEY on the server.");
+  }
+
+  const current = await latestRun(projectId);
+  if (isStoreFailure(current)) return fail(500, "UNKNOWN", "Could not resume the agent.");
+  if (!current.data) return fail(404, "RUN_NOT_FOUND", "There is no run to resume.");
+
+  const run = await interruptIfStale(current.data);
+  if (isRunActive(run)) {
+    return fail(409, "CONFLICT", "That run is still in progress.");
+  }
+  const stage = stageOf(run);
+  if (!run || (stage !== "failed" && stage !== "interrupted")) {
+    return fail(409, "RUN_NOT_RESUMABLE", "Only a failed or interrupted run can be resumed.");
+  }
+
+  const reopened = await resumeRun(projectId, run.id);
+  if (isStoreFailure(reopened)) {
+    if (reopened.code === "CONFLICT") {
+      return fail(409, "CONFLICT", reopened.error);
+    }
+    if (reopened.code === "RATE_LIMITED_USER" || reopened.code === "RATE_LIMITED_GLOBAL") {
+      return rateLimited(reopened.code === "RATE_LIMITED_GLOBAL" ? "global" : "user", 30);
+    }
+    return fail(500, "UNKNOWN", "Could not resume the agent.");
+  }
+  if (!reopened.data) {
+    return fail(409, "RUN_NOT_RESUMABLE", "That run cannot be resumed.");
+  }
+
+  after(() =>
+    runAgent({
+      userId,
+      projectId,
+      runId: reopened.data!.id,
+      prompt: reopened.data!.prompt,
+      requestedModel: reopened.data!.model,
+      resume: true,
+    }),
+  );
+
+  return ok({ status: "init", stage: "queued", runId: reopened.data.id, resumed: true });
+}
+
+async function cancelAgentResponse(userId: string, projectId: string): Promise<NextResponse> {
+  const current = await latestRun(projectId);
+  if (isStoreFailure(current)) return fail(500, "UNKNOWN", "Could not cancel the agent.");
+  if (!current.data) return fail(404, "RUN_NOT_FOUND", "There is no run to cancel.");
+
+  const run = await interruptIfStale(current.data);
+  if (!isRunActive(run)) {
+    return fail(409, "RUN_NOT_ACTIVE", "That run is not in progress.");
+  }
+
+  const cancelled = await finishRun(run.id, "cancelled", "The run was cancelled by the user.", {
+    stage: "cancelled",
+    errorCode: "RUN_CANCELLED",
+  });
+  if (!cancelled) {
+    return fail(409, "RUN_NOT_ACTIVE", "That run finished before it could be cancelled.");
+  }
+  await insertMessage(
+    projectId,
+    "agent",
+    "The run was cancelled. Completed batches were kept and the code was not rolled back automatically.",
+    "error",
+  );
+
+  return ok({ runId: run.id, status: "cancelled", stage: "cancelled" });
 }
 
 async function agentStatusResponse(projectId: string): Promise<NextResponse> {
-  const run = await latestRun(projectId);
-  if (isStoreFailure(run)) return fail(500, "UNKNOWN", "Could not load the agent status.");
-  if (!run.data) {
+  const latest = await latestRun(projectId);
+  if (isStoreFailure(latest)) return fail(500, "UNKNOWN", "Could not load the agent status.");
+  if (!latest.data) {
     return ok({
       projectId,
       status: "idle",
@@ -492,57 +700,114 @@ async function agentStatusResponse(projectId: string): Promise<NextResponse> {
     } satisfies AgentStatus);
   }
 
+  const run = await interruptIfStale(latest.data);
+  if (!run) return fail(500, "UNKNOWN", "Could not load the agent status.");
+
   const messages = await listMessages(projectId, { limit: 100 });
   const realtimeConversation = isStoreFailure(messages)
     ? []
     : messages.data
-        .filter((message) => message.created_at >= run.data!.started_at)
+        .filter((message) => message.created_at >= run.started_at)
         .map(toConversationMessage);
 
-  const status = isRunActive(run.data) ? "init" : "done";
+  const status = isRunActive(run) ? "init" : "done";
+  const manifest = parseManifestFileCount(run.generation_manifest);
   return ok({
     projectId,
     status,
-    startedAt: run.data.started_at,
+    stage: stageOf(run),
+    startedAt: run.started_at,
+    finishedAt: run.finished_at,
     realtimeConversation,
-    expectedMinutes: status === "init" ? 2 : null,
-    expectedFinishAt: status === "init"
-      ? new Date(Date.parse(run.data.started_at) + 120_000).toISOString()
-      : null,
-    runId: run.data.id,
+    // Do not invent an ETA. The client shows elapsed time from `startedAt`
+    // until the run reports a terminal stage.
+    expectedMinutes: null,
+    expectedFinishAt: null,
+    runId: run.id,
+    filesWritten: run.files_written,
+    totalFiles: manifest,
+    batchCount: run.batch_count,
+    checkpointCount: run.checkpoint_count,
+    attemptCount: run.attempt_count,
+    failureCode: run.error_code,
+    model: run.model_used ?? run.model ?? undefined,
+    usage: {
+      promptTokens: run.prompt_tokens,
+      completionTokens: run.completion_tokens,
+      totalTokens: run.total_tokens,
+      reasoningTokens: run.reasoning_tokens,
+    },
   } satisfies AgentStatus);
 }
 
-async function agentProgressResponse(projectId: string): Promise<NextResponse> {
-  const run = await latestRun(projectId);
-  if (isStoreFailure(run)) return fail(500, "UNKNOWN", "Could not load the agent progress.");
-  if (!run.data) return fail(404, "PROJECT_NOT_FOUND", "No agent run found.");
+function parseManifestFileCount(manifest: unknown): number | null {
+  if (!manifest || typeof manifest !== "object") return null;
+  const files = (manifest as { files?: unknown }).files;
+  return Array.isArray(files) ? files.length : null;
+}
 
-  const startedAt = Date.parse(run.data.started_at);
+async function agentProgressResponse(projectId: string): Promise<NextResponse> {
+  const latest = await latestRun(projectId);
+  if (isStoreFailure(latest)) return fail(500, "UNKNOWN", "Could not load the agent progress.");
+  if (!latest.data) return fail(404, "PROJECT_NOT_FOUND", "No agent run found.");
+
+  const run = await interruptIfStale(latest.data);
+  if (!run) return fail(500, "UNKNOWN", "Could not load the agent progress.");
+
+  const startedAt = Date.parse(run.started_at);
   if (!Number.isFinite(startedAt)) {
     return fail(500, "UNKNOWN", "Could not read the agent run start time.");
   }
 
-  const active = isRunActive(run.data);
-  const stage = active
-    ? Date.now() - startedAt < 10_000
-      ? "starting"
-      : "thinking"
-    : run.data.status === "done"
-      ? "done"
-      : run.data.status === "error"
-        ? "failed"
-        : "incomplete";
+  const batches = await listRunBatches(run.id);
+  const seen = new Set<string>();
+  const files: { path: string; change: "edit"; added: number; removed: number }[] = [];
+  if (!isStoreFailure(batches)) {
+    for (const batch of batches.data) {
+      for (const path of batch.paths) {
+        if (seen.has(path)) continue;
+        seen.add(path);
+        files.push({ path, change: "edit", added: 0, removed: 0 });
+      }
+    }
+  }
+  const checkpointCount = isStoreFailure(batches)
+    ? run.checkpoint_count
+    : Math.max(run.checkpoint_count, batches.data.length);
 
   return ok({
-    runId: run.data.id,
-    stage,
-    startedAt: run.data.started_at,
-    turns: 0,
+    runId: run.id,
+    stage: progressStageOf(run),
+    startedAt: run.started_at,
+    turns: Math.max(run.batch_count, checkpointCount),
     steps: [],
-    totalSteps: 0,
-    files: [],
+    totalSteps: checkpointCount,
+    files,
   });
+}
+
+/** The client only knows a small stage vocabulary; map the durable stage onto it. */
+function progressStageOf(run: RunRow): string {
+  const stage = stageOf(run);
+  switch (stage) {
+    case "queued":
+      return "queued";
+    case "validating":
+      return "starting";
+    case "generating":
+      return "working";
+    case "retrying":
+      return "fixing";
+    case "completed":
+      return "done";
+    case "cancelled":
+      return "cancelled";
+    case "failed":
+    case "interrupted":
+      return "failed";
+    default:
+      return run.status === "done" ? "done" : "failed";
+  }
 }
 
 async function conversationResponse(projectId: string, query: URLSearchParams): Promise<NextResponse> {

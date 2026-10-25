@@ -339,6 +339,11 @@ export interface AgentRunOptions {
   effort?: AgentEffort;
   /** Claude Code fast mode — Opus only, ignored with `sonnet`. */
   fastMode?: boolean;
+  /**
+   * Optional idempotency key for `agent/start`. A repeated request with the
+   * same key returns the same run instead of starting (and charging) a second.
+   */
+  clientRequestId?: string;
 }
 
 export interface ConversationMessage {
@@ -462,6 +467,23 @@ export interface AgentStatus {
   expectedFinishAt?: string | null;
   /** v2: the running run, else the last one. */
   runId?: string;
+  /** Durable job stage. `status` stays the UI-compatible coarse signal. */
+  stage?: "queued" | "validating" | "generating" | "retrying" | "completed" | "failed" | "cancelled" | "interrupted" | null;
+  finishedAt?: string | null;
+  filesWritten?: number;
+  totalFiles?: number | null;
+  batchCount?: number;
+  checkpointCount?: number;
+  attemptCount?: number;
+  failureCode?: string | null;
+  /** The model that actually served the most recent provider call. */
+  model?: string;
+  usage?: {
+    promptTokens: number | null;
+    completionTokens: number | null;
+    totalTokens: number | null;
+    reasoningTokens: number | null;
+  };
 }
 
 /**

@@ -508,13 +508,21 @@ export const vcaasApi = {
     ): Promise<VcaasResponse<unknown>> =>
       proxy.post(`${project(projectId)}/agent/start`, body),
 
+    /** POST …/agent/resume — reopen a failed/interrupted run from its checkpoints. */
+    resume: (projectId: string): Promise<VcaasResponse<unknown>> =>
+      proxy.post(`${project(projectId)}/agent/resume`, {}),
+
     /** POST …/agent/clear-context — the next prompt starts a fresh agent session. Free. */
     clearContext: (projectId: string): Promise<VcaasResponse<{ message: string }>> =>
       proxy.post(`${project(projectId)}/agent/clear-context`, {}),
 
-    /** POST …/agent/stop — request the current run to stop. */
+    /** POST …/agent/stop — cooperatively cancel the current run. */
     stop: (projectId: string): Promise<VcaasResponse<unknown>> =>
       proxy.post(`${project(projectId)}/agent/stop`, {}),
+
+    /** POST …/agent/cancel — explicit alias for `stop`. */
+    cancel: (projectId: string): Promise<VcaasResponse<unknown>> =>
+      proxy.post(`${project(projectId)}/agent/cancel`, {}),
 
     /** POST …/agent/server/start-or-restart — (re)start the project dev server. */
     restartServer: (projectId: string): Promise<VcaasResponse<unknown>> =>

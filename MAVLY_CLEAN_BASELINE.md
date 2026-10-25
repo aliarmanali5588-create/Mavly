@@ -62,6 +62,22 @@ document; see `MAVLY_VERCEL_DEPLOYMENTS.md` for DNS/SSL prerequisites as well.
 - RLS policies for every child table, each requiring an owned parent row;
 - one in-flight run per project (`project_runs_one_init_per_project`).
 
+`supabase/migrations/10_generation_jobs.sql` adds:
+
+- the durable `stage`, heartbeat, idempotency, provider-usage and checkpoint columns on
+  `project_runs`;
+- `project_run_batches`, one validated batch per row with per-path SHA-256 hashes and RLS
+  inherited from the owning project;
+- one unfinished run per project (`project_runs_one_active_per_project`) and a
+  project-scoped idempotency index;
+- `create_generation_job`, the SECURITY DEFINER admission gate (ownership, stale recovery,
+  idempotency, one active run per project, 2 per user, 8 global, serialized by a Postgres
+  advisory lock).
+
+Apply migration `10` before deploying code that reads these columns. There is still no
+autonomous worker: `after()` starts the run opportunistically, and the user-authenticated
+`agent/resume` endpoint reopens a failed/interrupted run from its verified checkpoints.
+
 `supabase/migrations/04_supabase_integration.sql` adds:
 
 - `supabase_integrations`, one row per Mavly user, with encrypted access/refresh tokens and
@@ -80,9 +96,11 @@ The project routes run authentication → path scope → ownership → handler:
 | --- | --- |
 | `GET /api/vcaas/projects` | Lists only the caller's projects. |
 | `POST /api/vcaas/projects` | Creates a project row; a taken id gets a random suffix. |
-| `POST /api/vcaas/projects/launch` | Creates the project, inserts the first message and run, schedules generation. |
+| `POST /api/vcaas/projects/launch` | Creates the project, admits one durable run, inserts the first message and schedules generation. |
 | `GET/PATCH/DELETE /api/vcaas/projects/{id}` | Read, update metadata, delete. |
-| `POST /api/vcaas/projects/{id}/agent/start` | Creates a run and schedules generation after the response. |
+| `POST /api/vcaas/projects/{id}/agent/start` | Atomically admits a run and schedules generation after the response. |
+| `POST /api/vcaas/projects/{id}/agent/resume` | Reopens the latest failed/interrupted run from its manifest and verified checkpoints. |
+| `POST /api/vcaas/projects/{id}/agent/stop` | Cooperatively cancels the active run; completed batches stay. |
 | `GET /api/vcaas/projects/{id}/agent/status` | Latest run state plus messages since that run started. |
 | `GET /api/vcaas/projects/{id}/agent/full-conversation` | Windowed message history. |
 | `GET /api/vcaas/projects/{id}/files/tree` | Flat folders + files, filtered/paged. |
@@ -194,13 +212,17 @@ and the stored token never reaches the model or a log.
   `deepseek/deepseek-v4.1-flash`.
 - The catalog in `src/lib/ai/models.ts` contains five models for future routing. Only the
   default is used automatically.
-- The model must return JSON containing full file contents and a `message`; one repair
-  attempt is made when parsing fails.
+- The run plans a manifest, then requests bounded file batches. The model must return JSON
+  with full file contents; one focused repair is made per malformed/empty response.
+- `finish_reason: "length"` is always a failure. The truncated response is discarded, the
+  batch is split, and prior validated batches remain checkpointed.
 - Paths are sanitized, `.env`/`.git`/`node_modules`/build output are refused, and per-file
-  and total size caps apply.
+  and total size caps apply before anything is written.
 - New projects must include `package.json`, `app/layout.tsx`, `app/page.tsx` and
   `preview.html`.
-- The agent runs after the HTTP response via Next.js `after()`; the UI polls run status.
+- The agent runs after the HTTP response via Next.js `after()`; the UI polls the durable
+  stage and checkpoint counts. `after()` is not a worker: a terminated invocation leaves an
+  unfinished run that `agent/resume` can reopen, but nothing restarts it automatically.
 
 ---
 
@@ -286,7 +308,9 @@ with HTTP **503** and `cache-control: private, no-store, max-age=0`.
 - `src/lib/ai/openrouter.ts` — the only outbound builder call; server-only key.
 - `src/lib/ai/agent.ts` — prompt, JSON parsing/repair, path and size validation.
 - `src/lib/mavly/store.ts` — Supabase persistence through the caller's client.
-- `src/lib/mavly/run-agent.ts` — background read → generate → validate → write.
+- `src/lib/mavly/run-agent.ts` — claim → baseline → checkpointed batches → complete/fail.
+- `src/lib/ai/retry.ts` — bounded retry/backoff/`Retry-After`.
+- `src/lib/mavly/checkpoints.ts` — verification of resumed batch hashes.
 - `src/lib/mavly/api.ts` — implemented route handlers and response mapping.
 - `src/lib/mavly/snapshots.ts` — restore-point storage and the content hash.
 - `src/lib/mavly/restore.ts` — the restore itself, with its recovery point.

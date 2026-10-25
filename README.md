@@ -28,7 +28,7 @@ audits listed at the end of this file; it is not a runtime dependency.
 | API session gate | `/api/*` returns JSON `401 UNAUTHENTICATED` without a verified session |
 | Project ownership checks | `public.projects` plus RLS, checked by every project-scoped route |
 | Project create/launch/list/get/update/delete | Stored in Supabase |
-| Agent generation | OpenRouter, server-side, with validated file output |
+| Agent generation | OpenRouter, server-side; durable run rows, bounded batches, per-batch checkpoints, resume and cooperative cancel |
 | Conversations and run status | Persisted in Supabase and polled by the workspace |
 | Project files | Generated source tree, file reads and file saves |
 | Source download | ZIP built from stored project files |
@@ -102,8 +102,13 @@ browser ── src/lib/vcaas.ts (client catalog, same-origin only)
   the caller's RLS-scoped Supabase client. Missing and foreign rows return the same
   non-enumerating 403; lookup failures fail closed. Child tables inherit that ownership
   through RLS.
-- **Generation:** `after()` in the route handler runs the agent after the response, reading
-  the current files as context and validating every returned path and size before writing.
+- **Generation:** `POST …/agent/start` atomically admits one run per project (and bounded
+  per-user/global concurrency) through `create_generation_job`. `after()` then runs the
+  agent: plan a manifest, request small file batches, validate every path and size, and
+  checkpoint each batch before starting the next. A truncated response is never written; a
+  failed/interrupted run can be resumed from its verified checkpoints with
+  `POST …/agent/resume`, and `POST …/agent/stop` cooperatively cancels it. See
+  [Generation reliability](#generation-reliability).
 - **Publishing:** disabled unless `MAVLY_VERCEL_DEPLOYMENTS_ENABLED` is one of
   `1`/`true`/`yes`/`on` and `VERCEL_API_TOKEN` is set. The server uploads the static
   entry point (`preview.html`, `index.html`, or `public/index.html`) and its local assets
@@ -117,6 +122,69 @@ browser ── src/lib/vcaas.ts (client catalog, same-origin only)
   Mavly account, separately from `public.projects.project_id`.
 - **Client API surface:** components call the catalog in `src/lib/vcaas.ts`, never the
   route paths directly.
+
+## Generation reliability
+
+One `project_runs` row is one durable job. The lifecycle is recorded in `stage`
+(`queued` → `validating` → `generating`/`retrying` → `completed`/`failed`/`cancelled`/
+`interrupted`) while the legacy `status` column stays `init`/`done`/`error` for the
+workspace. Every provider call records a safe attempt: status, requested/actual model,
+`finish_reason`, token usage, provider request id and a bounded error code. No prompt,
+provider payload, API key or token is stored in that metadata.
+
+The invariants are:
+
+- `finish_reason: "length"` is a failure. The response is discarded, never written.
+- A validated batch is checkpointed in `project_run_batches` with a SHA-256 hash per path.
+- A resume reuses the manifest and skips only paths whose current content still matches
+  their checkpoint. Edited/missing files are regenerated. It takes a fresh claim; run,
+  manifest and heartbeat writes are guarded by `claimed_at`, and a checkpoint is written
+  between two lease checks, so a stale worker cannot finalize the new attempt.
+- Retries are bounded by attempts, exponential backoff + jitter, the provider's
+  `Retry-After` and the run's wall-clock budget. Output-limit failures are not retried:
+  the batch is split instead.
+- One project has at most one unfinished run. Admission is serialized with a Postgres
+  advisory lock, so the per-user (2) and global (8) limits are enforced across instances.
+  Those limits are server constants in migration `10`; change them only after measuring
+  provider quotas.
+
+### Deployment order
+
+1. Preflight: `select project_id, count(*) from public.project_runs where finished_at is
+   null group by 1 having count(*) > 1;` The migration closes all but the newest active run
+   per project before creating the unique index, but review the result.
+2. Apply `supabase/migrations/10_generation_jobs.sql`.
+3. Deploy the application code. Without migration `10`, start/resume answers
+   `503 MIGRATION_REQUIRED` instead of silently bypassing admission.
+4. Smoke-test: start a run, verify `agent/status.stage` advances and batches appear; stop
+   one and verify `cancelled`; interrupt one and verify `interrupted` then `agent/resume`.
+
+**No autonomous worker exists.** `after()` is opportunistic and a serverless instance can
+be terminated after the response. The durable row, checkpoints and user-authenticated
+resume endpoint make recovery possible, but they do not by themselves restart a run. A
+production worker that polls unfinished runs would need a service-role design and a
+security review; this repository intentionally has no service-role key.
+
+### Metric definitions
+
+| Metric | Definition |
+|---|---|
+| Active runs | `finished_at is null` and heartbeat newer than 10 minutes |
+| Stale/interrupted rate | runs reaching `interrupted` ÷ terminal runs |
+| Success rate | runs reaching `completed` ÷ terminal runs |
+| Truncation rate | terminal runs with `error_code = 'GENERATION_TRUNCATED'` ÷ terminal runs |
+| Provider attempt count | `attempt_count` (manifest + batches + repairs + retries) |
+| Queue wait | `claimed_at − started_at` |
+| Time to first checkpoint | first `project_run_batches.completed_at − started_at` |
+| Time to complete | `finished_at − started_at` on `completed` runs |
+| Batch progress | `checkpoint_count ÷ the manifest file count` |
+| Retry pressure | `jsonb_array_length(provider_attempts)` and any non-null `retry_after_seconds` |
+
+**Load test status:** not run. This repository has no staging project, provider quota or
+authorization to generate at 1,000-user scale, and agents are forbidden from running test,
+build or load commands. The admission limits are conservative defaults, not measured
+capacity. Do not describe Mavly as validated for 1,000 concurrent users until a human has
+run the staged load test.
 
 ## Local setup
 
@@ -160,7 +228,9 @@ message and run tables. `04_supabase_integration.sql` creates the encrypted conn
 OAuth state tables. `07_project_deployments.sql` creates the deployment mapping used only
 when publishing is enabled, and `09_mavly_deployment_domains.sql` adds the Mavly-owned
 domain state. `08_figma_integration.sql` creates the encrypted per-project Figma
-connection. Configure the Mavly sign-in redirect as a bare `/auth/callback` URL
+connection. `10_generation_jobs.sql` adds the durable run lifecycle, per-batch checkpoints
+and the atomic admission function; **apply it before deploying code that reads those
+columns.** Configure the Mavly sign-in redirect as a bare `/auth/callback` URL
 with no query string, and keep Supabase's redirect allow-list tight.
 
 ### GitHub App connection
@@ -237,9 +307,11 @@ npm run lint
 npm run build && npm start
 ```
 
-Unit tests cover the pure auth/redirect/ownership/scope modules and static route
-invariants. They do not exercise a real Supabase session, OpenRouter, the Supabase OAuth
-connection, or a generated app. A manual OAuth check needs a real Supabase OAuth app:
+Unit tests cover the pure auth/redirect/ownership/scope modules, static route invariants,
+the generation validator/batching/truncation rules, provider retry classification,
+OpenRouter response classification, and checkpoint verification. They do not exercise a
+real Supabase session, a live OpenRouter call, the Supabase OAuth connection, the new
+migration or a generated app. A manual OAuth check needs a real Supabase OAuth app:
 connect, verify organization/project discovery, save a selection, refresh the page,
 disconnect, and confirm the grant is revoked. A manual publish check requires a real Vercel
 token and explicit eligibility approval; see
