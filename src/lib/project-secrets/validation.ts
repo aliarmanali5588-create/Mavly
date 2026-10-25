@@ -99,13 +99,13 @@ export function validateUpdateSecretInput(body: unknown): Validation<UpdateSecre
 
   if (record.secretValue !== undefined) {
     const value = validateSecretValue(record.secretValue);
-    if (!value.ok) return value;
+    if (!value.ok) return { ok: false, error: value.error };
     patch.secretValue = value.value;
   }
 
   if (record.environment !== undefined) {
     const environment = validateSecretEnvironment(record.environment);
-    if (!environment.ok) return environment;
+    if (!environment.ok) return { ok: false, error: environment.error };
     patch.environment = environment.value;
   }
 

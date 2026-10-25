@@ -214,12 +214,12 @@ test("a missing or malformed encryption key is a truthful configuration failure"
 
   const malformed = projectSecretsCryptoConfig({
     [PROJECT_SECRETS_ENCRYPTION_KEY_ENV]: "not-base64",
-  } as NodeJS.ProcessEnv);
+  } as unknown as NodeJS.ProcessEnv);
   assert.equal(malformed.ok, false);
 
   const valid = projectSecretsCryptoConfig({
     [PROJECT_SECRETS_ENCRYPTION_KEY_ENV]: KEY.toString("base64"),
-  } as NodeJS.ProcessEnv);
+  } as unknown as NodeJS.ProcessEnv);
   assert.equal(valid.ok, true);
 });
 
