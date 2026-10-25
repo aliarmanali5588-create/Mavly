@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useState } from "react";
 import type { RefObject } from "react";
 import { Monitor, Archive } from "lucide-react";
@@ -87,7 +88,15 @@ export function PreviewPanel({ previewUrl, onRefresh, loading, mobilePreview = f
                 iframeLoading ? "opacity-100" : "pointer-events-none opacity-0"
               }`}
             >
-              <span className="preview-loader-ring" />
+              <span className="preview-frame-loading-mark">
+                <Image
+                  src="/logo/Mavly.png"
+                  alt=""
+                  width={30}
+                  height={30}
+                  className="h-full w-full object-contain"
+                />
+              </span>
               <span className="sr-only">Loading website preview</span>
             </div>
             <iframe

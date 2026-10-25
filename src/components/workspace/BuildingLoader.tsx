@@ -54,66 +54,47 @@ export function BuildingLoader({
           data-retrying={retrying || undefined}
           aria-hidden="true"
         >
-          <div className="preview-assembly-browser">
-            <div className="preview-assembly-chrome">
-              <span className="preview-assembly-window-dots">
+          <div className="preview-canvas">
+            <div className="preview-canvas-header preview-assembly-piece">
+              <span className="preview-canvas-wordmark" />
+              <span className="preview-canvas-navigation">
                 <i />
                 <i />
                 <i />
               </span>
-              <span className="preview-assembly-address">
-                <span />
-              </span>
-              <span className="preview-assembly-menu">
-                <i />
-                <i />
-              </span>
+              <span className="preview-canvas-action" />
             </div>
-            <div className="preview-assembly-page">
-              <div className="preview-assembly-nav preview-assembly-piece">
-                <span className="preview-assembly-nav-brand" />
-                <span className="preview-assembly-nav-links">
-                  <i />
-                  <i />
-                  <i />
-                </span>
-                <span className="preview-assembly-nav-action" />
+            <div className="preview-canvas-hero">
+              <div className="preview-canvas-copy">
+                <span className="preview-canvas-kicker preview-assembly-piece" />
+                <span className="preview-canvas-heading preview-assembly-piece" />
+                <span className="preview-canvas-heading preview-canvas-heading-short preview-assembly-piece" />
+                <span className="preview-canvas-description preview-assembly-piece" />
+                <span className="preview-canvas-description preview-canvas-description-short preview-assembly-piece" />
+                <span className="preview-canvas-button preview-assembly-piece" />
               </div>
-              <div className="preview-assembly-hero">
-                <div className="preview-assembly-hero-copy">
-                  <span className="preview-assembly-eyebrow preview-assembly-piece" />
-                  <span className="preview-assembly-title preview-assembly-piece" />
-                  <span className="preview-assembly-title preview-assembly-title-short preview-assembly-piece" />
-                  <span className="preview-assembly-copy-line preview-assembly-piece" />
-                  <span className="preview-assembly-copy-line preview-assembly-copy-short preview-assembly-piece" />
-                  <span className="preview-assembly-cta preview-assembly-piece" />
-                </div>
-                <div className="preview-assembly-art preview-assembly-piece">
-                  <span className="preview-assembly-art-orbit" />
-                  <span className="preview-assembly-art-card preview-assembly-art-card-back" />
-                  <span className="preview-assembly-art-card preview-assembly-art-card-front">
-                    <i />
-                    <i />
-                    <i />
-                  </span>
-                  <span className="preview-assembly-art-spark preview-assembly-art-spark-one" />
-                  <span className="preview-assembly-art-spark preview-assembly-art-spark-two" />
-                </div>
+              <div className="preview-canvas-image preview-assembly-piece">
+                <span className="preview-canvas-image-outline" />
+                <span className="preview-canvas-image-detail" />
               </div>
-              <div className="preview-assembly-cards">
-                <span className="preview-assembly-card preview-assembly-piece">
+            </div>
+            <div className="preview-canvas-rule" />
+            <div className="preview-canvas-content">
+              <span className="preview-canvas-section-title preview-assembly-piece" />
+              <div className="preview-canvas-grid">
+                <span className="preview-canvas-card preview-assembly-piece">
                   <i />
                   <b />
                   <em />
                   <em />
                 </span>
-                <span className="preview-assembly-card preview-assembly-piece">
+                <span className="preview-canvas-card preview-assembly-piece">
                   <i />
                   <b />
                   <em />
                   <em />
                 </span>
-                <span className="preview-assembly-card preview-assembly-piece">
+                <span className="preview-canvas-card preview-assembly-piece">
                   <i />
                   <b />
                   <em />
@@ -121,7 +102,6 @@ export function BuildingLoader({
                 </span>
               </div>
             </div>
-            <span className="preview-assembly-light" />
           </div>
         </div>
 
