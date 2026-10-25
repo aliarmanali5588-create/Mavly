@@ -344,7 +344,7 @@ async function execute(input: RunAgentInput, run: RunRow, claimToken: string): P
         `Could not apply the generated deletions: ${deleted.error}`,
         before,
         baseline,
-        generated,
+        undefined,
         claimToken,
       );
       return;

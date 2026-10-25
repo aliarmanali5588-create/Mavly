@@ -79,7 +79,7 @@ export type AgentProgressEvent =
     }
   | {
       type: "retrying";
-      phase: "manifest" | "batch";
+      phase: "manifest" | "batch" | "repair";
       code: string;
       attempt: number;
       nextAttempt: number;
@@ -455,7 +455,7 @@ export async function generateApp(
         "The plan was valid but could not be saved. Nothing was changed.",
       );
     }
-    await emitProgress(input, {
+    await emitProgress(input.onProgress, {
       type: "manifest",
       fileCount: manifest.files.length,
       message: manifest.message,
@@ -521,7 +521,7 @@ export async function generateApp(
     if (isChatCompletionFailure(call) && call.code !== "EMPTY_COMPLETION") {
       const mapped = classifyProviderFailure(call);
 
-      if (mapped.code === "OUTPUT_LIMIT") {
+      if (call.code === "OUTPUT_LIMIT") {
         // The response is truncated. Nothing from it is used.
         if (requestedPaths.length > 1) {
           truncationRecoveries += 1;
@@ -534,7 +534,7 @@ export async function generateApp(
           const nextSize = Math.max(1, Math.floor(requestedPaths.length / 2));
           const split = splitGroup(group, nextSize);
           pending = [...split, ...pending];
-          await emitProgress(input, {
+          await emitProgress(input.onProgress, {
             type: "shrinking",
             phase: "batch",
             paths: requestedPaths,
@@ -549,7 +549,7 @@ export async function generateApp(
           compactRetried.add(singlePath);
           truncationRecoveries += 1;
           pending = [group, ...pending];
-          await emitProgress(input, {
+          await emitProgress(input.onProgress, {
             type: "shrinking",
             phase: "batch",
             paths: requestedPaths,
@@ -598,7 +598,7 @@ export async function generateApp(
       );
       if (isChatCompletionFailure(repaired)) {
         const mapped = classifyProviderFailure(repaired);
-        if (mapped.code === "OUTPUT_LIMIT") {
+        if (repaired.code === "OUTPUT_LIMIT") {
           return fail(
             "GENERATION_TRUNCATED",
             "The model hit its output limit while repairing a batch. Completed batches were saved; the project is incomplete.",
@@ -619,7 +619,7 @@ export async function generateApp(
         }
         const nextSize = Math.max(1, Math.floor(requestedPaths.length / 2));
         pending = [...splitGroup(group, nextSize), ...pending];
-        await emitProgress(input, {
+        await emitProgress(input.onProgress, {
           type: "shrinking",
           phase: "batch",
           paths: requestedPaths,
@@ -634,7 +634,7 @@ export async function generateApp(
         compactRetried.add(singlePath);
         truncationRecoveries += 1;
         pending = [group, ...pending];
-        await emitProgress(input, {
+        await emitProgress(input.onProgress, {
           type: "shrinking",
           phase: "batch",
           paths: requestedPaths,
@@ -770,7 +770,7 @@ async function planManifest(
 
   if (isChatCompletionFailure(call) && call.code !== "EMPTY_COMPLETION") {
     const mapped = classifyProviderFailure(call);
-    if (mapped.code === "OUTPUT_LIMIT") {
+    if (call.code === "OUTPUT_LIMIT") {
       return {
         ok: false,
         code: "GENERATION_TRUNCATED",
@@ -809,7 +809,7 @@ async function planManifest(
     );
     if (isChatCompletionFailure(repair)) {
       const mapped = classifyProviderFailure(repair);
-      if (mapped.code === "OUTPUT_LIMIT") {
+      if (repair.code === "OUTPUT_LIMIT") {
         return {
           ok: false,
           code: "GENERATION_TRUNCATED",
@@ -1112,7 +1112,7 @@ async function callModel(
   deadlineAt: number,
   now: () => number,
   onProgress?: AgentGenerationInput["onProgress"],
-  progressPhase: "manifest" | "batch" = phase === "manifest" ? "manifest" : "batch",
+  progressPhase: "manifest" | "batch" | "repair" = phase === "manifest" ? "manifest" : "batch",
 ): Promise<ChatCompletionResult> {
   const complete = deps.complete ?? chatCompletion;
 
