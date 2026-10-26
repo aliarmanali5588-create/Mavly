@@ -626,8 +626,14 @@ async function execute(
         message: `Could not apply the generated deletions: ${deleted.error}`,
         before,
         baseline,
+        /**
+         * The generation itself SUCCEEDED; only persisting the deletions failed.
+         * `failure` carries an `AgentGenerationFailure`, so passing the success
+         * outcome here would be a type lie. The code alone classifies this as a
+         * retryable persistence failure, matching the other persist-failure
+         * sites above.
+         */
         signals: { code: "GENERATION_PERSIST_FAILED" },
-        failure: generated,
       });
     }
   }

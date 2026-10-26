@@ -176,7 +176,13 @@ export async function runGenerationWorkerOnce(
     ownerId: project.data?.user_id ?? null,
     cohort: config.cohort,
   });
-  if (!verification.ok) {
+  /**
+   * `=== false`, not `!verification.ok`: with this project's
+   * `strictNullChecks: false`, the truthiness form does not narrow the union, so
+   * `verification.reason` below would be a type error. The explicit literal
+   * comparison narrows (the same pattern as `design.ok === false` above).
+   */
+  if (verification.ok === false) {
     await abandonClaim(client, job, config, verification.reason);
     return { status: "skipped", runId: job.runId, reason: verification.reason, recovered };
   }
