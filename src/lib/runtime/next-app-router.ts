@@ -12,6 +12,8 @@
 
 import {
   DEFAULT_NODE_IMAGE,
+  RUNTIME_HEALTH_PATH,
+  RUNTIME_PORT,
   type RuntimeResolution,
   type SourceFile,
 } from "./profile";
@@ -29,6 +31,13 @@ const APP_ROUTER_ENTRIES = {
 
 /** The only accepted build script, after whitespace normalization. */
 const ACCEPTED_BUILD_SCRIPT = "next build";
+
+/**
+ * The production start script. An absent script means the Next.js default;
+ * anything other than this exact text is refused rather than executed, so a
+ * generated manifest cannot smuggle an arbitrary command into the runtime.
+ */
+const ACCEPTED_START_SCRIPT = "next start";
 
 /** Accepted `packageManager` values. npm is the only supported installer. */
 const ACCEPTED_PACKAGE_MANAGER = /^npm@\d+(?:\.\d+)*(?:\+.*)?$/;
@@ -97,6 +106,20 @@ export function planNextAppRouter(files: readonly SourceFile[]): RuntimeResoluti
     return unsupported(
       "The package.json build script is not the supported `next build` command.",
       [`Found: ${buildScript.slice(0, 200)}`],
+    );
+  }
+
+  /**
+   * The start script is checked but never executed. The runtime command below
+   * is the fixed binary invocation; this check only prevents a manifest from
+   * claiming a different production server while verification pretends to
+   * exercise it.
+   */
+  const startScript = (manifest.scripts.start ?? "").replace(/\s+/g, " ").trim();
+  if (startScript && startScript !== ACCEPTED_START_SCRIPT) {
+    return unsupported(
+      "The package.json start script is not the supported `next start` command.",
+      [`Found: ${startScript.slice(0, 200)}`],
     );
   }
 

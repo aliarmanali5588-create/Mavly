@@ -115,7 +115,13 @@
       "Bash(git diff -- package.json && git diff -- src/lib/mavly/run-agent.ts | head -120)",
       "Bash(grep -n \"baseline\" src/lib/mavly/run-agent.ts | head -40)",
       "Bash(git status --short && echo \"---BRANCH---\" && git branch --show-current && echo \"---HEAD---\" && git log -1 --oneline && echo \"---UNTRACKED-M18---\" && ls -l supabase/migrations/18_admin_allowlist.sql 2>/dev/null || true)",
-      "Bash(grep -n \"app/layout\\\\|app/page\\\\|preview.html\\\\|preview\" src/lib/ai/agent.ts src/lib/mavly/run-agent.ts | head -60)"
+      "Bash(grep -n \"app/layout\\\\|app/page\\\\|preview.html\\\\|preview\" src/lib/ai/agent.ts src/lib/mavly/run-agent.ts | head -60)",
+      "Bash(curl -sS https://unpkg.com/@vercel/sandbox@3.5.0/dist/sandbox.d.ts | grep -nE \"static \\(create|get\\)|runCommand|domain|ports|stop\\\\\\(|delete\\\\\\(|getCommand|extendTimeout|class Sandbox\" | head -120)",
+      "Bash(curl -sS https://unpkg.com/@vercel/sandbox@3.5.0/dist/session.d.ts | grep -nE \"interface RunCommandParams|timeoutMs|detached|stdout|stderr|env\\\\?\" | head -60; echo \"---\"; curl -sS https://unpkg.com/@vercel/sandbox@3.5.0/dist/session.d.ts | sed -n '1,140p')",
+      "Bash(rg -n '\"start\"|next start|\"build\": \"next build\"' src/lib/ai src/lib/mavly src/lib --glob '!*.test.*' | head -50)",
+      "Bash(rg -n \"scripts\" src/lib/ai src/lib/mavly --glob '*.ts' | head -20; rg -n \"next dev|next start|\\\\\"dev\\\\\"\" src/lib/ai src/lib/mavly --glob '*.ts' | head -30)",
+      "Bash(rg -n \"export interface ChatCompletion|export type ChatCompletion|costUsd|usage|model\" src/lib/ai/groq.ts | head -60; rg -n \"export function resolveModel|task\" src/lib/ai/models.ts | head -30)",
+      "Bash(ls tests | head -60; ls docs/architecture docs/runbooks)"
     ]
   }
 }

@@ -39,6 +39,19 @@ export interface RuntimePlan {
   /** The exact package.json build script that was accepted. */
   buildScript: string;
   lockfile: "npm" | null;
+
+  /**
+   * The production start command, derived only from the fixed profile — never
+   * from an arbitrary generated `start` script. It binds loopback so the
+   * runtime is unreachable from outside the microVM.
+   */
+  runtime: RuntimeCommand;
+  /** The accepted `start` script text, or null when the default applies. */
+  startScript: string | null;
+  /** Loopback port. Fixed per profile; never taken from the manifest. */
+  runtimePort: number;
+  /** The only path health-checked, always a constant. */
+  runtimeHealthPath: string;
 }
 
 export type RuntimeFailureCode = "unsupported_runtime" | "invalid_manifest" | "invalid_lockfile";
@@ -59,3 +72,11 @@ export const SUPPORTED_NODE_IMAGES = [
 ] as const;
 
 export const DEFAULT_NODE_IMAGE = "vercel/sandbox/node:22";
+
+/**
+ * The runtime's fixed loopback port and health path. Both are profile
+ * constants, not manifest values, so a generated project cannot point the
+ * health check at another host, port or path.
+ */
+export const RUNTIME_PORT = 3000;
+export const RUNTIME_HEALTH_PATH = "/";
