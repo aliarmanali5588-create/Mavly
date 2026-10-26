@@ -806,8 +806,8 @@ export default function DashboardPage({ profile }: { profile: ProfileSummary }) 
               </h1>
               {!hasProjects && <p className="text-gray-500 max-w-md mx-auto mt-2 text-sm">Describe your app and AI will build it in minutes.</p>}
             </div>
-            <div className="relative bg-white rounded-2xl sm:rounded-3xl shadow-[0_8px_30px_rgba(0,0,0,0.04),0_2px_8px_rgba(0,0,0,0.02)] border border-black/[0.08] overflow-hidden transition-all duration-200 focus-within:border-black/20 focus-within:shadow-[0_12px_36px_rgba(0,0,0,0.06)]">
-              <div role="group" aria-label="Build mode" className="inline-flex max-w-full gap-1 rounded-xl bg-gray-100 p-1 mx-2 mt-4 sm:mx-5">
+            <div className="mb-2 px-4 sm:px-5">
+              <div role="group" aria-label="Build mode" className="inline-flex max-w-full gap-1 rounded-xl bg-gray-100 p-1">
                 <button
                   type="button"
                   aria-pressed={promptMode === "website"}
@@ -835,6 +835,8 @@ export default function DashboardPage({ profile }: { profile: ProfileSummary }) 
                   <span className="truncate">Android App</span>
                 </button>
               </div>
+            </div>
+            <div className="relative bg-white rounded-2xl sm:rounded-3xl shadow-[0_8px_30px_rgba(0,0,0,0.04),0_2px_8px_rgba(0,0,0,0.02)] border border-black/[0.08] overflow-hidden transition-all duration-200 focus-within:border-black/20 focus-within:shadow-[0_12px_36px_rgba(0,0,0,0.06)]">
               <div className="relative">
                 <textarea
                   ref={heroTextareaRef}

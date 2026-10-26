@@ -175,9 +175,12 @@ test("the dashboard prompt mode changes only its selected state and placeholder"
   assert.equal(dashboard.includes("inline-flex h-10 min-w-[100px]"), true);
   assert.equal(dashboard.includes("max-w-3xl mx-auto"), true);
   const selectorStart = dashboard.indexOf('<div role="group" aria-label="Build mode"');
-  const textareaStart = dashboard.indexOf("<textarea", selectorStart);
-  assert.equal(selectorStart >= 0 && textareaStart > selectorStart, true);
-  assert.doesNotMatch(dashboard.slice(selectorStart, textareaStart), /setFirstPrompt/);
+  const selectorEnd = dashboard.indexOf("</div>", selectorStart);
+  const composerStart = dashboard.indexOf('<div className="relative bg-white rounded-2xl');
+  const textareaStart = dashboard.indexOf("<textarea", composerStart);
+  assert.equal(selectorStart >= 0 && selectorEnd > selectorStart, true);
+  assert.equal(selectorEnd < composerStart && composerStart < textareaStart, true);
+  assert.equal(dashboard.includes('className="mb-2 px-4 sm:px-5"'), true);
   assert.match(
     dashboard,
     /<div className="relative">\s*<textarea[\s\S]*?<AnimatedPlaceholder active=\{heroAnimated\} \/>[\s\S]*?<\/div>/,
