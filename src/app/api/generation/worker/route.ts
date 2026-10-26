@@ -58,6 +58,7 @@ function publicResult(result: WorkerTickResult): Record<string, unknown> {
       : {}),
     ...(result.reason ? { reason: result.reason } : {}),
     ...(result.recovered !== undefined ? { recovered: result.recovered } : {}),
+    ...(result.verification ? { verification: result.verification } : {}),
   };
 }
 

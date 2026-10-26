@@ -83,7 +83,8 @@ import {
 } from "@/lib/generation/state-machine";
 import { retryDelaySeconds, WORKER_LEASE_SECONDS } from "@/lib/generation/leases";
 import { reportedCostOf } from "@/lib/observability/cost";
-import { emitGenerationEvent } from "@/lib/observability/events";
+import { emitGenerationEvent, emitVerificationEvent } from "@/lib/observability/events";
+import { maybeEnqueueVerification } from "@/lib/sandbox/enqueue";
 
 /**
  * Present only when the durable worker claimed this run. The worker has no user
@@ -674,8 +675,9 @@ async function complete(
   const diff = diffSource(before, after);
   const changed = !diff.unchanged;
 
+  let resultSnapshot: SnapshotSummary | null = null;
   if (changed) {
-    await captureResult(
+    resultSnapshot = await captureResult(
       input,
       guard.client,
       after,
@@ -737,7 +739,51 @@ async function complete(
     costKnown: cost.known,
   });
 
+  await handOffVerification(input, guard, resultSnapshot ?? baseline);
+
   return { status: "completed", runId: input.runId };
+}
+
+/**
+ * Hand the completed source to the durable verification queue.
+ *
+ * ⚠️ THE COMPARISON POINT IS THE STATE THIS RUN PRODUCED. A changed run hands
+ * off its result snapshot; an unchanged run hands off the baseline, which is
+ * the same content the run started with. With no usable snapshot there is
+ * nothing immutable to verify, so nothing is enqueued.
+ *
+ * ⚠️ ONLY THE WORKER HAND-OFF EXISTS. Inline runs have no durable worker to
+ * advance a verification, so enqueueing one would leave a row that never runs.
+ */
+async function handOffVerification(
+  input: RunAgentInput,
+  guard: RunGuard,
+  snapshot: SnapshotSummary | null,
+): Promise<void> {
+  if (!input.worker) return;
+
+  if (!snapshot) {
+    emitVerificationEvent("verification.enqueue_skipped", {
+      traceId: guard.traceId,
+      runId: input.runId,
+      projectId: input.projectId,
+      reason: "no_snapshot",
+    });
+    return;
+  }
+
+  /**
+   * A verification failure of any kind is reported as an event and never
+   * changes the run's completed status.
+   */
+  await maybeEnqueueVerification({
+    client: input.worker.client,
+    projectId: input.projectId,
+    runId: input.runId,
+    snapshotId: snapshot.id,
+    sourceHash: snapshot.sourceHash,
+    traceId: guard.traceId,
+  });
 }
 
 /**
@@ -1112,7 +1158,7 @@ async function captureResult(
   files: readonly SnapshotFile[],
   changedPaths: readonly string[],
   description: string,
-): Promise<void> {
+): Promise<SnapshotSummary | null> {
   const snapshot = await createSnapshot(
     {
       userId: input.userId,
@@ -1128,7 +1174,9 @@ async function captureResult(
 
   if (isSnapshotFailure(snapshot)) {
     console.error("[mavly] result snapshot failed:", snapshot.error);
+    return null;
   }
+  return snapshot.data;
 }
 
 function parseManifest(value: unknown): AgentManifest | null {

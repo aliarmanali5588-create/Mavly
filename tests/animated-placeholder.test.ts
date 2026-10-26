@@ -163,6 +163,21 @@ test("the chatbox still has its real controls", () => {
   assert.equal(dashboard.includes("openBuildModal"), true);
 });
 
+test("the dashboard prompt mode changes only its selected state and placeholder", () => {
+  assert.equal(dashboard.includes('useState<"website" | "android">("website")'), true);
+  assert.equal(dashboard.includes('aria-label="Build mode"'), true);
+  assert.equal(dashboard.includes('aria-pressed={promptMode === "website"}'), true);
+  assert.equal(dashboard.includes('aria-pressed={promptMode === "android"}'), true);
+  assert.equal(dashboard.includes('setPromptMode("website")'), true);
+  assert.equal(dashboard.includes('setPromptMode("android")'), true);
+  assert.equal(dashboard.includes("Describe the website you want to build..."), true);
+  assert.equal(dashboard.includes("Describe the Android app you want to build..."), true);
+  const launchStart = dashboard.indexOf("const launched = await vcaasApi.projects.launch({");
+  const launchEnd = dashboard.indexOf("\n      });", launchStart);
+  assert.equal(launchStart >= 0 && launchEnd > launchStart, true);
+  assert.doesNotMatch(dashboard.slice(launchStart, launchEnd), /promptMode/);
+});
+
 test("Enter in the chatbox goes through the submit helper", () => {
   assert.equal(dashboard.includes("shouldSubmitPrompt(e.key, e.shiftKey)"), true);
 });

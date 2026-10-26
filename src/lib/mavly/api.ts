@@ -31,6 +31,7 @@ import type {
   ProjectLaunchResult,
   ProjectSnapshot,
   ProjectSnapshotDetail,
+  ProjectVerification,
   RestoreResult,
   VcaasProject,
   VcaasProjectSummary,
@@ -122,6 +123,14 @@ import {
   rotateApiKey,
   type ProjectApiKeyServiceFailure,
 } from "@/lib/project-api-keys/service";
+
+import {
+  cancelVerification,
+  getVerificationForRun,
+} from "@/lib/sandbox/store";
+import { verificationSandboxConfig } from "@/lib/sandbox/config";
+import type { VerificationResult } from "@/lib/sandbox/state";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 const NO_STORE = { "cache-control": "private, no-store, max-age=0" } as const;
 const RUN_STALE_MS = 10 * 60_000;
@@ -992,6 +1001,23 @@ async function cancelAgentResponse(userId: string, projectId: string): Promise<N
   }
 
   if (!isRunActive(run)) {
+    /**
+     * A completed run may still have an isolated build in flight. Cancelling it
+     * is the only way a user can stop that work, so `agent/stop` covers it
+     * instead of reporting "not in progress" while a sandbox is still running.
+     */
+    const verification = await cancelVerificationForRun(
+      projectId,
+      run?.id ?? current.data.id,
+    );
+    if (verification === "cancelled") {
+      return ok({
+        runId: run?.id ?? current.data.id,
+        status: run?.stage ?? "completed",
+        stage: run?.stage ?? "completed",
+        verificationCancelled: true,
+      });
+    }
     return fail(409, "RUN_NOT_ACTIVE", "That run is not in progress.");
   }
 
@@ -1029,6 +1055,59 @@ async function cancelAgentResponse(userId: string, projectId: string): Promise<N
   return ok({ runId: run.id, status: "cancelled", stage: "cancelled" });
 }
 
+/** Verification rows exist only when this deployment targeted the project. */
+function verificationCohortCovers(projectId: string): boolean {
+  const config = verificationSandboxConfig();
+  return config.requested && config.cohort.includes(projectId.toLowerCase());
+}
+
+async function cancelVerificationForRun(
+  projectId: string,
+  runId: string,
+): Promise<"cancelled" | "none" | "already_terminal" | null> {
+  if (!verificationCohortCovers(projectId)) return null;
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) return null;
+  const result = await cancelVerification(supabase, projectId, runId);
+  return result.ok ? result.status : null;
+}
+
+async function readVerification(
+  projectId: string,
+  runId: string,
+): Promise<ProjectVerification | undefined> {
+  if (!verificationCohortCovers(projectId)) return undefined;
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) return undefined;
+  const result = await getVerificationForRun(supabase, projectId, runId);
+  return result ? toPublicVerification(result) : undefined;
+}
+
+/** Drop the provider resource reference and Mavly row id from the read model. */
+function toPublicVerification(result: VerificationResult): ProjectVerification {
+  return {
+    status: result.status,
+    stage: result.stage,
+    runId: result.runId,
+    snapshotId: result.snapshotId,
+    attempt: result.attempt,
+    maxAttempts: result.maxAttempts,
+    provider: result.provider,
+    startedAt: result.startedAt,
+    finishedAt: result.finishedAt,
+    enqueuedAt: result.enqueuedAt,
+    stageStartedAt: result.stageStartedAt,
+    exitCode: result.exitCode,
+    errorClass: result.errorClass,
+    summary: result.summary,
+    diagnostics: result.diagnostics,
+    diagnosticsTruncated: result.diagnosticsTruncated,
+    cleanupComplete: result.cleanupComplete,
+    partial: result.partial,
+    correlationId: result.correlationId,
+  };
+}
+
 async function agentStatusResponse(projectId: string): Promise<NextResponse> {
   const latest = await latestRun(projectId);
   if (isStoreFailure(latest)) return fail(500, "UNKNOWN", "Could not load the agent status.");
@@ -1054,6 +1133,9 @@ async function agentStatusResponse(projectId: string): Promise<NextResponse> {
   const status = isRunActive(run) ? "init" : "done";
   const stage = stageOf(run);
   const manifest = parseManifestFileCount(run.generation_manifest);
+  const verification = isRunActive(run)
+    ? undefined
+    : await readVerification(projectId, run.id);
   return ok({
     projectId,
     status,
@@ -1088,6 +1170,7 @@ async function agentStatusResponse(projectId: string): Promise<NextResponse> {
       totalTokens: run.total_tokens,
       reasoningTokens: run.reasoning_tokens,
     },
+    ...(verification ? { verification } : {}),
   } satisfies AgentStatus);
 }
 

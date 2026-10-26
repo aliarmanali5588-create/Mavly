@@ -26,7 +26,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import {
   Plus, Loader2, Trash2, Send, Paperclip, X, ArrowRight, Copy, Upload, Download,
   Search, LayoutGrid, Table as TableIcon, ArrowUpDown, ChevronLeft, ChevronRight,
-  AlertCircle, MoreVertical, AlertTriangle, Monitor,
+  AlertCircle, MoreVertical, AlertTriangle, Monitor, Globe, Smartphone,
 } from "lucide-react";
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
@@ -264,6 +264,7 @@ export default function DashboardPage({ profile }: { profile: ProfileSummary }) 
 
   // First-prompt "Build" flow
   const [firstPrompt, setFirstPrompt] = useState("");
+  const [promptMode, setPromptMode] = useState<"website" | "android">("website");
   const [attachedFiles, setAttachedFiles] = useState<{ name: string; imageDescription: string; file: File }[]>([]);
   const [uploading, setUploading] = useState(false);
   const heroTextareaRef = useRef<HTMLTextAreaElement>(null);
@@ -314,7 +315,7 @@ export default function DashboardPage({ profile }: { profile: ProfileSummary }) 
   }, [firstPrompt]);
 
   /** The animation only runs while the box is empty and nobody is typing in it. */
-  const heroAnimated = shouldAnimatePlaceholder(firstPrompt, heroFocused);
+  const heroAnimated = promptMode === "website" && shouldAnimatePlaceholder(firstPrompt, heroFocused);
 
   /**
    * ═══⭐ "NEW PROJECT" FOCUSES THE BOX — IT DOES NOT OPEN A FORM ═══════════════
@@ -806,13 +807,45 @@ export default function DashboardPage({ profile }: { profile: ProfileSummary }) 
               {!hasProjects && <p className="text-gray-500 max-w-md mx-auto mt-2 text-sm">Describe your app and AI will build it in minutes.</p>}
             </div>
             <div className="relative bg-white rounded-2xl sm:rounded-3xl shadow-[0_8px_30px_rgba(0,0,0,0.04),0_2px_8px_rgba(0,0,0,0.02)] border border-black/[0.08] overflow-hidden transition-all duration-200 focus-within:border-black/20 focus-within:shadow-[0_12px_36px_rgba(0,0,0,0.06)]">
+              <div role="group" aria-label="Build mode" className="grid grid-cols-2 gap-2 px-5 pt-4 pb-1">
+                <button
+                  type="button"
+                  aria-pressed={promptMode === "website"}
+                  onClick={() => setPromptMode("website")}
+                  className={`inline-flex min-w-0 items-center justify-center gap-2 rounded-xl border px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
+                    promptMode === "website"
+                      ? "border-gray-900 bg-gray-900 text-white shadow-sm"
+                      : "border-black/[0.06] bg-gray-50 text-gray-600 hover:border-black/[0.12] hover:bg-gray-100 hover:text-gray-900"
+                  }`}
+                >
+                  <Globe className="h-4 w-4 shrink-0" aria-hidden="true" />
+                  <span className="truncate">Website</span>
+                </button>
+                <button
+                  type="button"
+                  aria-pressed={promptMode === "android"}
+                  onClick={() => setPromptMode("android")}
+                  className={`inline-flex min-w-0 items-center justify-center gap-2 rounded-xl border px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
+                    promptMode === "android"
+                      ? "border-gray-900 bg-gray-900 text-white shadow-sm"
+                      : "border-black/[0.06] bg-gray-50 text-gray-600 hover:border-black/[0.12] hover:bg-gray-100 hover:text-gray-900"
+                  }`}
+                >
+                  <Smartphone className="h-4 w-4 shrink-0" aria-hidden="true" />
+                  <span className="truncate">Android App</span>
+                </button>
+              </div>
               <textarea
                 ref={heroTextareaRef}
                 value={firstPrompt}
                 onChange={(e) => setFirstPrompt(e.target.value)}
                 onFocus={() => setHeroFocused(true)}
                 onBlur={() => setHeroFocused(false)}
-                placeholder="Describe your app... e.g. 'A project management tool with kanban boards'"
+                placeholder={
+                  promptMode === "website"
+                    ? "Describe the website you want to build..."
+                    : "Describe the Android app you want to build..."
+                }
                 className="w-full min-h-[90px] sm:min-h-[110px] resize-none text-[15px] p-5 pb-2 outline-none placeholder:text-gray-400 bg-transparent"
                 onKeyDown={(e) => {
                   // Enter submits, Shift+Enter is a newline (the box is a textarea).

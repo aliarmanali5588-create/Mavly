@@ -461,6 +461,61 @@ export interface ConversationHistory {
   hasMore?: boolean;
 }
 
+/**
+ * ═══ VERIFICATION (Phase 3) ═════════════════════════════════════════════════
+ *
+ * Whether the generated source was built inside an isolated sandbox. `passed`
+ * means the production build exited 0 — not that a preview was reached, served
+ * or deployed. Absent from `AgentStatus` means no verification was enqueued for
+ * this run (feature off, outside the cohort, or no snapshot).
+ */
+export type ProjectVerificationStatus =
+  | "pending"
+  | "running"
+  | "passed"
+  | "failed"
+  | "timed_out"
+  | "cancelled"
+  | "unsupported_runtime"
+  | "configuration_error"
+  | "infrastructure_error";
+
+export type ProjectVerificationStage =
+  | "queued"
+  | "preparing"
+  | "installing"
+  | "building"
+  | "passed"
+  | "failed"
+  | "timed_out"
+  | "cancelled"
+  | "unsupported_runtime"
+  | "configuration_error"
+  | "infrastructure_error";
+
+export interface ProjectVerification {
+  status: ProjectVerificationStatus;
+  stage: ProjectVerificationStage;
+  runId: string;
+  snapshotId: string;
+  attempt: number;
+  maxAttempts: number;
+  provider: "vercel" | "e2b" | null;
+  startedAt: string | null;
+  finishedAt: string | null;
+  enqueuedAt: string | null;
+  stageStartedAt: string | null;
+  exitCode: number | null;
+  errorClass: string | null;
+  summary: string | null;
+  diagnostics: string[];
+  diagnosticsTruncated: boolean;
+  cleanupComplete: boolean;
+  /** Terminal, but a non-essential part (e.g. full logs) was unavailable. */
+  partial: boolean;
+  correlationId: string | null;
+}
+
 export interface AgentStatus {
   projectId: string;
   status: "init" | "done" | "idle";
@@ -501,6 +556,8 @@ export interface AgentStatus {
     totalTokens: number | null;
     reasoningTokens: number | null;
   };
+  /** Present only when a verification exists for this run. */
+  verification?: ProjectVerification;
 }
 
 /**

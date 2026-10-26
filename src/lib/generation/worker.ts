@@ -35,7 +35,8 @@ import {
   scheduleGenerationRetry,
 } from "@/lib/mavly/store";
 import { createSupabaseWorkerClient } from "@/lib/supabase/worker";
-import { emitGenerationEvent } from "@/lib/observability/events";
+import { emitGenerationEvent, emitVerificationEvent } from "@/lib/observability/events";
+import { runVerificationTick } from "@/lib/sandbox/verification";
 import {
   LEASE_RENEW_INTERVAL_MS,
   WORKER_LEASE_SECONDS,
@@ -69,6 +70,17 @@ export interface WorkerTickResult {
   retryAfterSeconds?: number;
   reason?: string;
   recovered?: number;
+  /** Present only when this tick advanced the verification queue instead. */
+  verification?: WorkerVerificationSummary;
+}
+
+export interface WorkerVerificationSummary {
+  status: string;
+  verificationId?: string;
+  outcome?: string;
+  reason?: string;
+  recovered?: number;
+  cleaned?: number;
 }
 
 export interface WorkerTickOptions {
@@ -135,7 +147,17 @@ export async function runGenerationWorkerOnce(
       workerId: config.workerId,
       recovered,
     });
-    return { status: "empty", recovered };
+    /**
+     * No generation job is ready, so this invocation advances at most one
+     * verification. Running it only here keeps Phase 2's claim order intact;
+     * a busy generation queue delays verification, it never preempts it.
+     */
+    const verification = await runVerificationSafely(client, config.workerId);
+    return {
+      status: "empty",
+      recovered,
+      ...(verification ? { verification } : {}),
+    };
   }
   if (parsed.status === "dead_letter") {
     emitGenerationEvent("generation.dead_letter", {
@@ -234,6 +256,31 @@ export async function runGenerationWorkerOnce(
     ...(outcome.status === "skipped" ? { reason: outcome.reason } : {}),
     recovered,
   };
+}
+
+/**
+ * Advance the verification queue, if it is configured at all. A verification
+ * failure is never a generation failure, and never changes this tick's status.
+ */
+async function runVerificationSafely(
+  client: SupabaseClient,
+  workerId: string,
+): Promise<WorkerVerificationSummary | null> {
+  try {
+    const tick = await runVerificationTick({ client, workerId });
+    if (tick.status === "unavailable" && tick.reason === "disabled") return null;
+    return {
+      status: tick.status,
+      ...(tick.verificationId ? { verificationId: tick.verificationId } : {}),
+      ...(tick.outcome ? { outcome: tick.outcome } : {}),
+      ...(tick.reason ? { reason: tick.reason } : {}),
+      ...(tick.recovered !== undefined ? { recovered: tick.recovered } : {}),
+      ...(tick.cleaned !== undefined ? { cleaned: tick.cleaned } : {}),
+    };
+  } catch {
+    emitVerificationEvent("verification.error", { workerId, reason: "unhandled_tick" });
+    return { status: "error", reason: "unhandled" };
+  }
 }
 
 /**

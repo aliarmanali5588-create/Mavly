@@ -21,11 +21,13 @@
  * `public.projects`, exactly like `project_files` and `project_messages`.
  */
 
-import { createHash } from "node:crypto";
-
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+
+import { hashSource } from "./source-hash";
+
+export { hashSource };
 
 /** One file of a project, as stored in `project_files` and in a snapshot. */
 export interface SnapshotFile {
@@ -91,25 +93,6 @@ export interface SourceDiff {
 
 const SNAPSHOT_SELECT =
   "id,project_id,user_id,run_id,kind,description,source_hash,file_count,changed_paths,status,restored_at,restore_of_snapshot_id,created_at";
-
-/**
- * A stable hash of a whole source state.
- *
- * ⚠️ THE PATHS ARE PART OF THE HASH, and they are sorted first: the hash must
- * answer "is this the same source?", and two projects whose files were written
- * in a different order are the same source.
- */
-export function hashSource(files: readonly SnapshotFile[]): string {
-  const hash = createHash("sha256");
-  const ordered = [...files].sort((a, b) => a.path.localeCompare(b.path));
-  for (const file of ordered) {
-    hash.update(file.path);
-    hash.update("\u0000");
-    hash.update(file.content);
-    hash.update("\u0000");
-  }
-  return hash.digest("hex");
-}
 
 /** The difference between two source states. */
 export function diffSource(
@@ -314,8 +297,9 @@ export async function listSnapshots(
 export async function getSnapshot(
   projectId: string,
   snapshotId: string,
+  injected?: SupabaseClient | null,
 ): Promise<SnapshotResult<SnapshotWithFiles>> {
-  const supabase = await createSupabaseServerClient();
+  const supabase = injected ?? (await createSupabaseServerClient());
   if (!supabase) {
     return { ok: false, error: "Supabase is not configured", code: "store_unavailable" };
   }

@@ -1,7 +1,8 @@
 # Mavly — Clean Backend Baseline
 
 **Status:** local AI builder, Phase 1 user-owned Supabase connection, an off-by-default
-static-publishing path, and an off-by-default durable generation worker implemented; the
+static-publishing path, an off-by-default durable generation worker, and an off-by-default
+isolated verification sandbox implemented; the
 rest of the platform backend remains unavailable.
 **Scope:** the Totalum VCaaS integration stays removed. Supabase authentication, OAuth,
 sessions, project ownership and RLS are preserved. Groq is the active server-only
@@ -28,6 +29,7 @@ revocation or database mutation was performed while preparing this document.
 | Project CRUD | Create/list/launch/get/update/delete, stored in Supabase. |
 | AI generation | `src/lib/mavly/run-agent.ts` → `src/lib/ai/agent.ts` → `src/lib/ai/provider.ts` → `src/lib/ai/groq.ts`. The default execution path is still the inline `after()` run; a durable worker is available opt-in per project cohort. |
 | Durable generation worker (opt-in) | Off unless `MAVLY_GENERATION_WORKER_ENABLED`, a ≥32-char `MAVLY_GENERATION_WORKER_SECRET`, an explicit `MAVLY_GENERATION_WORKER_PROJECTS` cohort, `SUPABASE_SERVICE_ROLE_KEY` and the Supabase URL are all configured. Admission records `dispatch_mode`; only worker-dispatched runs are claimed. An operator-supplied scheduler calls `/api/generation/worker`, which executes one job per tick under a fenced lease, renews it, recovers expired leases into bounded retries or dead letters, and never deletes accepted work. Uncohort projects remain inline. See `docs/runbooks/generation-worker.md`. |
+| Verification sandbox (opt-in) | Off unless `MAVLY_VERIFICATION_SANDBOX_ENABLED`, an explicit `MAVLY_VERIFICATION_SANDBOX_PROJECTS` cohort, a Vercel provider credential, `SUPABASE_SERVICE_ROLE_KEY` and the Supabase URL are all configured, and migration 17 is applied. Only worker-dispatched runs enqueue one verification per completed run and ready snapshot. Later worker ticks re-validate the snapshot, build it in an isolated Vercel Sandbox microVM (`npm install`, or `npm ci` when the snapshot has a valid npm lockfile, then `next build`), and record `passed` only for a zero exit. Stages run detached and are polled across ticks; every terminal path destroys the sandbox. Unsupported formats return `unsupported_runtime`. Status appears only in the existing authorized `agent/status` / `agent/stop` responses. See `docs/architecture/phase-3-verification-sandbox.md`. |
 | Generation preview | New-project plans always include `preview.html`; it is generated in its own batch. Batch parsing accepts only requested paths. Progress stages use durable run state, manifest/checkpoints, and the static-preview resolver; the UI uses an indeterminate bar rather than estimated completion percentages. |
 | Preserved provider | `src/lib/ai/openrouter.ts` and its model catalog remain available but are not used by active website-generation requests. |
 | Conversation and runs | Persisted in `project_messages` and `project_runs`, polled by the workspace. |
@@ -46,9 +48,10 @@ revocation or database mutation was performed while preparing this document.
 | `/api/config` | Still returns `{ ok: true, data: { configured: false } }`. |
 | Visual shell | Dashboard, workspace, chat, composer, dialogs and preview frame render. |
 
-Generated code is **never executed** on the Mavly server. There is no build sandbox. The
-generated backend exists only as source files; the preview is the standalone
-`preview.html` the model also returns.
+Generated code is **never executed** on the Mavly server. The only execution anywhere is
+the opt-in verification build inside an isolated provider microVM, which never runs on a
+Mavly host. The generated backend exists only as source files; the preview is the
+standalone `preview.html` the model also returns.
 
 Publishing does not change that rule. When enabled, the server uploads `index.html` (the
 preview bytes) and Vercel serves it as a static site with `framework: null`. Each publish
@@ -113,10 +116,35 @@ The admission RPC gains a `p_dispatch_mode` argument, so a run is either inline 
 before it exists and the two mechanisms never compete. Apply migration `16` after `10`
 (and after `14`/`15` when shared hosting is used) and before enabling the worker.
 
+`supabase/migrations/17_verification_sandbox.sql` adds the opt-in verification sandbox:
+
+- `project_verifications`, one row per generation run, linked to the owned project, run and
+  ready snapshot with its `source_hash`; statuses cover in-flight stages plus `passed`,
+  `failed`, `timed_out`, `cancelled`, `unsupported_runtime`, `configuration_error` and
+  `infrastructure_error`;
+- a fencing lease (`lease_token`, `lease_expires_at`, `worker_id`), attempt and hard
+  deadline, bounded/sanitized diagnostics, exit code and durable cleanup state;
+- `enqueue_verification` (service-role, idempotent on `run_id`, re-checks the completed run
+  and snapshot hash, bounded by 1 active per project / 2 per user / 8 global),
+  `claim_verification` (`FOR UPDATE SKIP LOCKED`, never starts a second sandbox),
+  fenced stage/renew/release RPCs, idempotent `complete_verification`,
+  `recover_expired_verification_leases`, bounded `claim_verification_cleanup` /
+  `mark_verification_cleanup`, and owner-only `cancel_verification`;
+- RLS: users may SELECT only their own rows through `projects` and may not INSERT/UPDATE/
+  DELETE; worker RPCs are executable only by `service_role`; lease tokens, worker ids and
+  raw provider sandbox ids are outside the authenticated column grant;
+- a `verification_schema_version()` preflight (returns 17).
+
+Apply migration `17` after `16` and before enabling verification. It is additive and does
+not modify `project_runs`, `project_files`, snapshots or hosting tables. A disabled or
+misconfigured deployment never enqueues work, and a missing marker fails closed.
+
 The app still uses the caller's own RLS-scoped Supabase client everywhere except the
 durable worker. `SUPABASE_SERVICE_ROLE_KEY` is server-only and is confined to
-`src/lib/supabase/worker.ts`, the worker orchestrator and `/api/generation/worker`; the
-worker re-verifies the project owner and cohort itself. RLS is unchanged.
+`src/lib/supabase/worker.ts`, the worker orchestrator, `/api/generation/worker` and the
+verification tick the worker invokes; the
+worker re-verifies the project owner and cohort itself. RLS is unchanged. Sandbox provider
+credentials are used only by the server-side adapter and are never uploaded into a sandbox.
 
 `supabase/migrations/04_supabase_integration.sql` adds:
 
@@ -373,11 +401,17 @@ with HTTP **503** and `cache-control: private, no-store, max-age=0`.
 4. The Groq and OpenRouter image URLs are constant. Route parameters only select a Supabase
    row after ownership is proved.
 5. Generated output is text. It is validated and stored; it is never imported, transpiled,
-   evaluated or executed.
+   evaluated or executed on a Mavly host. The only exception is the opt-in verification
+   build, which runs only inside an isolated provider microVM on a validated immutable
+   snapshot with restricted egress and no project/service credentials.
 6. The preview has a CSP `sandbox` without `allow-same-origin`, plus `default-src 'none'`,
    inline-only scripts/styles and `frame-ancestors 'self'`. It cannot act as the signed-in
    user.
-7. Child-table RLS requires an owned `public.projects` row. No privileged client is used.
+7. Child-table RLS requires an owned `public.projects` row. The only privileged client is
+   the durable worker's (`src/lib/supabase/worker.ts`), confined to the worker orchestrator,
+   `/api/generation/worker` and the verification tick it invokes. `project_verifications`
+   exposes only an owner SELECT policy and owner cancellation; all other mutations are
+   service-role RPCs.
 8. Mavly sign-in OAuth still sends no custom `state`, and its callback stays a bare
    `/auth/callback` with the destination in the `mavly_oauth_next` cookie.
 9. The user-owned Supabase integration uses its own `/auth/supabase/callback`. It verifies
@@ -409,6 +443,22 @@ with HTTP **503** and `cache-control: private, no-store, max-age=0`.
 - `src/lib/mavly/checkpoints.ts` — verification of resumed batch hashes.
 - `src/lib/mavly/api.ts` — implemented route handlers and response mapping.
 - `src/lib/mavly/snapshots.ts` — restore-point storage and the content hash.
+- `src/lib/runtime/` — generated-project runtime detection (App Router only), package
+  manifest validation and the bounded build plan.
+- `src/lib/sandbox/adapter.ts` — provider-neutral verification operations and typed
+  failures.
+- `src/lib/sandbox/vercel-sandbox.ts` — the Vercel Sandbox microVM adapter (upload,
+  detached commands, logs, destruction). `src/lib/sandbox/e2b.ts` is a typed
+  `not_implemented` stub; there is no local fallback.
+- `src/lib/sandbox/policy.ts` — snapshot/path/secret/hash validation, script safety,
+  egress allowlist and diagnostics redaction.
+- `src/lib/sandbox/state.ts` | `config.ts` | `store.ts` | `enqueue.ts` |
+  `verification.ts` — the public result model and budgets, opt-in configuration, fenced
+  persistence, idempotent enqueue and the bounded verification tick.
+- `supabase/migrations/17_verification_sandbox.sql` — verification table, leases, fenced
+  completion, recovery, orphan cleanup, owner cancellation and schema marker 17.
+- `docs/architecture/phase-3-verification-sandbox.md` and
+  `docs/runbooks/verification-sandbox.md` — design and operator runbook.
 - `src/lib/mavly/restore.ts` — the restore itself, with its recovery point.
 - `src/lib/integrations/github/` — the GitHub App client, the file policy and the
   store.
@@ -467,8 +517,17 @@ The Totalum client `src/lib/vcaas-server.ts` remains deleted and must not be rec
 - Migrations are not applied automatically. Apply `03_ai_builder.sql` before using the
   builder, `04_supabase_integration.sql` before using the Supabase connection,
   `07_project_deployments.sql`, `09_mavly_deployment_domains.sql` and
-  `13_deployment_unpublish.sql` before enabling publishing/unpublishing, and
+  `13_deployment_unpublish.sql` before enabling publishing/unpublishing,
+  `14_shared_hosting.sql` + `15_shared_hosting_attempt_state.sql` before enabling shared
+  hosting, `16_durable_generation_worker.sql` before enabling the durable worker,
+  `17_verification_sandbox.sql` (after 16) before enabling verification, and
   `08_figma_integration.sql` before using Figma.
+- The verification sandbox is off by default, applies only to worker-dispatched runs, and
+  is not proven against a live provider by this document. `passed` means the production
+  build exited `0`; it does not prove runtime correctness, backend execution, or a hosted
+  preview. Unsupported formats return `unsupported_runtime`. Wildcard/plan prerequisites
+  and cost limits remain operator decisions; see
+  `docs/runbooks/verification-sandbox.md`.
 - Publishing is disabled by default and publishes only the static preview. It does not
   build generated source, does not host generated APIs and does not provide
   customer-supplied custom domains. Each new publish does get a Mavly-owned
@@ -492,6 +551,12 @@ The Totalum client `src/lib/vcaas-server.ts` remains deleted and must not be rec
   is Vercel/Next.js `nodejs` with `after()` scheduling; this repository has no Supabase
   Edge Function or autonomous worker that needs the key. Configure it in Vercel Project
   Environment Variables and redeploy, and in local `.env.local` for development.
+- Verification requires the durable-worker prerequisites plus
+  `MAVLY_VERIFICATION_SANDBOX_ENABLED`, an explicit `MAVLY_VERIFICATION_SANDBOX_PROJECTS`
+  cohort, `MAVLY_VERIFICATION_SANDBOX_PROVIDER=vercel`, and either `VERCEL_OIDC_TOKEN` +
+  `VERCEL_PROJECT_ID` or the access-token triple `VERCEL_TOKEN` + `VERCEL_TEAM_ID` +
+  `VERCEL_PROJECT_ID`. All are server-only. A half-configured deployment disables
+  verification and leaves generation unchanged; `e2b` is not implemented.
 - Image generation is operator-cost-bearing but user-unbilled: it uses
   `OPENROUTER_API_KEY` and no credit policy exists to charge against. The restored
   OpenRouter chat client also reads that server key, but the active generation path never

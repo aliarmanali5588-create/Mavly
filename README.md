@@ -14,8 +14,10 @@ editor surfaces and settings dialogs of an AI app builder.
 > `index.html` / `public/index.html` and local assets. A user-owned Supabase account can
 > also be connected through OAuth to list and select one of its projects. An **opt-in,
 > off-by-default** publishing path can upload those static files to a Mavly-managed Vercel
-> account as a static site; it is not a dynamic backend host. Other platform features still return an
-> explicit `503 BACKEND_NOT_CONFIGURED`.
+> account as a static site; it is not a dynamic backend host. A separate **opt-in,
+> off-by-default** verification sandbox can run `next build` for a generated App Router
+> project inside an isolated Vercel microVM and report the real exit code. Other platform
+> features still return an explicit `503 BACKEND_NOT_CONFIGURED`.
 
 Read [`MAVLY_CLEAN_BASELINE.md`](MAVLY_CLEAN_BASELINE.md) for the authoritative record of
 what remains unavailable. The old Totalum integration is documented only in the historical
@@ -44,11 +46,13 @@ audits listed at the end of this file; it is not a runtime dependency.
 | Publishing (opt-in, disabled by default) | Static files → deterministic Vercel project, published at `<project-id>.mavly.xyz`; framework builds are not run. Deployment and domain state persisted and polled. **Unpublish** removes the Mavly project domain and production deployments, preserving the project/files for republishing. Requires `MAVLY_VERCEL_DEPLOYMENTS_ENABLED=1`, `VERCEL_API_TOKEN` and operator-configured `mavly.xyz` DNS/SSL. See [`MAVLY_VERCEL_DEPLOYMENTS.md`](MAVLY_VERCEL_DEPLOYMENTS.md). |
 | Shared tenant hosting (opt-in, off by default) | Immutable published versions stored in Supabase and served at `<project-id>.mavly.xyz` by Mavly's own tenant runtime. Enabled per project cohort with `MAVLY_HOSTING_MODE=shared` + `MAVLY_SHARED_HOSTING_PROJECTS`; the legacy Vercel path remains the default. See [`MAVLY_SHARED_HOSTING.md`](MAVLY_SHARED_HOSTING.md). |
 | Durable generation worker (opt-in, off by default) | A project-cohort worker claims durable runs with `FOR UPDATE SKIP LOCKED`, executes them under a fenced lease, renews the lease, recovers crashed/expired jobs into bounded retries or dead letters, and never deletes accepted work. Requires `MAVLY_GENERATION_WORKER_ENABLED`, a ≥32-char secret, an explicit cohort, `SUPABASE_SERVICE_ROLE_KEY` and an operator-supplied scheduler. Uncohort projects keep the inline `after()` path. See [`docs/runbooks/generation-worker.md`](docs/runbooks/generation-worker.md). |
+| Verification sandbox (opt-in, off by default) | Worker-dispatched runs enqueue one durable verification for their completed run and immutable snapshot. A later worker tick builds the project's source in a Vercel Sandbox microVM (`npm install`, or `npm ci` when the snapshot has a valid npm lockfile, then `next build`) and records `passed` only when the production build exits `0`; unsupported formats return `unsupported_runtime`. Detached stages span ticks, every terminal path destroys the sandbox, and cleanup failure never overwrites the build outcome. Requires `MAVLY_VERIFICATION_SANDBOX_ENABLED`, `MAVLY_VERIFICATION_SANDBOX_PROJECTS`, Vercel provider credentials and migration `17`. No generated code runs on a Mavly host. See [`docs/architecture/phase-3-verification-sandbox.md`](docs/architecture/phase-3-verification-sandbox.md). |
 | `/api/config` | `200 { "ok": true, "data": { "configured": false } }` |
 | Visual shell | Dashboard, workspace, chat, composer, dialogs and preview frame render |
 
-Generated code is **never executed** on this server. A generated backend exists as source
-files, not as a running service.
+Generated code is **never executed** on this server. The only execution anywhere is the
+opt-in verification build inside an isolated provider microVM, which never runs on a Mavly
+host. A generated backend exists as source files, not as a running service.
 
 ## What does not work yet
 
@@ -56,7 +60,10 @@ Uploads/attachments, rebuilds, database browsing, schema changes, SQL execution,
 customer-owned custom domains, runtime logs, visitor analytics, mobile builds, payments,
 an included scheduler, usage, credits, versions and visual edits do not have a local
 implementation. The durable generation worker is implemented but needs an operator-provided
-scheduler; without one, worker-dispatched runs stay queued. Secrets are stored and managed, but are not injected into generated
+scheduler; without one, worker-dispatched runs stay queued. The verification sandbox is
+implemented but off by default, applies only to worker-dispatched runs, and its `passed`
+status means a production build exited `0` — not that the site is correct, that a backend
+runs, or that a preview is hosted. Secrets are stored and managed, but are not injected into generated
 sites (the preview and published output are static). The workspace still offers real
 project metadata editing and generation
 activity; unsupported settings sections state that they are unavailable instead of
@@ -97,7 +104,8 @@ browser ── src/lib/vcaas.ts (client catalog, same-origin only)
    │             ├── store.ts            project_deployments (RLS)
    │             └── service.ts → src/lib/vercel/provider.ts → api.vercel.com
    ├── /api/generation/worker      Bearer secret → service-role worker tick
-   │      └── src/lib/generation/worker.ts → run-agent (worker mode)
+   │      ├── src/lib/generation/worker.ts → run-agent (worker mode)
+   │      └── src/lib/sandbox/verification.ts → provider microVM (build only)
    ├── /api/vcaas/source-code/{id} auth + ownership → generated ZIP
    ├── /api/preview/{id}/…         auth + ownership → sandboxed static site
    ├── /api/vcaas/upload|env|git-diff
@@ -142,6 +150,16 @@ browser ── src/lib/vcaas.ts (client catalog, same-origin only)
   `unpublished` only after Vercel confirms. The Vercel project, Mavly hostname, project row
   and files are preserved, so republishing reuses the same address. Shared DNS and the
   wildcard are never touched.
+- **Verification (opt-in):** after a worker-dispatched run completes, one verification row
+  is enqueued for its immutable snapshot. A later worker tick re-validates the snapshot,
+  uploads a manifest-validated copy into a Vercel Sandbox microVM with restricted egress,
+  runs install and `next build` as detached commands, and polls on subsequent ticks by
+  reconnecting to the same sandbox. The provider type, exit code and bounded diagnostics
+  are stored; the status is visible only through the existing authorized `agent/status`
+  and `agent/stop` responses. Unsupported/ambiguous projects return `unsupported_runtime`
+  rather than a guessed command. See the
+  [phase 3 architecture](docs/architecture/phase-3-verification-sandbox.md) and the
+  [verification runbook](docs/runbooks/verification-sandbox.md).
 - **Supabase connection:** authorization-code flow with PKCE, a single-use state row and
   AES-256-GCM encrypted access/refresh tokens. The selected external project is stored per
   Mavly account, separately from `public.projects.project_id`.
@@ -250,18 +268,31 @@ MAVLY_VERCEL_DEPLOYMENTS_ENABLED=
 VERCEL_API_TOKEN=
 VERCEL_TEAM_ID=
 VERCEL_PROJECT_PREFIX=mavly
+
+# Optional, off by default. Requires the durable worker and migration 17.
+MAVLY_VERIFICATION_SANDBOX_ENABLED=
+MAVLY_VERIFICATION_SANDBOX_PROVIDER=vercel
+MAVLY_VERIFICATION_SANDBOX_PROJECTS=
+VERCEL_OIDC_TOKEN=
+# Or the access-token triple: VERCEL_TOKEN below, VERCEL_TEAM_ID above,
+# VERCEL_PROJECT_ID below.
+VERCEL_TOKEN=
+VERCEL_PROJECT_ID=
 ```
 
 Only the two `NEXT_PUBLIC_SUPABASE_*` values and `NEXT_PUBLIC_APP_URL` are public.
 `GROQ_API_KEY`, `OPENROUTER_API_KEY` (used by images; preserved chat client only if
 explicitly reactivated), the OAuth client secrets,
 `MAVLY_INTEGRATION_ENCRYPTION_KEY`, `MAVLY_PROJECT_SECRETS_ENCRYPTION_KEY`,
-`VERCEL_API_TOKEN`, `MAVLY_GENERATION_WORKER_SECRET` and
+`VERCEL_API_TOKEN`, `VERCEL_OIDC_TOKEN`, `VERCEL_TOKEN`, `VERCEL_PROJECT_ID`,
+`MAVLY_GENERATION_WORKER_SECRET` and
 `SUPABASE_SERVICE_ROLE_KEY` are server-only: never prefix them with `NEXT_PUBLIC_`, never
 commit them, and configure provider usage/spend limits in Groq and OpenRouter as
 appropriate. The service-role key is required only when the opt-in durable worker is
-enabled, and is confined to `src/lib/supabase/worker.ts`, the worker orchestrator and
-`/api/generation/worker`. Groq's selected model is metered, not free; confirm the current
+enabled, and is confined to `src/lib/supabase/worker.ts`, the worker orchestrator,
+`/api/generation/worker` and the verification tick it invokes. Sandbox provider credentials
+are used only by the server-side adapter and are never uploaded into a sandbox. Groq's
+selected model is metered, not free; confirm the current
 price and organization limits in Groq's account console. The
 project-secrets key must not be stored in the database: losing it makes existing saved
 values unrecoverable.
@@ -281,7 +312,11 @@ and `last_unpublished_at`. `08_figma_integration.sql` creates the encrypted per-
 connection. `10_generation_jobs.sql` adds the durable run lifecycle, per-batch checkpoints
 and the atomic admission function; **apply it before deploying code that reads those
 columns.** `11_project_secrets.sql` creates encrypted project-secret storage with RLS and
-metadata-only column grants; apply it before using the Secrets section. Configure the Mavly sign-in redirect as a bare `/auth/callback` URL
+metadata-only column grants; apply it before using the Secrets section.
+`14_shared_hosting.sql` and `15_shared_hosting_attempt_state.sql` are required before
+enabling shared tenant hosting, `16_durable_generation_worker.sql` before enabling the
+durable worker, and `17_verification_sandbox.sql` (after 16) before enabling the
+verification sandbox. These are additive and non-destructive. Configure the Mavly sign-in redirect as a bare `/auth/callback` URL
 with no query string, and keep Supabase's redirect allow-list tight.
 
 ### GitHub App connection
@@ -361,14 +396,18 @@ npm run build && npm start
 
 Unit tests cover the pure auth/redirect/ownership/scope modules, static route invariants,
 Groq request/response classification, generation validator/batching/truncation rules,
-provider retry classification, checkpoint verification, deployment host/state rules, and the
+provider retry classification, checkpoint verification, deployment host/state rules, the
+verification runtime/policy/config/state/result modules, and the
 pure Vercel domain-detach/deployment-removal request shapes. They do not exercise a real
-Supabase session, a live Groq or OpenRouter image call, the Supabase OAuth connection, the
-new migration or a generated app. A manual OAuth check needs a real Supabase OAuth app:
+Supabase session, a live Groq or OpenRouter image call, the Supabase OAuth connection, a
+real Vercel Sandbox or any other verification provider, a generated app, or the new
+migrations. A manual OAuth check needs a real Supabase OAuth app:
 connect, verify organization/project discovery, save a selection, refresh the page,
 disconnect, and confirm the grant is revoked. A manual publish check requires a real Vercel
 token and explicit eligibility approval; see
-[`MAVLY_VERCEL_DEPLOYMENTS.md`](MAVLY_VERCEL_DEPLOYMENTS.md). See [`AGENTS.md`](AGENTS.md) for the rules
+[`MAVLY_VERCEL_DEPLOYMENTS.md`](MAVLY_VERCEL_DEPLOYMENTS.md). A manual verification check
+needs a disposable Vercel team/project and an explicit cohort; see
+[`docs/runbooks/verification-sandbox.md`](docs/runbooks/verification-sandbox.md). See [`AGENTS.md`](AGENTS.md) for the rules
 that apply to automated agents working in this repository.
 
 ## Historical documents
