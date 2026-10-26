@@ -17,7 +17,7 @@ import {
 
 const ENV = {
   NEXT_PUBLIC_APP_URL: "https://mavly.xyz",
-} as NodeJS.ProcessEnv;
+} as unknown as NodeJS.ProcessEnv;
 
 test("the configured app origin and its www sibling are allowed", () => {
   assert.deepEqual(allowedAppOrigins(ENV).sort(), [
@@ -40,7 +40,7 @@ test("extra origins are opt-in configuration, never inferred", () => {
   const env = {
     NEXT_PUBLIC_APP_URL: "https://mavly.xyz",
     MAVLY_ALLOWED_ORIGINS: "http://localhost:3001, not a url",
-  } as NodeJS.ProcessEnv;
+  } as unknown as NodeJS.ProcessEnv;
   assert.equal(isAllowedAppOrigin("http://localhost:3001", env), true);
   assert.equal(isAllowedAppOrigin("http://localhost:3002", env), false);
 });
@@ -127,7 +127,7 @@ test("a foreign cross-site mutation is refused", () => {
 });
 
 test("same-origin browser requests work even when the allowlist is missing", () => {
-  const empty = {} as NodeJS.ProcessEnv;
+  const empty = {} as unknown as NodeJS.ProcessEnv;
   assert.deepEqual(allowedAppOrigins(empty), []);
   assert.equal(
     crossOriginMutationReason(

@@ -542,6 +542,16 @@ async function publishSharedVersion(input: {
 
   const probe = await verifySharedPublication(hostname, version.data.id);
 
+  let domainStatus: "verified" | "pending";
+  let domainError: string | null;
+  if (probe.ok) {
+    domainStatus = "verified";
+    domainError = null;
+  } else {
+    domainStatus = "pending";
+    domainError = probe.reason;
+  }
+
   const saved = await updateDeploymentRow(projectId, {
     status: "ready",
     vercel_deployment_id: null,
@@ -549,8 +559,8 @@ async function publishSharedVersion(input: {
     error_code: null,
     error_message: null,
     mavly_hostname: hostname,
-    mavly_domain_status: probe.ok ? "verified" : "pending",
-    mavly_domain_error: probe.ok ? null : probe.reason,
+    mavly_domain_status: domainStatus,
+    mavly_domain_error: domainError,
     mavly_domain_checked_at: new Date().toISOString(),
     active_version_id: version.data.id,
   });
@@ -585,9 +595,20 @@ async function refreshSharedPublication(row: DeploymentRow): Promise<DeploymentR
   if (!row.mavly_hostname || !row.active_version_id) return row;
 
   const probe = await verifySharedPublication(row.mavly_hostname, row.active_version_id);
+
+  let domainStatus: "verified" | "pending";
+  let domainError: string | null;
+  if (probe.ok) {
+    domainStatus = "verified";
+    domainError = null;
+  } else {
+    domainStatus = "pending";
+    domainError = probe.reason;
+  }
+
   const patched = await updateDeploymentRow(row.project_id, {
-    mavly_domain_status: probe.ok ? "verified" : "pending",
-    mavly_domain_error: probe.ok ? null : probe.reason,
+    mavly_domain_status: domainStatus,
+    mavly_domain_error: domainError,
     mavly_domain_checked_at: new Date().toISOString(),
     ...(probe.ok ? { error_code: null, error_message: null } : {}),
   });

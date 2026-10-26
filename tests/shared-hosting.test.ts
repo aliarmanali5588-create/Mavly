@@ -27,14 +27,20 @@ import {
  */
 
 test("the default hosting mode is the legacy Vercel path", () => {
-  const config = readHostingConfig({} as NodeJS.ProcessEnv);
+  const config = readHostingConfig({} as unknown as NodeJS.ProcessEnv);
   assert.equal(config.mode, "vercel");
-  assert.equal(isSharedHostingRuntimeEnabled({} as NodeJS.ProcessEnv), false);
-  assert.equal(isSharedHostingProject("any-project", {} as NodeJS.ProcessEnv), false);
+  assert.equal(
+    isSharedHostingRuntimeEnabled({} as unknown as NodeJS.ProcessEnv),
+    false,
+  );
+  assert.equal(
+    isSharedHostingProject("any-project", {} as unknown as NodeJS.ProcessEnv),
+    false,
+  );
 });
 
 test("shared mode without a cohort enables nothing", () => {
-  const env = { MAVLY_HOSTING_MODE: "shared" } as NodeJS.ProcessEnv;
+  const env = { MAVLY_HOSTING_MODE: "shared" } as unknown as NodeJS.ProcessEnv;
   assert.equal(readHostingConfig(env).mode, "shared");
   assert.equal(isSharedHostingRuntimeEnabled(env), true);
   assert.equal(isSharedHostingProject("any-project", env), false);
@@ -44,7 +50,7 @@ test("only the explicit cohort uses shared hosting", () => {
   const env = {
     MAVLY_HOSTING_MODE: "shared",
     MAVLY_SHARED_HOSTING_PROJECTS: "meri-ek-car-ki, Other-Project ",
-  } as NodeJS.ProcessEnv;
+  } as unknown as NodeJS.ProcessEnv;
   assert.equal(isSharedHostingProject("meri-ek-car-ki", env), true);
   assert.equal(isSharedHostingProject("other-project", env), true);
   assert.equal(isSharedHostingProject("not-in-the-cohort", env), false);
@@ -54,7 +60,7 @@ test("`*` is the explicit all-projects opt-in", () => {
   const env = {
     MAVLY_HOSTING_MODE: "shared",
     MAVLY_SHARED_HOSTING_PROJECTS: "*",
-  } as NodeJS.ProcessEnv;
+  } as unknown as NodeJS.ProcessEnv;
   assert.equal(isSharedHostingProject("anything", env), true);
 });
 
@@ -62,7 +68,7 @@ test("an unrecognised mode falls back to the legacy path", () => {
   const env = {
     MAVLY_HOSTING_MODE: "yes-please",
     MAVLY_SHARED_HOSTING_PROJECTS: "*",
-  } as NodeJS.ProcessEnv;
+  } as unknown as NodeJS.ProcessEnv;
   assert.equal(readHostingConfig(env).mode, "vercel");
   assert.equal(isSharedHostingProject("anything", env), false);
 });
@@ -148,7 +154,6 @@ test("the artifact is hashed, measured and typed before any row is written", () 
   );
 
   assert.equal(prepared.ok, true);
-  if (prepared.ok === false) return;
 
   assert.equal(prepared.data.fileCount, 2);
   assert.equal(
