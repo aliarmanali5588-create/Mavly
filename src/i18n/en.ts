@@ -3916,6 +3916,8 @@ const base = {
     deploy: {
       publish: "Publish",
       deploying: "Publishing…",
+      publishing: "Publishing",
+      unpublishing: "Unpublishing…",
       live: "Live",
       liveNow: "Live now",
       notPublished: "Not published yet. Publishing puts your app online at a public URL.",
@@ -3926,14 +3928,39 @@ const base = {
       started: "Publishing started",
       succeeded: "Your app is live",
       failed: "The deployment failed",
+      failedShort: "Publish failed",
       customDomain: "Custom domain",
       customDomainManage: "Custom domain",
       customDomainHint: "Use your own web address",
 
+      /* ── Unpublishing ─────────────────────────────────────────────────────
+         Unpublishing removes the public address only. The confirmation says
+         explicitly that the project, generated code and files are untouched, so
+         the warning cannot be mistaken for a delete. */
+      unpublishAction: "Unpublish website",
+      unpublishTitle: "Unpublish this website?",
+      unpublishDescription:
+        "Your website will no longer be publicly available at its current public URL. Your project, generated code, saved files, and workspace will remain intact. You can publish it again whenever you want.",
+      unpublishFailed: "Could not unpublish this website",
+      unpublishIncomplete: "Unpublish did not finish",
+      unpublishIncompleteDescription:
+        "The website may still be live. Try unpublishing again.",
+      unpublished: "Website unpublished",
+      unpublishedDescription:
+        "The public URL no longer serves your site. Your project and files are unchanged, and publishing again restores the same address.",
+      unpublishedPill: "Unpublished",
+      publicAddress: "Public address",
+      takingDown: "Taking this address down",
+      titleUnpublishing: "Unpublishing your website",
+      subtitleUnpublishing:
+        "We're taking the public address down. Your project, generated code and saved files stay intact.",
+
       // ── The publish dialog ────────────────────────────────────────────────
       titleFirst: "Publish your app",
+      titleLive: "Your website is live",
       titlePublished: "Publish the latest changes",
       subtitleFirst: "Put your app online at a public address anyone can open.",
+      subtitleLive: "Anyone with the address below can open it right now.",
       subtitlePublished: "Your app is already online. Publishing again replaces it with what you have built since.",
       willBeLiveAt: "It will be live at",
       whatHappens: "What happens when you publish",

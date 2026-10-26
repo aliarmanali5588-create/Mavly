@@ -168,11 +168,17 @@ export interface VcaasDeployError {
 
 /** `GET …/deployments/status` — the current publish state, when there is one. */
 export interface DeploymentStatus {
+  /**
+   * `deploying` | `success` | `error` | `unpublishing` | `unpublished`, or null
+   * only for an older server that predates explicit unpublish states.
+   */
   status: string | null;
   createdAt?: string | null;
   deploymentId?: string;
   step?: string;
   liveUrl?: string;
+  /** True when the backend can safely take this deployment down. */
+  canUnpublish?: boolean;
   errorDetails?: VcaasDeployError;
 }
 

@@ -38,6 +38,7 @@ test("project subpaths resolve to the path's project id", () => {
     ["projects", "my-app", "agent", "status"],
     ["projects", "my-app", "files", "tree"],
     ["projects", "my-app", "deployments", "deploy"],
+    ["projects", "my-app", "deployments", "unpublish"],
   ]) {
     const scope = allow(classifyVcaasRequest("POST", path));
     assert.equal(scope.kind, "project");

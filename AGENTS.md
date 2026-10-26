@@ -62,9 +62,9 @@ npm run build && npm start
 Apply `supabase/migrations/10_generation_jobs.sql` before deploying the durable generation
 jobs, `03_ai_builder.sql` before using the builder,
 `04_supabase_integration.sql` before using the Supabase connection,
-`07_project_deployments.sql` and `09_mavly_deployment_domains.sql` before enabling
-publishing, `08_figma_integration.sql` before using Figma, and
-`11_project_secrets.sql` before using project secrets. Project-secret encryption also
+`07_project_deployments.sql`, `09_mavly_deployment_domains.sql` and
+`13_deployment_unpublish.sql` before enabling publishing/unpublishing, `08_figma_integration.sql`
+before using Figma, and `11_project_secrets.sql` before using project secrets. Project-secret encryption also
 requires the server-only `MAVLY_PROJECT_SECRETS_ENCRYPTION_KEY` (32 random bytes,
 base64-encoded); without it create/update fail closed. `npm test` covers the pure
 auth/redirect/ownership/scope modules and static route invariants. It does not exercise a
@@ -87,7 +87,11 @@ generated app.
   standalone `preview.html`; an imported repository is publishable only when it already
   contains `index.html` or `public/index.html` and its sibling static assets. Each publish
   attaches the server-derived `<project-id>.mavly.xyz` domain; success requires both the
-  deployment and a Vercel-verified domain. The operator must configure
+  deployment and a Vercel-verified domain. **Unpublishing is a real takedown**: it claims the
+  mapping, detaches the Mavly project domain, removes the project's production deployments,
+  and records `unpublished` only after Vercel confirms. The Vercel project, hostname, project
+  row and files are preserved for republishing; shared DNS/wildcard records are never
+  touched. The operator must configure
   `mavly.xyz` DNS/wildcard resolution and confirm certificates before enabling. Do not
   enable it in a real deployment until the operator has confirmed Vercel plan/terms
   eligibility for Mavly-managed customer hosting; see `MAVLY_VERCEL_DEPLOYMENTS.md`.
@@ -98,7 +102,8 @@ generated app.
   - project list/create/launch/get/update/delete;
   - `agent/start`, `agent/status`, `agent/full-conversation`;
   - `files/tree`, `files/content` (GET/PUT);
-  - `deployments/deploy` (POST) and `deployments/status` (GET), which fail closed with
+  - `deployments/deploy` (POST), `deployments/unpublish` (POST) and
+    `deployments/status` (GET), which fail closed with
     `BACKEND_NOT_CONFIGURED` unless publishing is explicitly enabled and configured.
 - Dedicated routes serve the generated source ZIP (`/api/vcaas/source-code/{id}`) and the
   sandboxed static preview (`/api/preview/{id}/`).
@@ -221,7 +226,7 @@ browser ── src/lib/vcaas.ts (client catalog, same-origin only)
    │      ├── src/lib/mavly/store.ts     Supabase RLS-scoped persistence
    │      ├── src/lib/mavly/run-agent.ts background run after the response
    │      │      └── src/lib/ai/agent.ts → src/lib/ai/provider.ts → src/lib/ai/groq.ts
-   │      └── src/lib/deployments/*      opt-in static publish
+   │      └── src/lib/deployments/*      opt-in static publish/unpublish
    │             ├── store.ts            project_deployments (RLS)
    │             └── service.ts → src/lib/vercel/provider.ts → api.vercel.com
    ├── /api/vcaas/source-code/{id} auth + ownership → ZIP from project_files
@@ -275,8 +280,9 @@ paths with `src/lib/vcaas-scope.ts`, so unknown shapes are refused before any wo
 | `src/lib/ai/models.ts` | Active Groq model catalog plus the preserved OpenRouter catalog/resolver. |
 | `src/lib/mavly-hostname.ts` | Pure derivation of `<project-id>.mavly.xyz` from the immutable, owned project id. |
 | `src/lib/vercel/` | Server-only opt-in config and the fixed-origin Vercel REST client, including project-domain assignment/verification. |
-| `src/lib/deployments/` | Publish orchestration, domain gating and RLS-scoped deployment mapping. |
+| `src/lib/deployments/` | Publish/unpublish orchestration, domain gating, provider-failure mapping and RLS-scoped deployment mapping. |
 | `supabase/migrations/07_project_deployments.sql` | Deployment mapping table, constraints and ownership RLS. |
+| `supabase/migrations/13_deployment_unpublish.sql` | `unpublishing`/`unpublished` statuses and `last_unpublished_at`; additive and non-destructive. |
 | `supabase/migrations/09_mavly_deployment_domains.sql` | Mavly hostname/domain state on the deployment mapping, with legacy rows left NULL. |
 | `supabase/migrations/08_figma_integration.sql` | Per-project encrypted Figma connection with project-inherited RLS. |
 | `src/lib/project-ownership.ts` | Ownership registration helpers, idempotent insert, owned-id filtering. |

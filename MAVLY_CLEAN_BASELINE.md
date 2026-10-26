@@ -39,7 +39,7 @@ revocation or database mutation was performed while preparing this document.
 | GitHub | A GitHub App with user-to-server tokens: connect, push, import. |
 | Preview | Generated static `preview.html`, or an imported static `index.html` / `public/index.html` with local assets, served with a CSP sandbox. Framework entry points that need a build are reported as unsupported. |
 | Supabase account connection | OAuth + PKCE, encrypted access/refresh tokens, organization/project discovery, one selected project. |
-| Static publishing (opt-in) | Off unless `MAVLY_VERCEL_DEPLOYMENTS_ENABLED` and `VERCEL_API_TOKEN` are set. Uploads the generated `preview.html`, or an imported static site and its local assets, as a static Vercel site, attaches the derived `<project-id>.mavly.xyz` domain, and records mapping/deployment/domain status in `project_deployments`. Success requires a ready deployment and a verified domain. |
+| Static publishing (opt-in) | Off unless `MAVLY_VERCEL_DEPLOYMENTS_ENABLED` and `VERCEL_API_TOKEN` are set. Uploads the generated `preview.html`, or an imported static site and its local assets, as a static Vercel site, attaches the derived `<project-id>.mavly.xyz` domain, and records mapping/deployment/domain status in `project_deployments`. Success requires a ready deployment and a verified domain. **Unpublish is a real Vercel takedown** (domain detach + production deployment removal) that records `unpublished`; project/files and the republish mapping are preserved. |
 | `/api/config` | Still returns `{ ok: true, data: { configured: false } }`. |
 | Visual shell | Dashboard, workspace, chat, composer, dialogs and preview frame render. |
 
@@ -54,6 +54,11 @@ reported as successful until Vercel verifies that domain. Generated Next.js sour
 routes, environment secrets and dependencies are never built or run. Vercel's
 commercial/plan eligibility for Mavly-managed customer hosting is **not verified** by this
 document; see `MAVLY_VERCEL_DEPLOYMENTS.md` for DNS/SSL prerequisites as well.
+
+Unpublishing is not a local flag. The server detaches the Mavly project domain at Vercel and
+removes the project's production deployments, and only then records `unpublished`. The Mavly
+project, generated files, snapshots, Vercel project mapping and hostname remain, so the same
+address can be published again. Shared `mavly.xyz` DNS/wildcard records are never deleted.
 
 ---
 
@@ -392,17 +397,20 @@ with HTTP **503** and `cache-control: private, no-store, max-age=0`.
 - `supabase/migrations/04_supabase_integration.sql` — connection/state tables and RLS.
 - `supabase/migrations/07_project_deployments.sql` — one deployment mapping per project,
   constrained status, RLS inherited from `public.projects`.
+- `supabase/migrations/13_deployment_unpublish.sql` — `unpublishing`/`unpublished` statuses
+  and `last_unpublished_at`, additive over the existing mapping rows.
 - `supabase/migrations/08_figma_integration.sql` — the encrypted per-project Figma
   connection, with ownership inherited from `public.projects`.
 - `supabase/migrations/09_mavly_deployment_domains.sql` — Mavly hostname and domain
   verification state on the deployment mapping; legacy rows stay NULL.
 - `src/lib/mavly-hostname.ts` — pure `<project-id>.mavly.xyz` derivation.
 - `src/lib/vercel/config.ts` — opt-in gate and server-only Vercel configuration.
-- `src/lib/vercel/provider.ts` — fixed-origin Vercel REST client, deterministic names and
-  project-domain assignment/verification.
-- `src/lib/deployments/store.ts` — RLS-scoped deployment persistence and publish claim.
-- `src/lib/deployments/service.ts` — publish/status orchestration, domain gating and
-  cleanup.
+- `src/lib/vercel/provider.ts` — fixed-origin Vercel REST client, deterministic names,
+  project-domain assignment/verification, domain detach and deployment removal.
+- `src/lib/deployments/store.ts` — RLS-scoped deployment persistence, publish claim and the
+  optimistic unpublish claim/finish/release lease.
+- `src/lib/deployments/service.ts` — publish/unpublish/status orchestration, domain gating,
+  stale-claim reconciliation and cleanup.
 - `src/lib/integrations/supabase/*` — config, encryption, OAuth client, store, token
   lifecycle, HTTP helpers and browser client.
 - `src/app/api/integrations/supabase/*` — start/status/discovery/select/disconnect routes.
@@ -432,14 +440,17 @@ The Totalum client `src/lib/vcaas-server.ts` remains deleted and must not be rec
 - `rebuildRequired` is `false` after a file save because there is no rebuild service.
 - Migrations are not applied automatically. Apply `03_ai_builder.sql` before using the
   builder, `04_supabase_integration.sql` before using the Supabase connection,
-  `07_project_deployments.sql` and `09_mavly_deployment_domains.sql` before enabling
-  publishing, and `08_figma_integration.sql` before using Figma.
+  `07_project_deployments.sql`, `09_mavly_deployment_domains.sql` and
+  `13_deployment_unpublish.sql` before enabling publishing/unpublishing, and
+  `08_figma_integration.sql` before using Figma.
 - Publishing is disabled by default and publishes only the static preview. It does not
   build generated source, does not host generated APIs and does not provide
   customer-supplied custom domains. Each new publish does get a Mavly-owned
   `<project-id>.mavly.xyz` address once the deployment and Vercel domain verification are
-  ready. Deleting a Mavly project attempts a best-effort Vercel cleanup; a failure leaves
-  an orphan Vercel project and does not fail the local delete.
+  ready. Unpublishing detaches that domain and removes the production deployments; it keeps
+  the project, files and mapping for a republish. Deleting a Mavly project attempts a
+  best-effort Vercel cleanup; a failure leaves an orphan Vercel project and does not fail the
+  local delete.
 - The Supabase connection is account-level. It is not linked to individual Mavly
   `projects.project_id` rows, and it grants no SQL/schema/data access in Phase 1.
 - The workspace More view supports project metadata editing, project secrets, the derived

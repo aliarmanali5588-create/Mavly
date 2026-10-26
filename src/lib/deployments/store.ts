@@ -8,7 +8,14 @@
 
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
-export type DeploymentStatus = "queued" | "building" | "ready" | "error" | "canceled";
+export type DeploymentStatus =
+  | "queued"
+  | "building"
+  | "ready"
+  | "error"
+  | "canceled"
+  | "unpublishing"
+  | "unpublished";
 export type MavlyDomainStatus = "pending" | "verified" | "error";
 
 export interface DeploymentRow {
@@ -28,16 +35,17 @@ export interface DeploymentRow {
   created_at: string;
   updated_at: string;
   last_published_at: string | null;
+  last_unpublished_at: string | null;
 }
 
 export type DeploymentStoreFailure = { ok: false; error: string; code?: string };
 export type DeploymentStoreResult<T> = { ok: true; data: T } | DeploymentStoreFailure;
 
 /**
- * A publish is a few short server calls. A row still queued/building after this
- * long belongs to a process that died (or a Vercel call that never returned), so
- * it is safe for the next publish to claim the slot. Without this a crashed
- * publish would block the project for ever.
+ * A publish/unpublish is a few short server calls. A row still queued/building/
+ * unpublishing after this long belongs to a process that died (or a Vercel call
+ * that never returned), so it is safe for the next operation to claim the slot.
+ * Without this a crashed operation would block the project for ever.
  */
 const STALE_CLAIM_MS = 15 * 60_000;
 
@@ -53,7 +61,7 @@ export function isDeploymentStoreFailure<T>(
 }
 
 const SELECT =
-  "project_id,provider,vercel_project_id,vercel_project_name,vercel_deployment_id,status,url,error_code,error_message,mavly_hostname,mavly_domain_status,mavly_domain_error,mavly_domain_checked_at,created_at,updated_at,last_published_at";
+  "project_id,provider,vercel_project_id,vercel_project_name,vercel_deployment_id,status,url,error_code,error_message,mavly_hostname,mavly_domain_status,mavly_domain_error,mavly_domain_checked_at,created_at,updated_at,last_published_at,last_unpublished_at";
 
 function dbError(scope: string, message: string, code?: string): DeploymentStoreFailure {
   console.error(`[deployments] ${scope}:`, message);
@@ -129,7 +137,7 @@ export async function beginDeployment(
     .from("project_deployments")
     .update(claim)
     .eq("project_id", projectId)
-    .in("status", ["ready", "error", "canceled"])
+    .in("status", ["ready", "error", "canceled", "unpublished"])
     .select(SELECT)
     .maybeSingle();
 
@@ -181,6 +189,7 @@ export interface DeploymentPatch {
   mavly_domain_error?: string | null;
   mavly_domain_checked_at?: string | null;
   last_published_at?: string;
+  last_unpublished_at?: string | null;
 }
 
 export async function updateDeploymentRow(
@@ -204,5 +213,126 @@ export async function updateDeploymentRow(
 
   if (error) return dbError("update deployment", error.message, error.code);
   if (!data) return { ok: false, error: "Deployment record not found", code: "NOT_FOUND" };
+  return { ok: true, data: data as DeploymentRow };
+}
+
+/**
+ * Claim this project's single deployment slot for an unpublish.
+ *
+ * The `updated_at` equality is the optimistic lock. A publish that is queued or
+ * building never matches, so it cannot be taken down halfway through; a stale
+ * `unpublishing` row left by a died process can be taken over. A loser receives
+ * `CONFLICT` and the service re-reads the authoritative row before answering.
+ */
+export async function claimUnpublish(
+  projectId: string,
+  current: DeploymentRow,
+): Promise<DeploymentStoreResult<DeploymentRow>> {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) return { ok: false, error: "Supabase is not configured", code: "UNAVAILABLE" };
+
+  const allowed =
+    current.status === "unpublishing"
+      ? ["unpublishing"]
+      : ["ready", "error", "canceled"];
+
+  const { data, error } = await supabase
+    .from("project_deployments")
+    .update({ status: "unpublishing", updated_at: new Date().toISOString() })
+    .eq("project_id", projectId)
+    .eq("updated_at", current.updated_at)
+    .in("status", allowed)
+    .select(SELECT)
+    .maybeSingle();
+
+  if (error) return dbError("claim unpublish", error.message, error.code);
+  if (!data) return { ok: false, error: "A deployment operation is already in progress.", code: "CONFLICT" };
+  return { ok: true, data: data as DeploymentRow };
+}
+
+/**
+ * Commit the unpublish only if this worker still owns the claim.
+ *
+ * The public host and production deployment are already gone at this point. The
+ * row keeps the Vercel project id/name and the derived `mavly_hostname`, so a
+ * later publish can reattach the same address.
+ */
+export async function finishUnpublish(
+  projectId: string,
+  leaseUpdatedAt: string,
+): Promise<DeploymentStoreResult<DeploymentRow>> {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) return { ok: false, error: "Supabase is not configured", code: "UNAVAILABLE" };
+
+  const now = new Date().toISOString();
+  const { data, error } = await supabase
+    .from("project_deployments")
+    .update({
+      status: "unpublished",
+      vercel_deployment_id: null,
+      url: null,
+      error_code: null,
+      error_message: null,
+      mavly_domain_status: null,
+      mavly_domain_error: null,
+      mavly_domain_checked_at: null,
+      last_unpublished_at: now,
+      updated_at: now,
+    })
+    .eq("project_id", projectId)
+    .eq("status", "unpublishing")
+    .eq("updated_at", leaseUpdatedAt)
+    .select(SELECT)
+    .maybeSingle();
+
+  if (error) return dbError("finish unpublish", error.message, error.code);
+  if (!data) {
+    return {
+      ok: false,
+      error: "The unpublish lease was lost before it could be recorded.",
+      code: "CONFLICT",
+    };
+  }
+  return { ok: true, data: data as DeploymentRow };
+}
+
+/**
+ * Put a failed unpublish back to the status it had before the claim.
+ *
+ * This is what keeps a provider error from falsely marking a live site as
+ * unpublished. It is conditional on the same lease; a takeover cannot be
+ * overwritten by the previous worker. The optional failure metadata is written
+ * in the same statement, so a new claim can never receive an old worker's error.
+ */
+export async function releaseUnpublish(
+  projectId: string,
+  leaseUpdatedAt: string,
+  previousStatus: Exclude<DeploymentStatus, "unpublishing" | "unpublished">,
+  failure?: { code: string; message: string },
+): Promise<DeploymentStoreResult<DeploymentRow>> {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) return { ok: false, error: "Supabase is not configured", code: "UNAVAILABLE" };
+
+  const { data, error } = await supabase
+    .from("project_deployments")
+    .update({
+      status: previousStatus,
+      updated_at: new Date().toISOString(),
+      ...(failure ? { error_code: failure.code, error_message: failure.message } : {}),
+    })
+    .eq("project_id", projectId)
+    .eq("status", "unpublishing")
+    .eq("updated_at", leaseUpdatedAt)
+    .select(SELECT)
+    .maybeSingle();
+
+  if (error) return dbError("release unpublish", error.message, error.code);
+  if (!data) {
+    return {
+      ok: false,
+      error: "The unpublish lease was lost before it could be rolled back.",
+      code: "CONFLICT",
+    };
+  }
   return { ok: true, data: data as DeploymentRow };
 }

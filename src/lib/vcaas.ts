@@ -538,11 +538,10 @@ export const vcaasApi = {
     /**
      * GET …/deployments/status — production deploy status (poll while deploying).
      *
-     * ⚠️ `status` IS NULLABLE, AND IT IS NULL ON EVERY PROJECT THAT HAS NEVER BEEN
-     * PUBLISHED — verified against a live project, which answers
-     * `{"status":null,"createdAt":null}`. It was typed as a bare `string` here, so a
-     * caller checking only for `"success"`/`"error"` polled a null for ever without
-     * the type ever hinting that "no deployment at all" was a possible answer.
+     * `status` is nullable only for compatibility with an older server. Mavly's
+     * backend answers `unpublished` for a project that has never been published or
+     * whose site was taken down, so callers can distinguish "nothing is live" from
+     * "still deploying" without trusting local history.
      */
     status: (projectId: string): Promise<VcaasResponse<DeploymentStatus>> =>
       proxy.get<DeploymentStatus>(`${project(projectId)}/deployments/status`),
@@ -555,6 +554,18 @@ export const vcaasApi = {
      */
     deploy: (projectId: string, confirmDestructive = false): Promise<VcaasResponse<unknown>> =>
       proxy.post(`${project(projectId)}/deployments/deploy`, confirmDestructive ? { confirmDestructive: true } : {}),
+
+    /**
+     * POST …/deployments/unpublish — take the published site down.
+     *
+     * The backend detaches the Mavly project domain and removes the project's
+     * production deployments. It returns the resulting state; only an
+     * `unpublished` answer means the public URL is down. An `unpublishing` answer
+     * means another request already holds the operation and the caller should
+     * keep polling status.
+     */
+    unpublish: (projectId: string): Promise<VcaasResponse<DeploymentStatus>> =>
+      proxy.post<DeploymentStatus>(`${project(projectId)}/deployments/unpublish`, {}),
   },
 
   // ──────────────────────────── GitHub ────────────────────────────

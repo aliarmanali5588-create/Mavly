@@ -15,6 +15,9 @@
  *   POST /v10/projects/{idOrName}/domains             attach a project domain
  *   GET  /v9/projects/{idOrName}/domains/{domain}     read its verification state
  *   POST /v9/projects/{idOrName}/domains/{domain}/verify  ask Vercel to verify it
+ *   DELETE /v9/projects/{idOrName}/domains/{domain}   detach a project domain
+ *   GET  /v6/deployments?projectId=…                  list a project's deployments
+ *   DELETE /v13/deployments/{id}                      remove one deployment
  */
 
 import { createHash } from "node:crypto";
@@ -428,6 +431,84 @@ export async function deleteVercelProject(
   if (raw.data.status === 404) return { ok: true, data: undefined };
   if (!isSuccess(raw.data.status)) return { ok: false, failure: failureFrom(raw.data) };
   return { ok: true, data: undefined };
+}
+
+/**
+ * Detach one project domain. This is the operation that makes
+ * `<project-id>.mavly.xyz` stop resolving to this Vercel project; wildcard DNS is
+ * shared infrastructure and is never touched.
+ *
+ * A 404 means Vercel no longer has the domain attached, which is the desired end
+ * state; it is treated as success so a retried unpublish is idempotent.
+ */
+export async function removeVercelProjectDomain(
+  config: VercelDeploymentConfig,
+  idOrName: string,
+  domain: string,
+): Promise<VercelResult<void>> {
+  const raw = await rawRequest(
+    config,
+    "remove_project_domain",
+    `/v9/projects/${encodeURIComponent(idOrName)}/domains/${encodeURIComponent(domain)}`,
+    { method: "DELETE" },
+  );
+  if (isVercelFailure(raw)) return raw;
+  if (raw.data.status === 404) return { ok: true, data: undefined };
+  if (!isSuccess(raw.data.status)) return { ok: false, failure: failureFrom(raw.data) };
+  return { ok: true, data: undefined };
+}
+
+/**
+ * Remove one deployment. Used after the project domain is detached so the
+ * deployment's own `.vercel.app` host and aliases stop serving the old site.
+ * A 404 is already removed and counts as success.
+ */
+export async function deleteVercelDeployment(
+  config: VercelDeploymentConfig,
+  deploymentId: string,
+): Promise<VercelResult<void>> {
+  const raw = await rawRequest(
+    config,
+    "delete_deployment",
+    `/v13/deployments/${encodeURIComponent(deploymentId)}`,
+    { method: "DELETE" },
+  );
+  if (isVercelFailure(raw)) return raw;
+  if (raw.data.status === 404) return { ok: true, data: undefined };
+  if (!isSuccess(raw.data.status)) return { ok: false, failure: failureFrom(raw.data) };
+  return { ok: true, data: undefined };
+}
+
+/**
+ * List the project's production deployment ids.
+ *
+ * Legacy mappings (NULL `mavly_hostname`) have no Mavly project domain to
+ * detach; their public address is the Vercel project host, so unpublishing must
+ * remove the production deployments themselves. The list endpoint identifies a
+ * deployment as `id` on new responses and `uid` on older ones; both are accepted.
+ */
+export async function listVercelProductionDeployments(
+  config: VercelDeploymentConfig,
+  projectId: string,
+): Promise<VercelResult<string[]>> {
+  const raw = await rawRequest(
+    config,
+    "list_deployments",
+    `/v6/deployments?projectId=${encodeURIComponent(projectId)}&target=production&limit=100`,
+    { method: "GET" },
+  );
+  if (isVercelFailure(raw)) return raw;
+  if (!isSuccess(raw.data.status)) return { ok: false, failure: failureFrom(raw.data) };
+
+  const body = bodyRecord(parseBody(raw.data.text));
+  const rows = Array.isArray(body?.deployments) ? body.deployments : [];
+  const ids = rows.flatMap((entry): string[] => {
+    const record = bodyRecord(entry);
+    if (!record) return [];
+    const id = stringOf(record.id) ?? stringOf(record.uid);
+    return id ? [id] : [];
+  });
+  return { ok: true, data: ids };
 }
 
 export async function uploadDeploymentFile(

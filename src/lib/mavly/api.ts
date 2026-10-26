@@ -86,6 +86,7 @@ import {
   getProjectDeploymentStatus,
   isDeploymentServiceFailure,
   publishProject,
+  unpublishProject,
   wireDeploymentStatus,
 } from "@/lib/deployments/service";
 import {
@@ -269,6 +270,9 @@ export async function handleMavlyVcaasRequest(input: MavlyRequest): Promise<Next
   }
   if (action === "deployments/deploy" && method === "POST") {
     return deployResponse(userId, projectId);
+  }
+  if (action === "deployments/unpublish" && method === "POST") {
+    return unpublishResponse(userId, projectId);
   }
   if (action === "deployments/status" && method === "GET") {
     return deploymentStatusResponse(userId, projectId);
@@ -590,6 +594,19 @@ async function deleteProjectResponse(userId: string, projectId: string): Promise
 
 async function deployResponse(userId: string, projectId: string): Promise<NextResponse> {
   const result = await publishProject(userId, projectId);
+  if (isDeploymentServiceFailure(result)) {
+    return fail(
+      result.status,
+      result.code,
+      result.error,
+      result.retryAfterSeconds ? { "retry-after": String(result.retryAfterSeconds) } : undefined,
+    );
+  }
+  return ok(result.data);
+}
+
+async function unpublishResponse(userId: string, projectId: string): Promise<NextResponse> {
+  const result = await unpublishProject(userId, projectId);
   if (isDeploymentServiceFailure(result)) {
     return fail(
       result.status,
@@ -1586,13 +1603,20 @@ function projectFromRow(
 ): VcaasProject {
   const previewPath = `/api/preview/${encodeURIComponent(row.project_id)}/`;
   const previewUrl = preview ? previewPath : null;
-  const deploymentWire = deployment ? wireDeploymentStatus(deployment) : null;
+  /**
+   * `unpublished` is a recorded state, but it is not a deployment the workspace
+   * should present as existing: there is no live site, no live URL and no
+   * deployment link. A later publish claims the same mapping.
+   */
+  const deploymentRecord =
+    deployment && deployment.status !== "unpublished" ? deployment : null;
+  const deploymentWire = deploymentRecord ? wireDeploymentStatus(deploymentRecord) : null;
   const deploymentStatus: "deploying" | "success" | "error" =
     deploymentWire?.status === "success"
       ? "success"
       : deploymentWire?.status === "error"
         ? "error"
-        : deployment
+        : deploymentRecord
           ? "deploying"
           : "error";
   const domainFailed = deploymentWire?.errorDetails?.stage === "domain";
@@ -1603,7 +1627,10 @@ function projectFromRow(
    * a build or domain check is pending would let the copied UI treat a dead site
    * as published.
    */
-  const liveHost = deployment && deploymentStatus === "success" ? deploymentHost(deployment) : "";
+  const liveHost =
+    deploymentRecord && deploymentStatus === "success"
+      ? deploymentHost(deploymentRecord)
+      : "";
 
   return {
     projectId: row.project_id,
@@ -1613,26 +1640,26 @@ function projectFromRow(
     agentProcessStatus: isRunActive(run) ? "init" : run ? "done" : "idle",
     agentServerStatus: "Active",
     createdAt: row.created_at,
-    deployment: deployment
+    deployment: deploymentRecord
       ? {
           status: deploymentStatus,
-          createdAt: deployment.last_published_at ?? deployment.created_at,
-          ...(deployment.vercel_deployment_id
-            ? { versionId: deployment.vercel_deployment_id }
+          createdAt: deploymentRecord.last_published_at ?? deploymentRecord.created_at,
+          ...(deploymentRecord.vercel_deployment_id
+            ? { versionId: deploymentRecord.vercel_deployment_id }
             : {}),
         }
       : null,
     lastDeployError:
-      deployment && deploymentStatus === "error"
+      deploymentRecord && deploymentStatus === "error"
         ? {
             stage: domainFailed ? "domain" : "build",
             title: domainFailed ? "Domain setup failed" : "Publish failed",
             message: domainFailed
-              ? deployment.mavly_domain_error ||
-                deployment.error_message ||
+              ? deploymentRecord.mavly_domain_error ||
+                deploymentRecord.error_message ||
                 "Vercel could not verify this Mavly address."
-              : deployment.error_message || "Vercel could not finish the deployment.",
-            at: deployment.last_published_at ?? deployment.updated_at,
+              : deploymentRecord.error_message || "Vercel could not finish the deployment.",
+            at: deploymentRecord.last_published_at ?? deploymentRecord.updated_at,
           }
         : null,
     versionRecovery: null,

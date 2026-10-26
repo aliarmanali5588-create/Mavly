@@ -17,12 +17,14 @@ export interface PublicDeploymentFailure {
 
 export function publicDeploymentFailure(
   failure: VercelFailure,
+  action: "publish" | "unpublish" = "publish",
 ): PublicDeploymentFailure {
+  const verb = action === "unpublish" ? "unpublish" : "publish";
   if (failure.status === 429) {
     return {
       status: 429,
       code: "RATE_LIMITED",
-      error: "Publishing is temporarily rate limited. Try again shortly.",
+      error: `The hosting provider is temporarily rate limiting ${verb} requests. Try again shortly.`,
       ...(failure.retryAfterSeconds
         ? { retryAfterSeconds: failure.retryAfterSeconds }
         : {}),
@@ -55,12 +57,12 @@ export function publicDeploymentFailure(
     return {
       status: 400,
       code: "VALIDATION",
-      error: failure.message || "Vercel rejected the publish.",
+      error: failure.message || `Vercel rejected the ${verb}.`,
     };
   }
   return {
     status: 502,
     code: "UNKNOWN",
-    error: "Vercel could not complete the publish.",
+    error: `Vercel could not complete the ${verb}.`,
   };
 }

@@ -1,6 +1,8 @@
 # Mavly-managed Vercel publishing
 
-**Status:** implemented, **disabled by default**, and limited to static sites.
+**Status:** implemented, **disabled by default**, and limited to static sites. Publishing and
+unpublishing are both real Vercel operations; unpublishing detaches the Mavly project domain
+and removes the project's production deployments rather than hiding a URL.
 **Do not enable this in a production deployment until the eligibility prerequisite below is
 confirmed by the operator.**
 
@@ -52,9 +54,10 @@ All values are server-only. Never add a `NEXT_PUBLIC_` prefix.
 | `VERCEL_PROJECT_PREFIX` | no | Prefix for generated project names. Default `mavly`; sanitized server-side. |
 
 Apply `supabase/migrations/07_project_deployments.sql` before enabling, then
-`supabase/migrations/09_mavly_deployment_domains.sql` for the Mavly hostname columns. The
-first creates `public.project_deployments` and its ownership RLS; the second adds the
-Mavly-owned domain state.
+`supabase/migrations/09_mavly_deployment_domains.sql` for the Mavly hostname columns, then
+`supabase/migrations/13_deployment_unpublish.sql` for the unpublish states. The first creates
+`public.project_deployments` and its ownership RLS; the second adds the Mavly-owned domain
+state; the third widens the status constraint and records `last_unpublished_at`.
 
 ## Data model
 
@@ -64,13 +67,20 @@ Mavly-owned domain state.
 - `provider` — currently only `vercel`;
 - `vercel_project_id`, `vercel_project_name` — created server-side, never client-supplied;
 - `vercel_deployment_id` — latest deployment, used only for server-side status reads;
-- `status` — `queued`, `building`, `ready`, `error` or `canceled`;
+- `status` — `queued`, `building`, `ready`, `error`, `canceled`, `unpublishing` or
+  `unpublished`;
 - `url`, `error_code`, `error_message`;
 - `mavly_hostname` — `<project-id>.mavly.xyz`, or NULL for a legacy mapping;
 - `mavly_domain_status` — `pending`, `verified`, `error`, or NULL when no Mavly hostname
   was assigned;
 - `mavly_domain_error`, `mavly_domain_checked_at`;
-- `created_at`, `updated_at`, `last_published_at`.
+- `created_at`, `updated_at`, `last_published_at`, `last_unpublished_at`.
+
+`unpublished` is a real state, not a missing row. It keeps `vercel_project_id`,
+`vercel_project_name`, `mavly_hostname` and the project row so a later publish reuses the same
+Vercel project and Mavly address. It clears the deployment id, `url` and domain-check state,
+because none of those describes a live site. `last_unpublished_at` records when the takedown
+succeeded.
 
 `mavly_hostname` is unique when present and constrained to exactly
 `lower(project_id) + '.mavly.xyz'`, so it cannot name an unrelated project. Existing rows
@@ -103,6 +113,33 @@ Status polling calls `GET …/deployments/status`. A terminal row with a verifie
 authoritative; a `queued`/`building` row triggers a remote read and is then persisted. A
 `ready` row with a pending domain triggers a domain verification check. A transient remote
 read failure keeps the last recorded state instead of inventing a build or domain failure.
+
+### Unpublishing
+
+`POST /api/vcaas/projects/{id}/deployments/unpublish` is authenticated and ownership-checked
+exactly like a publish. The service then:
+
+1. rejects a publish that is still `queued`/`building` with `409 VALIDATION`;
+2. claims the row with `status = 'unpublishing'` and an `updated_at` optimistic lease;
+3. calls `DELETE /v9/projects/{idOrName}/domains/{hostname}` for the derived Mavly hostname;
+   a `404` means the domain is already detached;
+4. lists the project's production deployments and calls
+   `DELETE /v13/deployments/{id}` for each one, so `.vercel.app` hosts do not keep serving the
+   old bytes;
+5. records `status = 'unpublished'` only after the provider confirms those operations.
+
+A provider failure rolls the status back to the previous terminal state (or `error` for a
+stale claim) and returns the failure. A timeout on the domain `DELETE` is reconciled by
+re-reading the domain: only a `404` proves detachment. The operation never deletes the Mavly
+project, `project_files`, snapshots, the Vercel project, the hostname, DNS records or the
+wildcard. A repeated unpublish is idempotent: an `unpublished` row returns that state, and a
+fresh `unpublishing` claim returns the in-flight state instead of starting a second takedown.
+A claim left behind by a killed process is reconciled after 15 minutes from the provider's
+actual state.
+
+The wire status is `unpublished` or `unpublishing`; `canUnpublish` is `false` for both. The
+workspace loads this state on mount and polls it while an operation is in flight, so an
+unpublish started in another tab is reflected without trusting local history.
 
 For a new Mavly publish, `productionProjectUrl` is the verified
 `<project-id>.mavly.xyz`. A legacy row with no Mavly hostname keeps its existing Vercel
@@ -138,6 +175,8 @@ The code never edits DNS, nameservers or production domain settings. It only cal
 project-domain API for the exact derived hostname. While DNS or certificate verification is
 pending, the deployment remains `deploying`; it is never reported as a successful Mavly
 address. A pre-existing legacy row keeps its old URL and is not forced onto `mavly.xyz`.
+Unpublishing removes this project's domain attachment only; it never deletes the shared
+`*.mavly.xyz` wildcard or nameservers.
 
 ## Project naming and isolation
 
@@ -174,6 +213,13 @@ sanitize(prefix + "-" + mavlyProjectId) + "-" + sha256(userId + "\0" + projectId
 | Vercel timeout / transport failure | `504 UNKNOWN` |
 | Other Vercel failure | `502 UNKNOWN` |
 | Local mapping write fails after submission | `500 UNKNOWN` with an explicit message that Vercel may still have the deployment |
+| Unpublish while a publish is queued/building | `409 VALIDATION`; the publish is not interrupted |
+| Unpublish with no deployment row / already unpublished | `200` with `status: "unpublished"`; no Vercel request is needed |
+| Unpublish already in flight (fresh claim) | `200` with `status: "unpublishing"`; the caller should keep polling |
+| Domain detach fails and re-read does not prove a `404` | Failure; the row is rolled back and the site may still be live |
+| Domain detached, deployment cleanup fails for a legacy row | Failure; the legacy public host is the deployment host |
+| Domain detached, deployment cleanup fails for a Mavly host | `unpublished` with a logged warning; the Mavly URL is already down |
+| Unpublish succeeds remotely but the row cannot be updated | `500 UNKNOWN`; the message says the site is down but the record is stale |
 
 Insert-first plus a terminal-status-only update claims the single deployment slot. A
 previous attempt that created the Vercel project but failed before recording its id is
@@ -198,6 +244,11 @@ never turns a successful local delete into an error; it can leave an orphan Verc
 4. Vercel credentials, ids and raw responses are not logged.
 5. Generated source is never built, imported, transpiled or executed by Mavly.
 6. The browser never talks to Vercel directly.
+7. Unpublish accepts no ids, deployment names or hostnames from the client. It derives the
+   Vercel project target and the Mavly hostname from the owned Supabase row, or from the
+   immutable project id for the hostname, and passes them to fixed Vercel API paths.
+8. Unpublish never deletes shared DNS, nameservers, the wildcard record or the Vercel
+   project. It removes this project's domain attachment and production deployments only.
 
 ## Limits and operations
 
@@ -218,11 +269,12 @@ migration is needed.
 
 Agents must not run any of these. The repository owner should:
 
-1. Apply `07_project_deployments.sql`, then `09_mavly_deployment_domains.sql`.
+1. Apply `07_project_deployments.sql`, then `09_mavly_deployment_domains.sql`, then
+   `13_deployment_unpublish.sql`.
 2. Confirm `mavly.xyz` DNS/nameservers, wildcard resolution, Vercel domain control and SSL
    issuance as described above.
-3. With the flag unset, confirm deploy/status return `503 BACKEND_NOT_CONFIGURED` and create
-   no Vercel resource.
+3. With the flag unset, confirm deploy/status/unpublish return `503 BACKEND_NOT_CONFIGURED`
+   and create no Vercel resource.
 4. With a scoped token and the flag enabled, publish a project with a generated preview and
    confirm `<project-id>.mavly.xyz` is attached to its Vercel project and verified.
 5. Confirm the status stays `deploying` while the domain is pending, then becomes `success`
@@ -230,11 +282,32 @@ Agents must not run any of these. The repository owner should:
 6. Reload the workspace and confirm the status survives; confirm the production link only
    appears on success.
 7. Publish a legacy-style row with NULL `mavly_hostname` and confirm its old URL is retained.
-8. Delete the project and confirm the mapping is gone and the Vercel project is removed (or
-   the cleanup failure is logged without breaking the delete).
-9. Verify a second account cannot read or publish the first account's project, including its
-   Mavly hostname.
-10. Run `npx tsc --noEmit`, `npm run lint`, `npm test` and `npm run build` per `AGENTS.md`.
+8. **Unpublish integration check.** With the published URL open in a separate browser or
+   `curl`, press **Unpublish website**, confirm cancellation does nothing, then confirm. Verify
+   all of the following:
+   - the confirmation shows the real public address and says code/files are kept;
+   - the backend returns `unpublished` only after the domain DELETE succeeds;
+   - the Mavly URL no longer serves the site (DNS may still resolve; it must not serve the
+     deployment). In Vercel, the project domain is detached and the production deployments
+     are gone;
+   - the Vercel project, `public.projects`, `project_files`, snapshots and the Mavly hostname
+     still exist;
+   - the publish dialog now shows the **Publish now** action and no open/copy live link;
+   - a page reload still shows `unpublished` (the state is persisted, not local).
+9. **Republish check.** Press **Publish now** from the unpublished state and confirm the same
+   Vercel project and the same `<project-id>.mavly.xyz` address are reused, then that the URL
+   serves the site again.
+10. **Failure check.** With a deliberately invalid `VERCEL_API_TOKEN`, attempt unpublish and
+    confirm the site is not reported as down, the row is not `unpublished`, and the dialog
+    stays open with an actionable error.
+11. **Concurrency check.** Send two unpublish requests for the same project; one must claim
+    the row and the other must answer `unpublished` or `unpublishing`, never start a second
+    remote takedown or mark a live site down.
+12. Delete the project and confirm the mapping is gone and the Vercel project is removed (or
+    the cleanup failure is logged without breaking the delete).
+13. Verify a second account cannot read, publish or unpublish the first account's project,
+    including its Mavly hostname.
+14. Run `npx tsc --noEmit`, `npm run lint`, `npm test` and `npm run build` per `AGENTS.md`.
 
 ## Custom-hostname 522 — external investigation (NOT fixed by this repository)
 

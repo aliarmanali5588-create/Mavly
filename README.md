@@ -41,7 +41,7 @@ audits listed at the end of this file; it is not a runtime dependency.
 | Preview | Sandboxed static `preview.html`, or an imported static `index.html` / `public/index.html` with local assets |
 | Supabase account connection | OAuth with PKCE, encrypted server-side tokens, organization/project discovery and one selected project |
 | Figma design reference | Personal access token validated with Figma, encrypted per project, and a bounded design summary injected into generation |
-| Publishing (opt-in, disabled by default) | Static files → deterministic Vercel project, published at `<project-id>.mavly.xyz`; framework builds are not run. Deployment and domain state persisted and polled. Requires `MAVLY_VERCEL_DEPLOYMENTS_ENABLED=1`, `VERCEL_API_TOKEN` and operator-configured `mavly.xyz` DNS/SSL. See [`MAVLY_VERCEL_DEPLOYMENTS.md`](MAVLY_VERCEL_DEPLOYMENTS.md). |
+| Publishing (opt-in, disabled by default) | Static files → deterministic Vercel project, published at `<project-id>.mavly.xyz`; framework builds are not run. Deployment and domain state persisted and polled. **Unpublish** removes the Mavly project domain and production deployments, preserving the project/files for republishing. Requires `MAVLY_VERCEL_DEPLOYMENTS_ENABLED=1`, `VERCEL_API_TOKEN` and operator-configured `mavly.xyz` DNS/SSL. See [`MAVLY_VERCEL_DEPLOYMENTS.md`](MAVLY_VERCEL_DEPLOYMENTS.md). |
 | `/api/config` | `200 { "ok": true, "data": { "configured": false } }` |
 | Visual shell | Dashboard, workspace, chat, composer, dialogs and preview frame render |
 
@@ -90,7 +90,7 @@ browser ── src/lib/vcaas.ts (client catalog, same-origin only)
    │      ├── src/lib/mavly/run-agent.ts background generation
    │      │      ├── src/lib/integrations/figma/* → api.figma.com
    │      │      └── src/lib/ai/agent.ts → src/lib/ai/provider.ts → src/lib/ai/groq.ts
-   │      └── src/lib/deployments/*      opt-in publish orchestration
+   │      └── src/lib/deployments/*      opt-in publish/unpublish orchestration
    │             ├── store.ts            project_deployments (RLS)
    │             └── service.ts → src/lib/vercel/provider.ts → api.vercel.com
    ├── /api/vcaas/source-code/{id} auth + ownership → generated ZIP
@@ -127,6 +127,11 @@ browser ── src/lib/vcaas.ts (client catalog, same-origin only)
   deployment plus domain status in `project_deployments`. Success requires both the
   deployment and the verified domain. The browser never calls Vercel and never supplies a
   Vercel id, URL or hostname.
+- **Unpublishing:** a separate authenticated operation. It claims the mapping, detaches the
+  Mavly project domain, removes the project's production deployments, and records
+  `unpublished` only after Vercel confirms. The Vercel project, Mavly hostname, project row
+  and files are preserved, so republishing reuses the same address. Shared DNS and the
+  wildcard are never touched.
 - **Supabase connection:** authorization-code flow with PKCE, a single-use state row and
   AES-256-GCM encrypted access/refresh tokens. The selected external project is stored per
   Mavly account, separately from `public.projects.project_id`.
@@ -255,8 +260,9 @@ Apply the schema in `supabase/migrations/` with the Supabase CLI (`supabase db p
 pasting the migrations into the Supabase SQL editor. `03_ai_builder.sql` creates the file,
 message and run tables. `04_supabase_integration.sql` creates the encrypted connection and
 OAuth state tables. `07_project_deployments.sql` creates the deployment mapping used only
-when publishing is enabled, and `09_mavly_deployment_domains.sql` adds the Mavly-owned
-domain state. `08_figma_integration.sql` creates the encrypted per-project Figma
+when publishing is enabled, `09_mavly_deployment_domains.sql` adds the Mavly-owned
+domain state, and `13_deployment_unpublish.sql` adds the `unpublishing`/`unpublished` states
+and `last_unpublished_at`. `08_figma_integration.sql` creates the encrypted per-project Figma
 connection. `10_generation_jobs.sql` adds the durable run lifecycle, per-batch checkpoints
 and the atomic admission function; **apply it before deploying code that reads those
 columns.** `11_project_secrets.sql` creates encrypted project-secret storage with RLS and
@@ -340,7 +346,8 @@ npm run build && npm start
 
 Unit tests cover the pure auth/redirect/ownership/scope modules, static route invariants,
 Groq request/response classification, generation validator/batching/truncation rules,
-provider retry classification, and checkpoint verification. They do not exercise a real
+provider retry classification, checkpoint verification, deployment host/state rules, and the
+pure Vercel domain-detach/deployment-removal request shapes. They do not exercise a real
 Supabase session, a live Groq or OpenRouter image call, the Supabase OAuth connection, the
 new migration or a generated app. A manual OAuth check needs a real Supabase OAuth app:
 connect, verify organization/project discovery, save a selection, refresh the page,

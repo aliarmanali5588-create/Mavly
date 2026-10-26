@@ -1,5 +1,5 @@
 /**
- * Publish orchestration for Mavly-managed Vercel deployments.
+ * Publish and unpublish orchestration for Mavly-managed Vercel deployments.
  *
  * The route has already authenticated the caller and proved ownership of
  * `projectId`. This module repeats the project read through the caller's
@@ -36,22 +36,29 @@ import {
   addVercelProjectDomain,
   createVercelDeployment,
   createVercelProject,
+  deleteVercelDeployment,
   deleteVercelProject,
   getVercelDeployment,
   getVercelProject,
   getVercelProjectDomain,
   isVercelFailure,
+  listVercelProductionDeployments,
+  removeVercelProjectDomain,
   uploadDeploymentFile,
   vercelProjectName,
   verifyVercelProjectDomain,
   type VercelFailure,
   type VercelProjectDomain,
+  type VercelResult,
 } from "@/lib/vercel/provider";
 import {
   beginDeployment,
+  claimUnpublish,
+  finishUnpublish,
   getDeploymentRow,
   isDeploymentRowStale,
   isDeploymentStoreFailure,
+  releaseUnpublish,
   updateDeploymentRow,
   type DeploymentRow,
   type DeploymentStatus as StoredDeploymentStatus,
@@ -115,9 +122,13 @@ function storedStatusFor(readyState: string): StoredDeploymentStatus {
   }
 }
 
-function wireStatus(status: StoredDeploymentStatus): "deploying" | "success" | "error" {
+function wireStatus(
+  status: StoredDeploymentStatus,
+): "deploying" | "success" | "error" | "unpublishing" | "unpublished" {
   if (status === "ready") return "success";
   if (status === "error" || status === "canceled") return "error";
+  if (status === "unpublishing") return "unpublishing";
+  if (status === "unpublished") return "unpublished";
   return "deploying";
 }
 
@@ -127,9 +138,10 @@ function wireStatus(status: StoredDeploymentStatus): "deploying" | "success" | "
  * A row with a Mavly hostname only exposes it after Vercel reports the domain
  * verified. A legacy row (no Mavly hostname) keeps its existing Vercel address,
  * so historical deployments continue to work and their URL is never rewritten.
+ * An unpublished row exposes no address at all.
  */
 export function deploymentHost(row: DeploymentRow | null): string {
-  if (!row) return "";
+  if (!row || row.status === "unpublished") return "";
   if (row.mavly_hostname) {
     return row.mavly_domain_status === "verified" ? row.mavly_hostname : "";
   }
@@ -138,6 +150,34 @@ export function deploymentHost(row: DeploymentRow | null): string {
 
 export function wireDeploymentStatus(row: DeploymentRow): WireDeploymentStatus {
   const deploymentState = wireStatus(row.status);
+  const createdAt =
+    row.status === "unpublished"
+      ? row.last_unpublished_at ?? row.last_published_at ?? row.created_at
+      : row.last_published_at ?? row.created_at;
+
+  /**
+   * An unpublished mapping is a real state, not "no row": it keeps the Vercel
+   * project mapping and Mavly hostname for a later republish, but it must never
+   * expose a live URL or invite a second unpublish.
+   */
+  if (deploymentState === "unpublished") {
+    return {
+      status: "unpublished",
+      createdAt,
+      step: "unpublished",
+      canUnpublish: false,
+    };
+  }
+  if (deploymentState === "unpublishing") {
+    return {
+      status: "unpublishing",
+      createdAt,
+      step: "unpublishing",
+      canUnpublish: false,
+      ...(row.vercel_deployment_id ? { deploymentId: row.vercel_deployment_id } : {}),
+    };
+  }
+
   const hasMavlyHostname = Boolean(row.mavly_hostname);
   const domainVerified = !hasMavlyHostname || row.mavly_domain_status === "verified";
   const domainErrorCode = (row.error_code ?? "").toLowerCase();
@@ -155,13 +195,23 @@ export function wireDeploymentStatus(row: DeploymentRow): WireDeploymentStatus {
       : deploymentState;
   const domainStep = row.status === "ready" && hasMavlyHostname && !domainVerified;
   const host = deploymentHost(row);
-  const createdAt = row.last_published_at ?? row.created_at;
 
   return {
     status,
     createdAt,
     ...(row.vercel_deployment_id ? { deploymentId: row.vercel_deployment_id } : {}),
     step: status === "deploying" ? (domainStep ? "domain" : "building") : status,
+    /**
+     * Unpublish is offered when there is something public to take down. A failed
+     * republish can leave the previous production deployment serving at the same
+     * Mavly host, so an `error`/`canceled` row still qualifies when a hostname or
+     * deployment id proves the publish reached Vercel. A first publish that failed
+     * before either existed has nothing to unpublish.
+     */
+    canUnpublish:
+      row.status === "ready" ||
+      ((row.status === "error" || row.status === "canceled") &&
+        Boolean(row.mavly_hostname || row.vercel_deployment_id)),
     ...(status === "success" && host ? { liveUrl: `https://${host}` } : {}),
     ...(status === "error"
       ? {
@@ -570,6 +620,350 @@ export async function publishProject(
   return { ok: true, data: wireDeploymentStatus(updated.data) };
 }
 
+function releasableStatus(
+  status: StoredDeploymentStatus,
+): Exclude<StoredDeploymentStatus, "unpublishing" | "unpublished"> {
+  return status === "ready" || status === "error" || status === "canceled"
+    ? status
+    : "error";
+}
+
+/**
+ * Confirm whether a failed DELETE actually detached the domain.
+ *
+ * A transport timeout may mean Vercel processed the request; the provider state
+ * is the authority. Only a 404 (no attached domain) is proof of detachment.
+ */
+async function domainDetachedAfterFailure(
+  config: VercelDeploymentConfig,
+  target: string,
+  hostname: string,
+): Promise<boolean | null> {
+  const existing = await getVercelProjectDomain(config, target, hostname);
+  if (isVercelFailure(existing)) {
+    return existing.failure.status === 404 ? true : null;
+  }
+  return false;
+}
+
+async function removeProductionDeployments(
+  config: VercelDeploymentConfig,
+  row: DeploymentRow,
+  required: boolean,
+): Promise<VercelResult<void>> {
+  const target = row.vercel_project_id || row.vercel_project_name;
+  const ids = new Set<string>();
+  if (row.vercel_deployment_id) ids.add(row.vercel_deployment_id);
+
+  if (target) {
+    const listed = await listVercelProductionDeployments(config, target);
+    if (isVercelFailure(listed)) {
+      if (required) return listed;
+      console.warn(
+        "[deployments] unpublish could not list every production deployment; removing the recorded one only",
+      );
+    } else {
+      for (const id of listed.data) ids.add(id);
+    }
+  }
+
+  for (const id of ids) {
+    const deleted = await deleteVercelDeployment(config, id);
+    if (isVercelFailure(deleted)) {
+      if (required) return deleted;
+      console.warn(
+        "[deployments] the Mavly address is detached, but a Vercel deployment could not be removed",
+      );
+    }
+  }
+  return { ok: true, data: undefined };
+}
+
+async function rollBackUnpublish(
+  projectId: string,
+  leaseUpdatedAt: string,
+  previousStatus: StoredDeploymentStatus,
+  message: string,
+  /**
+   * A cleanup that may have removed some of the public deployments cannot be
+   * rolled back to `ready` without risking a false "the site is live" claim. It
+   * is restored as `error` instead; `canUnpublish` stays true so it can be retried.
+   */
+  restoreStatus?: Exclude<StoredDeploymentStatus, "unpublishing" | "unpublished">,
+): Promise<void> {
+  const restoreTo = restoreStatus ?? releasableStatus(previousStatus);
+  const recordFailure =
+    previousStatus === "unpublishing" || restoreTo !== previousStatus || restoreTo === "error";
+  /**
+   * The status and the failure text are written in ONE lease-guarded statement.
+   * A second update would be unconditional, so a new publish could claim the row
+   * between the two writes and inherit an old unpublish error.
+   */
+  const released = await releaseUnpublish(
+    projectId,
+    leaseUpdatedAt,
+    restoreTo,
+    recordFailure
+      ? { code: "unpublish_failed", message: message.slice(0, ERROR_MESSAGE_MAX) }
+      : undefined,
+  );
+  if (isDeploymentStoreFailure(released)) {
+    console.error("[deployments] could not roll back a failed unpublish:", released.error);
+  }
+}
+
+/**
+ * ═══ UNPUBLISH — THE PUBLIC SITE ACTUALLY GOES DOWN ═════════════════════════
+ *
+ * There is no "hide the URL" state here. The operation:
+ *
+ *   1. claims the mapping with an optimistic lease (`status = unpublishing`);
+ *   2. detaches the derived `<project-id>.mavly.xyz` project domain at Vercel —
+ *      this is what stops the public Mavly address serving the site;
+ *   3. removes the project's production deployments, so their `.vercel.app`
+ *      hosts and aliases do not keep serving the old bytes either;
+ *   4. records `unpublished` only after the provider confirms the public host is
+ *      gone. A provider failure rolls the status back and is reported as a
+ *      failure — it never fabricates success.
+ *
+ * Shared wildcard DNS is untouched. The Vercel project, its deterministic name,
+ * the Mavly hostname, the Mavly project row and every generated file are kept so
+ * the same project can publish again at the same address.
+ *
+ * A row whose `mavly_hostname` is NULL is a legacy mapping whose public address
+ * is the Vercel project host. For those, removing the production deployments is
+ * the critical operation rather than detaching a domain.
+ */
+export async function unpublishProject(
+  userId: string,
+  projectId: string,
+): Promise<DeploymentServiceResult<WireDeploymentStatus>> {
+  const project = await getProject(userId, projectId);
+  if (isStoreFailure(project)) {
+    return fail(500, "UNKNOWN", "Could not load this project.");
+  }
+  if (!project.data) return fail(404, "PROJECT_NOT_FOUND", "Project not found.");
+
+  const rowResult = await getDeploymentRow(projectId);
+  if (isDeploymentStoreFailure(rowResult)) {
+    return fail(500, "UNKNOWN", "Could not load the deployment status.");
+  }
+  const row = rowResult.data;
+  if (!row) {
+    return {
+      ok: true,
+      data: { status: "unpublished", createdAt: null, step: "unpublished", canUnpublish: false },
+    };
+  }
+  if (row.status === "unpublished") {
+    return { ok: true, data: wireDeploymentStatus(row) };
+  }
+  if (row.status === "queued" || row.status === "building") {
+    return fail(409, "VALIDATION", "A publish is already in progress. Wait for it to finish before unpublishing.");
+  }
+  if (row.status === "unpublishing" && !isDeploymentRowStale(row)) {
+    return { ok: true, data: wireDeploymentStatus(row) };
+  }
+
+  const config = readVercelDeploymentConfig();
+  if (isVercelDeploymentConfigFailure(config)) {
+    return fail(
+      503,
+      "BACKEND_NOT_CONFIGURED",
+      config.reason === "disabled"
+        ? "Unpublishing is not enabled on this Mavly deployment."
+        : "Unpublishing is not configured on this Mavly deployment.",
+    );
+  }
+
+  const claimed = await claimUnpublish(projectId, row);
+  if (isDeploymentStoreFailure(claimed)) {
+    /**
+     * A concurrent request may have just finished. Re-read before answering so
+     * a repeated click gets the authoritative state instead of a blind error.
+     */
+    const latest = await getDeploymentRow(projectId);
+    if (!isDeploymentStoreFailure(latest) && latest.data) {
+      if (latest.data.status === "unpublished" || latest.data.status === "unpublishing") {
+        return { ok: true, data: wireDeploymentStatus(latest.data) };
+      }
+      if (latest.data.status === "queued" || latest.data.status === "building") {
+        return fail(409, "VALIDATION", "A publish is already in progress. Wait for it to finish before unpublishing.");
+      }
+    }
+    return fail(
+      409,
+      "VALIDATION",
+      "A deployment operation is already in progress. Reload the project and try again.",
+    );
+  }
+
+  const lease = claimed.data.updated_at;
+  const target = row.vercel_project_id || row.vercel_project_name;
+
+  try {
+    if (row.mavly_hostname) {
+      if (!target) {
+        const message = "This deployment has no Vercel project mapping to unpublish.";
+        await rollBackUnpublish(projectId, lease, row.status, message);
+        return fail(500, "UNKNOWN", message);
+      }
+
+      const removed = await removeVercelProjectDomain(
+        config.config,
+        target,
+        row.mavly_hostname,
+      );
+      if (isVercelFailure(removed)) {
+        const detached = await domainDetachedAfterFailure(
+          config.config,
+          target,
+          row.mavly_hostname,
+        );
+        if (detached !== true) {
+          const publicFailure = publicDeploymentFailure(removed.failure, "unpublish");
+          await rollBackUnpublish(
+            projectId,
+            lease,
+            row.status,
+            publicFailure.error,
+          );
+          return { ok: false, ...publicFailure };
+        }
+      }
+    }
+
+    /**
+     * A legacy row has no Mavly domain, so removing its production deployments
+     * is what takes the public address down and therefore must succeed. For a
+     * Mavly row the domain is already detached; deployment cleanup is a second
+     * layer so the old `.vercel.app` host does not remain public.
+     */
+    const cleaned = await removeProductionDeployments(
+      config.config,
+      row,
+      /* required */ row.mavly_hostname === null,
+    );
+    if (isVercelFailure(cleaned)) {
+      const publicFailure = publicDeploymentFailure(cleaned.failure, "unpublish");
+      /**
+       * Only a legacy row reaches this branch (a Mavly row treats cleanup as
+       * best-effort). Some of its production deployments may already be gone, so
+       * restoring `ready` could claim a live site that no longer exists.
+       */
+      await rollBackUnpublish(
+        projectId,
+        lease,
+        row.status,
+        publicFailure.error,
+        row.mavly_hostname === null ? "error" : undefined,
+      );
+      return { ok: false, ...publicFailure };
+    }
+
+    const finished = await finishUnpublish(projectId, lease);
+    if (isDeploymentStoreFailure(finished)) {
+      console.error("[deployments] unpublish finished remotely but was not recorded:", finished.error);
+      return fail(
+        500,
+        "UNKNOWN",
+        "The website is no longer public, but Mavly could not record the change. Reload in a moment to see the current state.",
+      );
+    }
+    return { ok: true, data: wireDeploymentStatus(finished.data) };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("[deployments] unexpected unpublish failure:", message);
+    await rollBackUnpublish(
+      projectId,
+      lease,
+      row.status,
+      "The hosting provider did not confirm the unpublish. The website may still be live.",
+    );
+    return fail(
+      502,
+      "UNKNOWN",
+      "The hosting provider did not confirm the unpublish. The website may still be live.",
+    );
+  }
+}
+
+/**
+ * Reconcile a stale `unpublishing` claim after a process died mid-request.
+ *
+ * The provider state decides: a missing project domain (Mavly host) or no READY
+ * production deployment (legacy) means the site is down and the row is moved to
+ * `unpublished`; a still-attached domain/deployment means the takedown did not
+ * complete, so the row is moved back to a state that reflects what is actually
+ * serving rather than leaving the UI stuck on "Unpublishing".
+ */
+async function reconcileStaleUnpublish(
+  config: VercelDeploymentConfig,
+  row: DeploymentRow,
+): Promise<DeploymentRow> {
+  const target = row.vercel_project_id || row.vercel_project_name;
+
+  let domainDetached = row.mavly_hostname === null;
+  if (row.mavly_hostname) {
+    if (!target) return row;
+    const domain = await getVercelProjectDomain(config, target, row.mavly_hostname);
+    if (isVercelFailure(domain)) {
+      if (domain.failure.status !== 404) return row;
+      domainDetached = true;
+    } else {
+      domainDetached = false;
+    }
+  }
+
+  let deploymentStillReady = false;
+  if (row.vercel_deployment_id) {
+    const deployment = await getVercelDeployment(config, row.vercel_deployment_id);
+    if (isVercelFailure(deployment)) {
+      if (deployment.failure.status !== 404) return row;
+    } else {
+      deploymentStillReady = deployment.data.readyState.toUpperCase() === "READY";
+    }
+  }
+
+  let cleanupFailed = false;
+  if (domainDetached) {
+    /**
+     * Finish the takedown the dead process started. A Mavly host is already
+     * detached, so deployment cleanup is best-effort; a legacy host IS the Vercel
+     * deployment host, so a cleanup failure must not be recorded as unpublished.
+     */
+    const cleaned = await removeProductionDeployments(
+      config,
+      row,
+      row.mavly_hostname === null,
+    );
+    if (!isVercelFailure(cleaned)) {
+      const finished = await finishUnpublish(row.project_id, row.updated_at);
+      if (!isDeploymentStoreFailure(finished)) return finished.data;
+      return row;
+    }
+    cleanupFailed = true;
+  }
+
+  /**
+   * Something is still serving — or a legacy cleanup removed some deployments and
+   * then failed, which is not proof of a live site. Record that the takedown did
+   * not finish instead of pretending it did; the owner can retry. This uses the
+   * same lease as the claim, so a concurrent worker cannot be overwritten.
+   */
+  const restored = await releaseUnpublish(
+    row.project_id,
+    row.updated_at,
+    !cleanupFailed && (deploymentStillReady || row.mavly_hostname) ? "ready" : "error",
+    {
+      code: "unpublish_incomplete",
+      message:
+        "The unpublish did not finish. The website may still be live; try unpublishing again.",
+    },
+  );
+  return isDeploymentStoreFailure(restored) ? row : restored.data;
+}
+
 export async function getProjectDeploymentStatus(
   userId: string,
   projectId: string,
@@ -584,7 +978,37 @@ export async function getProjectDeploymentStatus(
   if (isDeploymentStoreFailure(row)) {
     return fail(500, "UNKNOWN", "Could not load the deployment status.");
   }
-  if (!row.data) return { ok: true, data: { status: null, createdAt: null } };
+  if (!row.data) {
+    return {
+      ok: true,
+      data: { status: "unpublished", createdAt: null, step: "unpublished", canUnpublish: false },
+    };
+  }
+
+  /**
+   * A recorded unpublish is terminal. It still keeps the Vercel project mapping
+   * for a later republish, but no remote read is needed and no live URL exists.
+   */
+  if (row.data.status === "unpublished") {
+    return { ok: true, data: wireDeploymentStatus(row.data) };
+  }
+
+  /**
+   * An unpublish is a short server operation, but a killed process can leave the
+   * claim behind. Only a stale claim is reconciled, so a request that is still in
+   * flight is never raced.
+   */
+  if (row.data.status === "unpublishing") {
+    if (!isDeploymentRowStale(row.data)) {
+      return { ok: true, data: wireDeploymentStatus(row.data) };
+    }
+    const config = readVercelDeploymentConfig();
+    if (isVercelDeploymentConfigFailure(config)) {
+      return { ok: true, data: wireDeploymentStatus(row.data) };
+    }
+    const reconciled = await reconcileStaleUnpublish(config.config, row.data);
+    return { ok: true, data: wireDeploymentStatus(reconciled) };
+  }
 
   /**
    * An in-flight deployment needs a remote read. A ready deployment with a

@@ -12,14 +12,14 @@ import {
     RocketIcon,
     TriangleAlertIcon,
 } from "lucide-react";
-import { CopyButton, Modal, StatusPill } from "@/components/primitives";
+import { ConfirmDialog, CopyButton, Modal, StatusPill } from "@/components/primitives";
 import { Button } from "@/components/ui/button";
 import { useT } from "@/i18n";
 import { getDomainProgress } from "@/lib/domain-status";
 import { engineOf, getPublishedHost } from "@/lib/project-status";
 import { usePrice } from "@/components/credits/CreditsProvider";
 import { cn } from "@/lib/utils";
-import type { VcaasProject } from "@/lib/vcaas-types";
+import type { DeploymentStatus, VcaasProject } from "@/lib/vcaas-types";
 import { DomainPendingBadge, DomainProgressCompact } from "./DomainProgress";
 
 /**
@@ -78,7 +78,11 @@ import { DomainPendingBadge, DomainProgressCompact } from "./DomainProgress";
 export interface DeployControlProps {
     projectId: string;
     project: VcaasProject | null;
+    /** The authoritative state from `GET deployments/status`, when loaded. */
+    deploymentStatus?: DeploymentStatus | null;
     isDeploying: boolean;
+    /** True while the unpublish request is in flight (or a previous one is durable). */
+    isUnpublishing?: boolean;
     /** Deploying mid-run would publish a half-written build. */
     isRunning: boolean;
     /**
@@ -94,22 +98,48 @@ export interface DeployControlProps {
     blockedReason?: string | null;
     onDeploy: () => void;
     onOpenDomain: () => void;
+    /** Runs the real unpublish and rejects when the backend did not confirm it. */
+    onUnpublish: () => Promise<void>;
+    /** Optional controlled state, so a mobile menu item can open the same dialog. */
+    open?: boolean;
+    onOpenChange?: (open: boolean) => void;
 }
 
 export function DeployControl({
     projectId,
     project,
+    deploymentStatus = null,
     isDeploying,
+    isUnpublishing: isUnpublishingProp = false,
     isRunning,
     blockedReason = null,
     onDeploy,
     onOpenDomain,
+    onUnpublish,
+    open: openProp,
+    onOpenChange,
 }: DeployControlProps) {
     const t = useT();
     const price = usePrice();
-    const [open, setOpen] = React.useState(false);
+    const [internalOpen, setInternalOpen] = React.useState(false);
+    const [confirmUnpublish, setConfirmUnpublish] = React.useState(false);
+    const [unpublishError, setUnpublishError] = React.useState<string | null>(null);
+    const open = openProp ?? internalOpen;
+    const setOpen = onOpenChange ?? setInternalOpen;
 
-    const isPublished = project?.deployment?.status === "success";
+    const wireStatus = deploymentStatus?.status ?? null;
+    const projectStatus = project?.deployment?.status ?? null;
+    const isPublished = wireStatus === "success" || (wireStatus === null && projectStatus === "success");
+    const isUnpublishing = isUnpublishingProp || wireStatus === "unpublishing";
+    const isPublishing = isDeploying || wireStatus === "deploying";
+    const isFailed =
+        !isPublished &&
+        !isPublishing &&
+        !isUnpublishing &&
+        (wireStatus === "error" || (wireStatus === null && projectStatus === "error"));
+    const isUnpublished = wireStatus === "unpublished";
+    const canUnpublish =
+        !isUnpublishing && !isPublishing && (Boolean(deploymentStatus?.canUnpublish) || isPublished);
     const domain = project?.customDomain;
     const domainProgress = getDomainProgress(domain);
 
@@ -124,6 +154,25 @@ export function DeployControl({
     const publishedHost = getPublishedHost(project, projectId);
 
     const liveUrl = `https://${publishedHost}`;
+
+    async function handleUnpublish() {
+        setUnpublishError(null);
+        try {
+            await onUnpublish();
+            setOpen(false);
+        } catch (error) {
+            /**
+             * The confirmation stays open on purpose: the user must be able to
+             * read the backend's reason and retry without guessing what happened.
+             */
+            setUnpublishError(
+                error instanceof Error && error.message
+                    ? error.message
+                    : t("workspace.deploy.unpublishFailed"),
+            );
+            throw error;
+        }
+    }
 
     return (
         <>
@@ -140,13 +189,17 @@ export function DeployControl({
                 disabled={isRunning}
                 onClick={() => setOpen(true)}
             >
-                {isDeploying ? (
+                {isPublishing ? (
                     <LoaderIcon className="size-3.5 animate-spin" aria-hidden />
                 ) : (
                     <RocketIcon className="size-3.5" aria-hidden />
                 )}
                 <span className="hidden sm:inline">
-                    {isDeploying ? t("workspace.deploy.deploying") : t("workspace.deploy.publish")}
+                    {isUnpublishing
+                        ? t("workspace.deploy.unpublishing")
+                        : isPublishing
+                          ? t("workspace.deploy.deploying")
+                          : t("workspace.deploy.publish")}
                 </span>
             </Button>
 
@@ -155,19 +208,39 @@ export function DeployControl({
                 onOpenChange={setOpen}
                 size="md"
                 title={
-                    isPublished
-                        ? t("workspace.deploy.titlePublished")
-                        : t("workspace.deploy.titleFirst")
+                    isUnpublishing
+                        ? t("workspace.deploy.titleUnpublishing")
+                        : isPublished
+                          ? t("workspace.deploy.titleLive")
+                          : t("workspace.deploy.titleFirst")
                 }
                 description={
-                    isPublished
-                        ? t("workspace.deploy.subtitlePublished")
-                        : t("workspace.deploy.subtitleFirst")
+                    isUnpublishing
+                        ? t("workspace.deploy.subtitleUnpublishing")
+                        : isPublished
+                          ? t("workspace.deploy.subtitleLive")
+                          : t("workspace.deploy.subtitleFirst")
                 }
                 headerAside={
-                    isPublished ? (
+                    isUnpublishing ? (
+                        <StatusPill tone="warning" dot pulse>
+                            {t("workspace.deploy.unpublishing")}
+                        </StatusPill>
+                    ) : isPublished ? (
                         <StatusPill tone="success" dot>
                             {t("workspace.deploy.live")}
+                        </StatusPill>
+                    ) : isPublishing ? (
+                        <StatusPill tone="info" dot pulse>
+                            {t("workspace.deploy.publishing")}
+                        </StatusPill>
+                    ) : isFailed ? (
+                        <StatusPill tone="danger" dot>
+                            {t("workspace.deploy.failedShort")}
+                        </StatusPill>
+                    ) : isUnpublished ? (
+                        <StatusPill tone="neutral" dot>
+                            {t("workspace.deploy.unpublishedPill")}
                         </StatusPill>
                     ) : null
                 }
@@ -176,15 +249,29 @@ export function DeployControl({
                         <Button variant="outline" onClick={() => setOpen(false)}>
                             {t("common.close")}
                         </Button>
+                        {canUnpublish ? (
+                            <Button
+                                variant="outline"
+                                className="text-destructive hover:bg-destructive/10 hover:text-destructive border-destructive/30"
+                                disabled={isPublishing || isUnpublishing}
+                                onClick={() => {
+                                    setUnpublishError(null);
+                                    setConfirmUnpublish(true);
+                                }}
+                            >
+                                <GlobeIcon className="size-4" aria-hidden />
+                                {t("workspace.deploy.unpublishAction")}
+                            </Button>
+                        ) : null}
                         <Button
                             className="gap-2"
-                            disabled={isDeploying || isRunning || !!blockedReason}
+                            disabled={isPublishing || isUnpublishing || isRunning || !!blockedReason}
                             onClick={() => {
                                 setOpen(false);
                                 onDeploy();
                             }}
                         >
-                            {isDeploying ? (
+                            {isPublishing ? (
                                 <LoaderIcon className="size-4 animate-spin" aria-hidden />
                             ) : (
                                 <RocketIcon className="size-4" aria-hidden />
@@ -217,13 +304,23 @@ export function DeployControl({
                     <section
                         className={cn(
                             "rounded-xl border p-4",
-                            isPublished ? "border-success/30 bg-success-subtle/50" : "bg-surface-sunken"
+                            isUnpublishing
+                                ? "border-warning/40 bg-warning-subtle/40"
+                                : isPublished
+                                  ? "border-success/30 bg-success-subtle/50"
+                                  : canUnpublish
+                                    ? "border-warning/30 bg-warning-subtle/30"
+                                    : "bg-surface-sunken"
                         )}
                     >
                         <p className="text-muted-foreground text-2xs font-medium tracking-wider uppercase">
-                            {isPublished
-                                ? t("workspace.deploy.liveNow")
-                                : t("workspace.deploy.willBeLiveAt")}
+                            {isUnpublishing
+                                ? t("workspace.deploy.takingDown")
+                                : isPublished
+                                  ? t("workspace.deploy.liveNow")
+                                  : canUnpublish
+                                    ? t("workspace.deploy.publicAddress")
+                                    : t("workspace.deploy.willBeLiveAt")}
                         </p>
 
                         {/*
@@ -237,7 +334,9 @@ export function DeployControl({
                                 {publishedHost}
                             </p>
                             <div className="flex shrink-0 items-center gap-1">
-                                <CopyButton value={liveUrl} size="icon" />
+                                {!isUnpublished && !isUnpublishing ? (
+                                    <CopyButton value={liveUrl} size="icon" />
+                                ) : null}
                                 {isPublished ? (
                                     <Button variant="ghost" size="icon" className="size-8" asChild>
                                         <a
@@ -367,6 +466,36 @@ export function DeployControl({
                     </section>
                 </div>
             </Modal>
+
+            {/*
+              ⚠️ THE CONFIRMATION IS A SECOND, SMALLER DIALOG on purpose: the publish
+              dialog stays open behind it, and a failed unpublish keeps the confirm
+              open with the backend's reason instead of closing as if it worked.
+            */}
+            <ConfirmDialog
+                open={confirmUnpublish}
+                onOpenChange={setConfirmUnpublish}
+                tone="danger"
+                title={t("workspace.deploy.unpublishTitle")}
+                description={t("workspace.deploy.unpublishDescription")}
+                confirmLabel={t("workspace.deploy.unpublishAction")}
+                onConfirm={handleUnpublish}
+            >
+                <div className="border-border bg-surface-sunken rounded-xl border p-3">
+                    <p className="text-muted-foreground text-2xs font-medium tracking-wider uppercase">
+                        {t("workspace.deploy.publicAddress")}
+                    </p>
+                    <p className="mt-1 font-mono text-sm break-all">{publishedHost}</p>
+                </div>
+                {unpublishError ? (
+                    <p
+                        role="alert"
+                        className="border-destructive/30 bg-destructive/10 text-destructive mt-3 rounded-xl border p-3 text-xs leading-relaxed"
+                    >
+                        {unpublishError}
+                    </p>
+                ) : null}
+            </ConfirmDialog>
         </>
     );
 }

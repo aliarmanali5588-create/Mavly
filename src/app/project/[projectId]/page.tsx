@@ -33,14 +33,13 @@ import { ConfirmDialog, Modal } from "@/components/primitives";
 import { ImportOverlay } from "@/components/workspace/ImportOverlay";
 import { PathPicker } from "@/components/workspace/PathPicker";
 import { looksLikePlaceholder } from "@/lib/preview-health";
-import type { VcaasProject, ConversationMessage, ProjectVersion, AgentRunOptions, AgentInputFile } from "@/lib/vcaas-types";
+import type { VcaasProject, ConversationMessage, ProjectVersion, AgentRunOptions, AgentInputFile, DeploymentStatus } from "@/lib/vcaas-types";
 import { loadAttachments, saveAttachments } from "@/lib/composer-attachments";
 import { useServerWake } from "@/components/workspace/use-server-wake";
 import { ServerWakeNotice } from "@/components/workspace/ServerWakeNotice";
 import { ServerBlockedDialog, useServerBlocked } from "@/components/workspace/ServerBlockedDialog";
 import { FigmaModal } from "@/components/workspace/FigmaModal";
 import { OperationBanner } from "@/components/workspace/OperationBanner";
-import { PublishedModal } from "@/components/workspace/PublishedModal";
 import { useProjectOperation } from "@/components/workspace/use-project-operation";
 import { OPERATION_COPY, OPERATION_PROFILES } from "@/lib/project-operation";
 import { getPublishedHost, getPreviewUrlField, isV2Project } from "@/lib/project-status";
@@ -101,6 +100,10 @@ const IDLE_POLLS_BEFORE_GIVING_UP = 3;
  * only about not dropping the overlay onto the sandbox's "preview building" placeholder.
  */
 const IMPORT_PREVIEW_GRACE_MS = 90_000;
+
+/** Publishing takes ~3 minutes; 90 × 10s leaves room for a slow Vercel build. */
+const DEPLOY_POLL_INTERVAL_MS = 10_000;
+const DEPLOY_POLL_MAX_ATTEMPTS = 90;
 
 /**
  * One shared empty list, so "this project has no attachments" is always the SAME
@@ -261,7 +264,19 @@ export default function WorkspacePage() {
    * same sandbox, so starting one while another runs is refused rather than queued.
    */
   const operation = useProjectOperation(projectId);
-  const [publishedHost, setPublishedHost] = useState<string | null>(null);
+  /**
+   * ⭐ THE PUBLISH/PUBLISHED DIALOG, AND THE STATE THAT FILLS IT.
+   *
+   * `deploymentStatus` is the authoritative answer from
+   * `GET …/deployments/status` — never inferred from the page's own request
+   * history. It is re-read on mount, whenever a publish/unpublish settles, and
+   * every ten seconds while either operation is still in flight, so an unpublish
+   * started in another tab is reflected here instead of leaving a dead URL on
+   * screen.
+   */
+  const [deploymentStatus, setDeploymentStatus] = useState<DeploymentStatus | null>(null);
+  const [unpublishing, setUnpublishing] = useState(false);
+  const [publishDialogOpen, setPublishDialogOpen] = useState(false);
   const restoringVersion = operation.kind === "restoreVersion";
 
   /**
@@ -415,6 +430,21 @@ export default function WorkspacePage() {
   // message list we re-hydrate the chips/thumbnails onto matching user messages.
   const sentFilesRef = useRef<{ message: string; files: { name: string; url: string; imageDescription: string }[] }[]>([]);
   const pollingRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** One deploy/unpublish watcher, so two poll loops cannot race the same row. */
+  const deployPollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const deployPollAttemptsRef = useRef(0);
+  /**
+   * A generation, not just a cleared timeout: `stopDeployPolling()` cannot abort a
+   * fetch that is already in flight. Incrementing this makes that stale response
+   * return without scheduling a second loop.
+   */
+  const deployPollGenerationRef = useRef(0);
+  /**
+   * Why the current watcher was started. A takedown that turns out to have been
+   * reverted (`ready`) must not report "Published successfully!", and a failed
+   * unpublish must not be described as a deployment failure.
+   */
+  const deployPollIntentRef = useRef<"publish" | "unpublish">("publish");
   /**
    * ⭐ THE SPLITTER'S LIVE DRAG STATE LIVES IN REFS, NOT REACT STATE. Writing the panel
    * width through `setState` on every `pointermove` re-rendered the entire workspace —
@@ -649,23 +679,42 @@ export default function WorkspacePage() {
       setPreviewKey((k) => k + 1);
     });
   }
-  async function pollDeployOnce() {
-    if (!mountedRef.current) return;
+  async function pollDeployOnce(generation = deployPollGenerationRef.current) {
+    if (!mountedRef.current || generation !== deployPollGenerationRef.current) return;
+    deployPollAttemptsRef.current += 1;
     const res = await vcaasApi.deployments.status(projectId);
-    if (!mountedRef.current) return;
+    if (!mountedRef.current || generation !== deployPollGenerationRef.current) return;
     if (res.ok && res.data) {
-      if (res.data.status === "success" || res.data.status === "error") reloadPreviewAfterPublish();
-      if (res.data.status === "success") {
+      const next = res.data;
+      setDeploymentStatus(next);
+      const status = next.status;
+
+      if (status === "success") {
+        setUnpublishing(false);
         setDeploying(false);
         operation.end("publish");
+        reloadPreviewAfterPublish();
+        if (deployPollIntentRef.current === "unpublish") {
+          /**
+           * The takedown did not happen and the previous deployment is still
+           * serving. Say exactly that instead of reporting a successful publish.
+           */
+          toast.warning(translate("workspace.deploy.unpublishIncomplete"), {
+            description: translate("workspace.deploy.unpublishIncompleteDescription"),
+          });
+          void fetchProject();
+          return;
+        }
         toast.success("Published successfully!");
         const proj = await fetchProject();
+        if (!mountedRef.current || generation !== deployPollGenerationRef.current) return;
         /**
          * ⭐ THE ONE OPERATION THAT EARNS A DIALOG. The whole point of publishing is the
          * ADDRESS — to click, to copy, to send to somebody — and a toast that disappears
-         * in four seconds is the wrong place for it.
+         * in four seconds is the wrong place for it. The same dialog owns "Publish the
+         * latest changes" and "Unpublish website" afterwards.
          */
-        setPublishedHost(getPublishedHost(proj, projectId));
+        setPublishDialogOpen(true);
         // Surface the deploy result in the chat and pull the latest conversation.
         const liveUrl = getPublishedHost(proj ?? project, projectId);
         setMessages((prev) => [...prev, {
@@ -677,25 +726,117 @@ export default function WorkspacePage() {
         fetchConversation();
         return;
       }
-      if (res.data.status === "error") {
+
+      if (status === "error") {
+        setUnpublishing(false);
         setDeploying(false);
         operation.end("publish");
+        reloadPreviewAfterPublish();
         // New engine: why it failed is on the status (and on the project's `lastDeployError`, which the banner shows).
-        toast.error(res.data.errorDetails?.title || "Deployment failed");
+        if (deployPollIntentRef.current === "unpublish") {
+          // The upstream wording describes a build; a takedown failure needs its
+          // own copy so the user knows the public site may still be serving.
+          toast.error(translate("workspace.deploy.unpublishFailed"), {
+            description: translate("workspace.deploy.unpublishIncompleteDescription"),
+          });
+        } else {
+          toast.error(next.errorDetails?.title || "Deployment failed");
+        }
         void fetchProject();
         return;
       }
+
+      /**
+       * A recorded unpublish is terminal. Refresh the project so the workspace stops
+       * presenting the mapping as a live deployment; there is deliberately no success
+       * toast here — the action that requested it already reported the outcome.
+       */
+      if (status === "unpublished") {
+        setUnpublishing(false);
+        setDeploying(false);
+        void fetchProject();
+        return;
+      }
+
+      if (status === "unpublishing") {
+        // An `unpublishing` row can only come from a takedown, never a publish.
+        deployPollIntentRef.current = "unpublish";
+        setDeploying(false);
+        setUnpublishing(true);
+      }
+      if (status === "deploying") {
+        setUnpublishing(false);
+        setDeploying(true);
+      }
+      if (status !== "deploying" && status !== "unpublishing") return;
     }
-    setTimeout(pollDeployOnce, 10000);
+
+    if (deployPollAttemptsRef.current >= DEPLOY_POLL_MAX_ATTEMPTS) {
+      /**
+       * ⚠️ KEEP THE LAST OBSERVED STATE. Resetting the local flags while the backend
+       * may still report `deploying`/`unpublishing` would re-enable a button whose
+       * outcome is unknown. The toast tells the user how to get the truth.
+       */
+      operation.end("publish");
+      toast.warning("We stopped watching this — refresh in a moment to see the current state.");
+      return;
+    }
+    deployPollRef.current = setTimeout(
+      () => void pollDeployOnce(generation),
+      DEPLOY_POLL_INTERVAL_MS,
+    );
+  }
+  /** One watcher at a time: a second publish/unpublish must not leave two loops. */
+  function startDeployPolling(intent: "publish" | "unpublish" = "publish") {
+    stopDeployPolling();
+    deployPollIntentRef.current = intent;
+    const generation = deployPollGenerationRef.current;
+    deployPollAttemptsRef.current = 0;
+    void pollDeployOnce(generation);
+  }
+  function stopDeployPolling() {
+    deployPollGenerationRef.current += 1;
+    if (deployPollRef.current) {
+      clearTimeout(deployPollRef.current);
+      deployPollRef.current = null;
+    }
   }
   useEffect(() => {
     let cancelled = false;
     async function init() {
       setLoading(true);
       const [proj] = await Promise.all([fetchProject(), fetchConversation(), fetchGithubStatus()]);
-      if (cancelled) return; setLoading(false);
+      if (cancelled) return;
+      setLoading(false);
       if (proj?.agentProcessStatus === "init") startAgentPolling();
-      if (proj?.deployment?.status === "deploying") { setDeploying(true); pollDeployOnce(); }
+
+      /**
+       * ⭐ THE PUBLISH STATE COMES FROM THE BACKEND, NOT FROM `project.deployment`.
+       * The project document only says `deploying|success|error`; the status endpoint
+       * also knows `unpublishing|unpublished` and is the only source that may claim a
+       * site is still live. A failed read falls back to the project document so a
+       * publish that is genuinely in flight is still watched.
+       */
+      const deployment = await vcaasApi.deployments.status(projectId);
+      if (cancelled) return;
+      if (deployment.ok && deployment.data) {
+        setDeploymentStatus(deployment.data);
+        const status = deployment.data.status;
+        if (status === "deploying") {
+          setDeploying(true);
+          startDeployPolling("publish");
+        } else if (status === "unpublishing") {
+          setUnpublishing(true);
+          startDeployPolling("unpublish");
+        } else {
+          setDeploying(false);
+          setUnpublishing(false);
+        }
+      } else if (proj?.deployment?.status === "deploying") {
+        setDeploying(true);
+        startDeployPolling();
+      }
+
       /**
        * ⭐⭐ AN IMPORT IS ADOPTED WITH THE SERVER'S OWN CLOCK, AND IT OUTRANKS THE REST.
        * `importInProgress` is a lock held and dated by the server, so a clone that was
@@ -708,7 +849,7 @@ export default function WorkspacePage() {
         operation.adopt("import", Date.parse(proj.importInProgress.startedAt) || undefined);
       }
     }
-    init(); return () => { cancelled = true; stopAgentPolling(); };
+    init(); return () => { cancelled = true; stopAgentPolling(); stopDeployPolling(); };
   }, [projectId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /**
@@ -1159,7 +1300,7 @@ export default function WorkspacePage() {
   }, []);
   /** `confirmDestructive`: the user confirmed the pending migration that deletes data (new engine; from the banner). */
   const handleDeploy = async (confirmDestructive = false) => {
-    if (deploying) return;
+    if (deploying || unpublishing) return;
     if (refuseWhileBusy()) return;
     setDeploying(true);
     const res = await vcaasApi.deployments.deploy(projectId, confirmDestructive);
@@ -1189,10 +1330,78 @@ export default function WorkspacePage() {
 
     if (res.ok) {
       toast.success("Deploying… this takes ~3 minutes");
+      setUnpublishing(false);
       operation.begin("publish");
-      pollDeployOnce();
+      startDeployPolling("publish");
     }
     else { toast.error(res.error || "Failed to deploy"); setDeploying(false); }
+  };
+  /**
+   * ═══ UNPUBLISH — THE REAL TAKEDOWN, NOT A HIDDEN URL ═══════════════════════
+   *
+   * The page never decides that a site is down. It sends the request, then trusts
+   * only the state the backend returns: `unpublished` means Vercel confirmed the
+   * public host is gone; `unpublishing` means another request owns the claim and
+   * this page watches it. Anything else is a failure and is rethrown so
+   * `ConfirmDialog` stays open with the backend's reason instead of closing as if
+   * the takedown had worked.
+   *
+   * ⚠️ NO `serverWake`: unpublishing does not touch the development sandbox.
+   */
+  const handleUnpublish = async () => {
+    if (unpublishing) throw new Error("An unpublish is already in progress.");
+    setUnpublishing(true);
+    stopDeployPolling();
+    try {
+      const res = await vcaasApi.deployments.unpublish(projectId);
+      if (!res.ok || !res.data) {
+        throw new Error(res.error || translate("workspace.deploy.unpublishFailed"));
+      }
+      setDeploymentStatus(res.data);
+      if (res.data.status === "unpublishing") {
+        startDeployPolling("unpublish");
+        return;
+      }
+      if (res.data.status !== "unpublished") {
+        throw new Error("The hosting provider did not confirm the unpublish.");
+      }
+      setUnpublishing(false);
+      await fetchProject();
+      toast.success(translate("workspace.deploy.unpublished"), {
+        description: translate("workspace.deploy.unpublishedDescription"),
+      });
+    } catch (error) {
+      /**
+       * ⚠️ A FAILED UNPUBLISH ROLLS THE ROW BACK SERVER-SIDE. Re-read it before
+       * answering: leaving the local state on `unpublishing` would strand the button
+       * on "Unpublishing…" after the backend already released the claim.
+       */
+      const latest = await vcaasApi.deployments.status(projectId);
+      if (mountedRef.current && latest.ok && latest.data) {
+        setDeploymentStatus(latest.data);
+        const latestStatus = latest.data.status;
+        setUnpublishing(latestStatus === "unpublishing");
+        if (latestStatus === "unpublishing") startDeployPolling("unpublish");
+        /**
+         * A concurrent tab may have completed the same takedown while this
+         * request reported an error. The backend state is authoritative, so
+         * report the confirmed outcome instead of a false failure.
+         */
+        if (latestStatus === "unpublished") {
+          await fetchProject();
+          toast.success(translate("workspace.deploy.unpublished"), {
+            description: translate("workspace.deploy.unpublishedDescription"),
+          });
+          return;
+        }
+      } else {
+        setUnpublishing(false);
+      }
+      toast.error(translate("workspace.deploy.unpublishFailed"), {
+        description: error instanceof Error ? error.message : undefined,
+      });
+      throw error;
+    }
   };
   const handleRestartServer = async () => {
     const res = await vcaasApi.agent.restartServer(projectId);
@@ -1361,10 +1570,10 @@ export default function WorkspacePage() {
         </button>
       </div>
       <div className="border-t py-1" style={{ borderColor: darkMode ? "#444" : "#eee" }}>
-        {/* Publish on mobile */}
-        <button onClick={() => { handleDeploy(); setMenuOpen(false); }} disabled={deploying || isBuilding}
+        {/* Publish on mobile — opens the same dialog the desktop header owns. */}
+        <button onClick={() => { setMenuOpen(false); setPublishDialogOpen(true); }}
           className="w-full sm:hidden flex items-center gap-2.5 px-3 py-2 text-sm hover:bg-black/5 dark:hover:bg-white/10 transition-colors text-gray-700 dark:text-gray-200">
-          <Rocket className="w-4 h-4 text-gray-400" /> {deploying ? "Deploying" : "Publish"}
+          <Rocket className="w-4 h-4 text-gray-400" /> {unpublishing ? translate("workspace.deploy.unpublishing") : deploying ? translate("workspace.deploy.deploying") : translate("workspace.deploy.publish")}
         </button>
       </div>
       <div className="border-t py-1" style={{ borderColor: darkMode ? "#444" : "#eee" }}>
@@ -1493,11 +1702,16 @@ export default function WorkspacePage() {
             <DeployControl
               projectId={projectId}
               project={project}
+              deploymentStatus={deploymentStatus}
               isDeploying={deploying}
+              isUnpublishing={unpublishing}
               isRunning={isBuilding}
-              blockedReason={deploying ? null : operationBusyReason}
+              blockedReason={deploying || unpublishing ? null : operationBusyReason}
               onDeploy={() => void handleDeploy()}
               onOpenDomain={() => setOpenModal("domain")}
+              onUnpublish={handleUnpublish}
+              open={publishDialogOpen}
+              onOpenChange={setPublishDialogOpen}
             />
           </div>
         </header>
@@ -1692,18 +1906,6 @@ export default function WorkspacePage() {
         onConfirm={() => router.push(leaveWorkspaceHref)}
       />
       <ServerBlockedDialog reason={blocked.reason} onDismiss={blocked.dismiss} wake={serverWake} />
-      <PublishedModal
-        open={publishedHost !== null}
-        onOpenChange={open => {
-          if (!open) setPublishedHost(null);
-        }}
-        host={publishedHost ?? ""}
-        hasCustomDomain={project.customDomain?.status === "active"}
-        onOpenDomain={() => {
-          setPublishedHost(null);
-          setOpenModal("domain");
-        }}
-      />
 
       {/* ═══ THE ERRANDS — totalum-platform's dialogs, copied unchanged ═══ */}
       <VersionsModal
