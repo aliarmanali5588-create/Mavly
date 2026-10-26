@@ -10,7 +10,11 @@
  * `curl … | sh` must not be able to turn this into a command runner.
  */
 
-import type { RuntimeResolution, SourceFile } from "./profile";
+import {
+  DEFAULT_NODE_IMAGE,
+  type RuntimeResolution,
+  type SourceFile,
+} from "./profile";
 import {
   nodeImageForEngines,
   parsePackageManifest,
@@ -99,9 +103,18 @@ export function planNextAppRouter(files: readonly SourceFile[]): RuntimeResoluti
   const lockfile = readNpmLockfile(files);
   if (lockfile.ok === false) return lockfile;
 
-  const image = nodeImageForEngines(manifest.engines);
-  if (image && image.ok === false) return image;
-  const nodeImage = image?.nodeImage ?? "vercel/sandbox/node:22";
+  /**
+   * Narrow by property presence, not by `image.ok`. This project compiles with
+   * `strictNullChecks: false`, where an `ok` discriminator does not reliably
+   * narrow the union after an early return (the same workaround `serve.ts` uses
+   * for publication probes). `??` keeps "no engines.node" on the default image.
+   */
+  const image = nodeImageForEngines(manifest.engines) ?? {
+    ok: true as const,
+    nodeImage: DEFAULT_NODE_IMAGE,
+  };
+  if (!("nodeImage" in image)) return image;
+  const nodeImage = image.nodeImage;
 
   const install = lockfile.present
     ? { cmd: "npm", args: ["ci", "--no-audit", "--no-fund"] }

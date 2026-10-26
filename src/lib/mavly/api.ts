@@ -32,6 +32,7 @@ import type {
   ProjectSnapshot,
   ProjectSnapshotDetail,
   ProjectVerification,
+  ProjectVerificationStatus,
   RestoreResult,
   VcaasProject,
   VcaasProjectSummary,
@@ -129,7 +130,7 @@ import {
   getVerificationForRun,
 } from "@/lib/sandbox/store";
 import { verificationSandboxConfig } from "@/lib/sandbox/config";
-import type { VerificationResult } from "@/lib/sandbox/state";
+import type { VerificationResult, VerificationStatus } from "@/lib/sandbox/state";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 const NO_STORE = { "cache-control": "private, no-store, max-age=0" } as const;
@@ -1083,10 +1084,31 @@ async function readVerification(
   return result ? toPublicVerification(result) : undefined;
 }
 
+/**
+ * `VerificationResult` models both a stored verification row and the ABSENCE of
+ * one (`not_started`, from `notStartedVerification`). The public wire type has
+ * no `not_started` member on purpose: a run without a row omits `verification`
+ * entirely (`readVerification` returns `undefined`), so `not_started` can never
+ * reach this mapping. The table is total over `VerificationStatus`, so adding a
+ * status to that union fails the build until its wire mapping is chosen here.
+ */
+const PUBLIC_VERIFICATION_STATUS: Record<VerificationStatus, ProjectVerificationStatus> = {
+  not_started: "pending",
+  pending: "pending",
+  running: "running",
+  passed: "passed",
+  failed: "failed",
+  timed_out: "timed_out",
+  cancelled: "cancelled",
+  unsupported_runtime: "unsupported_runtime",
+  configuration_error: "configuration_error",
+  infrastructure_error: "infrastructure_error",
+};
+
 /** Drop the provider resource reference and Mavly row id from the read model. */
 function toPublicVerification(result: VerificationResult): ProjectVerification {
   return {
-    status: result.status,
+    status: PUBLIC_VERIFICATION_STATUS[result.status],
     stage: result.stage,
     runId: result.runId,
     snapshotId: result.snapshotId,

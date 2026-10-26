@@ -113,7 +113,9 @@
       "Bash(cd /Users/ashadali/Mavly && git diff MAVLY_CLEAN_BASELINE.md | sed -n '1,220p')",
       "Bash(grep:*)",
       "Bash(git diff -- package.json && git diff -- src/lib/mavly/run-agent.ts | head -120)",
-      "Bash(grep -n \"baseline\" src/lib/mavly/run-agent.ts | head -40)"
+      "Bash(grep -n \"baseline\" src/lib/mavly/run-agent.ts | head -40)",
+      "Bash(git status --short && echo \"---BRANCH---\" && git branch --show-current && echo \"---HEAD---\" && git log -1 --oneline && echo \"---UNTRACKED-M18---\" && ls -l supabase/migrations/18_admin_allowlist.sql 2>/dev/null || true)",
+      "Bash(grep -n \"app/layout\\\\|app/page\\\\|preview.html\\\\|preview\" src/lib/ai/agent.ts src/lib/mavly/run-agent.ts | head -60)"
     ]
   }
 }
