@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { resolveCallbackOutcome } from "@/lib/auth/callback";
 import { OAUTH_NEXT_COOKIE, OAUTH_STATE_COOKIE } from "@/lib/auth/oauth-url";
+import { hasEstablishedSessionCookie } from "@/lib/auth/session-cookies";
 import {
   createSupabaseRequestClient,
   type CookieToSet,
@@ -34,6 +35,13 @@ export async function GET(request: NextRequest) {
   // below. Empty when the deployment is not configured.
   const sessionCookies: CookieToSet[] = [];
 
+  // A sign-in attempted by a browser that already holds a valid session can
+  // produce the same session cookie it already has; the library then writes
+  // nothing. That is still a signed-in browser, not a failed exchange.
+  const existingSessionCookies = request.cookies
+    .getAll()
+    .map(({ name, value }) => ({ name, value }));
+
   const supabase = createSupabaseRequestClient(request, (cookies) => {
     sessionCookies.push(...cookies);
   });
@@ -60,6 +68,19 @@ export async function GET(request: NextRequest) {
     if ("error" in outcome) {
       destination = new URL("/login", origin);
       destination.searchParams.set("error", outcome.error);
+    } else if (
+      !hasEstablishedSessionCookie(sessionCookies) &&
+      !hasEstablishedSessionCookie(existingSessionCookies)
+    ) {
+      /**
+       * ⚠️ AN EXCHANGE THAT PERSISTED NO SESSION COOKIE IS NOT A SIGN-IN.
+       *
+       * Redirecting to the builder here would make the proxy (correctly) say
+       * "signed out" and send the visitor back to `/login` — a loop that looks
+       * like the login never stuck. Report it once, on the sign-in screen.
+       */
+      destination = new URL("/login", origin);
+      destination.searchParams.set("error", "exchange_failed");
     } else {
       destination = new URL(outcome.redirectTo, origin);
     }

@@ -786,7 +786,7 @@ export default function DashboardPage({ profile }: { profile: ProfileSummary }) 
       <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8">
         {/* Hero prompt */}
         <div className="mb-10">
-          <div className="w-full max-w-2xl mx-auto">
+          <div className="w-full max-w-3xl mx-auto">
             <div className="text-center mb-6">
               {!hasProjects && (
                 <div className="w-14 h-14 rounded-2xl mx-auto mb-4 shadow-[0_4px_16px_rgba(0,0,0,0.06)] overflow-hidden flex items-center justify-center p-1 bg-white border border-black/[0.06]">
@@ -807,15 +807,15 @@ export default function DashboardPage({ profile }: { profile: ProfileSummary }) 
               {!hasProjects && <p className="text-gray-500 max-w-md mx-auto mt-2 text-sm">Describe your app and AI will build it in minutes.</p>}
             </div>
             <div className="relative bg-white rounded-2xl sm:rounded-3xl shadow-[0_8px_30px_rgba(0,0,0,0.04),0_2px_8px_rgba(0,0,0,0.02)] border border-black/[0.08] overflow-hidden transition-all duration-200 focus-within:border-black/20 focus-within:shadow-[0_12px_36px_rgba(0,0,0,0.06)]">
-              <div role="group" aria-label="Build mode" className="grid grid-cols-2 gap-2 px-5 pt-4 pb-1">
+              <div role="group" aria-label="Build mode" className="inline-flex max-w-full gap-1 rounded-xl bg-gray-100 p-1 mx-2 mt-4 sm:mx-5">
                 <button
                   type="button"
                   aria-pressed={promptMode === "website"}
                   onClick={() => setPromptMode("website")}
-                  className={`inline-flex min-w-0 items-center justify-center gap-2 rounded-xl border px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
+                  className={`inline-flex h-10 min-w-[100px] items-center justify-center gap-1.5 rounded-lg border px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:min-w-[116px] ${
                     promptMode === "website"
-                      ? "border-gray-900 bg-gray-900 text-white shadow-sm"
-                      : "border-black/[0.06] bg-gray-50 text-gray-600 hover:border-black/[0.12] hover:bg-gray-100 hover:text-gray-900"
+                      ? "border-black/[0.06] bg-white text-gray-900 shadow-sm"
+                      : "border-transparent bg-transparent text-gray-500 hover:bg-white/70 hover:text-gray-800"
                   }`}
                 >
                   <Globe className="h-4 w-4 shrink-0" aria-hidden="true" />
@@ -825,46 +825,44 @@ export default function DashboardPage({ profile }: { profile: ProfileSummary }) 
                   type="button"
                   aria-pressed={promptMode === "android"}
                   onClick={() => setPromptMode("android")}
-                  className={`inline-flex min-w-0 items-center justify-center gap-2 rounded-xl border px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
+                  className={`inline-flex h-10 min-w-[100px] items-center justify-center gap-1.5 rounded-lg border px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:min-w-[116px] ${
                     promptMode === "android"
-                      ? "border-gray-900 bg-gray-900 text-white shadow-sm"
-                      : "border-black/[0.06] bg-gray-50 text-gray-600 hover:border-black/[0.12] hover:bg-gray-100 hover:text-gray-900"
+                      ? "border-black/[0.06] bg-white text-gray-900 shadow-sm"
+                      : "border-transparent bg-transparent text-gray-500 hover:bg-white/70 hover:text-gray-800"
                   }`}
                 >
                   <Smartphone className="h-4 w-4 shrink-0" aria-hidden="true" />
                   <span className="truncate">Android App</span>
                 </button>
               </div>
-              <textarea
-                ref={heroTextareaRef}
-                value={firstPrompt}
-                onChange={(e) => setFirstPrompt(e.target.value)}
-                onFocus={() => setHeroFocused(true)}
-                onBlur={() => setHeroFocused(false)}
-                placeholder={
-                  promptMode === "website"
-                    ? "Describe the website you want to build..."
-                    : "Describe the Android app you want to build..."
-                }
-                className="w-full min-h-[90px] sm:min-h-[110px] resize-none text-[15px] p-5 pb-2 outline-none placeholder:text-gray-400 bg-transparent"
-                onKeyDown={(e) => {
-                  // Enter submits, Shift+Enter is a newline (the box is a textarea).
-                  if (shouldSubmitPrompt(e.key, e.shiftKey)) {
-                    e.preventDefault();
-                    openBuildModal();
+              <div className="relative">
+                <textarea
+                  ref={heroTextareaRef}
+                  value={firstPrompt}
+                  onChange={(e) => setFirstPrompt(e.target.value)}
+                  onFocus={() => setHeroFocused(true)}
+                  onBlur={() => setHeroFocused(false)}
+                  placeholder={
+                    promptMode === "website"
+                      ? "Describe what you want to build..."
+                      : "Describe the Android app you want to build..."
                   }
-                }}
-                onPaste={handleHeroPaste}
-              />
-              {/*
-                ⭐ THE ANIMATED PLACEHOLDER. It comes AFTER the textarea on purpose:
-                it is drawn over it, with the card's white background, so the
-                browser's own placeholder text is hidden underneath it instead of
-                showing through — no doubled text, no two carets. It ignores
-                clicks, and it only exists while the box is empty and unfocused,
-                so the user's own text is never covered.
-              */}
-              <AnimatedPlaceholder active={heroAnimated} />
+                  className="block w-full min-h-[140px] sm:min-h-[170px] resize-none text-[15px] leading-relaxed p-5 pb-3 outline-none placeholder:text-gray-400 bg-transparent focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-gray-300"
+                  onKeyDown={(e) => {
+                    // Enter submits, Shift+Enter is a newline (the box is a textarea).
+                    if (shouldSubmitPrompt(e.key, e.shiftKey)) {
+                      e.preventDefault();
+                      openBuildModal();
+                    }
+                  }}
+                  onPaste={handleHeroPaste}
+                />
+                {/*
+                  ⭐ The animated placeholder sits over the textarea only; it must not
+                  cover the mode selector above it.
+                */}
+                <AnimatedPlaceholder active={heroAnimated} />
+              </div>
               {/*
                 ⭐ The attachments, previewed. Nothing is uploaded yet here — the project
                 does not exist — so an image is shown from the browser's own copy through

@@ -2,7 +2,12 @@
 
 import { createBrowserClient } from "@supabase/ssr";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { SUPABASE_ANON_KEY, SUPABASE_URL, isSupabaseConfigured } from "./config";
+import {
+  SUPABASE_ANON_KEY,
+  SUPABASE_URL,
+  authCookieOptions,
+  isSupabaseConfigured,
+} from "./config";
 
 /**
  * ═══ THE BROWSER-SIDE SUPABASE CLIENT ═══════════════════════════════════════
@@ -24,7 +29,12 @@ let cachedClient: SupabaseClient | null = null;
 export function getSupabaseBrowserClient(): SupabaseClient | null {
   if (!isSupabaseConfigured()) return null;
   if (!cachedClient) {
-    cachedClient = createBrowserClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    cachedClient = createBrowserClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      // Same attributes as the server/proxy clients — one cookie jar, one
+      // session. `persistSession` and cookie storage are the library defaults
+      // (enabled); this app never sets them to false for the browser client.
+      cookieOptions: authCookieOptions(),
+    });
   }
   return cachedClient;
 }

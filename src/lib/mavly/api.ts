@@ -94,6 +94,19 @@ import {
   wireDeploymentStatus,
 } from "@/lib/deployments/service";
 import {
+  disableFullstackProject,
+  fullstackDeployableSnapshots,
+  fullstackDeploymentHistory,
+  isFullstackFailure,
+  rollbackFullstackProject,
+} from "@/lib/deployments/fullstack";
+import {
+  getDatabaseStatus,
+  isDatabaseServiceFailure,
+  removeDatabaseConfig,
+  saveDatabaseConfig,
+} from "@/lib/hosting/fullstack-database";
+import {
   getSnapshot,
   hashSource,
   isSnapshotFailure,
@@ -300,13 +313,54 @@ export async function handleMavlyVcaasRequest(input: MavlyRequest): Promise<Next
     return conversationResponse(projectId, query);
   }
   if (action === "deployments/deploy" && method === "POST") {
-    return deployResponse(userId, projectId);
+    return deployResponse(userId, projectId, body);
   }
   if (action === "deployments/unpublish" && method === "POST") {
     return unpublishResponse(userId, projectId);
   }
   if (action === "deployments/status" && method === "GET") {
     return deploymentStatusResponse(userId, projectId);
+  }
+  /**
+   * ═══ FULL-STACK DEPLOYMENT OPERATIONS ═════════════════════════════════════
+   *
+   * These routes are project-scoped, so the catch-all has already proved
+   * ownership. Each handler re-verifies ownership through the caller's
+   * RLS-scoped client and is additionally gated by the explicit full-stack
+   * cohort; a project outside it receives a truthful configuration refusal.
+   *
+   *   POST …/deployments/rollback   — restore a previously READY attempt
+   *   POST …/deployments/disable    — real takedown (same contract as unpublish)
+   *   GET  …/deployments/history    — attempt history / rollback targets
+   *   GET  …/deployments/snapshots  — verified snapshots that may be pinned
+   */
+  if (action === "deployments/rollback" && method === "POST") {
+    return rollbackResponse(userId, projectId, body);
+  }
+  if (action === "deployments/disable" && method === "POST") {
+    return disableResponse(userId, projectId);
+  }
+  if (action === "deployments/history" && method === "GET") {
+    return deploymentHistoryResponse(userId, projectId);
+  }
+  if (action === "deployments/snapshots" && method === "GET") {
+    return deployableSnapshotsResponse(userId, projectId);
+  }
+  /**
+   * ═══ APPLICATION DATABASE CONTRACT (METADATA ONLY) ════════════════════════
+   *
+   *   GET    …/database/config — is a connection configured and synced?
+   *   PUT    …/database/config — validate + store the URL as a project secret
+   *   DELETE …/database/config — remove the contract and its secret
+   *
+   * The URL is never returned. "Configured" is not a live connectivity proof.
+   */
+  if (action === "database/config") {
+    if (method === "GET") return databaseStatusResponse(userId, projectId);
+    if (method === "PUT" || method === "POST") {
+      return databaseSaveResponse(userId, projectId, body);
+    }
+    if (method === "DELETE") return databaseRemoveResponse(userId, projectId);
   }
   if (action === "figma/status" && method === "GET") {
     return figmaStatusResponse(userId, projectId, query);
@@ -655,8 +709,18 @@ async function deleteProjectResponse(userId: string, projectId: string): Promise
   return ok({ deleted: true });
 }
 
-async function deployResponse(userId: string, projectId: string): Promise<NextResponse> {
-  const result = await publishProject(userId, projectId);
+async function deployResponse(
+  userId: string,
+  projectId: string,
+  body: unknown,
+): Promise<NextResponse> {
+  /**
+   * `snapshotId` is optional and only used by full-stack hosting: it pins an
+   * already-verified snapshot. It is re-validated server-side (ownership, hash
+   * and passed verification), so the id alone grants nothing.
+   */
+  const snapshotId = stringOf(recordOf(body).snapshotId);
+  const result = await publishProject(userId, projectId, { snapshotId });
   if (isDeploymentServiceFailure(result)) {
     return fail(
       result.status,
@@ -685,6 +749,85 @@ async function deploymentStatusResponse(userId: string, projectId: string): Prom
   const result = await getProjectDeploymentStatus(userId, projectId);
   if (isDeploymentServiceFailure(result)) return fail(result.status, result.code, result.error);
   return ok(result.data satisfies DeploymentStatus);
+}
+
+function fullstackFailureResponse(failure: {
+  status: number;
+  code: string;
+  error: string;
+  retryAfterSeconds?: number;
+}): NextResponse {
+  return fail(
+    failure.status,
+    failure.code,
+    failure.error,
+    failure.retryAfterSeconds ? { "retry-after": String(failure.retryAfterSeconds) } : undefined,
+  );
+}
+
+async function rollbackResponse(
+  userId: string,
+  projectId: string,
+  body: unknown,
+): Promise<NextResponse> {
+  const result = await rollbackFullstackProject(userId, projectId, body);
+  if (isFullstackFailure(result)) return fullstackFailureResponse(result);
+  return ok(result.data);
+}
+
+async function disableResponse(userId: string, projectId: string): Promise<NextResponse> {
+  const result = await disableFullstackProject(userId, projectId);
+  if (isFullstackFailure(result)) return fullstackFailureResponse(result);
+  return ok(result.data);
+}
+
+async function deploymentHistoryResponse(
+  userId: string,
+  projectId: string,
+): Promise<NextResponse> {
+  const result = await fullstackDeploymentHistory(userId, projectId);
+  if (isFullstackFailure(result)) return fullstackFailureResponse(result);
+  return ok(result.data);
+}
+
+async function deployableSnapshotsResponse(
+  userId: string,
+  projectId: string,
+): Promise<NextResponse> {
+  const result = await fullstackDeployableSnapshots(userId, projectId);
+  if (isFullstackFailure(result)) return fullstackFailureResponse(result);
+  return ok(result.data);
+}
+
+async function databaseStatusResponse(userId: string, projectId: string): Promise<NextResponse> {
+  const result = await getDatabaseStatus(userId, projectId);
+  if (isDatabaseServiceFailure(result)) {
+    return fail(result.status, result.code, result.error);
+  }
+  return ok(result.data);
+}
+
+async function databaseSaveResponse(
+  userId: string,
+  projectId: string,
+  body: unknown,
+): Promise<NextResponse> {
+  const result = await saveDatabaseConfig(userId, projectId, body);
+  if (isDatabaseServiceFailure(result)) {
+    return fail(result.status, result.code, result.error);
+  }
+  return ok(result.data);
+}
+
+async function databaseRemoveResponse(
+  userId: string,
+  projectId: string,
+): Promise<NextResponse> {
+  const result = await removeDatabaseConfig(userId, projectId);
+  if (isDatabaseServiceFailure(result)) {
+    return fail(result.status, result.code, result.error);
+  }
+  return ok(result.data);
 }
 
 async function figmaValidateResponse(userId: string, body: unknown): Promise<NextResponse> {

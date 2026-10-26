@@ -1,7 +1,12 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { SUPABASE_ANON_KEY, SUPABASE_URL, isSupabaseConfigured } from "./config";
+import {
+  SUPABASE_ANON_KEY,
+  SUPABASE_URL,
+  authCookieOptions,
+  isSupabaseConfigured,
+} from "./config";
 
 /**
  * ═══ SESSION REFRESH FOR THE PROXY ═════════════════════════════════════════
@@ -36,6 +41,7 @@ export async function updateSupabaseSession(request: NextRequest) {
   }
 
   const supabase = createServerClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    cookieOptions: authCookieOptions(),
     cookies: {
       getAll() {
         return request.cookies.getAll();

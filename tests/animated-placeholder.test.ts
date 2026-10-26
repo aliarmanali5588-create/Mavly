@@ -170,8 +170,18 @@ test("the dashboard prompt mode changes only its selected state and placeholder"
   assert.equal(dashboard.includes('aria-pressed={promptMode === "android"}'), true);
   assert.equal(dashboard.includes('setPromptMode("website")'), true);
   assert.equal(dashboard.includes('setPromptMode("android")'), true);
-  assert.equal(dashboard.includes("Describe the website you want to build..."), true);
+  assert.equal(dashboard.includes("Describe what you want to build..."), true);
   assert.equal(dashboard.includes("Describe the Android app you want to build..."), true);
+  assert.equal(dashboard.includes("inline-flex h-10 min-w-[100px]"), true);
+  assert.equal(dashboard.includes("max-w-3xl mx-auto"), true);
+  const selectorStart = dashboard.indexOf('<div role="group" aria-label="Build mode"');
+  const textareaStart = dashboard.indexOf("<textarea", selectorStart);
+  assert.equal(selectorStart >= 0 && textareaStart > selectorStart, true);
+  assert.doesNotMatch(dashboard.slice(selectorStart, textareaStart), /setFirstPrompt/);
+  assert.match(
+    dashboard,
+    /<div className="relative">\s*<textarea[\s\S]*?<AnimatedPlaceholder active=\{heroAnimated\} \/>[\s\S]*?<\/div>/,
+  );
   const launchStart = dashboard.indexOf("const launched = await vcaasApi.projects.launch({");
   const launchEnd = dashboard.indexOf("\n      });", launchStart);
   assert.equal(launchStart >= 0 && launchEnd > launchStart, true);

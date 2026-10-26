@@ -9,14 +9,21 @@
  * encrypt it immediately and never read it back. No function here returns a
  * value or ciphertext to a route.
  *
- * ⚠️ INJECTION IS NOT IMPLEMENTED. The generated site is static and published
- * as static files, so a saved secret is not automatically available to generated
- * code. This module stores and manages values only.
+ * ⚠️ INJECTION IS COHORT-GATED AND PROVIDER-SIDE. Static publishing never
+ * injects a secret. For an explicitly configured full-stack hosting project the
+ * optional write-through pushes the value into the hosting provider's encrypted
+ * environment in the same request that saved it (see `hosting/secret-sync.ts`).
+ * There is still no read-back path, and an unsynced secret blocks a deployment
+ * from being reported ready.
  */
 
 import { randomUUID } from "node:crypto";
 
 import type { VcaasSecret } from "@/lib/vcaas-types";
+import {
+  syncProjectSecretRemoved,
+  syncProjectSecretSaved,
+} from "@/lib/hosting/secret-sync";
 import { projectSecretsCryptoConfig } from "./config";
 import { encryptProjectSecretValue } from "./crypto";
 import {
@@ -87,6 +94,29 @@ export interface ProjectSecretsServiceDeps {
   store: ProjectSecretStore;
   newSecretId: () => string;
   now: () => string;
+  /**
+   * Optional hosting write-through. It receives the plaintext at the only moment
+   * it exists on the server (this request) and NEVER returns or logs it. It is a
+   * no-op unless the project is in the full-stack hosting cohort.
+   */
+  sync?: ProjectSecretsSync;
+}
+
+export interface ProjectSecretsSync {
+  saved(input: {
+    projectId: string;
+    userId: string;
+    secretName: string;
+    environment: SecretEnvironment;
+    value: string | null;
+    previous?: { secretName: string; environment: SecretEnvironment } | null;
+  }): Promise<void>;
+  removed(input: {
+    projectId: string;
+    userId: string;
+    secretName: string;
+    environment: SecretEnvironment;
+  }): Promise<void>;
 }
 
 const defaultDeps: ProjectSecretsServiceDeps = {
@@ -99,7 +129,24 @@ const defaultDeps: ProjectSecretsServiceDeps = {
   },
   newSecretId: () => randomUUID(),
   now: () => new Date().toISOString(),
+  sync: {
+    saved: syncProjectSecretSaved,
+    removed: syncProjectSecretRemoved,
+  },
 };
+
+/**
+ * The write-through must never turn a successful encrypted write into a failed
+ * request, and it must never be able to leak a value into the response.
+ */
+async function runSync(run: () => Promise<void>): Promise<void> {
+  try {
+    await run();
+  } catch {
+    // The sync implementation already records state and never throws; this is a
+    // last-resort guard.
+  }
+}
 
 function failure(status: number, code: string, error: string): ProjectSecretServiceFailure {
   return { ok: false, status, code, error };
@@ -175,6 +222,17 @@ export async function createProjectSecret(
     now: deps.now(),
   });
   if (isProjectSecretStoreFailure(inserted)) return fromStoreFailure(inserted);
+  if (deps.sync) {
+    await runSync(() =>
+      deps.sync!.saved({
+        projectId,
+        userId,
+        secretName: input.value.secretName,
+        environment: input.value.environment,
+        value: input.value.secretValue,
+      }),
+    );
+  }
   return { ok: true, data: toSecretMetadata(inserted.data) };
 }
 
@@ -191,6 +249,20 @@ export async function updateProjectSecret(
 
   const input = validateUpdateSecretInput(body);
   if (!input.ok) return failure(400, "VALIDATION", input.error);
+
+  /**
+   * A rename or environment move must revoke the OLD provider key. The metadata
+   * row is read (metadata only) before the update so the write-through knows the
+   * previous name/environment; a failure here does not block the update.
+   */
+  let previous: { secretName: string; environment: SecretEnvironment } | null = null;
+  if (deps.sync) {
+    const before = await deps.store.list(projectId, userId);
+    if (!isProjectSecretStoreFailure(before)) {
+      const row = before.data.find((entry) => entry.id === secretId);
+      if (row) previous = { secretName: row.secret_name, environment: row.environment };
+    }
+  }
 
   let valueCiphertext: string | undefined;
   if (input.value.secretValue !== undefined) {
@@ -217,6 +289,22 @@ export async function updateProjectSecret(
     now: deps.now(),
   });
   if (isProjectSecretStoreFailure(updated)) return fromStoreFailure(updated);
+
+  if (deps.sync) {
+    await runSync(() =>
+      deps.sync!.saved({
+        projectId,
+        userId,
+        secretName: updated.data.secret_name,
+        environment: updated.data.environment,
+        // No new value ⇒ nothing exists to push. The write-through records the
+        // row as unsynced and the readiness gate asks the user to re-save it.
+        value: input.value.secretValue ?? null,
+        previous,
+      }),
+    );
+  }
+
   return { ok: true, data: toSecretMetadata(updated.data) };
 }
 
@@ -230,7 +318,31 @@ export async function deleteProjectSecret(
     return failure(404, "PROJECT_NOT_FOUND", "Secret not found.");
   }
 
+  let removedMetadata: { secretName: string; environment: SecretEnvironment } | null = null;
+  if (deps.sync) {
+    const before = await deps.store.list(projectId, userId);
+    if (!isProjectSecretStoreFailure(before)) {
+      const row = before.data.find((entry) => entry.id === secretId);
+      if (row) {
+        removedMetadata = { secretName: row.secret_name, environment: row.environment };
+      }
+    }
+  }
+
   const removed = await deps.store.remove(projectId, userId, secretId);
   if (isProjectSecretStoreFailure(removed)) return fromStoreFailure(removed);
+
+  if (deps.sync && removedMetadata) {
+    const target = removedMetadata;
+    await runSync(() =>
+      deps.sync!.removed({
+        projectId,
+        userId,
+        secretName: target.secretName,
+        environment: target.environment,
+      }),
+    );
+  }
+
   return { ok: true, data: removed.data };
 }

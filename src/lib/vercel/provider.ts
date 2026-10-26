@@ -72,12 +72,24 @@ export interface VercelDeployment {
   alias: string[];
   errorCode: string | null;
   errorMessage: string | null;
+  /**
+   * The project this deployment belongs to, when Vercel returns it. Used to
+   * refuse a deployment id that points at another Mavly tenant's project.
+   */
+  projectId?: string | null;
 }
 
 export interface VercelUploadedFile {
   file: string;
   sha: string;
   size: number;
+}
+
+export interface VercelEnvVar {
+  id: string | null;
+  key: string;
+  type: string | null;
+  target: string[];
 }
 
 interface RawResponse {
@@ -295,6 +307,7 @@ function deploymentFrom(value: unknown): VercelDeployment | null {
     alias,
     errorCode: stringOf(record.errorCode),
     errorMessage: stringOf(record.errorMessage),
+    projectId: stringOf(record.projectId),
   };
 }
 
@@ -540,6 +553,13 @@ export async function createVercelDeployment(
     name: string;
     project: string;
     files: readonly VercelUploadedFile[];
+    /**
+     * `null` is the static publish path: no framework build is attempted.
+     * `"nextjs"` is the full-stack path: Vercel runs the validated Next.js
+     * production build itself, inside its own build infrastructure.
+     */
+    framework?: "nextjs" | null;
+    target?: "production" | "preview";
   },
 ): Promise<VercelResult<VercelDeployment>> {
   const raw = await rawRequest(
@@ -550,8 +570,8 @@ export async function createVercelDeployment(
       name: input.name,
       project: input.project,
       files: input.files.map((file) => ({ file: file.file, sha: file.sha, size: file.size })),
-      target: "production",
-      projectSettings: { framework: null },
+      target: input.target ?? "production",
+      projectSettings: { framework: input.framework ?? null },
     }),
   );
   if (isVercelFailure(raw)) return raw;
@@ -565,6 +585,125 @@ export async function createVercelDeployment(
     };
   }
   return { ok: true, data: deployment };
+}
+
+/**
+ * Create or replace one ENCRYPTED project environment variable.
+ *
+ * Used only by the full-stack secret write-through, where the plaintext value
+ * is already in the server request that saved the secret. There is deliberately
+ * no read-back: `listVercelEnv` returns key metadata, never a value.
+ */
+export async function upsertVercelEnv(
+  config: VercelDeploymentConfig,
+  projectIdOrName: string,
+  input: { key: string; value: string; target: readonly string[] },
+): Promise<VercelResult<VercelEnvVar>> {
+  const path = `/v10/projects/${encodeURIComponent(projectIdOrName)}/env?upsert=true`;
+  const raw = await rawRequest(
+    config,
+    "upsert_env",
+    path,
+    jsonInit("POST", {
+      key: input.key,
+      value: input.value,
+      type: "encrypted",
+      target: input.target,
+    }),
+  );
+  if (isVercelFailure(raw)) return raw;
+  if (!isSuccess(raw.data.status)) return { ok: false, failure: failureFrom(raw.data) };
+
+  const body = bodyRecord(parseBody(raw.data.text));
+  const created = bodyRecord(body?.created) ?? bodyRecord(body?.env) ?? body;
+  return {
+    ok: true,
+    data: {
+      id: stringOf(created?.id),
+      key: input.key,
+      type: "encrypted",
+      target: [...input.target],
+    },
+  };
+}
+
+/** Remove one project environment variable. An already-absent value is clean. */
+export async function deleteVercelEnv(
+  config: VercelDeploymentConfig,
+  projectIdOrName: string,
+  envId: string,
+): Promise<VercelResult<{ deleted: true }>> {
+  const raw = await rawRequest(
+    config,
+    "delete_env",
+    `/v9/projects/${encodeURIComponent(projectIdOrName)}/env/${encodeURIComponent(envId)}`,
+    { method: "DELETE" },
+  );
+  if (isVercelFailure(raw)) return raw;
+  if (raw.data.status === 404) return { ok: true, data: { deleted: true } };
+  if (!isSuccess(raw.data.status)) return { ok: false, failure: failureFrom(raw.data) };
+  return { ok: true, data: { deleted: true } };
+}
+
+/** Key/target metadata for a project's environment variables. Never values. */
+export async function listVercelEnv(
+  config: VercelDeploymentConfig,
+  projectIdOrName: string,
+): Promise<VercelResult<VercelEnvVar[]>> {
+  const raw = await rawRequest(
+    config,
+    "list_env",
+    `/v9/projects/${encodeURIComponent(projectIdOrName)}/env`,
+    { method: "GET" },
+  );
+  if (isVercelFailure(raw)) return raw;
+  if (!isSuccess(raw.data.status)) return { ok: false, failure: failureFrom(raw.data) };
+
+  const body = bodyRecord(parseBody(raw.data.text));
+  const rows = Array.isArray(body?.envs)
+    ? body.envs
+    : Array.isArray(parseBody(raw.data.text))
+      ? (parseBody(raw.data.text) as unknown[])
+      : [];
+  const envs = rows.flatMap((entry): VercelEnvVar[] => {
+    const record = bodyRecord(entry);
+    if (!record) return [];
+    const key = stringOf(record.key);
+    if (!key) return [];
+    const target = Array.isArray(record.target)
+      ? record.target.filter((value): value is string => typeof value === "string")
+      : [];
+    return [
+      {
+        id: stringOf(record.id),
+        key,
+        type: stringOf(record.type),
+        target,
+      },
+    ];
+  });
+  return { ok: true, data: envs };
+}
+
+/**
+ * Point production traffic at a previous production deployment (Vercel Instant
+ * Rollback). Only a 2xx response means the provider accepted the request; the
+ * caller must still verify the target through `getVercelDeployment`.
+ */
+export async function rollbackVercelDeployment(
+  config: VercelDeploymentConfig,
+  projectId: string,
+  deploymentId: string,
+): Promise<VercelResult<{ requested: true }>> {
+  const raw = await rawRequest(
+    config,
+    "rollback_deployment",
+    `/v1/projects/${encodeURIComponent(projectId)}/rollback/${encodeURIComponent(deploymentId)}`,
+    jsonInit("POST", {}),
+  );
+  if (isVercelFailure(raw)) return raw;
+  if (!isSuccess(raw.data.status)) return { ok: false, failure: failureFrom(raw.data) };
+  return { ok: true, data: { requested: true } };
 }
 
 export async function getVercelDeployment(

@@ -5,6 +5,7 @@ import { crossOriginMutationReason, isAllowedAppOrigin } from "@/lib/api-origin"
 import { isSharedHostingRuntimeEnabled } from "@/lib/hosting/config";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { loginUrlFor } from "@/lib/auth/redirect";
+import { authenticatedRootTarget } from "@/lib/auth/route-policy";
 import { AUTH_CALLBACK_PATH } from "@/lib/auth/oauth-url";
 import { refreshSession } from "@/lib/supabase/proxy";
 import { isNextInternalPath, parseTenantHost } from "@/lib/tenant-host";
@@ -100,6 +101,11 @@ function isStaticAssetPath(pathname: string): boolean {
  * (`/terms`, `/privacy`), the marketing page (`/`), the sign-in page
  * (`/login`) and the auth routes themselves stay public.
  *
+ * ⚠️ `/` IS PUBLIC, BUT NOT AUTH-BLIND. A signed-out visitor gets the marketing
+ * page; a visitor whose session this request verified is redirected to
+ * `/dashboard` before render (`authenticatedRootTarget`). Keeping the
+ * marketing page reachable is why `/` is not in this list.
+ *
  * ⚠️ `/home` IS NOT IN THIS LIST ON PURPOSE. It is the builder's old address
  * and it answers a 308 redirect to `/dashboard`; a signed-out visitor who
  * follows an old link is sent to the sign-in page *through* the new address,
@@ -138,6 +144,32 @@ function oauthFallbackTarget(url: URL): URL | null {
 }
 
 /**
+ * ═══ THE REFRESHED COOKIES MUST RIDE ON WHATEVER RESPONSE WINS ══════════════
+ *
+ * `refreshSession()` builds a `NextResponse.next()` that carries the cookies
+ * the Supabase client just wrote: a rotated access/refresh token pair, or the
+ * removal of a session the Auth server rejected.
+ *
+ * ⚠️ WHEN THIS PROXY REPLACES THAT RESPONSE — a login redirect, a JSON 401, or
+ * the landing-page redirect below — the replacements start empty. Dropping the
+ * cookies is how a valid sign-in turns into "please log in again":
+ *
+ *   · a rotated refresh token that never reaches the browser is replaced on the
+ *     next request by the previous one, which the Auth server may treat as
+ *     reuse and answer by revoking the session family;
+ *   · a rejected session cookie that is never cleared keeps failing on every
+ *     request.
+ *
+ * Copy them onto every response this file returns in place of `response`.
+ */
+function carrySessionCookies(target: NextResponse, session: NextResponse): NextResponse {
+  for (const cookie of session.cookies.getAll()) {
+    target.cookies.set(cookie);
+  }
+  return target;
+}
+
+/**
  * ═══ THE REQUEST BOUNDARY ════════════════════════════════════════════════════
  *
  * 1. A tenant host is served by the tenant runtime and nothing else.
@@ -146,7 +178,9 @@ function oauthFallbackTarget(url: URL): URL | null {
  *    generated website (same-site with the app) cannot publish or unpublish for
  *    a signed-in visitor.
  * 4. The Supabase session is refreshed and verified on the app's own hosts.
- * 5. Unauthenticated API calls get a JSON 401; app pages get a login redirect.
+ * 5. An authenticated visit to `/` is sent to the builder; signed-out visitors
+ *    keep the public marketing page.
+ * 6. Unauthenticated API calls get a JSON 401; app pages get a login redirect.
  *
  * ⚠️ IT FAILS CLOSED. Without a Supabase configuration the builder pages are
  * not served at all — the visitor is sent to `/login`, which explains that
@@ -213,6 +247,38 @@ export async function proxy(request: NextRequest) {
     : { response: NextResponse.next({ request }), user: null };
 
   /**
+   * ── THE FRONT DOOR (authenticated visitors) ──────────────────────────────
+   *
+   * `/` stays the public marketing page for signed-out visitors. A visitor the
+   * Auth server JUST VERIFIED belongs in the builder, and the decision is made
+   * here, before anything renders — no marketing-page flash, no client-side
+   * guess while the session is still initialising.
+   *
+   * Only an exact `/` GET/HEAD is redirected. A stray OAuth `?code=` was
+   * already forwarded to `/auth/callback` above, API routes are excluded by the
+   * policy, and `/dashboard` is not redirected again, so this cannot loop.
+   */
+  if (request.method === "GET" || request.method === "HEAD") {
+    const rootTarget = authenticatedRootTarget(request.nextUrl.pathname, user !== null);
+    if (rootTarget) {
+      const redirectResponse = carrySessionCookies(
+        NextResponse.redirect(new URL(rootTarget, request.nextUrl.origin), 307),
+        response,
+      );
+      redirectResponse.headers.set(
+        "Cache-Control",
+        "private, no-store, no-cache, must-revalidate, max-age=0",
+      );
+      addCorsHeaders(redirectResponse, request);
+      addCspHeaders(redirectResponse, request);
+      // The answer depends on the session cookie: a shared cache must not
+      // replay the redirect for a signed-out visitor (or vice versa).
+      redirectResponse.headers.append("Vary", "Cookie");
+      return redirectResponse;
+    }
+  }
+
+  /**
    * ── THE API GATE (F-1) ────────────────────────────────────────────────────
    *
    * Everything under `/api/` except the exact public paths (`/api/config` and
@@ -223,9 +289,12 @@ export async function proxy(request: NextRequest) {
    * route handler runs.
    */
   if (apiSessionDecision(request.nextUrl.pathname, user !== null) === "unauthenticated") {
-    const unauthorized = NextResponse.json(
-      { ok: false, error: "You must be signed in to do that.", code: "UNAUTHENTICATED" },
-      { status: 401, headers: { "cache-control": "private, no-store, max-age=0" } },
+    const unauthorized = carrySessionCookies(
+      NextResponse.json(
+        { ok: false, error: "You must be signed in to do that.", code: "UNAUTHENTICATED" },
+        { status: 401, headers: { "cache-control": "private, no-store, max-age=0" } },
+      ),
+      response,
     );
     addCorsHeaders(unauthorized, request);
     addCspHeaders(unauthorized, request);
@@ -242,7 +311,12 @@ export async function proxy(request: NextRequest) {
       loginUrl.searchParams.set("error", "not_configured");
     }
 
-    const redirectResponse = NextResponse.redirect(loginUrl, 303);
+    // Carry the Auth server's removals: a session it has rejected must be
+    // cleared in the browser, not retried on every visit to `/login`.
+    const redirectResponse = carrySessionCookies(
+      NextResponse.redirect(loginUrl, 303),
+      response,
+    );
     redirectResponse.headers.set(
       "Cache-Control",
       "private, no-store, no-cache, must-revalidate, max-age=0",

@@ -2,7 +2,12 @@ import { createServerClient } from "@supabase/ssr";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 import type { NextRequest } from "next/server";
-import { SUPABASE_ANON_KEY, SUPABASE_URL, isSupabaseConfigured } from "./config";
+import {
+  SUPABASE_ANON_KEY,
+  SUPABASE_URL,
+  authCookieOptions,
+  isSupabaseConfigured,
+} from "./config";
 
 /** One cookie the client wants to write, as `@supabase/ssr` hands it over. */
 export type CookieToSet = {
@@ -42,6 +47,7 @@ export async function createSupabaseServerClient(): Promise<SupabaseClient | nul
   const cookieStore = await cookies();
 
   return createServerClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    cookieOptions: authCookieOptions(),
     cookies: {
       getAll() {
         return cookieStore.getAll();
@@ -88,6 +94,7 @@ export function createSupabaseRequestClient(
   if (!isSupabaseConfigured()) return null;
 
   return createServerClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    cookieOptions: authCookieOptions(),
     cookies: {
       getAll() {
         return request.cookies.getAll();

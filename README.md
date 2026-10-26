@@ -292,6 +292,13 @@ VERCEL_OIDC_TOKEN=
 # VERCEL_PROJECT_ID below.
 VERCEL_TOKEN=
 VERCEL_PROJECT_ID=
+
+# Optional, off by default. Full-stack hosting deploys a VERIFIED Next.js
+# snapshot to the Vercel runtime (server routes run there, never on Mavly).
+# Requires the Vercel publishing config above, an explicit project cohort and
+# MAVLY_PROJECT_SECRETS_ENCRYPTION_KEY. A wildcard cohort is refused.
+MAVLY_FULLSTACK_HOSTING_ENABLED=
+MAVLY_FULLSTACK_HOSTING_PROJECTS=
 ```
 
 Only the two `NEXT_PUBLIC_SUPABASE_*` values and `NEXT_PUBLIC_APP_URL` are public.

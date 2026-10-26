@@ -75,16 +75,21 @@ RPCs and schema marker 17; additive and non-destructive), then
 `19_runtime_verification.sql` before enabling runtime/health verification and bounded AI
 repair (it adds build/runtime/health/preview/repair state, the 7-argument enqueue, the
 build+runtime+health `passed` rule and schema marker 19; additive, applied after 17),
+then `20_fullstack_hosting.sql` before enabling full-stack production hosting (it adds the
+deployment lifecycle/attempt/env/database tables, the fenced deployment RPCs and schema
+marker 20; additive, applied after 19 and 11),
 `08_figma_integration.sql`
 before using Figma, and `11_project_secrets.sql` before using project secrets. Project-secret encryption also
 requires the server-only `MAVLY_PROJECT_SECRETS_ENCRYPTION_KEY` (32 random bytes,
 base64-encoded); without it create/update fail closed. `npm test` covers the pure
 auth/redirect/ownership/scope modules, the generation state/lease/claim/observability
 modules, the verification runtime/health/preview/policy/config/state/result modules, the
-bounded repair policy and parsers, and static route/migration invariants. It does not
+bounded repair policy and parsers, the full-stack runtime/config/database/env/address
+rules, and static route/migration invariants. It does not
 exercise a
 real Supabase session, Groq, a live worker/queue, the Supabase OAuth connection, Vercel
-publishing, a real Vercel Sandbox, a generated app, a repair model call, or the migrations
+publishing, a real Vercel Sandbox, a generated app, a repair model call, a real Vercel
+full-stack deployment, a real application database connection, or the migrations
 against a database.
 
 ---
@@ -214,6 +219,35 @@ against a database.
   caller's own project. See `docs/architecture/phase-4-runtime-verification.md`,
   `docs/architecture/phase-3-verification-sandbox.md` and
   `docs/runbooks/verification-sandbox.md`.
+- **Full-stack production hosting is implemented but off by default (Phase 5).**
+  A project explicitly listed in `MAVLY_FULLSTACK_HOSTING_PROJECTS` (never `*`) is
+  routed to `src/lib/deployments/fullstack.ts` before static resolution, and only a
+  PASSED Phase 3/4 verification for the exact snapshot hash can be deployed. Vercel
+  builds and runs the Next.js App Router app (route handlers, server actions,
+  middleware) in its own runtime; no generated code runs on Mavly hosts, and the
+  Phase 3/4 microVM is not used as hosting. The attempt table and monotonic
+  `deployment_attempt` fence keep one active attempt, settle only the attempt they
+  belong to, and preserve `previous_deployment_id` on failure; rollback uses Vercel
+  Instant Rollback to a previously ready attempt. `ready` requires provider READY, a
+  verified Mavly domain, every production secret synced and any configured
+  `DATABASE_URL` synced with the same fingerprint. Existing full-stack rows keep
+  status/takedown/rollback even when the flag or cohort is turned off; takedown
+  requires only the Vercel token. Provider project targeting is derived from the
+  owner-bound `vercelProjectName` (never a row-supplied id/name), and takedown deletes
+  only deployments the provider lists for the project. Project secrets are pushed to
+  the provider's encrypted env in the save request (write-only; no read-back); a
+  value saved before the provider project existed is `awaiting_project` and must be
+  re-saved after the first deploy creates the project. The application database
+  contract stores non-secret metadata and one encrypted `DATABASE_URL`; saving it runs
+  one bounded, DNS-pinned `select 1` (private addresses refused) and never provisions,
+  migrates or reads application data. The deployment RPCs are SECURITY DEFINER and
+  ownership-checked and use the caller's RLS client (no service role); a project owner
+  can still misrepresent their own deployment/env metadata, which needs a
+  service-role-only follow-up if stronger self-attestation resistance is required.
+  No live post-deploy HTTP probe is performed (readiness is the verified snapshot +
+  provider READY + domain). See `docs/architecture/phase-5-fullstack-hosting.md` and
+  `docs/runbooks/fullstack-hosting.md`. Static tests do not exercise a real Vercel
+  build, secret push or database connection.
 - **Restore points are implemented.** Every completed AI execution that changes the
   project's source leaves a durable snapshot (`project_snapshots` +
   `project_snapshot_files`). The chat renders a **Restore Code** action on that execution,
@@ -402,6 +436,16 @@ paths with `src/lib/vcaas-scope.ts`, so unknown shapes are refused before any wo
 | `src/lib/tenant-host.ts` | Pure request-host parser and the only way to identify a public tenant. |
 | `src/lib/reserved-hostnames.ts` | Mavly-owned host labels, shared by slug creation, publishing, routing and migration 14. |
 | `src/lib/hosting/` | Shared hosting: mode/cohort config, immutable version persistence, atomic activation, missing-migration detection, public resolution/serving, publish admission limits, hosting events. |
+| `src/lib/deployments/fullstack.ts` | Phase 5 orchestration: verified-snapshot deploy, owner-bound provider targeting, fenced attempt lifecycle, readiness finalization, rollback, takedown and history. |
+| `src/lib/hosting/fullstack-config.ts` | Opt-in Phase 5 prerequisites (flag, explicit cohort, Vercel config, secrets key) and the no-silent-downgrade refusal. |
+| `src/lib/hosting/fullstack-source.ts` | The join between a PASSED Phase 3/4 verification and the exact deployable snapshot/hash. |
+| `src/lib/runtime/deployment-plan.ts` | Pure deployment profile: App Router only, path/size limits, static-export refusal and the deployable hash. |
+| `src/lib/hosting/fullstack-store.ts` | Caller-scoped attempts/env/database persistence; the fenced deployment RPCs are the only writers of deployment state. |
+| `src/lib/hosting/secret-sync.ts` | Write-only secret write-through to the provider's encrypted env; no value is ever read back, logged or stored in metadata. |
+| `src/lib/hosting/database-config.ts`, `database-connectivity.ts`, `fullstack-database.ts` | Application database contract: URL validation, non-secret metadata, and one bounded, DNS-pinned live `select 1` before anything is stored. |
+| `src/lib/hosting/deployment-env.ts` | Public/server env classification, reserved names, and the production-secret readiness gate. |
+| `supabase/migrations/20_fullstack_hosting.sql` | Deployment lifecycle/attempt/env/database tables, ownership-checked fenced RPCs, column-level grants and schema marker 20. Additive; apply after 19 and 11. |
+| `docs/architecture/phase-5-fullstack-hosting.md`, `docs/runbooks/fullstack-hosting.md` | Phase 5 design, readiness contract, security boundaries, rollout, failure handling and live verification checklist. |
 | `src/app/api/tenant/[[...path]]/route.ts` | The tenant runtime (internal path reached by the validated-host rewrite). |
 | `src/lib/api-origin.ts` | Explicit credentialed-origin allowlist and cross-origin mutation policy. |
 | `supabase/migrations/14_shared_hosting.sql` | Published versions/files, active-version RPCs, published-only public lookup, RLS and grants. |

@@ -31,6 +31,7 @@ import {
 } from "@/lib/hosting/config";
 import { logHostingEvent } from "@/lib/hosting/events";
 import type { HostingEvent } from "@/lib/hosting/events";
+import { isFullstackHostingRequested } from "@/lib/hosting/fullstack-config";
 import {
   SHARED_HOSTING_INSTALL_MESSAGE,
   migrationRequirementMessage,
@@ -62,7 +63,6 @@ import {
   vercelConfigPresence,
 } from "@/lib/vercel/diagnostics";
 import {
-  addVercelProjectDomain,
   createVercelDeployment,
   createVercelProject,
   deleteVercelDeployment,
@@ -77,7 +77,6 @@ import {
   vercelProjectName,
   verifyVercelProjectDomain,
   type VercelFailure,
-  type VercelProjectDomain,
   type VercelResult,
 } from "@/lib/vercel/provider";
 import {
@@ -92,8 +91,14 @@ import {
   type DeploymentRow,
   type DeploymentStatus as StoredDeploymentStatus,
   type DeploymentStoreResult,
-  type MavlyDomainStatus,
 } from "./store";
+import { assignMavlyDomain, recordDomainFailure } from "./domain-assignment";
+import {
+  disableFullstackProject,
+  getFullstackDeploymentStatus,
+  isFullstackDeploymentRow,
+  publishFullstackProject,
+} from "./fullstack";
 import { resolveVercelProject } from "./vercel-project";
 import { publicDeploymentFailure } from "./vercel-failure";
 
@@ -280,99 +285,6 @@ async function recordFailure(projectId: string, failure: VercelFailure): Promise
   });
   if (isDeploymentStoreFailure(updated)) {
     console.error("[deployments] could not record deployment failure:", updated.error);
-  }
-}
-
-interface DomainAssignment {
-  status: MavlyDomainStatus;
-  error: string | null;
-}
-
-/**
- * Attach the project's Mavly hostname to its Vercel project and ask Vercel to
- * verify it. A domain that is merely attached is not ready: only
- * `verified: true` may make a deployment live at the Mavly address.
- */
-async function assignMavlyDomain(
-  config: VercelDeploymentConfig,
-  vercelProjectId: string,
-  hostname: string,
-): Promise<DeploymentServiceResult<DomainAssignment>> {
-  const added = await addVercelProjectDomain(config, vercelProjectId, hostname);
-  let domain: VercelProjectDomain;
-
-  if (isVercelFailure(added)) {
-    /**
-     * Vercel reports an existing project-domain as a validation/conflict error.
-     * Re-read it from THIS project before deciding: a domain attached to another
-     * Vercel project must never be adopted.
-     */
-    if (added.failure.status === 400 || added.failure.status === 409) {
-      const existing = await getVercelProjectDomain(config, vercelProjectId, hostname);
-      if (isVercelFailure(existing)) {
-        if (existing.failure.status === 404) {
-          return fail(
-            409,
-            "DOMAIN_CONFLICT",
-            `The Mavly address ${hostname} is already assigned to another deployment.`,
-          );
-        }
-        return fromVercel(existing.failure);
-      }
-      domain = existing.data;
-    } else {
-      return fromVercel(added.failure);
-    }
-  } else {
-    domain = added.data;
-  }
-
-  if (!domain.verified) {
-    const checked = await verifyVercelProjectDomain(config, vercelProjectId, hostname);
-    if (isVercelFailure(checked)) {
-      if (checked.failure.status === 404) {
-        return fail(
-          502,
-          "DOMAIN_NOT_FOUND",
-          `Vercel could not find the Mavly address ${hostname} after assigning it.`,
-        );
-      }
-      if (checked.failure.status === 401 || checked.failure.status === 403) {
-        return fromVercel(checked.failure);
-      }
-      // A pending DNS/certificate challenge is not a failed publish. Status
-      // checks will retry verification without ever reporting success early.
-      return { ok: true, data: { status: "pending", error: null } };
-    }
-    domain = checked.data;
-  }
-
-  return {
-    ok: true,
-    data: { status: domain.verified ? "verified" : "pending", error: null },
-  };
-}
-
-async function recordDomainFailure(
-  projectId: string,
-  hostname: string,
-  failure: { code: string; error: string },
-): Promise<void> {
-  const normalizedCode = failure.code.toLowerCase();
-  const errorCode = (
-    normalizedCode.startsWith("domain") ? failure.code : `domain_${failure.code}`
-  ).slice(0, 120);
-  const updated = await updateDeploymentRow(projectId, {
-    status: "error",
-    error_code: errorCode,
-    error_message: failure.error.slice(0, ERROR_MESSAGE_MAX),
-    mavly_hostname: hostname,
-    mavly_domain_status: "error",
-    mavly_domain_error: failure.error.slice(0, ERROR_MESSAGE_MAX),
-    mavly_domain_checked_at: new Date().toISOString(),
-  });
-  if (isDeploymentStoreFailure(updated)) {
-    console.error("[deployments] could not record domain failure:", updated.error);
   }
 }
 
@@ -903,12 +815,41 @@ async function sharedDeploymentStatus(
   return { ok: true, data: wireDeploymentStatus(current) };
 }
 
+export interface PublishProjectOptions {
+  /** A verified snapshot to deploy. Only meaningful for full-stack hosting. */
+  snapshotId?: string | null;
+}
+
 export async function publishProject(
   userId: string,
   projectId: string,
+  options: PublishProjectOptions = {},
 ): Promise<DeploymentServiceResult<WireDeploymentStatus>> {
   const allowance = deploymentOperationLimiter.consume(userId);
   if (allowance.ok === false) return rateLimitFailure(allowance);
+
+  /**
+   * ═══ FULL-STACK HOSTING IS A DIFFERENT CONTRACT ═══════════════════════════
+   *
+   * A project the operator explicitly listed is routed here BEFORE any static
+   * resolution. If a prerequisite is missing, `publishFullstackProject` refuses
+   * with that prerequisite — it never falls through to a static publish that
+   * would silently drop every server route.
+   *
+   * ⚠️ AN EXISTING FULL-STACK ROW IS ROUTED HERE TOO, even when the project is
+   * no longer in the cohort. Otherwise removing a project from the cohort would
+   * make its next deploy a static publish, silently replacing a full-stack site
+   * with one that has no API routes. `publishFullstackProject` then refuses the
+   * removal with a clear message.
+   *
+   * The admission window above is consumed exactly once.
+   */
+  if (
+    isFullstackHostingRequested(projectId) ||
+    (await isFullstackDeploymentRow(projectId))
+  ) {
+    return publishFullstackProject(userId, projectId, options);
+  }
 
   /**
    * Which hosting path this project uses. Both the mode and the cohort are
@@ -1090,7 +1031,7 @@ export async function publishProject(
    * "deploying" until Vercel reports the domain verified.
    */
   const assigned = await assignMavlyDomain(config.config, vercelProjectId, hostname);
-  if (isDeploymentServiceFailure(assigned)) {
+  if ("error" in assigned) {
     await recordDomainFailure(projectId, hostname, assigned);
     return assigned;
   }
@@ -1293,6 +1234,19 @@ export async function unpublishProject(
   userId: string,
   projectId: string,
 ): Promise<DeploymentServiceResult<WireDeploymentStatus>> {
+  /**
+   * A full-stack row takes the provider takedown path (detach the Mavly domain,
+   * remove production deployments, then record `disabled`). A project that is
+   * merely in the cohort but still has a static mapping keeps the static
+   * unpublish, so adding a project to the cohort cannot make its existing site
+   * impossible to take down.
+   *
+   * The admission window is consumed by whichever path actually runs.
+   */
+  if (await isFullstackDeploymentRow(projectId)) {
+    return disableFullstackProject(userId, projectId);
+  }
+
   const allowance = deploymentOperationLimiter.consume(userId);
   if (allowance.ok === false) return rateLimitFailure(allowance);
 
@@ -1559,6 +1513,16 @@ export async function getProjectDeploymentStatus(
   userId: string,
   projectId: string,
 ): Promise<DeploymentServiceResult<WireDeploymentStatus>> {
+  /**
+   * A full-stack row has its own lifecycle, attempt fence and readiness
+   * contract. Only a row that is actually full-stack is routed here, so a
+   * project added to the cohort with an older static deployment keeps the
+   * static status shape.
+   */
+  if (await isFullstackDeploymentRow(projectId)) {
+    return getFullstackDeploymentStatus(userId, projectId);
+  }
+
   const project = await getProject(userId, projectId);
   if (isStoreFailure(project)) {
     return fail(500, "UNKNOWN", "Could not load this project.");
