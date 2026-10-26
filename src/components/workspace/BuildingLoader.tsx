@@ -1,8 +1,6 @@
 "use client";
 
-import Image from "next/image";
 import {
-  generationStepStatuses,
   stageText,
   type RunStage,
 } from "@/lib/run-progress";
@@ -24,15 +22,6 @@ export function BuildingLoader({
         ? "Waiting for the preview to be ready"
         : stageText(stage)
       : "Waiting for generation status";
-  const stageStatuses = generationStepStatuses(stage, previewReady);
-  const activeStageIndex = stageStatuses.indexOf("active");
-  const completedStageCount = stageStatuses.filter((status) => status === "completed").length;
-  const assemblyStage =
-    activeStageIndex >= 0
-      ? String(activeStageIndex)
-      : completedStageCount > 0
-        ? String(Math.min(completedStageCount - 1, 4))
-        : "idle";
 
   return (
     <div
@@ -41,54 +30,49 @@ export function BuildingLoader({
       className="preview-loader absolute inset-0 overflow-y-auto bg-background px-4 py-5 sm:px-6"
     >
       <div className="preview-loader-content">
-        <div className="preview-loader-brand">
-          <span className="preview-loader-mark">
-            <Image
-              src="/logo/Mavly.png"
-              alt="Mavly"
-              width={25}
-              height={25}
-              className="h-full w-full rounded object-contain"
-            />
-          </span>
-          <span>MAVLY <i /> GENERATION</span>
-        </div>
+        <p className="preview-loader-eyebrow">THE LIVING CANVAS</p>
 
-        <div className="preview-morph" data-stage={assemblyStage} aria-hidden="true">
-          <span className="preview-morph-mark">
-            <Image
-              src="/logo/Mavly.png"
-              alt=""
-              width={38}
-              height={38}
-              className="h-full w-full rounded object-contain"
-            />
-          </span>
-          <div className="preview-morph-layout">
-            <span className="preview-morph-nav preview-morph-line" />
-            <span className="preview-morph-nav-action preview-morph-outline" />
-            <span className="preview-morph-heading preview-morph-line" />
-            <span className="preview-morph-heading-short preview-morph-line" />
-            <span className="preview-morph-copy preview-morph-line" />
-            <span className="preview-morph-copy-short preview-morph-line" />
-            <span className="preview-morph-image preview-morph-outline" />
-            <span className="preview-morph-divider" />
-            <span className="preview-morph-panel preview-morph-outline" />
-            <span className="preview-morph-panel preview-morph-panel-middle preview-morph-outline" />
-            <span className="preview-morph-panel preview-morph-panel-last preview-morph-outline" />
+        <div className="living-canvas" aria-hidden="true">
+          <div className="living-browser">
+            <div className="living-browser-chrome">
+              <span className="living-browser-dots"><i /><i /><i /></span>
+              <span className="living-browser-address" />
+              <span className="living-browser-control" />
+            </div>
+            <div className="living-site">
+              <nav className="living-nav">
+                <span className="living-brand-mark" />
+                <span className="living-brand-name" />
+                <span className="living-nav-links"><i /><i /><i /></span>
+                <span className="living-nav-action" />
+              </nav>
+              <section className="living-hero">
+                <div className="living-hero-copy">
+                  <span className="living-eyebrow" />
+                  <span className="living-heading"><i /><i /></span>
+                  <span className="living-supporting"><i /><i /></span>
+                  <span className="living-cta" />
+                </div>
+                <div className="living-artwork">
+                  <span className="living-artwork-sun" />
+                  <span className="living-artwork-hill living-artwork-hill-back" />
+                  <span className="living-artwork-hill living-artwork-hill-front" />
+                  <span className="living-artwork-card" />
+                </div>
+              </section>
+              <div className="living-cards">
+                <div className="living-card"><i /><span /><b /></div>
+                <div className="living-card"><i /><span /><b /></div>
+                <div className="living-card"><i /><span /><b /></div>
+              </div>
+            </div>
           </div>
         </div>
 
         <section className="preview-loader-progress" aria-label="Website generation progress">
           <div className="preview-loader-status">
-            <span className="preview-loader-status-mark">
-              <Image
-                src="/logo/Mavly.png"
-                alt="Mavly"
-                width={30}
-                height={30}
-                className="h-full w-full rounded object-contain"
-              />
+            <span className="preview-loader-status-mark" aria-hidden="true">
+              <span />
             </span>
             <div className="min-w-0">
               <p className="text-sm font-medium text-foreground">Your website is taking shape</p>
