@@ -10,10 +10,14 @@ export function BuildingLoader({
   stage = null,
   retrying = false,
   previewReady = false,
+  motionActive = true,
+  motionPaused = false,
 }: {
   stage?: RunStage | null;
   retrying?: boolean;
   previewReady?: boolean;
+  motionActive?: boolean;
+  motionPaused?: boolean;
 }) {
   const currentLabel = retrying
     ? "Retrying a generation step"
@@ -26,7 +30,9 @@ export function BuildingLoader({
   return (
     <div
       data-testid="building-loader"
-      aria-busy="true"
+      data-motion={motionActive ? "active" : "settled"}
+      data-motion-paused={motionPaused || undefined}
+      aria-busy={motionActive}
       className="preview-loader absolute inset-0 overflow-y-auto bg-background px-4 py-5 sm:px-6"
     >
       <div className="preview-loader-content">

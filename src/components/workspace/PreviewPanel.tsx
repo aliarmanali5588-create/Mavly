@@ -40,6 +40,11 @@ interface PreviewPanelProps {
 
 export function PreviewPanel({ previewUrl, onRefresh, loading, mobilePreview = false, iframePath = "/", cached = false, proxiedSrc, frameRef, buildStage, buildRetrying, previewReady, emptyMessage }: PreviewPanelProps) {
   const [iframeLoading, setIframeLoading] = useState(true);
+  const [canvasSessionActive, setCanvasSessionActive] = useState(
+    () => Boolean(loading && !previewUrl),
+  );
+  const [canvasRevealing, setCanvasRevealing] = useState(false);
+  const [pageVisible, setPageVisible] = useState(true);
   /** ⚠️ The proxy wins when present — see `proxiedSrc`. */
   const base = (proxiedSrc || previewUrl || "").replace(/\/$/, "");
   const path = iframePath && iframePath !== "/"
@@ -52,8 +57,31 @@ export function PreviewPanel({ previewUrl, onRefresh, loading, mobilePreview = f
   const fullIframeUrl = base ? `${base}${path}` : null;
 
   useEffect(() => {
-    if (fullIframeUrl) setIframeLoading(true);
+    if (fullIframeUrl) {
+      setIframeLoading(true);
+      setCanvasRevealing(false);
+    }
   }, [fullIframeUrl]);
+
+  useEffect(() => {
+    if (loading && !previewUrl) setCanvasSessionActive(true);
+    if (!loading && !fullIframeUrl) {
+      setCanvasSessionActive(false);
+      setCanvasRevealing(false);
+    }
+  }, [loading, previewUrl, fullIframeUrl]);
+
+  useEffect(() => {
+    const updateVisibility = () => setPageVisible(!document.hidden);
+    updateVisibility();
+    document.addEventListener("visibilitychange", updateVisibility);
+    return () => document.removeEventListener("visibilitychange", updateVisibility);
+  }, []);
+
+  const showCanvas =
+    (canvasSessionActive || Boolean(loading && !previewUrl)) &&
+    (loading || Boolean(fullIframeUrl));
+  const canvasMotionActive = Boolean(loading && !previewReady && !previewUrl);
 
   return (
     <div className="h-full flex flex-col overflow-hidden">
@@ -68,7 +96,15 @@ export function PreviewPanel({ previewUrl, onRefresh, loading, mobilePreview = f
           </div>
         )}
         {!previewUrl ? (
-          loading ? <BuildingLoader stage={buildStage} retrying={buildRetrying} previewReady={previewReady} /> : (
+          showCanvas ? (
+            <BuildingLoader
+              stage={buildStage}
+              retrying={buildRetrying}
+              previewReady={previewReady}
+              motionActive={canvasMotionActive}
+              motionPaused={!pageVisible}
+            />
+          ) : (
             <div className="flex flex-col items-center justify-center text-center px-8">
               <Monitor className="w-10 h-10 text-gray-300 mb-4" />
               <p className="text-sm font-medium text-gray-500 mb-1">No preview yet</p>
@@ -79,38 +115,72 @@ export function PreviewPanel({ previewUrl, onRefresh, loading, mobilePreview = f
           <div className={`preview-panel-enter bg-white transition-all duration-300 relative ${
             mobilePreview ? "w-[375px] h-[667px] rounded-[2rem] border-[8px] border-gray-800 overflow-hidden shadow-2xl" : "w-full h-full"
           }`}>
-            <div
-              role="status"
-              aria-live="polite"
-              aria-atomic="true"
-              aria-hidden={!iframeLoading}
-              className={`preview-frame-loading absolute inset-0 z-10 flex items-center justify-center bg-white ${
-                iframeLoading ? "opacity-100" : "pointer-events-none opacity-0"
-              }`}
-            >
-              <span className="preview-frame-loading-mark">
-                <Image
-                  src="/logo/Mavly.png"
-                  alt=""
-                  width={30}
-                  height={30}
-                  className="h-full w-full object-contain"
-                />
-              </span>
-              <span className="sr-only">Loading website preview</span>
+            <div className="absolute inset-0">
+              <iframe
+                /* ⚠️ REMOUNT WHEN THE ORIGIN CHANGES. Swapping the `src` between the direct
+                   URL and the proxy without a new element leaves the old document (and its
+                   injected agent, or lack of one) in place. */
+                key={proxiedSrc ? "proxy" : "direct"}
+                ref={frameRef}
+                src={fullIframeUrl || undefined}
+                className={`preview-frame-content h-full w-full border-0 transition-opacity duration-300 ${
+                  iframeLoading ? "opacity-0" : "opacity-100"
+                }`}
+                title="Preview"
+                sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals"
+                onLoad={() => {
+                  setIframeLoading(false);
+                  if (!canvasSessionActive) return;
+                  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+                    setCanvasSessionActive(false);
+                    return;
+                  }
+                  setCanvasRevealing(true);
+                }}
+              />
+              {!showCanvas && (
+                <div
+                  role="status"
+                  aria-live="polite"
+                  aria-atomic="true"
+                  aria-hidden={!iframeLoading}
+                  className={`preview-frame-loading absolute inset-0 z-10 flex items-center justify-center bg-white ${
+                    iframeLoading ? "opacity-100" : "pointer-events-none opacity-0"
+                  }`}
+                >
+                  <span className="preview-frame-loading-mark">
+                    <Image
+                      src="/logo/Mavly.png"
+                      alt=""
+                      width={30}
+                      height={30}
+                      className="h-full w-full object-contain"
+                    />
+                  </span>
+                  <span className="sr-only">Loading website preview</span>
+                </div>
+              )}
+              {showCanvas && (
+                <div
+                  className={`preview-canvas-reveal absolute inset-0 z-20 ${
+                    canvasRevealing ? "preview-canvas-revealing" : ""
+                  }`}
+                  onTransitionEnd={(event) => {
+                    if (event.target !== event.currentTarget || event.propertyName !== "opacity") return;
+                    setCanvasSessionActive(false);
+                    setCanvasRevealing(false);
+                  }}
+                >
+                  <BuildingLoader
+                    stage={buildStage}
+                    retrying={buildRetrying}
+                    previewReady={previewReady}
+                    motionActive={canvasMotionActive}
+                    motionPaused={!pageVisible}
+                  />
+                </div>
+              )}
             </div>
-            <iframe
-              /* ⚠️ REMOUNT WHEN THE ORIGIN CHANGES. Swapping the `src` between the direct
-                 URL and the proxy without a new element leaves the old document (and its
-                 injected agent, or lack of one) in place. */
-              key={proxiedSrc ? "proxy" : "direct"}
-              ref={frameRef}
-              src={fullIframeUrl || undefined}
-              className="w-full h-full border-0"
-              title="Preview"
-              sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals"
-              onLoad={() => setIframeLoading(false)}
-            />
           </div>
         )}
       </div>

@@ -282,9 +282,26 @@ button {
 
 .living-browser::after {
   position: absolute;
+  z-index: 4;
   inset: 0;
   border: 1px solid color-mix(in oklab, var(--primary) 26%, var(--border));
   border-radius: inherit;
+  content: "";
+  opacity: 0;
+  pointer-events: none;
+}
+
+.living-browser::before {
+  position: absolute;
+  z-index: 3;
+  inset: 0;
+  width: 48%;
+  background: linear-gradient(
+    105deg,
+    transparent 18%,
+    color-mix(in oklab, #8098b8 13%, transparent) 50%,
+    transparent 82%
+  );
   content: "";
   opacity: 0;
   pointer-events: none;
@@ -407,6 +424,9 @@ button {
 }
 
 .living-heading i {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
   width: 92%;
   height: clamp(5px, 1.2cqw, 9px);
   border-radius: 999px;
@@ -425,6 +445,9 @@ button {
 }
 
 .living-supporting i {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
   width: 100%;
   height: 3px;
   border-radius: 999px;
@@ -455,6 +478,21 @@ button {
       color-mix(in oklab, var(--foreground) 3%, var(--background)));
 }
 
+.living-artwork::after {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  width: 52%;
+  background: linear-gradient(
+    105deg,
+    transparent 15%,
+    color-mix(in oklab, #8098b8 12%, transparent) 50%,
+    transparent 85%
+  );
+  content: "";
+  pointer-events: none;
+}
+
 .living-artwork-sun {
   position: absolute;
   top: 17%;
@@ -463,6 +501,10 @@ button {
   aspect-ratio: 1;
   border-radius: 50%;
   background: color-mix(in oklab, var(--primary) 18%, var(--background));
+}
+
+.living-artwork-card {
+  will-change: transform;
 }
 
 .living-artwork-hill {
@@ -530,6 +572,9 @@ button {
 
 .living-card span,
 .living-card b {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
   height: 4px;
   border-radius: 999px;
   background: color-mix(in oklab, var(--foreground) 43%, var(--border));
@@ -607,6 +652,16 @@ button {
   transition: opacity 240ms ease;
 }
 
+.preview-canvas-reveal {
+  opacity: 1;
+  transition: opacity 280ms ease;
+}
+
+.preview-canvas-revealing {
+  opacity: 0;
+  pointer-events: none;
+}
+
 .preview-frame-loading-mark {
   display: grid;
   width: 36px;
@@ -641,32 +696,96 @@ button {
   .preview-panel-enter {
     animation: preview-panel-enter 220ms ease-out both;
   }
-  .living-browser {
+  .preview-loader[data-motion="active"] .living-browser {
     animation: living-canvas-frame-in 440ms var(--ease-in-out-soft) both;
   }
-  .living-browser::after {
+  .preview-loader[data-motion="active"] .living-browser::before {
+    animation: living-canvas-sweep 1.2s 1.15s ease-out both;
+  }
+  .preview-loader[data-motion="active"] .living-browser::after {
     animation: living-canvas-refine 620ms 1.05s ease-out forwards;
   }
-  .living-nav {
+  .preview-loader[data-motion="active"] .living-nav {
     animation: living-canvas-piece-in 380ms 140ms var(--ease-in-out-soft) both;
   }
-  .living-hero-copy .living-eyebrow {
+  .preview-loader[data-motion="active"] .living-hero-copy .living-eyebrow {
     animation: living-canvas-piece-in 360ms 250ms var(--ease-in-out-soft) both;
   }
-  .living-heading {
+  .preview-loader[data-motion="active"] .living-heading {
     animation: living-canvas-piece-in 380ms 330ms var(--ease-in-out-soft) both;
   }
-  .living-supporting {
+  .preview-loader[data-motion="active"] .living-supporting {
     animation: living-canvas-piece-in 380ms 410ms var(--ease-in-out-soft) both;
   }
-  .living-cta {
+  .preview-loader[data-motion="active"] .living-cta {
     animation: living-canvas-piece-in 380ms 480ms var(--ease-in-out-soft) both;
   }
-  .living-artwork {
+  .preview-loader[data-motion="active"] .living-artwork {
     animation: living-canvas-piece-in 460ms 360ms var(--ease-in-out-soft) both;
   }
-  .living-cards {
+  .preview-loader[data-motion="active"] .living-cards {
     animation: living-canvas-piece-in 440ms 570ms var(--ease-in-out-soft) both;
+  }
+  .preview-loader[data-motion="active"] .living-card:nth-child(1) {
+    animation: living-canvas-piece-in 360ms 680ms var(--ease-in-out-soft) both;
+  }
+  .preview-loader[data-motion="active"] .living-card:nth-child(2) {
+    animation: living-canvas-piece-in 360ms 770ms var(--ease-in-out-soft) both;
+  }
+  .preview-loader[data-motion="active"] .living-card:nth-child(3) {
+    animation: living-canvas-piece-in 360ms 860ms var(--ease-in-out-soft) both;
+  }
+  .preview-loader[data-motion="active"] .living-heading i::after {
+    animation: living-canvas-shimmer 3.4s 1.05s ease-in-out infinite;
+  }
+  .preview-loader[data-motion="active"] .living-supporting i::after {
+    animation: living-canvas-shimmer 3.8s 1.3s ease-in-out infinite;
+  }
+  .preview-loader[data-motion="active"] .living-supporting i:nth-child(2)::after {
+    animation-delay: 1.65s;
+  }
+  .preview-loader[data-motion="active"] .living-artwork::after {
+    animation: living-canvas-shimmer 4.4s 1.25s ease-in-out infinite;
+  }
+  .preview-loader[data-motion="active"] .living-card span::after,
+  .preview-loader[data-motion="active"] .living-card b::after {
+    animation: living-canvas-shimmer 3.6s 1.6s ease-in-out infinite;
+  }
+  .preview-loader[data-motion="active"] .living-card:nth-child(2) span::after,
+  .preview-loader[data-motion="active"] .living-card:nth-child(2) b::after {
+    animation-delay: 2s;
+  }
+  .preview-loader[data-motion="active"] .living-card:nth-child(3) span::after,
+  .preview-loader[data-motion="active"] .living-card:nth-child(3) b::after {
+    animation-delay: 2.4s;
+  }
+  .preview-loader[data-motion="active"] .living-artwork-sun {
+    animation: living-canvas-drift 5.8s 700ms ease-in-out infinite;
+  }
+  .preview-loader[data-motion="active"] .living-artwork-card {
+    animation: living-canvas-drift 6.4s 1.1s ease-in-out infinite;
+  }
+  .preview-loader[data-motion-paused="true"] .living-canvas *,
+  .preview-loader[data-motion-paused="true"] .living-browser::before,
+  .preview-loader[data-motion-paused="true"] .living-browser::after {
+    animation-play-state: paused;
+  }
+  .living-heading i::after,
+  .living-supporting i::after,
+  .living-card span::after,
+  .living-card b::after {
+    position: absolute;
+    inset: 0;
+    width: 70%;
+    background: linear-gradient(
+      100deg,
+      transparent 12%,
+      color-mix(in oklab, #8098b8 17%, transparent) 50%,
+      transparent 88%
+    );
+    content: "";
+    pointer-events: none;
+    transform: translateX(-130%);
   }
   @keyframes preview-panel-enter {
     from { opacity: 0.72; transform: translateY(3px); }
@@ -684,6 +803,19 @@ button {
     from { opacity: 0.72; }
     to { opacity: 0; }
   }
+  @keyframes living-canvas-sweep {
+    0% { opacity: 0; transform: translateX(-125%) skewX(-12deg); }
+    25% { opacity: 1; }
+    100% { opacity: 0; transform: translateX(220%) skewX(-12deg); }
+  }
+  @keyframes living-canvas-shimmer {
+    0%, 22% { transform: translateX(-130%); }
+    72%, 100% { transform: translateX(190%); }
+  }
+  @keyframes living-canvas-drift {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-2px); }
+  }
   @keyframes run-progress-sweep {
     from { transform: translateX(-110%); }
     to { transform: translateX(420%); }
@@ -699,8 +831,10 @@ button {
 
 @media (prefers-reduced-motion: reduce) {
   .preview-loader-step-track,
-  .preview-frame-loading {
-    transition: none;
+  .preview-frame-loading,
+  .preview-canvas-reveal,
+  .preview-frame-content {
+    transition: none !important;
   }
 }
 
