@@ -18,9 +18,15 @@ export type DeploymentStatus =
   | "unpublished";
 export type MavlyDomainStatus = "pending" | "verified" | "error";
 
+/**
+ * `vercel` — one per-project Vercel deployment (legacy, still supported);
+ * `shared` — an immutable published version served by Mavly's tenant runtime.
+ */
+export type DeploymentProvider = "vercel" | "shared";
+
 export interface DeploymentRow {
   project_id: string;
-  provider: "vercel";
+  provider: DeploymentProvider;
   vercel_project_id: string | null;
   vercel_project_name: string;
   vercel_deployment_id: string | null;
@@ -32,6 +38,8 @@ export interface DeploymentRow {
   mavly_domain_status: MavlyDomainStatus | null;
   mavly_domain_error: string | null;
   mavly_domain_checked_at: string | null;
+  /** The published version the shared runtime may serve. NULL for legacy rows. */
+  active_version_id?: string | null;
   created_at: string;
   updated_at: string;
   last_published_at: string | null;
@@ -60,8 +68,7 @@ export function isDeploymentStoreFailure<T>(
   return result.ok === false;
 }
 
-const SELECT =
-  "project_id,provider,vercel_project_id,vercel_project_name,vercel_deployment_id,status,url,error_code,error_message,mavly_hostname,mavly_domain_status,mavly_domain_error,mavly_domain_checked_at,created_at,updated_at,last_published_at,last_unpublished_at";
+const SELECT = "project_id,provider,vercel_project_id,vercel_project_name,vercel_deployment_id,status,url,error_code,error_message,mavly_hostname,mavly_domain_status,mavly_domain_error,mavly_domain_checked_at,active_version_id,created_at,updated_at,last_published_at,last_unpublished_at";
 
 function dbError(scope: string, message: string, code?: string): DeploymentStoreFailure {
   console.error(`[deployments] ${scope}:`, message);
@@ -93,6 +100,7 @@ export async function getDeploymentRow(projectId: string): Promise<DeploymentSto
 export async function beginDeployment(
   projectId: string,
   vercelProjectName: string,
+  provider: DeploymentProvider = "vercel",
 ): Promise<DeploymentStoreResult<DeploymentRow>> {
   const supabase = await createSupabaseServerClient();
   if (!supabase) return { ok: false, error: "Supabase is not configured", code: "UNAVAILABLE" };
@@ -102,7 +110,7 @@ export async function beginDeployment(
     .from("project_deployments")
     .insert({
       project_id: projectId,
-      provider: "vercel",
+      provider,
       vercel_project_name: vercelProjectName,
       status: "queued",
       updated_at: now,
@@ -119,7 +127,7 @@ export async function beginDeployment(
   }
 
   const claim = {
-    provider: "vercel",
+    provider,
     // The previous deployment is still live on Vercel, but it is no longer this
     // row's current attempt. Clearing the id prevents status polling from
     // adopting the old READY state while the new publish is in flight.
@@ -188,6 +196,7 @@ export interface DeploymentPatch {
   mavly_domain_status?: MavlyDomainStatus | null;
   mavly_domain_error?: string | null;
   mavly_domain_checked_at?: string | null;
+  active_version_id?: string | null;
   last_published_at?: string;
   last_unpublished_at?: string | null;
 }
@@ -273,6 +282,12 @@ export async function finishUnpublish(
       url: null,
       error_code: null,
       error_message: null,
+      /**
+       * The published version stops being resolvable here. The version ROWS are
+       * preserved (deactivate_published_version supersedes them), so history and
+       * rollback survive an unpublish.
+       */
+      active_version_id: null,
       mavly_domain_status: null,
       mavly_domain_error: null,
       mavly_domain_checked_at: null,

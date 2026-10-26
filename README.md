@@ -42,6 +42,7 @@ audits listed at the end of this file; it is not a runtime dependency.
 | Supabase account connection | OAuth with PKCE, encrypted server-side tokens, organization/project discovery and one selected project |
 | Figma design reference | Personal access token validated with Figma, encrypted per project, and a bounded design summary injected into generation |
 | Publishing (opt-in, disabled by default) | Static files → deterministic Vercel project, published at `<project-id>.mavly.xyz`; framework builds are not run. Deployment and domain state persisted and polled. **Unpublish** removes the Mavly project domain and production deployments, preserving the project/files for republishing. Requires `MAVLY_VERCEL_DEPLOYMENTS_ENABLED=1`, `VERCEL_API_TOKEN` and operator-configured `mavly.xyz` DNS/SSL. See [`MAVLY_VERCEL_DEPLOYMENTS.md`](MAVLY_VERCEL_DEPLOYMENTS.md). |
+| Shared tenant hosting (opt-in, off by default) | Immutable published versions stored in Supabase and served at `<project-id>.mavly.xyz` by Mavly's own tenant runtime. Enabled per project cohort with `MAVLY_HOSTING_MODE=shared` + `MAVLY_SHARED_HOSTING_PROJECTS`; the legacy Vercel path remains the default. See [`MAVLY_SHARED_HOSTING.md`](MAVLY_SHARED_HOSTING.md). |
 | `/api/config` | `200 { "ok": true, "data": { "configured": false } }` |
 | Visual shell | Dashboard, workspace, chat, composer, dialogs and preview frame render |
 

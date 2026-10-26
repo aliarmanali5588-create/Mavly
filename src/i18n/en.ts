@@ -3010,6 +3010,8 @@ const base = {
       nameErrorTooLong: "Use at most 35 characters",
       nameErrorFormat: "Use lowercase letters, numbers and single hyphens. Start with a letter.",
       nameErrorReserved: "Names can't contain “-dev-”",
+      nameErrorReservedHostname:
+        "That name is reserved for a Mavly address. Pick a different name.",
 
       // ── Creation errors (mapped from VCaaS codes) ─────────────────────────
       errorAlreadyExists: "That name is taken. We picked {name} instead — or choose your own.",

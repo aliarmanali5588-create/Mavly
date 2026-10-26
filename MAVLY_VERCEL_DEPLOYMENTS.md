@@ -1,5 +1,11 @@
 # Mavly-managed Vercel publishing
 
+> **Dual mode:** this per-project path is still the default. An opt-in shared tenant runtime
+> (`MAVLY_HOSTING_MODE=shared` + a project cohort) is documented in
+> [`MAVLY_SHARED_HOSTING.md`](MAVLY_SHARED_HOSTING.md). It stores immutable published
+> versions and serves them from Mavly; it does not create or detach Vercel projects for
+> shared rows. Do not detach existing project domains as part of enabling it.
+
 **Status:** implemented, **disabled by default**, and limited to static sites. Publishing and
 unpublishing are both real Vercel operations; unpublishing detaches the Mavly project domain
 and removes the project's production deployments rather than hiding a URL.

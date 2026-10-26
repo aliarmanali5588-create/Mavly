@@ -46,7 +46,13 @@ import {
  * are the platform's, so the copy below still reads from the same dictionary.
  */
 const PROBLEM_KEYS: Record<
-    "empty" | "too-short" | "too-long" | "invalid-format" | "reserved",
+    | "empty"
+    | "too-short"
+    | "too-long"
+    | "invalid-format"
+    | "reserved"
+    /** The name would claim a hostname Mavly's own infrastructure owns. */
+    | "reserved-hostname",
     TranslationKey
 > = {
     empty: "pages.projects.nameErrorEmpty",
@@ -54,6 +60,7 @@ const PROBLEM_KEYS: Record<
     "too-long": "pages.projects.nameErrorTooLong",
     "invalid-format": "pages.projects.nameErrorFormat",
     reserved: "pages.projects.nameErrorReserved",
+    "reserved-hostname": "pages.projects.nameErrorReservedHostname",
 };
 import { cn } from "@/lib/utils";
 

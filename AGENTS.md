@@ -63,7 +63,10 @@ Apply `supabase/migrations/10_generation_jobs.sql` before deploying the durable 
 jobs, `03_ai_builder.sql` before using the builder,
 `04_supabase_integration.sql` before using the Supabase connection,
 `07_project_deployments.sql`, `09_mavly_deployment_domains.sql` and
-`13_deployment_unpublish.sql` before enabling publishing/unpublishing, `08_figma_integration.sql`
+`13_deployment_unpublish.sql` before enabling publishing/unpublishing,
+`14_shared_hosting.sql` before deploying this build (it is additive, but the deployment
+mapping now reads `active_version_id`) and before enabling shared tenant hosting,
+`08_figma_integration.sql`
 before using Figma, and `11_project_secrets.sql` before using project secrets. Project-secret encryption also
 requires the server-only `MAVLY_PROJECT_SECRETS_ENCRYPTION_KEY` (32 random bytes,
 base64-encoded); without it create/update fail closed. `npm test` covers the pure
@@ -95,6 +98,17 @@ generated app.
   `mavly.xyz` DNS/wildcard resolution and confirm certificates before enabling. Do not
   enable it in a real deployment until the operator has confirmed Vercel plan/terms
   eligibility for Mavly-managed customer hosting; see `MAVLY_VERCEL_DEPLOYMENTS.md`.
+- **Shared tenant hosting is implemented but off by default** (`MAVLY_HOSTING_MODE=shared`
+  plus an explicit `MAVLY_SHARED_HOSTING_PROJECTS` cohort). A shared publish stores an
+  immutable version in `project_published_versions` / `project_published_files`, links it
+  from `project_deployments.active_version_id`, and serves it at
+  `<project-id>.mavly.xyz` through the tenant runtime (`src/app/api/tenant/…` reached by a
+  validated-host rewrite in `src/proxy.ts`). Public access is limited to two
+  `SECURITY DEFINER` RPCs; `project_files` is never served publicly, drafts never leak, and
+  unpublish deactivates the mapping without deleting history. The legacy per-project Vercel
+  path remains the default and its rows keep their Vercel takedown behaviour. Wildcard
+  DNS/TLS and Vercel plan eligibility are still unverified operator prerequisites; see
+  `MAVLY_SHARED_HOSTING.md`.
 - `src/lib/vcaas-server.ts` was deleted and must not be recreated. No Totalum host, key or
   forwarding remains.
 - Implemented paths authenticate, check `/api/vcaas` scope and project ownership, then use
@@ -278,7 +292,13 @@ paths with `src/lib/vcaas-scope.ts`, so unknown shapes are refused before any wo
 | `src/lib/ai/groq.ts` | The Groq chat-completions call for website/code generation; server-only key. |
 | `src/lib/ai/provider.ts` | Provider-neutral website-generation boundary, currently bound only to Groq. |
 | `src/lib/ai/models.ts` | Active Groq model catalog plus the preserved OpenRouter catalog/resolver. |
-| `src/lib/mavly-hostname.ts` | Pure derivation of `<project-id>.mavly.xyz` from the immutable, owned project id. |
+| `src/lib/mavly-hostname.ts` | Pure derivation of `<project-id>.mavly.xyz` from the immutable, owned project id; refuses reserved labels. |
+| `src/lib/tenant-host.ts` | Pure request-host parser and the only way to identify a public tenant. |
+| `src/lib/reserved-hostnames.ts` | Mavly-owned host labels, shared by slug creation, publishing, routing and migration 14. |
+| `src/lib/hosting/` | Shared hosting: mode/cohort config, immutable version persistence, public resolution/serving, publish admission limits, hosting events. |
+| `src/app/api/tenant/[[...path]]/route.ts` | The tenant runtime (internal path reached by the validated-host rewrite). |
+| `src/lib/api-origin.ts` | Explicit credentialed-origin allowlist and cross-origin mutation policy. |
+| `supabase/migrations/14_shared_hosting.sql` | Published versions/files, active-version RPCs, published-only public lookup, RLS and grants. |
 | `src/lib/vercel/` | Server-only opt-in config and the fixed-origin Vercel REST client, including project-domain assignment/verification. |
 | `src/lib/deployments/` | Publish/unpublish orchestration, domain gating, provider-failure mapping and RLS-scoped deployment mapping. |
 | `supabase/migrations/07_project_deployments.sql` | Deployment mapping table, constraints and ownership RLS. |

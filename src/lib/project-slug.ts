@@ -20,6 +20,8 @@
  * `src/lib/__tests__/project-slug.test.ts`.
  */
 
+import { isReservedLabel } from "./reserved-hostnames";
+
 /** VCaaS's own regex, character for character. */
 export const PROJECT_SLUG_REGEX = /^[a-z]([a-z0-9]|-(?!-))*(?<!-)$/;
 
@@ -35,7 +37,9 @@ export type SlugProblem =
     | "too-short"
     | "too-long"
     | "invalid-format"
-    | "reserved";
+    | "reserved"
+    /** The id would claim a hostname Mavly's own infrastructure owns. */
+    | "reserved-hostname";
 
 /**
  * Validate a slug against every rule VCaaS applies, in the same order, so the
@@ -49,6 +53,13 @@ export function validateProjectSlug(slug: string): SlugProblem | null {
     if (slug.length < PROJECT_SLUG_MIN_LENGTH) return "too-short";
     if (slug.length > PROJECT_SLUG_MAX_LENGTH) return "too-long";
     if (slug.includes(RESERVED_SLUG_FRAGMENT)) return "reserved";
+    /**
+     * ⚠️ A PUBLISHED SITE LIVES AT `<project-id>.mavly.xyz`. Reserving Mavly's
+     * own hostnames here keeps a NEW project from claiming `www`, `api`, …,
+     * while `isRoutableProjectSlug` (the read path) stays unchanged so an
+     * existing project is never made unreachable or renamed.
+     */
+    if (isReservedLabel(slug)) return "reserved-hostname";
     return null;
 }
 
@@ -196,6 +207,13 @@ export function suggestProjectSlug(prompt: string, fallback = "my-app"): string 
     // good idea for a name, it just needs one more character to pass.
     if (candidate && candidate.length < PROJECT_SLUG_MIN_LENGTH) {
         candidate = slugify(`${candidate}-app`);
+    }
+
+    // A reserved hostname is a fine idea with a bad address: keep the word and
+    // move it out of the reserved label rather than falling back to a generic
+    // name.
+    if (candidate && isReservedLabel(candidate)) {
+        candidate = slugify(`${candidate}-site`);
     }
 
     return isValidProjectSlug(candidate) ? candidate : fallback;

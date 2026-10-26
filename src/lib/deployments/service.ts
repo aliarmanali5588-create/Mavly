@@ -21,12 +21,33 @@
 
 import type { DeploymentStatus as WireDeploymentStatus } from "@/lib/vcaas-types";
 import { resolveStaticPreview, staticPublishFiles } from "@/lib/static-site";
+import type { StaticPublishFile, StaticSite } from "@/lib/static-site";
 import { mavlyHostname } from "@/lib/mavly-hostname";
+import {
+  PUBLISHED_VERSION_RETENTION,
+  isSharedHostingProject,
+  isSharedHostingRuntimeEnabled,
+  sharedDeploymentName,
+} from "@/lib/hosting/config";
+import { logHostingEvent } from "@/lib/hosting/events";
+import { deploymentOperationLimiter } from "@/lib/hosting/publish-limits";
+import { contentTypeForPath } from "@/lib/hosting/published-version";
+import { verifySharedPublication } from "@/lib/hosting/serve";
+import {
+  activatePublishedVersion,
+  createPublishedVersion,
+  deactivatePublishedVersion,
+  isHostingStoreFailure,
+  markPublishedVersionFailed,
+  preparePublishedFiles,
+  pruneSupersededVersions,
+} from "@/lib/hosting/store";
 import { getProject, isStoreFailure, listFiles } from "@/lib/mavly/store";
 import {
   isVercelDeploymentConfigFailure,
   readVercelDeploymentConfig,
   type VercelDeploymentConfig,
+  type VercelDeploymentConfigResult,
 } from "@/lib/vercel/config";
 import {
   formatVercelFailureDiagnostic,
@@ -408,12 +429,328 @@ async function refreshPendingDomain(
   return isDeploymentStoreFailure(patched) ? row : patched.data;
 }
 
+function rateLimitFailure(decision: {
+  scope: "user" | "global";
+  retryAfterSeconds: number;
+}): DeploymentServiceResult<never> {
+  logHostingEvent("rate_limited", { scope: decision.scope });
+  return fail(
+    429,
+    "RATE_LIMITED",
+    decision.scope === "global"
+      ? "Mavly is handling a lot of publishing right now. Try again shortly."
+      : "Too many publishing operations. Wait a moment and try again.",
+    decision.retryAfterSeconds,
+  );
+}
+
+/**
+ * Record a failed shared publish without touching the previously active version.
+ *
+ * Activation only happens after the whole artifact is stored, so a failure here
+ * leaves the last published version publicly resolvable. The deployment row
+ * reports the failed ATTEMPT, exactly as the legacy path does.
+ */
+async function recordSharedFailure(projectId: string, message: string): Promise<void> {
+  const updated = await updateDeploymentRow(projectId, {
+    status: "error",
+    error_code: "shared_publish_failed",
+    error_message: message.slice(0, ERROR_MESSAGE_MAX),
+  });
+  if (isDeploymentStoreFailure(updated)) {
+    console.error("[deployments] could not record shared publish failure:", updated.error);
+  }
+  logHostingEvent("publish_failed", { project: projectId, stage: "store" });
+}
+
+/**
+ * ═══ SHARED PUBLISH — NO VERCEL, ONE IMMUTABLE VERSION ══════════════════════
+ *
+ *   1. claim the project's single deployment slot (`provider = shared`);
+ *   2. validate + hash the exact static file set;
+ *   3. insert an INACTIVE version and all of its bytes;
+ *   4. activate atomically (previous active → superseded);
+ *   5. prove Mavly's own runtime resolves the host to THAT version;
+ *   6. persist the truthful wire state.
+ *
+ * A failure in 2–4 leaves the previous version active and serving. Step 5 is the
+ * only claim of readiness this code can make: it proves the public lookup and
+ * artifact read work, NOT that operator DNS/TLS point the wildcard here.
+ */
+async function publishSharedVersion(input: {
+  projectId: string;
+  hostname: string;
+  site: StaticSite;
+  publishFiles: readonly StaticPublishFile[];
+}): Promise<DeploymentServiceResult<WireDeploymentStatus>> {
+  const { projectId, hostname, site, publishFiles } = input;
+
+  logHostingEvent("publish_started", {
+    project: projectId,
+    host: hostname,
+    mode: "shared",
+    files: publishFiles.length,
+  });
+
+  const prepared = preparePublishedFiles(publishFiles, contentTypeForPath);
+  if (isHostingStoreFailure(prepared)) {
+    return fail(400, "VALIDATION", prepared.error);
+  }
+
+  const began = await beginDeployment(projectId, sharedDeploymentName(projectId), "shared");
+  if (isDeploymentStoreFailure(began)) {
+    return began.code === "CONFLICT"
+      ? fail(409, "VALIDATION", began.error)
+      : fail(500, "UNKNOWN", "Could not start the publish.");
+  }
+
+  const version = await createPublishedVersion({
+    projectId,
+    prepared: prepared.data,
+    entryPath: "index.html",
+    /**
+     * Only a standalone generated preview is a single client-routed document.
+     * An imported multi-page site keeps literal 404s for unknown paths; the
+     * policy is recorded in the immutable version, never guessed per request.
+     */
+    spaFallback: site.generated,
+  });
+  if (isHostingStoreFailure(version)) {
+    await recordSharedFailure(projectId, "Mavly could not store the published website.");
+    return version.code === "MIGRATION_REQUIRED"
+      ? fail(503, "BACKEND_NOT_CONFIGURED", "Shared hosting is not installed. Apply migration 14.")
+      : fail(500, "UNKNOWN", "Could not store the published website.");
+  }
+
+  const activated = await activatePublishedVersion(projectId, version.data.id);
+  if (isHostingStoreFailure(activated)) {
+    await markPublishedVersionFailed(version.data.id);
+    await recordSharedFailure(projectId, "Mavly could not activate the published website.");
+    return activated.code === "MIGRATION_REQUIRED"
+      ? fail(503, "BACKEND_NOT_CONFIGURED", "Shared hosting is not installed. Apply migration 14.")
+      : fail(500, "UNKNOWN", "Could not activate the published website.");
+  }
+
+  logHostingEvent("artifact_created", {
+    project: projectId,
+    version: version.data.id,
+    files: version.data.fileCount,
+    bytes: version.data.byteCount,
+    hash: version.data.contentHash,
+  });
+  logHostingEvent("version_activated", { project: projectId, version: version.data.id });
+
+  const probe = await verifySharedPublication(hostname, version.data.id);
+
+  const saved = await updateDeploymentRow(projectId, {
+    status: "ready",
+    vercel_deployment_id: null,
+    url: null,
+    error_code: null,
+    error_message: null,
+    mavly_hostname: hostname,
+    mavly_domain_status: probe.ok ? "verified" : "pending",
+    mavly_domain_error: probe.ok ? null : probe.reason,
+    mavly_domain_checked_at: new Date().toISOString(),
+    active_version_id: version.data.id,
+  });
+  if (isDeploymentStoreFailure(saved)) {
+    return fail(
+      500,
+      "UNKNOWN",
+      "The website was published but Mavly could not record it. Reload the workspace shortly.",
+    );
+  }
+
+  const removed = await pruneSupersededVersions(projectId, PUBLISHED_VERSION_RETENTION);
+  if (removed > 0) logHostingEvent("versions_pruned", { project: projectId, removed });
+
+  if (!probe.ok) {
+    logHostingEvent("publish_failed", {
+      project: projectId,
+      stage: "probe",
+      reason: probe.reason,
+    });
+  }
+
+  return { ok: true, data: wireDeploymentStatus(saved.data) };
+}
+
+/**
+ * Re-prove a pending shared publication. A transient lookup/read failure keeps
+ * the row `pending` (and therefore non-successful) instead of inventing either a
+ * live site or a failed publish.
+ */
+async function refreshSharedPublication(row: DeploymentRow): Promise<DeploymentRow> {
+  if (!row.mavly_hostname || !row.active_version_id) return row;
+
+  const probe = await verifySharedPublication(row.mavly_hostname, row.active_version_id);
+  const patched = await updateDeploymentRow(row.project_id, {
+    mavly_domain_status: probe.ok ? "verified" : "pending",
+    mavly_domain_error: probe.ok ? null : probe.reason,
+    mavly_domain_checked_at: new Date().toISOString(),
+    ...(probe.ok ? { error_code: null, error_message: null } : {}),
+  });
+  return isDeploymentStoreFailure(patched) ? row : patched.data;
+}
+
+async function unpublishSharedProject(
+  projectId: string,
+  lease: string,
+  row: DeploymentRow,
+): Promise<DeploymentServiceResult<WireDeploymentStatus>> {
+  try {
+    /**
+     * The mapping is the public switch: after deactivation the resolver finds no
+     * active version, so the host stops serving immediately. The version history
+     * and the Vercel legacy mapping (if any) are preserved for republishing.
+     */
+    const deactivated = await deactivatePublishedVersion(projectId);
+    if (isHostingStoreFailure(deactivated)) {
+      logHostingEvent("unpublish_failed", { project: projectId, stage: "deactivate" });
+      await rollBackUnpublish(
+        projectId,
+        lease,
+        row.status,
+        "Mavly could not take this website offline.",
+      );
+      return fail(
+        deactivated.code === "MIGRATION_REQUIRED" ? 503 : 500,
+        deactivated.code === "MIGRATION_REQUIRED" ? "BACKEND_NOT_CONFIGURED" : "UNKNOWN",
+        deactivated.code === "MIGRATION_REQUIRED"
+          ? "Shared hosting is not installed. Apply migration 14."
+          : "Mavly could not take this website offline.",
+      );
+    }
+
+    const finished = await finishUnpublish(projectId, lease);
+    if (isDeploymentStoreFailure(finished)) {
+      console.error("[deployments] shared unpublish finished but was not recorded:", finished.error);
+      return fail(
+        500,
+        "UNKNOWN",
+        "The website is no longer public, but Mavly could not record the change. Reload in a moment to see the current state.",
+      );
+    }
+
+    logHostingEvent("unpublish_completed", { project: projectId, mode: "shared" });
+    return { ok: true, data: wireDeploymentStatus(finished.data) };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("[deployments] unexpected shared unpublish failure:", message);
+    await rollBackUnpublish(
+      projectId,
+      lease,
+      row.status,
+      "Mavly did not confirm the unpublish. The website may still be live.",
+    );
+    return fail(
+      502,
+      "UNKNOWN",
+      "Mavly did not confirm the unpublish. The website may still be live.",
+    );
+  }
+}
+
+/**
+ * Status for a shared row never consults Vercel: there is no Vercel project.
+ * Terminal states are authoritative; a pending probe is retried at most once a
+ * minute; a stale in-flight claim becomes an actionable failure.
+ */
+async function sharedDeploymentStatus(
+  projectId: string,
+  row: DeploymentRow,
+): Promise<DeploymentServiceResult<WireDeploymentStatus>> {
+  let current = row;
+
+  if (current.status === "unpublishing") {
+    if (!isDeploymentRowStale(current)) {
+      return { ok: true, data: wireDeploymentStatus(current) };
+    }
+    /** A killed process: finish the deactivation it started. */
+    const deactivated = await deactivatePublishedVersion(projectId);
+    if (isHostingStoreFailure(deactivated)) {
+      return { ok: true, data: wireDeploymentStatus(current) };
+    }
+    const finished = await finishUnpublish(projectId, current.updated_at);
+    return {
+      ok: true,
+      data: wireDeploymentStatus(isDeploymentStoreFailure(finished) ? current : finished.data),
+    };
+  }
+
+  if (current.status === "queued" || current.status === "building") {
+    if (!isDeploymentRowStale(current)) {
+      return { ok: true, data: wireDeploymentStatus(current) };
+    }
+    const stalled = await updateDeploymentRow(projectId, {
+      status: "error",
+      error_code: "deployment_stalled",
+      error_message: "The publish did not complete. Try publishing again.",
+    });
+    return {
+      ok: true,
+      data: wireDeploymentStatus(isDeploymentStoreFailure(stalled) ? current : stalled.data),
+    };
+  }
+
+  /**
+   * ⚠️ ROLLBACK TRUTHFULNESS. A published version still exists in the database
+   * after the operator turns shared hosting off, but the runtime answers 404 for
+   * every tenant host. Reporting `success` and a live URL would be a lie, so the
+   * row is presented as an error the owner can act on (the legacy Vercel path
+   * remains available for republishing).
+   */
+  if (!isSharedHostingRuntimeEnabled()) {
+    return {
+      ok: true,
+      data: wireDeploymentStatus({
+        ...current,
+        status: "error",
+        error_code: "shared_hosting_disabled",
+        error_message: "Shared hosting is disabled on this deployment.",
+        mavly_domain_status: "error",
+        mavly_domain_error: "Shared hosting is disabled on this deployment.",
+      }),
+    };
+  }
+
+  if (
+    current.status === "ready" &&
+    current.mavly_hostname &&
+    current.active_version_id &&
+    current.mavly_domain_status !== "verified" &&
+    current.mavly_domain_status !== "error" &&
+    domainCheckDue(current)
+  ) {
+    current = await refreshSharedPublication(current);
+  }
+
+  return { ok: true, data: wireDeploymentStatus(current) };
+}
+
 export async function publishProject(
   userId: string,
   projectId: string,
 ): Promise<DeploymentServiceResult<WireDeploymentStatus>> {
-  const config = readVercelDeploymentConfig();
-  if (isVercelDeploymentConfigFailure(config)) {
+  const allowance = deploymentOperationLimiter.consume(userId);
+  if (allowance.ok === false) return rateLimitFailure(allowance);
+
+  /**
+   * Which hosting path this project uses. Both the mode and the cohort are
+   * server-side configuration; the DEFAULT is the existing Vercel path.
+   */
+  const shared = isSharedHostingProject(projectId);
+
+  /**
+   * Vercel credentials are required only for the legacy path. A shared publish
+   * must work with no Vercel configuration at all — that is the migration's
+   * whole point.
+   */
+  let config: VercelDeploymentConfigResult | null = null;
+  if (!shared) {
+    config = readVercelDeploymentConfig();
+    if (isVercelDeploymentConfigFailure(config)) {
     /**
      * Presence only: no token, no value, no request content. This is the line
      * that tells an operator whether the flag or the token name is the mismatch.
@@ -440,6 +777,7 @@ export async function publishProject(
         ? "Publishing is not enabled on this Mavly deployment."
         : "Publishing is not configured on this Mavly deployment.",
     );
+    }
   }
 
   const project = await getProject(userId, projectId);
@@ -488,6 +826,23 @@ export async function publishProject(
     return fail(400, "VALIDATION", "This project id cannot be published on a Mavly address.");
   }
 
+  if (shared) {
+    return publishSharedVersion({
+      projectId,
+      hostname,
+      site: resolved.site,
+      publishFiles,
+    });
+  }
+
+  if (!config || isVercelDeploymentConfigFailure(config)) {
+    return fail(
+      503,
+      "BACKEND_NOT_CONFIGURED",
+      "Publishing is not configured on this Mavly deployment.",
+    );
+  }
+
   const requestedName = vercelProjectName(config.config.projectPrefix, projectId, userId);
   const began = await beginDeployment(projectId, requestedName);
   if (isDeploymentStoreFailure(began)) {
@@ -495,6 +850,15 @@ export async function publishProject(
       ? fail(409, "VALIDATION", began.error)
       : fail(500, "UNKNOWN", "Could not start the publish.");
   }
+
+  /**
+   * A legacy republish of a project that previously used shared hosting leaves a
+   * resolvable shared version behind. It is deactivated only AFTER this Vercel
+   * publish reaches `ready` (below), never before: a failed legacy publish must
+   * not take the previous site down. A deployment without migration 14 has no
+   * such column, so legacy publishing still works unchanged.
+   */
+  const previousSharedVersion = began.data.active_version_id ?? null;
 
   /**
    * Reuse the name already mapped to this project. The prefix is configuration,
@@ -615,6 +979,21 @@ export async function publishProject(
       "UNKNOWN",
       "The site was submitted to Vercel but Mavly could not record the result. Check the workspace again shortly.",
     );
+  }
+
+  /**
+   * The legacy publish is recorded. Only now may the project stop being served
+   * at the shared runtime — a failed publish above returned before this point and
+   * left the previous version resolvable.
+   */
+  if (previousSharedVersion && updated.data.status === "ready") {
+    const deactivated = await deactivatePublishedVersion(projectId);
+    if (isHostingStoreFailure(deactivated)) {
+      console.warn(
+        "[deployments] could not deactivate the previous shared version:",
+        deactivated.code ?? "UNKNOWN",
+      );
+    }
   }
 
   return { ok: true, data: wireDeploymentStatus(updated.data) };
@@ -738,6 +1117,9 @@ export async function unpublishProject(
   userId: string,
   projectId: string,
 ): Promise<DeploymentServiceResult<WireDeploymentStatus>> {
+  const allowance = deploymentOperationLimiter.consume(userId);
+  if (allowance.ok === false) return rateLimitFailure(allowance);
+
   const project = await getProject(userId, projectId);
   if (isStoreFailure(project)) {
     return fail(500, "UNKNOWN", "Could not load this project.");
@@ -765,15 +1147,26 @@ export async function unpublishProject(
     return { ok: true, data: wireDeploymentStatus(row) };
   }
 
-  const config = readVercelDeploymentConfig();
-  if (isVercelDeploymentConfigFailure(config)) {
-    return fail(
-      503,
-      "BACKEND_NOT_CONFIGURED",
-      config.reason === "disabled"
-        ? "Unpublishing is not enabled on this Mavly deployment."
-        : "Unpublishing is not configured on this Mavly deployment.",
-    );
+  /**
+   * The PROVIDER decides how a takedown happens, not the current environment:
+   * a row created by the legacy path must still be detached at Vercel even if
+   * the deployment has since opted into shared hosting. A shared row needs no
+   * Vercel configuration at all.
+   */
+  const sharedRow = row.provider === "shared";
+
+  let config: VercelDeploymentConfigResult | null = null;
+  if (!sharedRow) {
+    config = readVercelDeploymentConfig();
+    if (isVercelDeploymentConfigFailure(config)) {
+      return fail(
+        503,
+        "BACKEND_NOT_CONFIGURED",
+        config.reason === "disabled"
+          ? "Unpublishing is not enabled on this Mavly deployment."
+          : "Unpublishing is not configured on this Mavly deployment.",
+      );
+    }
   }
 
   const claimed = await claimUnpublish(projectId, row);
@@ -799,6 +1192,24 @@ export async function unpublishProject(
   }
 
   const lease = claimed.data.updated_at;
+
+  /**
+   * ⚠️ A SHARED TAKEDOWN TOUCHES NO VERCEL RESOURCE. It clears the published
+   * mapping so the tenant runtime stops resolving the host, and keeps the
+   * version history (and any legacy Vercel mapping) for a later republish.
+   */
+  if (sharedRow) {
+    return unpublishSharedProject(projectId, lease, row);
+  }
+
+  if (!config || isVercelDeploymentConfigFailure(config)) {
+    return fail(
+      503,
+      "BACKEND_NOT_CONFIGURED",
+      "Unpublishing is not configured on this Mavly deployment.",
+    );
+  }
+
   const target = row.vercel_project_id || row.vercel_project_name;
 
   try {
@@ -994,6 +1405,15 @@ export async function getProjectDeploymentStatus(
   }
 
   /**
+   * A shared row has no Vercel deployment to poll. Its terminal states are
+   * authoritative, a pending readiness probe is retried at most once a minute,
+   * and a stale claim is reconciled locally.
+   */
+  if (row.data.provider === "shared") {
+    return sharedDeploymentStatus(projectId, row.data);
+  }
+
+  /**
    * An unpublish is a short server operation, but a killed process can leave the
    * claim behind. Only a stale claim is reconciled, so a request that is still in
    * flight is never raced.
@@ -1103,6 +1523,13 @@ export async function getProjectDeploymentStatus(
  * credential and never turns a successful local delete into an error.
  */
 export async function discardVercelProject(row: DeploymentRow): Promise<void> {
+  /**
+   * ⚠️ A SHARED MAPPING NEVER OWNS A VERCEL PROJECT. Deleting the shared hosting
+   * application because one tenant was removed would take every other tenant
+   * down. Shared cleanup is the database cascade of this project's rows only.
+   */
+  if (row.provider === "shared") return;
+
   const config = readVercelDeploymentConfig();
   if (isVercelDeploymentConfigFailure(config)) return;
 
