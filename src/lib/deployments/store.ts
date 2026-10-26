@@ -97,10 +97,20 @@ export async function getDeploymentRow(projectId: string): Promise<DeploymentSto
  * cannot both proceed. A losing caller gets `CONFLICT`, never a second Vercel
  * deployment.
  */
+export interface BeginDeploymentOptions {
+  /**
+   * Shared publishing keeps `last_published_at` describing the last SUCCESSFUL
+   * publication. A failed attempt must not rewrite the timestamp of the version
+   * that is still live. The legacy Vercel path keeps its existing behaviour.
+   */
+  preserveLastPublishedAt?: boolean;
+}
+
 export async function beginDeployment(
   projectId: string,
   vercelProjectName: string,
   provider: DeploymentProvider = "vercel",
+  options: BeginDeploymentOptions = {},
 ): Promise<DeploymentStoreResult<DeploymentRow>> {
   const supabase = await createSupabaseServerClient();
   if (!supabase) return { ok: false, error: "Supabase is not configured", code: "UNAVAILABLE" };
@@ -114,7 +124,7 @@ export async function beginDeployment(
       vercel_project_name: vercelProjectName,
       status: "queued",
       updated_at: now,
-      last_published_at: now,
+      ...(options.preserveLastPublishedAt ? {} : { last_published_at: now }),
     })
     .select(SELECT)
     .single();
@@ -128,16 +138,20 @@ export async function beginDeployment(
 
   const claim = {
     provider,
-    // The previous deployment is still live on Vercel, but it is no longer this
-    // row's current attempt. Clearing the id prevents status polling from
-    // adopting the old READY state while the new publish is in flight.
+    /**
+     * The previous deployment is still live (on Vercel, or as the active shared
+     * version), but it is no longer this row's current attempt. Clearing the
+     * Vercel id prevents status polling from adopting the old READY state while
+     * the new publish is in flight. It never clears `active_version_id`: that is
+     * the shared runtime's live pointer and is changed only on activation.
+     */
     vercel_deployment_id: null,
     status: "queued",
     url: null,
     error_code: null,
     error_message: null,
     updated_at: now,
-    last_published_at: now,
+    ...(options.preserveLastPublishedAt ? {} : { last_published_at: now }),
   } as const;
 
   /** Normal republish: a finished row can be claimed at once. */

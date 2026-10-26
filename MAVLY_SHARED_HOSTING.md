@@ -31,8 +31,12 @@ browser ── https://<project-id>.mavly.xyz/path
    ▼  Supabase (SECURITY DEFINER, fixed search_path)
       project_published_versions (status = active)
       project_published_files    (exact bytes of that version)
-      project_deployments        (status = ready, active_version_id = version, mavly_hostname)
+      project_deployments        (active_version_id = version, mavly_hostname)
 ```
+
+⚠️ The deployment row's `status`/`error_code` describe the **latest publish attempt**.
+They are not part of the serving decision. Migration 15 removed the old `status = 'ready'`
+gate so starting or failing a republish cannot take the previous published version down.
 
 The Mavly app (dashboard, `/api/vcaas/*`, preview, auth) is **unreachable** from a tenant
 host: every path is rewritten to the tenant route, which only reads published files.
@@ -54,12 +58,16 @@ also carries `provider` (`vercel` | `shared`).
 1. **`project_files` is never served publicly.** Only a published version is.
 2. Editing draft files does not change live content until the next publish.
 3. A version is inserted as `draft`, its files are written, and only then is
-   `activate_published_version` called. A failure before activation leaves the previous
-   active version serving.
+   `activate_shared_publication` (migration 15) called. A failure before activation leaves
+   the previous active version serving. Claiming a republish writes `queued`, which is
+   attempt state only.
 4. Activation is one transaction: previous active → `superseded`, new → `active`,
-   deployment link → new id. A partial unique index allows at most one active version.
-5. Unpublish deactivates the mapping immediately (the resolver requires an active version
-   **and** a ready deployment row), and keeps version history.
+   deployment link → new id, attempt → `ready`, domain → `pending`. A partial unique index
+   allows at most one active version. Verification (`verified`) is written only after the
+   post-commit probe.
+5. Unpublish deactivates the mapping immediately (the resolver requires `active_version_id`
+   pointing at an `active` version and a row that is not `unpublished`), and keeps version
+   history.
 6. Retention: the newest `PUBLISHED_VERSION_RETENTION` (5) superseded versions are kept;
    older ones are pruned after a successful publish. The active version is never pruned.
 7. Restore points (`project_snapshots`) are a separate concept and never affect a published
@@ -82,8 +90,10 @@ Two functions are the whole public surface. Both are `SECURITY DEFINER` with
 resolve_published_tenant(p_hostname text)
   → (project_id, version_id, published_at, content_hash, entry_path, spa_fallback)
   -- no row unless: normalized hostname matches mavly_tenant_hostname,
-  -- version.status = 'active', deployment.status = 'ready',
-  -- deployment.active_version_id = version.id, deployment.mavly_hostname = hostname
+  -- version.status = 'active', deployment.active_version_id = version.id,
+  -- deployment.mavly_hostname = hostname AND equals lower(project_id) || '.mavly.xyz',
+  -- deployment.status <> 'unpublished'
+  -- NOTE: the latest attempt status ('queued', 'error', 'building') is irrelevant.
 
 read_published_file(p_hostname text, p_version_id uuid, p_path text)
   → (path, content, content_type, sha256)
@@ -114,9 +124,9 @@ read_published_file(p_hostname text, p_version_id uuid, p_path text)
 
 | Operation | Shared mode |
 | --- | --- |
-| Publish | Claim the deployment slot (`provider = shared`), validate + hash the static set, insert a draft version and its files, activate atomically, probe the public lookup, persist `ready` + domain state |
-| Readiness | `verified` means **Mavly's resolver returns this exact version and its entry document can be read**. It does not prove DNS/TLS; a failed probe leaves the row `pending` (never success) |
-| Republish | New version; activation switches atomically; failed attempt leaves the previous version live |
+| Publish | Preflight `shared_hosting_schema_version()` **before any write**, claim the attempt slot (`provider = shared`, preserving `last_published_at`), validate + hash the static set, insert a draft version and its files, activate atomically (`ready` + `pending`), then probe the public lookup and persist only the domain result |
+| Readiness | `verified` means **Mavly's resolver returns this exact version and its entry document can be read**. It does not prove DNS/TLS; a failed probe leaves the domain `pending` (never success). The probe runs only after activation commits |
+| Republish | New version; activation switches atomically. The attempt's `queued`/`error` status is not part of serving, so a failed attempt leaves the previous version live and the row truthfully reports `error` |
 | Unpublish | `deactivate_published_version` clears the mapping/active version, then the existing lease+`finishUnpublish` records `unpublished`. No Vercel call, no deletion of versions |
 | Delete project | Database cascade removes the mapping, versions and files. `discardVercelProject` is a **no-op for shared rows**, so a tenant delete can never delete the shared application |
 
@@ -190,12 +200,27 @@ reserved-label constraint is `NOT VALID` — but the deployment mapping now SELE
 It is safe to apply while `MAVLY_HOSTING_MODE` is unset; nothing is served from the new
 tables until the mode and a cohort are configured.
 
+**Then apply `supabase/migrations/15_shared_hosting_attempt_state.sql` before enabling the
+shared cohort.** It is additive and idempotent. It:
+
+* replaces `resolve_published_tenant` with a version that serves from `active_version_id` +
+  `status = 'active'` and ignores the deployment attempt status;
+* adds `activate_shared_publication`, the one transaction that supersedes/activates and
+  records the successful attempt;
+* adds `shared_hosting_schema_version()` (returns `15`), the publish preflight.
+
+Rollout order matters: 14 then 15, then the code, then the cohort. If the code reaches a
+database missing either migration, a shared publish fails closed with
+`503 BACKEND_NOT_CONFIGURED` and an actionable message **before** it writes `queued` or any
+version row. That preflight runs once per publish, never on tenant requests.
+
 **Rollout**
 
-1. Apply migration 14. Publish a test project with `MAVLY_HOSTING_MODE=shared` and
-   `MAVLY_SHARED_HOSTING_PROJECTS=<test-project>`.
+1. Apply migration 14, then migration 15. Publish a test project with
+   `MAVLY_HOSTING_MODE=shared` and `MAVLY_SHARED_HOSTING_PROJECTS=<test-project>`.
 2. Confirm the deployment row is `ready`, `provider = shared`, `mavly_domain_status =
-   verified`, and `active_version_id` is set.
+   verified`, and `active_version_id` is set. Republish once and confirm the live host keeps
+   serving during the attempt.
 3. Attach the wildcard domain to the app **after** the code is deployed (operator).
 4. Verify the host end to end; then expand the cohort. Use `*` only after the cohort is
    proven.
@@ -205,6 +230,8 @@ tables until the mode and a cohort are configured.
 1. Unset `MAVLY_HOSTING_MODE` (or set `vercel`). The tenant runtime immediately answers 404;
    the legacy Vercel domains — never removed by this change — keep serving.
 2. Remove project ids from `MAVLY_SHARED_HOSTING_PROJECTS` to roll back individual sites.
+   The tenant runtime re-checks the cohort after resolution, so removal takes effect on the
+   next request and does not affect projects still in the cohort.
 3. Do **not** detach the wildcard or delete versions as part of a rollback. Published
    versions are inert while the mode is `vercel`.
 
@@ -217,18 +244,25 @@ Agents do not run any of these (see `AGENTS.md`).
    live URL shown is `<project-id>.mavly.xyz`.
 3. Edit a project file; confirm the live page is unchanged until republish, then changes.
 4. Republish; confirm the previous version is `superseded`, the new one `active`, and the
-   host serves the new bytes.
-5. Unpublish; confirm the host returns 404 immediately and the workspace shows
+   host serves the new bytes. During the attempt, confirm the old host keeps serving.
+5. Force a failed republish (for example, temporarily revoke the storage write): confirm the
+   host still serves the previous version, the workspace reports the attempt as failed, and
+   no live URL is claimed.
+6. With a database that has only migration 14, attempt a shared publish: confirm
+   `503 BACKEND_NOT_CONFIGURED` names migrations 14 and 15 and no deployment row is written
+   as a successful attempt.
+7. Unpublish; confirm the host returns 404 immediately and the workspace shows
    `Unpublished`. Republish and confirm the same address serves again.
-6. Unknown host, reserved host, uppercase host, trailing dot and `a.b.mavly.xyz`:
+8. Unknown host, reserved host, uppercase host, trailing dot and `a.b.mavly.xyz`:
    confirm 404 / correct handling.
-7. Two tenants: confirm neither serves the other's content and a version id from one cannot
-   be read through the other's hostname.
-8. Confirm the main app, `/api/*`, auth callbacks and an existing legacy `.vercel.app` site
-   still work.
-9. With `MAVLY_HOSTING_MODE` unset, confirm tenant hosts 404 and a legacy publish still
-   detaches/attaches its Vercel domain exactly as before.
-10. Confirm a shared project's deletion does not delete the shared Vercel application.
+9. Two tenants: confirm neither serves the other's content and a version id from one cannot
+   be read through the other's hostname. Remove one from
+   `MAVLY_SHARED_HOSTING_PROJECTS` and confirm that host 404s while the other still serves.
+10. Confirm the main app, `/api/*`, auth callbacks and an existing legacy `.vercel.app` site
+    still work.
+11. With `MAVLY_HOSTING_MODE` unset, confirm tenant hosts 404 and a legacy publish still
+    detaches/attaches its Vercel domain exactly as before.
+12. Confirm a shared project's deletion does not delete the shared Vercel application.
 
 ## 11. Known limitations
 

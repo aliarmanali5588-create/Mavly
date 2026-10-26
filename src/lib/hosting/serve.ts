@@ -21,13 +21,16 @@
 
 import { parseTenantHost } from "@/lib/tenant-host";
 
-import { isSharedHostingRuntimeEnabled } from "./config";
+import { isSharedHostingProject, isSharedHostingRuntimeEnabled } from "./config";
+import type { HostingEvent } from "./events";
 import { logHostingEvent } from "./events";
 import {
   isHostingStoreFailure,
   readPublishedFile,
   resolvePublishedTenant,
+  type HostingStoreResult,
   type ResolvedPublishedTenant,
+  type StoredPublishedFile,
 } from "./store";
 import { publishedLookupCandidates } from "./published-version";
 
@@ -44,6 +47,31 @@ export interface TenantServeResponse {
   headers: Record<string, string>;
   body: string;
 }
+
+/**
+ * The serving dependencies are injectable so the route's real decisions can be
+ * exercised with a fake resolver in `node:test` (this repository has no local
+ * Supabase harness). Production always uses the defaults below.
+ */
+export interface TenantServeDependencies {
+  runtimeEnabled: () => boolean;
+  projectEligible: (projectId: string) => boolean;
+  resolveTenant: (hostname: string) => Promise<HostingStoreResult<ResolvedPublishedTenant | null>>;
+  readFile: (
+    hostname: string,
+    versionId: string,
+    path: string,
+  ) => Promise<HostingStoreResult<StoredPublishedFile | null>>;
+  log: (event: HostingEvent, fields?: Record<string, unknown>) => void;
+}
+
+const DEFAULT_TENANT_SERVE_DEPENDENCIES: TenantServeDependencies = {
+  runtimeEnabled: () => isSharedHostingRuntimeEnabled(),
+  projectEligible: (projectId) => isSharedHostingProject(projectId),
+  resolveTenant: resolvePublishedTenant,
+  readFile: readPublishedFile,
+  log: logHostingEvent,
+};
 
 const BASE_HEADERS = {
   /**
@@ -82,6 +110,7 @@ function textResponse(status: number, body: string): TenantServeResponse {
  */
 export async function serveTenantRequest(
   input: TenantServeInput,
+  deps: TenantServeDependencies = DEFAULT_TENANT_SERVE_DEPENDENCIES,
 ): Promise<TenantServeResponse> {
   const method = input.method.toUpperCase();
   if (method !== "GET" && method !== "HEAD") {
@@ -100,13 +129,13 @@ export async function serveTenantRequest(
    * hosting. A deployment that has not opted in must not start serving because
    * a tenant Host reached it.
    */
-  if (!isSharedHostingRuntimeEnabled()) {
+  if (!deps.runtimeEnabled()) {
     return textResponse(404, "Not found");
   }
 
-  const resolved = await resolvePublishedTenant(tenant.hostname);
+  const resolved = await deps.resolveTenant(tenant.hostname);
   if (isHostingStoreFailure(resolved)) {
-    logHostingEvent("tenant_error", {
+    deps.log("tenant_error", {
       host: tenant.hostname,
       stage: "resolve",
       code: resolved.code,
@@ -114,11 +143,27 @@ export async function serveTenantRequest(
     return textResponse(503, "This site is temporarily unavailable.");
   }
   if (!resolved.data) {
-    logHostingEvent("tenant_unresolved", { host: tenant.hostname, reason: "not_published" });
+    deps.log("tenant_unresolved", { host: tenant.hostname, reason: "not_published" });
     return textResponse(404, "This site is not published.");
   }
 
   const version = resolved.data;
+
+  /**
+   * ⚠️ THE COHORT IS A REAL OFF-SWITCH. The resolver proves what is published;
+   * eligibility proves the operator still wants it served. Removing a project
+   * from `MAVLY_SHARED_HOSTING_PROJECTS` must stop its host, without affecting
+   * another eligible project and without a 404 ever revealing which project it
+   * was.
+   */
+  if (!deps.projectEligible(version.projectId)) {
+    deps.log("tenant_unresolved", {
+      host: tenant.hostname,
+      reason: "not_in_shared_cohort",
+    });
+    return textResponse(404, "This site is not published.");
+  }
+
   const candidates = publishedLookupCandidates(
     input.segments,
     version.entryPath,
@@ -127,9 +172,9 @@ export async function serveTenantRequest(
   if (candidates.length === 0) return textResponse(404, "Not found");
 
   for (const candidate of candidates) {
-    const file = await readPublishedFile(tenant.hostname, version.versionId, candidate.path);
+    const file = await deps.readFile(tenant.hostname, version.versionId, candidate.path);
     if (isHostingStoreFailure(file)) {
-      logHostingEvent("tenant_error", {
+      deps.log("tenant_error", {
         host: tenant.hostname,
         stage: "read",
         code: file.code,
@@ -139,7 +184,7 @@ export async function serveTenantRequest(
     }
     if (!file.data) continue;
 
-    logHostingEvent("tenant_served", {
+    deps.log("tenant_served", {
       host: tenant.hostname,
       project: version.projectId,
       version: version.versionId,

@@ -65,7 +65,9 @@ jobs, `03_ai_builder.sql` before using the builder,
 `07_project_deployments.sql`, `09_mavly_deployment_domains.sql` and
 `13_deployment_unpublish.sql` before enabling publishing/unpublishing,
 `14_shared_hosting.sql` before deploying this build (it is additive, but the deployment
-mapping now reads `active_version_id`) and before enabling shared tenant hosting,
+mapping now reads `active_version_id`), then `15_shared_hosting_attempt_state.sql` before
+enabling shared tenant hosting (it separates the live active version from the latest publish
+attempt and adds the publish preflight),
 `08_figma_integration.sql`
 before using Figma, and `11_project_secrets.sql` before using project secrets. Project-secret encryption also
 requires the server-only `MAVLY_PROJECT_SECRETS_ENCRYPTION_KEY` (32 random bytes,
@@ -100,15 +102,20 @@ generated app.
   eligibility for Mavly-managed customer hosting; see `MAVLY_VERCEL_DEPLOYMENTS.md`.
 - **Shared tenant hosting is implemented but off by default** (`MAVLY_HOSTING_MODE=shared`
   plus an explicit `MAVLY_SHARED_HOSTING_PROJECTS` cohort). A shared publish stores an
-  immutable version in `project_published_versions` / `project_published_files`, links it
-  from `project_deployments.active_version_id`, and serves it at
-  `<project-id>.mavly.xyz` through the tenant runtime (`src/app/api/tenant/…` reached by a
-  validated-host rewrite in `src/proxy.ts`). Public access is limited to two
+  immutable version in `project_published_versions` / `project_published_files`, then
+  `activate_shared_publication` (migration 15) atomically supersedes the previous version,
+  sets `project_deployments.active_version_id`, and marks the attempt `ready`. The public
+  resolver serves from `active_version_id` + the active version, **not** from the attempt
+  `status`, so a republish (`queued`) or a failed attempt (`error`) leaves the previous
+  version live. It serves at `<project-id>.mavly.xyz` through the tenant runtime
+  (`src/app/api/tenant/…` reached by a validated-host rewrite in `src/proxy.ts`), and the
+  runtime re-checks the configured cohort after resolution. Public access is limited to two
   `SECURITY DEFINER` RPCs; `project_files` is never served publicly, drafts never leak, and
-  unpublish deactivates the mapping without deleting history. The legacy per-project Vercel
-  path remains the default and its rows keep their Vercel takedown behaviour. Wildcard
-  DNS/TLS and Vercel plan eligibility are still unverified operator prerequisites; see
-  `MAVLY_SHARED_HOSTING.md`.
+  unpublish deactivates the mapping without deleting history. A publish on a database
+  missing migration 14/15 fails closed with `503 BACKEND_NOT_CONFIGURED` **before writing
+  any attempt state**. The legacy per-project Vercel path remains the default and its rows
+  keep their Vercel takedown behaviour. Wildcard DNS/TLS and Vercel plan eligibility are
+  still unverified operator prerequisites; see `MAVLY_SHARED_HOSTING.md`.
 - `src/lib/vcaas-server.ts` was deleted and must not be recreated. No Totalum host, key or
   forwarding remains.
 - Implemented paths authenticate, check `/api/vcaas` scope and project ownership, then use
@@ -295,10 +302,11 @@ paths with `src/lib/vcaas-scope.ts`, so unknown shapes are refused before any wo
 | `src/lib/mavly-hostname.ts` | Pure derivation of `<project-id>.mavly.xyz` from the immutable, owned project id; refuses reserved labels. |
 | `src/lib/tenant-host.ts` | Pure request-host parser and the only way to identify a public tenant. |
 | `src/lib/reserved-hostnames.ts` | Mavly-owned host labels, shared by slug creation, publishing, routing and migration 14. |
-| `src/lib/hosting/` | Shared hosting: mode/cohort config, immutable version persistence, public resolution/serving, publish admission limits, hosting events. |
+| `src/lib/hosting/` | Shared hosting: mode/cohort config, immutable version persistence, atomic activation, missing-migration detection, public resolution/serving, publish admission limits, hosting events. |
 | `src/app/api/tenant/[[...path]]/route.ts` | The tenant runtime (internal path reached by the validated-host rewrite). |
 | `src/lib/api-origin.ts` | Explicit credentialed-origin allowlist and cross-origin mutation policy. |
 | `supabase/migrations/14_shared_hosting.sql` | Published versions/files, active-version RPCs, published-only public lookup, RLS and grants. |
+| `supabase/migrations/15_shared_hosting_attempt_state.sql` | Status-independent resolver, atomic `activate_shared_publication`, and the `shared_hosting_schema_version` publish preflight. Additive; apply after 14. |
 | `src/lib/vercel/` | Server-only opt-in config and the fixed-origin Vercel REST client, including project-domain assignment/verification. |
 | `src/lib/deployments/` | Publish/unpublish orchestration, domain gating, provider-failure mapping and RLS-scoped deployment mapping. |
 | `supabase/migrations/07_project_deployments.sql` | Deployment mapping table, constraints and ownership RLS. |

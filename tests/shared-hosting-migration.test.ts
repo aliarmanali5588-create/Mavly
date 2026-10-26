@@ -78,7 +78,13 @@ test("the public lookup is SECURITY DEFINER with a fixed search_path", () => {
   assert.doesNotMatch(SQL, /grant[^;]*on public\.project_published[a-z_]*[^;]*to\s+anon/i);
 });
 
-test("the resolver can only return a READY, ACTIVE, verified mapping", () => {
+/**
+ * Migration 14's original resolver. Kept as a record of the file it shipped:
+ * migration 15 REPLACES this function so the attempt status no longer gates
+ * serving (see `shared-hosting-attempt-state-migration.test.ts`). These
+ * assertions pin the migration-14 source, which is intentionally not edited.
+ */
+test("migration 14's resolver returned only a READY, ACTIVE mapping", () => {
   assert.match(SQL, /v\.status = 'active'/);
   assert.match(SQL, /d\.status = 'ready'/);
   assert.match(SQL, /d\.active_version_id = v\.id/);

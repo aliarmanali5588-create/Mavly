@@ -6,7 +6,7 @@
  * two published-only RPCs from migration 14.
  *
  * ⚠️ THE WRITE ORDER IS THE SAFETY PROPERTY. A version is inserted as `draft`,
- * its files are written, and ONLY THEN is `activate_published_version` called.
+ * its files are written, and ONLY THEN is `activate_shared_publication` called.
  * A failure anywhere before activation leaves the previously active version
  * untouched and publicly resolvable, so a failed republish never takes the site
  * down or publishes a partial artifact.
@@ -17,6 +17,10 @@ import { createHash } from "node:crypto";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { createSupabasePublicClient } from "@/lib/supabase/public";
 
+import {
+  SHARED_HOSTING_INSTALL_MESSAGE,
+  isMissingDatabaseObject,
+} from "./migration-requirement";
 import { isSafePublishedSegment } from "./published-version";
 
 export type HostingStoreFailure = { ok: false; error: string; code?: string };
@@ -240,6 +244,90 @@ export async function createPublishedVersion(input: {
   };
 }
 
+/**
+ * ═══ PREFLIGHT — IS THE ATTEMPT-STATE MIGRATION INSTALLED? ═══════════════════
+ *
+ * The publish path calls this once, before it writes any row. It is deliberately
+ * an RPC: a missing function is the unambiguous signal that the database has not
+ * been migrated. A connection/timeout failure is NOT treated as a missing
+ * migration — only recognised missing-object errors are.
+ *
+ * This is one extra round trip per shared publish (not per tenant request).
+ */
+export async function readSharedHostingSchemaVersion(): Promise<HostingStoreResult<number>> {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) return { ok: false, error: "Supabase is not configured", code: "UNAVAILABLE" };
+
+  const { data, error } = await supabase.rpc("shared_hosting_schema_version");
+
+  if (!error) {
+    const version = typeof data === "number" ? data : Number(data);
+    return { ok: true, data: Number.isFinite(version) ? version : 0 };
+  }
+
+  if (isMissingDatabaseObject({ code: error.code, message: error.message })) {
+    return {
+      ok: false,
+      error: SHARED_HOSTING_INSTALL_MESSAGE,
+      code: "MIGRATION_REQUIRED",
+    };
+  }
+  return { ok: false, error: error.message, code: error.code };
+}
+
+/**
+ * Activate a shared publication atomically (migration 15).
+ *
+ * One SQL transaction supersedes the previous active version, activates the new
+ * one, and records the successful attempt (`status = 'ready'`, `active_version_id`,
+ * hostname, `mavly_domain_status = 'pending'`). It never stores `verified`; the
+ * caller probes the runtime after this returns.
+ *
+ * A failure before this call leaves the previous live version untouched.
+ */
+export async function activateSharedPublication(
+  projectId: string,
+  versionId: string,
+  hostname: string,
+): Promise<HostingStoreResult<void>> {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) return { ok: false, error: "Supabase is not configured", code: "UNAVAILABLE" };
+
+  const { error } = await supabase.rpc("activate_shared_publication", {
+    p_project_id: projectId,
+    p_version_id: versionId,
+    p_hostname: hostname,
+  });
+
+  if (!error) return { ok: true, data: undefined };
+
+  const message = error.message ?? "activation failed";
+  if (isMissingDatabaseObject({ code: error.code, message })) {
+    return {
+      ok: false,
+      error:
+        "Shared hosting attempt state is not installed. Apply migration 15_shared_hosting_attempt_state.sql.",
+      code: "MIGRATION_REQUIRED",
+    };
+  }
+  if (error.code === "42501" || /FORBIDDEN/i.test(message)) {
+    return { ok: false, error: "You don't have access to this project.", code: "FORBIDDEN" };
+  }
+  if (error.code === "P0002" || /VERSION_NOT_FOUND/i.test(message)) {
+    return { ok: false, error: "The published version could not be found.", code: "NOT_FOUND" };
+  }
+  if (error.code === "22023" || /INVALID_(HOSTNAME|ARGUMENT)/i.test(message)) {
+    return { ok: false, error: "This project cannot be published on a Mavly address.", code: "VALIDATION" };
+  }
+  return { ok: false, error: message, code: error.code };
+}
+
+/**
+ * @deprecated Kept only because migration 14 still defines the RPC. Do not use it
+ * for a shared publish: it does not record the successful attempt (hostname,
+ * `status = 'ready'`, `last_published_at`) and does not create the migration-15
+ * preflight contract. `activateSharedPublication` is the only supported path.
+ */
 export async function activatePublishedVersion(
   projectId: string,
   versionId: string,

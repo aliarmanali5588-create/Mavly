@@ -30,17 +30,25 @@ import {
   sharedDeploymentName,
 } from "@/lib/hosting/config";
 import { logHostingEvent } from "@/lib/hosting/events";
+import type { HostingEvent } from "@/lib/hosting/events";
+import {
+  SHARED_HOSTING_INSTALL_MESSAGE,
+  migrationRequirementMessage,
+  requiredMigrationFor,
+} from "@/lib/hosting/migration-requirement";
 import { deploymentOperationLimiter } from "@/lib/hosting/publish-limits";
 import { contentTypeForPath } from "@/lib/hosting/published-version";
 import { verifySharedPublication } from "@/lib/hosting/serve";
+import type { SharedPublicationProbe } from "@/lib/hosting/serve";
 import {
-  activatePublishedVersion,
+  activateSharedPublication,
   createPublishedVersion,
   deactivatePublishedVersion,
   isHostingStoreFailure,
   markPublishedVersionFailed,
   preparePublishedFiles,
   pruneSupersededVersions,
+  readSharedHostingSchemaVersion,
 } from "@/lib/hosting/store";
 import { getProject, isStoreFailure, listFiles } from "@/lib/mavly/store";
 import {
@@ -83,6 +91,7 @@ import {
   updateDeploymentRow,
   type DeploymentRow,
   type DeploymentStatus as StoredDeploymentStatus,
+  type DeploymentStoreResult,
   type MavlyDomainStatus,
 } from "./store";
 import { resolveVercelProject } from "./vercel-project";
@@ -445,47 +454,149 @@ function rateLimitFailure(decision: {
 }
 
 /**
- * Record a failed shared publish without touching the previously active version.
+ * ═══ SHARED PUBLISH — ATTEMPT STATE IS NOT LIVE STATE ═══════════════════════
  *
- * Activation only happens after the whole artifact is stored, so a failure here
- * leaves the last published version publicly resolvable. The deployment row
- * reports the failed ATTEMPT, exactly as the legacy path does.
+ * `project_deployments.status` describes the LATEST ATTEMPT. The public
+ * resolver (migration 15) serves from `active_version_id` + the active version,
+ * so writing `queued`/`error` here can never take the previous version down.
+ *
+ * The dependencies are injectable so the orchestration can be exercised with a
+ * fake store in `node:test`; production uses the defaults below.
  */
-async function recordSharedFailure(projectId: string, message: string): Promise<void> {
-  const updated = await updateDeploymentRow(projectId, {
+export interface SharedPublishDependencies {
+  schema: typeof readSharedHostingSchemaVersion;
+  begin: (
+    projectId: string,
+    vercelProjectName: string,
+    provider: "shared",
+    options: { preserveLastPublishedAt: boolean },
+  ) => Promise<DeploymentStoreResult<DeploymentRow>>;
+  createVersion: typeof createPublishedVersion;
+  activate: typeof activateSharedPublication;
+  recordRow: typeof updateDeploymentRow;
+  probe: typeof verifySharedPublication;
+  markFailed: typeof markPublishedVersionFailed;
+  prune: typeof pruneSupersededVersions;
+  log: (event: HostingEvent, fields?: Record<string, unknown>) => void;
+}
+
+const DEFAULT_SHARED_PUBLISH_DEPENDENCIES: SharedPublishDependencies = {
+  schema: readSharedHostingSchemaVersion,
+  begin: (projectId, vercelProjectName, provider, options) =>
+    beginDeployment(projectId, vercelProjectName, provider, options),
+  createVersion: createPublishedVersion,
+  activate: activateSharedPublication,
+  recordRow: updateDeploymentRow,
+  probe: verifySharedPublication,
+  markFailed: markPublishedVersionFailed,
+  prune: pruneSupersededVersions,
+  log: logHostingEvent,
+};
+
+function migrationFailure(
+  code: string | undefined,
+  message: string,
+): DeploymentServiceResult<never> | null {
+  if (code === "MIGRATION_REQUIRED") {
+    const migration = message.includes("15_shared_hosting_attempt_state.sql")
+      ? "15_shared_hosting_attempt_state.sql"
+      : "14_shared_hosting.sql";
+    return fail(503, "BACKEND_NOT_CONFIGURED", migrationRequirementMessage(migration));
+  }
+  const migration = requiredMigrationFor({ code, message });
+  return migration
+    ? fail(503, "BACKEND_NOT_CONFIGURED", migrationRequirementMessage(migration))
+    : null;
+}
+
+/**
+ * A failed attempt records its own outcome and nothing else.
+ *
+ * `active_version_id`, `mavly_hostname` and the active version row are untouched.
+ * Under the migration-15 resolver that means the previous publication keeps
+ * serving; if this was a first publish there is no active version and the site
+ * is truthfully unpublished.
+ */
+async function recordSharedFailure(
+  deps: Pick<SharedPublishDependencies, "recordRow" | "log">,
+  projectId: string,
+  message: string,
+  previousVersionId: string | null,
+): Promise<void> {
+  const text = previousVersionId
+    ? `${message} The previous published version was left unchanged.`
+    : message;
+  const updated = await deps.recordRow(projectId, {
     status: "error",
     error_code: "shared_publish_failed",
-    error_message: message.slice(0, ERROR_MESSAGE_MAX),
+    error_message: text.slice(0, ERROR_MESSAGE_MAX),
   });
   if (isDeploymentStoreFailure(updated)) {
     console.error("[deployments] could not record shared publish failure:", updated.error);
   }
-  logHostingEvent("publish_failed", { project: projectId, stage: "store" });
+  deps.log("publish_failed", { project: projectId, stage: "store" });
+}
+
+function sharedFailureResult(
+  base: string,
+  previousVersionId: string | null,
+  fallback: string,
+): DeploymentServiceResult<never> {
+  return fail(
+    500,
+    "UNKNOWN",
+    previousVersionId ? `${base} The previous published version was left unchanged.` : fallback,
+  );
+}
+
+/**
+ * The probe is the ONLY source of `verified`. A timeout, an unresolved host or
+ * an unreadable entry document stays `pending` and is retried by a later status
+ * read; it never becomes a fabricated success.
+ */
+function probeDomainState(probe: SharedPublicationProbe): {
+  status: "verified" | "pending";
+  error: string | null;
+} {
+  if (probe.ok) return { status: "verified", error: null };
+  return {
+    status: "pending",
+    error:
+      probe.reason === "not_resolved"
+        ? "Mavly could not resolve the published address yet."
+        : probe.reason === "entry_missing"
+          ? "The published entry document could not be read yet."
+          : "Mavly could not verify the published address yet.",
+  };
 }
 
 /**
  * ═══ SHARED PUBLISH — NO VERCEL, ONE IMMUTABLE VERSION ══════════════════════
  *
- *   1. claim the project's single deployment slot (`provider = shared`);
+ *   0. preflight the attempt-state migration (before any write);
+ *   1. claim the project's single attempt slot (`provider = shared`);
  *   2. validate + hash the exact static file set;
  *   3. insert an INACTIVE version and all of its bytes;
- *   4. activate atomically (previous active → superseded);
+ *   4. activate atomically — live pointer + `status = ready`, `verified` never;
  *   5. prove Mavly's own runtime resolves the host to THAT version;
- *   6. persist the truthful wire state.
+ *   6. persist only the probe result (`verified` or `pending`).
  *
- * A failure in 2–4 leaves the previous version active and serving. Step 5 is the
- * only claim of readiness this code can make: it proves the public lookup and
- * artifact read work, NOT that operator DNS/TLS point the wildcard here.
+ * A failure in 0–4 leaves the previous version active and serving. The previous
+ * version is superseded only inside step 4, the one transition that may change
+ * what the public resolver returns.
  */
-async function publishSharedVersion(input: {
-  projectId: string;
-  hostname: string;
-  site: StaticSite;
-  publishFiles: readonly StaticPublishFile[];
-}): Promise<DeploymentServiceResult<WireDeploymentStatus>> {
+export async function publishSharedVersion(
+  input: {
+    projectId: string;
+    hostname: string;
+    site: StaticSite;
+    publishFiles: readonly StaticPublishFile[];
+  },
+  deps: SharedPublishDependencies = DEFAULT_SHARED_PUBLISH_DEPENDENCIES,
+): Promise<DeploymentServiceResult<WireDeploymentStatus>> {
   const { projectId, hostname, site, publishFiles } = input;
 
-  logHostingEvent("publish_started", {
+  deps.log("publish_started", {
     project: projectId,
     host: hostname,
     mode: "shared",
@@ -497,14 +608,43 @@ async function publishSharedVersion(input: {
     return fail(400, "VALIDATION", prepared.error);
   }
 
-  const began = await beginDeployment(projectId, sharedDeploymentName(projectId), "shared");
+  /**
+   * ⚠️ PREFLIGHT BEFORE ANY WRITE. If migration 15 is absent, writing `queued`
+   * would leave the OLD resolver (14) requiring `ready`, and the live site would
+   * go down before we could report the missing migration. Nothing is written
+   * until both migrations are proven installed.
+   */
+  const schema = await deps.schema();
+  if (isHostingStoreFailure(schema)) {
+    if (schema.code === "MIGRATION_REQUIRED") {
+      return fail(503, "BACKEND_NOT_CONFIGURED", schema.error || SHARED_HOSTING_INSTALL_MESSAGE);
+    }
+    const migration = migrationFailure(schema.code, schema.error);
+    if (migration) return migration;
+    return fail(500, "UNKNOWN", "Could not verify the shared hosting backend.");
+  }
+  if (schema.data < 15) {
+    return fail(503, "BACKEND_NOT_CONFIGURED", SHARED_HOSTING_INSTALL_MESSAGE);
+  }
+
+  const began = await deps.begin(
+    projectId,
+    sharedDeploymentName(projectId),
+    "shared",
+    { preserveLastPublishedAt: true },
+  );
   if (isDeploymentStoreFailure(began)) {
+    const migration = migrationFailure(began.code, began.error);
+    if (migration) return migration;
     return began.code === "CONFLICT"
       ? fail(409, "VALIDATION", began.error)
       : fail(500, "UNKNOWN", "Could not start the publish.");
   }
 
-  const version = await createPublishedVersion({
+  /** The version that remains live until step 4 actually succeeds. */
+  const previousVersionId = began.data.active_version_id ?? null;
+
+  const version = await deps.createVersion({
     projectId,
     prepared: prepared.data,
     entryPath: "index.html",
@@ -516,51 +656,66 @@ async function publishSharedVersion(input: {
     spaFallback: site.generated,
   });
   if (isHostingStoreFailure(version)) {
-    await recordSharedFailure(projectId, "Mavly could not store the published website.");
-    return version.code === "MIGRATION_REQUIRED"
-      ? fail(503, "BACKEND_NOT_CONFIGURED", "Shared hosting is not installed. Apply migration 14.")
-      : fail(500, "UNKNOWN", "Could not store the published website.");
+    await recordSharedFailure(
+      deps,
+      projectId,
+      "Mavly could not store the published website.",
+      previousVersionId,
+    );
+    const migration = migrationFailure(version.code, version.error);
+    if (migration) return migration;
+    return sharedFailureResult(
+      "Could not store the published website.",
+      previousVersionId,
+      "Could not store the published website.",
+    );
   }
 
-  const activated = await activatePublishedVersion(projectId, version.data.id);
+  const activated = await deps.activate(projectId, version.data.id, hostname);
   if (isHostingStoreFailure(activated)) {
-    await markPublishedVersionFailed(version.data.id);
-    await recordSharedFailure(projectId, "Mavly could not activate the published website.");
-    return activated.code === "MIGRATION_REQUIRED"
-      ? fail(503, "BACKEND_NOT_CONFIGURED", "Shared hosting is not installed. Apply migration 14.")
-      : fail(500, "UNKNOWN", "Could not activate the published website.");
+    await deps.markFailed(version.data.id);
+    await recordSharedFailure(
+      deps,
+      projectId,
+      "Mavly could not activate the published website.",
+      previousVersionId,
+    );
+    const migration = migrationFailure(activated.code, activated.error);
+    if (migration) return migration;
+    return sharedFailureResult(
+      "Could not activate the published website.",
+      previousVersionId,
+      "Could not activate the published website.",
+    );
   }
 
-  logHostingEvent("artifact_created", {
+  deps.log("artifact_created", {
     project: projectId,
     version: version.data.id,
     files: version.data.fileCount,
     bytes: version.data.byteCount,
     hash: version.data.contentHash,
   });
-  logHostingEvent("version_activated", { project: projectId, version: version.data.id });
+  deps.log("version_activated", { project: projectId, version: version.data.id });
 
-  const probe = await verifySharedPublication(hostname, version.data.id);
+  /**
+   * The activation is committed: `status = ready`, `active_version_id` and the
+   * hostname already describe the new live version. Only NOW may the runtime be
+   * probed, and only a probe that resolves the EXACT version may become
+   * `verified`.
+   */
+  const probe = await deps.probe(hostname, version.data.id);
+  const domain = probeDomainState(probe);
 
-  let domainStatus: "verified" | "pending";
-  let domainError: string | null;
-  if ("reason" in probe) {
-    domainStatus = "pending";
-    domainError = probe.reason;
-  } else {
-    domainStatus = "verified";
-    domainError = null;
-  }
-
-  const saved = await updateDeploymentRow(projectId, {
+  const saved = await deps.recordRow(projectId, {
     status: "ready",
     vercel_deployment_id: null,
     url: null,
     error_code: null,
     error_message: null,
     mavly_hostname: hostname,
-    mavly_domain_status: domainStatus,
-    mavly_domain_error: domainError,
+    mavly_domain_status: domain.status,
+    mavly_domain_error: domain.error,
     mavly_domain_checked_at: new Date().toISOString(),
     active_version_id: version.data.id,
   });
@@ -572,11 +727,11 @@ async function publishSharedVersion(input: {
     );
   }
 
-  const removed = await pruneSupersededVersions(projectId, PUBLISHED_VERSION_RETENTION);
-  if (removed > 0) logHostingEvent("versions_pruned", { project: projectId, removed });
+  const removed = await deps.prune(projectId, PUBLISHED_VERSION_RETENTION);
+  if (removed > 0) deps.log("versions_pruned", { project: projectId, removed });
 
   if ("reason" in probe) {
-    logHostingEvent("publish_failed", {
+    deps.log("publish_failed", {
       project: projectId,
       stage: "probe",
       reason: probe.reason,
@@ -595,20 +750,11 @@ async function refreshSharedPublication(row: DeploymentRow): Promise<DeploymentR
   if (!row.mavly_hostname || !row.active_version_id) return row;
 
   const probe = await verifySharedPublication(row.mavly_hostname, row.active_version_id);
-
-  let domainStatus: "verified" | "pending";
-  let domainError: string | null;
-  if ("reason" in probe) {
-    domainStatus = "pending";
-    domainError = probe.reason;
-  } else {
-    domainStatus = "verified";
-    domainError = null;
-  }
+  const domain = probeDomainState(probe);
 
   const patched = await updateDeploymentRow(row.project_id, {
-    mavly_domain_status: domainStatus,
-    mavly_domain_error: domainError,
+    mavly_domain_status: domain.status,
+    mavly_domain_error: domain.error,
     mavly_domain_checked_at: new Date().toISOString(),
     ...(probe.ok ? { error_code: null, error_message: null } : {}),
   });
@@ -717,21 +863,21 @@ async function sharedDeploymentStatus(
 
   /**
    * ⚠️ ROLLBACK TRUTHFULNESS. A published version still exists in the database
-   * after the operator turns shared hosting off, but the runtime answers 404 for
-   * every tenant host. Reporting `success` and a live URL would be a lie, so the
-   * row is presented as an error the owner can act on (the legacy Vercel path
-   * remains available for republishing).
+   * after the operator turns shared hosting off (or removes this project from
+   * the cohort), but the runtime answers 404 for the tenant host. Reporting
+   * `success` and a live URL would be a lie, so the row is presented as an error
+   * the owner can act on (the legacy Vercel path remains available).
    */
-  if (!isSharedHostingRuntimeEnabled()) {
+  if (!isSharedHostingRuntimeEnabled() || !isSharedHostingProject(projectId)) {
     return {
       ok: true,
       data: wireDeploymentStatus({
         ...current,
         status: "error",
         error_code: "shared_hosting_disabled",
-        error_message: "Shared hosting is disabled on this deployment.",
+        error_message: "Shared hosting is disabled for this project.",
         mavly_domain_status: "error",
-        mavly_domain_error: "Shared hosting is disabled on this deployment.",
+        mavly_domain_error: "Shared hosting is disabled for this project.",
       }),
     };
   }
@@ -867,6 +1013,8 @@ export async function publishProject(
   const requestedName = vercelProjectName(config.config.projectPrefix, projectId, userId);
   const began = await beginDeployment(projectId, requestedName);
   if (isDeploymentStoreFailure(began)) {
+    const migration = migrationFailure(began.code, began.error);
+    if (migration) return migration;
     return began.code === "CONFLICT"
       ? fail(409, "VALIDATION", began.error)
       : fail(500, "UNKNOWN", "Could not start the publish.");
@@ -1149,6 +1297,8 @@ export async function unpublishProject(
 
   const rowResult = await getDeploymentRow(projectId);
   if (isDeploymentStoreFailure(rowResult)) {
+    const migration = migrationFailure(rowResult.code, rowResult.error);
+    if (migration) return migration;
     return fail(500, "UNKNOWN", "Could not load the deployment status.");
   }
   const row = rowResult.data;
@@ -1192,6 +1342,8 @@ export async function unpublishProject(
 
   const claimed = await claimUnpublish(projectId, row);
   if (isDeploymentStoreFailure(claimed)) {
+    const migration = migrationFailure(claimed.code, claimed.error);
+    if (migration) return migration;
     /**
      * A concurrent request may have just finished. Re-read before answering so
      * a repeated click gets the authoritative state instead of a blind error.
@@ -1408,6 +1560,8 @@ export async function getProjectDeploymentStatus(
 
   const row = await getDeploymentRow(projectId);
   if (isDeploymentStoreFailure(row)) {
+    const migration = migrationFailure(row.code, row.error);
+    if (migration) return migration;
     return fail(500, "UNKNOWN", "Could not load the deployment status.");
   }
   if (!row.data) {
