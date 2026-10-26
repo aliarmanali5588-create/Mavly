@@ -1,0 +1,594 @@
+.
+├── .freebuff
+│   └── project-id
+├── .github
+│   └── assets
+│       └── ai_app_builder_open_demo.gif
+├── .vscode
+│   └── settings.json
+├── public
+│   ├── applogo
+│   │   ├── apple-touch-icon.png
+│   │   ├── applogo-192.png
+│   │   ├── applogo-512.png
+│   │   ├── applogo-maskable-192.png
+│   │   ├── applogo-maskable-512.png
+│   │   └── applogo.png
+│   ├── logo
+│   │   ├── Mavly.ico
+│   │   └── Mavly.png
+│   ├── svg
+│   │   └── credit.svg
+│   ├── _headers
+│   ├── favicon-16x16.png
+│   ├── favicon-32x32.png
+│   ├── favicon.ico
+│   ├── manifest.json
+│   ├── offline.html
+│   ├── robots.txt
+│   └── sw.js
+├── src
+│   ├── app
+│   │   ├── [...slug]
+│   │   │   └── page.tsx
+│   │   ├── about
+│   │   │   └── page.tsx
+│   │   ├── adminsh
+│   │   │   ├── ai-usage
+│   │   │   │   └── page.tsx
+│   │   │   ├── announcements
+│   │   │   │   └── page.tsx
+│   │   │   ├── audit-logs
+│   │   │   │   └── page.tsx
+│   │   │   ├── auth
+│   │   │   │   └── page.tsx
+│   │   │   ├── billing
+│   │   │   │   └── page.tsx
+│   │   │   ├── components
+│   │   │   │   ├── AdminHeader.tsx
+│   │   │   │   ├── AdminShell.tsx
+│   │   │   │   ├── AdminSidebar.tsx
+│   │   │   │   ├── AiUsageSection.tsx
+│   │   │   │   ├── GenerationsTable.tsx
+│   │   │   │   ├── KpiCards.tsx
+│   │   │   │   ├── MockDataViews.tsx
+│   │   │   │   ├── PlatformHealth.tsx
+│   │   │   │   ├── QuickActionsModal.tsx
+│   │   │   │   ├── RevenueChart.tsx
+│   │   │   │   ├── TransactionsTable.tsx
+│   │   │   │   ├── mockData.ts
+│   │   │   │   └── types.ts
+│   │   │   ├── credits
+│   │   │   │   └── page.tsx
+│   │   │   ├── dashboard
+│   │   │   │   └── page.tsx
+│   │   │   ├── generation-monitor
+│   │   │   │   └── page.tsx
+│   │   │   ├── projects
+│   │   │   │   └── page.tsx
+│   │   │   ├── settings
+│   │   │   │   └── page.tsx
+│   │   │   ├── system-health
+│   │   │   │   └── page.tsx
+│   │   │   └── users
+│   │   │       └── page.tsx
+│   │   ├── api
+│   │   │   ├── config
+│   │   │   │   └── route.ts
+│   │   │   ├── integrations
+│   │   │   │   ├── github
+│   │   │   │   │   ├── branches
+│   │   │   │   │   │   └── route.ts
+│   │   │   │   │   ├── projects
+│   │   │   │   │   │   └── [projectId]
+│   │   │   │   │   │       ├── connection
+│   │   │   │   │   │       │   └── route.ts
+│   │   │   │   │   │       ├── import
+│   │   │   │   │   │       │   └── route.ts
+│   │   │   │   │   │       └── push
+│   │   │   │   │   │           └── route.ts
+│   │   │   │   │   ├── repositories
+│   │   │   │   │   │   └── route.ts
+│   │   │   │   │   ├── start
+│   │   │   │   │   │   └── route.ts
+│   │   │   │   │   └── status
+│   │   │   │   │       └── route.ts
+│   │   │   │   └── supabase
+│   │   │   │       ├── disconnect
+│   │   │   │       │   └── route.ts
+│   │   │   │       ├── organizations
+│   │   │   │       │   └── route.ts
+│   │   │   │       ├── projects
+│   │   │   │       │   └── route.ts
+│   │   │   │       ├── select
+│   │   │   │       │   └── route.ts
+│   │   │   │       ├── start
+│   │   │   │       │   └── route.ts
+│   │   │   │       └── status
+│   │   │   │           └── route.ts
+│   │   │   ├── preview
+│   │   │   │   └── [projectId]
+│   │   │   │       └── [[...path]]
+│   │   │   │           └── route.ts
+│   │   │   ├── tenant
+│   │   │   │   └── [[...path]]
+│   │   │   │       └── route.ts
+│   │   │   ├── vcaas
+│   │   │   │   ├── [...path]
+│   │   │   │   │   └── route.ts
+│   │   │   │   ├── backup-download
+│   │   │   │   │   └── [projectId]
+│   │   │   │   │       └── [backupId]
+│   │   │   │   │           └── route.ts
+│   │   │   │   ├── env
+│   │   │   │   │   └── [projectId]
+│   │   │   │   │       └── route.ts
+│   │   │   │   ├── git-diff
+│   │   │   │   │   └── route.ts
+│   │   │   │   ├── source-code
+│   │   │   │   │   └── [projectId]
+│   │   │   │   │       └── route.ts
+│   │   │   │   ├── upload
+│   │   │   │   │   └── [projectId]
+│   │   │   │   │       └── route.ts
+│   │   │   │   └── _shared.ts
+│   │   │   └── visual-edit
+│   │   │       └── [projectId]
+│   │   │           └── apply
+│   │   │               └── route.ts
+│   │   ├── auth
+│   │   │   ├── callback
+│   │   │   │   └── route.ts
+│   │   │   ├── github
+│   │   │   │   └── callback
+│   │   │   │       └── route.ts
+│   │   │   ├── signout
+│   │   │   │   └── route.ts
+│   │   │   └── supabase
+│   │   │       └── callback
+│   │   │           └── route.ts
+│   │   ├── blog
+│   │   │   └── page.tsx
+│   │   ├── careers
+│   │   │   └── page.tsx
+│   │   ├── changelog
+│   │   │   └── page.tsx
+│   │   ├── contact
+│   │   │   └── page.tsx
+│   │   ├── credit-topup
+│   │   │   ├── credit-topup-client.tsx
+│   │   │   └── page.tsx
+│   │   ├── dashboard
+│   │   │   └── page.tsx
+│   │   ├── docs
+│   │   │   └── page.tsx
+│   │   ├── faq
+│   │   │   └── page.tsx
+│   │   ├── features
+│   │   │   └── page.tsx
+│   │   ├── integrations
+│   │   │   └── page.tsx
+│   │   ├── login
+│   │   │   ├── login-screen.tsx
+│   │   │   └── page.tsx
+│   │   ├── pricing
+│   │   │   └── page.tsx
+│   │   ├── privacy
+│   │   │   └── page.tsx
+│   │   ├── project
+│   │   │   └── [projectId]
+│   │   │       └── page.tsx
+│   │   ├── support
+│   │   │   ├── loading.tsx
+│   │   │   ├── page.tsx
+│   │   │   └── support-client.tsx
+│   │   ├── terms
+│   │   │   └── page.tsx
+│   │   ├── tutorials
+│   │   │   └── page.tsx
+│   │   ├── upgrade
+│   │   │   ├── page.tsx
+│   │   │   └── upgrade-client.tsx
+│   │   ├── error.tsx
+│   │   ├── favicon.ico
+│   │   ├── global-error.tsx
+│   │   ├── globals.css
+│   │   ├── layout.tsx
+│   │   ├── not-found.tsx
+│   │   └── page.tsx
+│   ├── components
+│   │   ├── auth
+│   │   │   └── AuthNav.tsx
+│   │   ├── builder
+│   │   │   ├── AnimatedPlaceholder.tsx
+│   │   │   ├── BuilderDashboard.tsx
+│   │   │   └── useAnimatedPlaceholder.ts
+│   │   ├── common
+│   │   │   ├── .gitkeep
+│   │   │   ├── MarketingPageShell.tsx
+│   │   │   └── ScrollProgressIndicator.tsx
+│   │   ├── credits
+│   │   │   └── CreditsProvider.tsx
+│   │   ├── home
+│   │   │   ├── FAQSection.tsx
+│   │   │   ├── FeaturesSection.tsx
+│   │   │   ├── HeroSection.tsx
+│   │   │   ├── HomeFooter.tsx
+│   │   │   ├── HomeNavigation.tsx
+│   │   │   ├── MarketingHome.tsx
+│   │   │   └── PricingSection.tsx
+│   │   ├── plan
+│   │   │   ├── CapabilityProvider.tsx
+│   │   │   └── PaidFeature.tsx
+│   │   ├── primitives
+│   │   │   ├── ConfirmDialog.tsx
+│   │   │   ├── CopyButton.tsx
+│   │   │   ├── EmptyState.tsx
+│   │   │   ├── ErrorState.tsx
+│   │   │   ├── Modal.tsx
+│   │   │   ├── PageHeader.tsx
+│   │   │   ├── Section.tsx
+│   │   │   ├── Skeletons.tsx
+│   │   │   ├── Spinner.tsx
+│   │   │   ├── StatusPill.tsx
+│   │   │   └── index.ts
+│   │   ├── prompt
+│   │   │   ├── FigmaPromptButton.tsx
+│   │   │   └── GithubPromptButton.tsx
+│   │   ├── pwa
+│   │   │   ├── InstallButton.tsx
+│   │   │   ├── MavlySplash.tsx
+│   │   │   ├── OfflineBanner.tsx
+│   │   │   ├── PWAInitializer.tsx
+│   │   │   └── SWRegistration.tsx
+│   │   ├── settings
+│   │   │   ├── DomainContactForm.tsx
+│   │   │   └── DomainManager.tsx
+│   │   ├── ui
+│   │   │   ├── alert-dialog.tsx
+│   │   │   ├── alert.tsx
+│   │   │   ├── avatar.tsx
+│   │   │   ├── badge.tsx
+│   │   │   ├── button.tsx
+│   │   │   ├── calendar.tsx
+│   │   │   ├── card.tsx
+│   │   │   ├── checkbox.tsx
+│   │   │   ├── collapsible.tsx
+│   │   │   ├── command.tsx
+│   │   │   ├── context-menu.tsx
+│   │   │   ├── dialog.tsx
+│   │   │   ├── dropdown-menu.tsx
+│   │   │   ├── form.tsx
+│   │   │   ├── hover-card.tsx
+│   │   │   ├── input.tsx
+│   │   │   ├── label.tsx
+│   │   │   ├── menubar.tsx
+│   │   │   ├── navigation-menu.tsx
+│   │   │   ├── popover.tsx
+│   │   │   ├── progress.tsx
+│   │   │   ├── radio-group.tsx
+│   │   │   ├── scroll-area.tsx
+│   │   │   ├── searchable-select.tsx
+│   │   │   ├── select.tsx
+│   │   │   ├── separator.tsx
+│   │   │   ├── sheet.tsx
+│   │   │   ├── skeleton.tsx
+│   │   │   ├── slider.tsx
+│   │   │   ├── sonner.tsx
+│   │   │   ├── switch.tsx
+│   │   │   ├── table.tsx
+│   │   │   ├── tabs.tsx
+│   │   │   ├── textarea.tsx
+│   │   │   ├── toggle.tsx
+│   │   │   └── tooltip.tsx
+│   │   ├── workspace
+│   │   │   ├── database-v2
+│   │   │   │   ├── BackupsPanel.tsx
+│   │   │   │   ├── DatabaseSettingsPanel.tsx
+│   │   │   │   ├── DbMoveBar.tsx
+│   │   │   │   ├── MigrationsPanel.tsx
+│   │   │   │   ├── RecordPanel.tsx
+│   │   │   │   ├── ResultGrid.tsx
+│   │   │   │   ├── SchemasView.tsx
+│   │   │   │   ├── SqlDatabasePanel.tsx
+│   │   │   │   ├── SqlPanels.tsx
+│   │   │   │   ├── SupabaseDatabasePanel.tsx
+│   │   │   │   ├── TableDataView.tsx
+│   │   │   │   └── env-theme.ts
+│   │   │   ├── v2
+│   │   │   │   ├── CronJobsModal.tsx
+│   │   │   │   ├── DeployErrorCard.tsx
+│   │   │   │   ├── ImageGenerationPanel.tsx
+│   │   │   │   ├── MobilePanel.tsx
+│   │   │   │   ├── MoreView.tsx
+│   │   │   │   ├── PaymentsModal.tsx
+│   │   │   │   ├── ProjectActivityModal.tsx
+│   │   │   │   ├── ProjectApiKeysModal.tsx
+│   │   │   │   ├── ProjectDomainPanel.tsx
+│   │   │   │   ├── RunawayNotice.tsx
+│   │   │   │   ├── SiteAnalyticsModal.tsx
+│   │   │   │   ├── UndoDbChange.tsx
+│   │   │   │   ├── UsageLimitsModal.tsx
+│   │   │   │   ├── V2Banner.tsx
+│   │   │   │   ├── V2ProjectSettings.tsx
+│   │   │   │   ├── WorkspaceMore.tsx
+│   │   │   │   └── page-bits.tsx
+│   │   │   ├── visual-editor
+│   │   │   │   ├── VisualChangesBar.tsx
+│   │   │   │   ├── VisualEditorPanel.tsx
+│   │   │   │   └── use-visual-editor.ts
+│   │   │   ├── AttachmentPreview.tsx
+│   │   │   ├── BuildingLoader.tsx
+│   │   │   ├── ChatPanel.tsx
+│   │   │   ├── CodePanel.tsx
+│   │   │   ├── CreditsIndicator.tsx
+│   │   │   ├── DeployControl.tsx
+│   │   │   ├── DiffViewer.tsx
+│   │   │   ├── DomainBuyPanel.tsx
+│   │   │   ├── DomainConnectGuide.tsx
+│   │   │   ├── DomainModal.tsx
+│   │   │   ├── DomainProgress.tsx
+│   │   │   ├── FigmaModal.tsx
+│   │   │   ├── GenerationProgressVisuals.tsx
+│   │   │   ├── GithubModal.tsx
+│   │   │   ├── ImportOverlay.tsx
+│   │   │   ├── InsufficientCreditsModal.tsx
+│   │   │   ├── LogsPanel.tsx
+│   │   │   ├── OperationBanner.tsx
+│   │   │   ├── PathPicker.tsx
+│   │   │   ├── PreviewGenerationTimeline.tsx
+│   │   │   ├── PreviewPanel.tsx
+│   │   │   ├── ProjectTransferDialogs.tsx
+│   │   │   ├── PublishedModal.tsx
+│   │   │   ├── RestoreCodeAction.tsx
+│   │   │   ├── RunActivity.tsx
+│   │   │   ├── RunOptionsMenu.tsx
+│   │   │   ├── RunProgress.tsx
+│   │   │   ├── SecretsModal.tsx
+│   │   │   ├── ServerBlockedDialog.tsx
+│   │   │   ├── ServerWakeNotice.tsx
+│   │   │   ├── VersionsModal.tsx
+│   │   │   ├── use-dirty-guard.tsx
+│   │   │   ├── use-project-operation.ts
+│   │   │   ├── use-run-clock.ts
+│   │   │   └── use-server-wake.ts
+│   │   └── GlobalErrorCatcher.tsx
+│   ├── i18n
+│   │   ├── en-more.ts
+│   │   ├── en.ts
+│   │   ├── index.ts
+│   │   ├── locale-provider.ts
+│   │   ├── resolve.ts
+│   │   └── types.ts
+│   ├── lib
+│   │   ├── ai
+│   │   │   ├── agent.ts
+│   │   │   ├── groq.ts
+│   │   │   ├── image-models.ts
+│   │   │   ├── models.ts
+│   │   │   ├── openrouter-images.ts
+│   │   │   ├── openrouter.ts
+│   │   │   ├── provider.ts
+│   │   │   └── retry.ts
+│   │   ├── auth
+│   │   │   ├── callback.ts
+│   │   │   ├── error-copy.ts
+│   │   │   ├── oauth-url.ts
+│   │   │   ├── oauth.ts
+│   │   │   └── redirect.ts
+│   │   ├── deployments
+│   │   │   ├── service.ts
+│   │   │   ├── store.ts
+│   │   │   ├── vercel-failure.ts
+│   │   │   └── vercel-project.ts
+│   │   ├── hosting
+│   │   │   ├── config.ts
+│   │   │   ├── events.ts
+│   │   │   ├── publish-limits.ts
+│   │   │   ├── published-version.ts
+│   │   │   ├── serve.ts
+│   │   │   └── store.ts
+│   │   ├── integrations
+│   │   │   ├── figma
+│   │   │   │   ├── api.ts
+│   │   │   │   ├── config.ts
+│   │   │   │   ├── crypto.ts
+│   │   │   │   ├── service.ts
+│   │   │   │   └── store.ts
+│   │   │   ├── github
+│   │   │   │   ├── config.ts
+│   │   │   │   ├── crypto.ts
+│   │   │   │   ├── git.ts
+│   │   │   │   ├── http.ts
+│   │   │   │   ├── oauth.ts
+│   │   │   │   ├── safety.ts
+│   │   │   │   ├── service.ts
+│   │   │   │   └── store.ts
+│   │   │   └── supabase
+│   │   │       ├── client.ts
+│   │   │       ├── config.ts
+│   │   │       ├── crypto.ts
+│   │   │       ├── http.ts
+│   │   │       ├── oauth.ts
+│   │   │       ├── service.ts
+│   │   │       ├── store.ts
+│   │   │       └── types.ts
+│   │   ├── mavly
+│   │   │   ├── api.ts
+│   │   │   ├── checkpoints.ts
+│   │   │   ├── image-limits.ts
+│   │   │   ├── restore.ts
+│   │   │   ├── run-agent.ts
+│   │   │   ├── snapshots.ts
+│   │   │   └── store.ts
+│   │   ├── project-api-keys
+│   │   │   ├── crypto.ts
+│   │   │   ├── service.ts
+│   │   │   ├── store.ts
+│   │   │   └── validation.ts
+│   │   ├── project-secrets
+│   │   │   ├── config.ts
+│   │   │   ├── crypto.ts
+│   │   │   ├── service.ts
+│   │   │   ├── store.ts
+│   │   │   └── validation.ts
+│   │   ├── pwa
+│   │   │   └── registerSW.ts
+│   │   ├── supabase
+│   │   │   ├── client.ts
+│   │   │   ├── config.ts
+│   │   │   ├── proxy.ts
+│   │   │   ├── public.ts
+│   │   │   └── server.ts
+│   │   ├── vercel
+│   │   │   ├── config.ts
+│   │   │   ├── diagnostics.ts
+│   │   │   ├── provider.ts
+│   │   │   └── request-url.ts
+│   │   ├── agent-progress.ts
+│   │   ├── animated-placeholder.ts
+│   │   ├── api-access.ts
+│   │   ├── api-origin.ts
+│   │   ├── api.ts
+│   │   ├── attachments.ts
+│   │   ├── base64.ts
+│   │   ├── composer-attachments.ts
+│   │   ├── credits-config.ts
+│   │   ├── db-backups.ts
+│   │   ├── db-move.ts
+│   │   ├── db-v2-form.ts
+│   │   ├── diff-parse.ts
+│   │   ├── domain-connect.ts
+│   │   ├── domain-contact.ts
+│   │   ├── domain-prefix.ts
+│   │   ├── domain-status.ts
+│   │   ├── env-parse.ts
+│   │   ├── figma-url.ts
+│   │   ├── file-save.ts
+│   │   ├── format.ts
+│   │   ├── github-client.ts
+│   │   ├── github-repo.ts
+│   │   ├── image-generation-options.ts
+│   │   ├── legacy-routes.ts
+│   │   ├── logs.ts
+│   │   ├── mavly-hostname.ts
+│   │   ├── monaco-diagnostics.ts
+│   │   ├── option-search.ts
+│   │   ├── preview-health.ts
+│   │   ├── preview-proxy.ts
+│   │   ├── project-activity.ts
+│   │   ├── project-operation.ts
+│   │   ├── project-ownership.ts
+│   │   ├── project-routes.ts
+│   │   ├── project-slug.ts
+│   │   ├── project-status.ts
+│   │   ├── project-transfer.ts
+│   │   ├── reserved-hostnames.ts
+│   │   ├── run-options.ts
+│   │   ├── run-progress.ts
+│   │   ├── safe-url.ts
+│   │   ├── site-analytics.ts
+│   │   ├── source-archive-cache.ts
+│   │   ├── sql-statement.ts
+│   │   ├── static-site.ts
+│   │   ├── tenant-host.ts
+│   │   ├── toast.ts
+│   │   ├── undo-db-change.ts
+│   │   ├── upload.ts
+│   │   ├── usage.ts
+│   │   ├── user-profile.ts
+│   │   ├── utils.ts
+│   │   ├── v2-pages.ts
+│   │   ├── v2-payments.ts
+│   │   ├── v2-usage.ts
+│   │   ├── vcaas-errors.ts
+│   │   ├── vcaas-scope.ts
+│   │   ├── vcaas-types.ts
+│   │   ├── vcaas.ts
+│   │   ├── visual-edit-agent.ts
+│   │   ├── visual-edit-match.ts
+│   │   ├── visual-edit-resolve.ts
+│   │   ├── visual-edit-source.ts
+│   │   ├── visual-edit-upgrade.ts
+│   │   └── visual-edit.ts
+│   └── proxy.ts
+├── supabase
+│   ├── migrations
+│   │   ├── 01_create_user_profiles.sql
+│   │   ├── 02_create_projects.sql
+│   │   ├── 03_ai_builder.sql
+│   │   ├── 04_supabase_integration.sql
+│   │   ├── 05_restore_snapshots.sql
+│   │   ├── 06_github_integration.sql
+│   │   ├── 07_project_deployments.sql
+│   │   ├── 08_figma_integration.sql
+│   │   ├── 09_mavly_deployment_domains.sql
+│   │   ├── 10_generation_jobs.sql
+│   │   ├── 11_project_secrets.sql
+│   │   ├── 12_project_api_keys.sql
+│   │   ├── 13_deployment_unpublish.sql
+│   │   └── 14_shared_hosting.sql
+│   ├── backfill-ownership.template.sql
+│   └── config.toml
+├── tests
+│   ├── animated-placeholder.test.ts
+│   ├── api-access.test.ts
+│   ├── api-guards.test.ts
+│   ├── api-origin.test.ts
+│   ├── auth-callback.test.ts
+│   ├── auth-config.test.ts
+│   ├── auth-flow.test.ts
+│   ├── backend-disconnection.test.ts
+│   ├── deployment-host.test.ts
+│   ├── deployments-unpublish.test.ts
+│   ├── generation-checkpoints.test.ts
+│   ├── generation-migration.test.ts
+│   ├── generation-reliability.test.ts
+│   ├── github-installation.test.ts
+│   ├── groq-provider.test.ts
+│   ├── image-generation-limits.test.ts
+│   ├── image-generation.test.ts
+│   ├── openrouter-metadata.test.ts
+│   ├── ownership-migration.test.ts
+│   ├── ownership-registration.test.ts
+│   ├── preview-panel.test.ts
+│   ├── project-secrets.test.ts
+│   ├── provider-retry.test.ts
+│   ├── register.mjs
+│   ├── route-authorization.test.ts
+│   ├── routes.test.ts
+│   ├── run-progress.test.ts
+│   ├── shared-hosting-migration.test.ts
+│   ├── shared-hosting.test.ts
+│   ├── static-site.test.ts
+│   ├── tenant-host.test.ts
+│   ├── ts-resolver.mjs
+│   ├── vcaas-scope.test.ts
+│   ├── vercel-config.test.ts
+│   ├── vercel-failure.test.ts
+│   ├── vercel-project-recovery.test.ts
+│   └── vercel-request-url.test.ts
+├── .env.example
+├── .gitignore
+├── AGENTS.md
+├── AUDIT.md
+├── CLAUDE.md
+├── MAVLY_CLEAN_BASELINE.md
+├── MAVLY_PRODUCT_ARCHITECTURE_REALITY_AUDIT.md
+├── MAVLY_SHARED_HOSTING.md
+├── MAVLY_VERCEL_DEPLOYMENTS.md
+├── README.md
+├── ROUTE_AUDIT.md
+├── TOTALUM_API_DEPENDENCY_AUDIT.md
+├── components.json
+├── eslint.config.mjs
+├── mavly-structure.txt
+├── metadata.json
+├── next.config.ts
+├── package-lock.json
+├── package.json
+├── postcss.config.mjs
+├── tsconfig.json
+└── vercel.json
+
+128 directories, 464 files
