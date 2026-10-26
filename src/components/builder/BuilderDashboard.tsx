@@ -836,7 +836,7 @@ export default function DashboardPage({ profile }: { profile: ProfileSummary }) 
                 </button>
               </div>
             </div>
-            <div className="relative bg-white rounded-2xl sm:rounded-3xl shadow-[0_8px_30px_rgba(0,0,0,0.04),0_2px_8px_rgba(0,0,0,0.02)] border border-black/[0.08] overflow-hidden transition-all duration-200 focus-within:border-black/20 focus-within:shadow-[0_12px_36px_rgba(0,0,0,0.06)]">
+            <div className="relative bg-white rounded-2xl sm:rounded-3xl shadow-[0_8px_30px_rgba(0,0,0,0.04),0_2px_8px_rgba(0,0,0,0.02)] border border-black/[0.08] overflow-hidden transition-all duration-200 focus-within:border-black/40 focus-within:shadow-[0_12px_36px_rgba(0,0,0,0.06)]">
               <div className="relative">
                 <textarea
                   ref={heroTextareaRef}
@@ -849,7 +849,7 @@ export default function DashboardPage({ profile }: { profile: ProfileSummary }) 
                       ? "Describe what you want to build..."
                       : "Describe the Android app you want to build..."
                   }
-                  className="block w-full min-h-[140px] sm:min-h-[170px] resize-none text-[15px] leading-relaxed p-5 pb-3 outline-none placeholder:text-gray-400 bg-transparent focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-gray-300"
+                  className="block w-full min-h-[140px] sm:min-h-[170px] resize-none text-[15px] leading-relaxed p-5 pb-3 outline-none placeholder:text-gray-400 bg-transparent"
                   onKeyDown={(e) => {
                     // Enter submits, Shift+Enter is a newline (the box is a textarea).
                     if (shouldSubmitPrompt(e.key, e.shiftKey)) {
