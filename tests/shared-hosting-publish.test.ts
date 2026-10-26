@@ -290,7 +290,6 @@ test("a first failed publish reports error and never pretends the site is live",
 
   const wire = wireDeploymentStatus(h.state.row);
   assert.equal(wire.status, "error");
-  assert.equal(wire.status === "success", false);
   assert.equal(wire.canUnpublish, false);
   assert.equal(wire.liveUrl, undefined);
 });

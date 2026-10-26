@@ -558,7 +558,14 @@ function probeDomainState(probe: SharedPublicationProbe): {
   status: "verified" | "pending";
   error: string | null;
 } {
-  if (probe.ok) return { status: "verified", error: null };
+  /**
+   * `"reason" in probe`, NOT `if (probe.ok)`. This project compiles with
+   * `strictNullChecks: false`, where the boolean discriminant does not narrow
+   * the union, so the failure branch would still be typed as the whole union.
+   * The `in` check (already used further down for the failure log) narrows by
+   * property presence instead.
+   */
+  if (!("reason" in probe)) return { status: "verified", error: null };
   return {
     status: "pending",
     error:

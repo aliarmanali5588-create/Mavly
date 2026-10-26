@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ls -la src/lib/generation src/lib/observability docs/runbooks 2>&1; echo \"---MIGRATIONS---\"; ls -la supabase/migrations; echo \"---TESTS---\"; ls -la tests | head -60)",
+      "Bash(rg -n -i \"pgmq|outbox|service.?role|worker|cron|vercel.json|maxDuration|after\\\\\\(\" src supabase AGENTS.md MAVLY_CLEAN_BASELINE.md MAVLY_PRODUCTION_READINESS_AUDIT.md README.md .env.example vercel.json | head -200)"
+    ]
+  }
+}
