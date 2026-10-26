@@ -8,6 +8,8 @@
  * server or reaches the model.
  */
 
+import type { SupabaseClient } from "@supabase/supabase-js";
+
 import type { VcaasErrorCode } from "@/lib/vcaas-errors";
 import type { FigmaAccount, FigmaStatus } from "@/lib/vcaas-types";
 import {
@@ -258,8 +260,9 @@ export async function disconnectFigma(
 async function readFigmaToken(
   projectId: string,
   userId: string,
+  client?: SupabaseClient | null,
 ): Promise<FigmaServiceResult<string>> {
-  const connection = await getFigmaConnection(projectId, userId);
+  const connection = await getFigmaConnection(projectId, userId, client);
   if (isFigmaStoreFailure(connection)) {
     return failure(500, "UNKNOWN", "Could not read the Figma connection.");
   }
@@ -298,12 +301,14 @@ export async function loadFigmaDesignContext(input: {
   projectId: string;
   userId: string;
   prompt: string;
+  /** The generation worker's verified service-role client. */
+  client?: SupabaseClient | null;
 }): Promise<FigmaServiceResult<string | null>> {
   const references = extractFigmaReferences(input.prompt);
   if (references.ok === false) return fromApiFailure(references);
   if (references.data.length === 0) return { ok: true, data: null };
 
-  const token = await readFigmaToken(input.projectId, input.userId);
+  const token = await readFigmaToken(input.projectId, input.userId, input.client);
   if (token.ok === false) return token;
 
   const blocks: string[] = [];

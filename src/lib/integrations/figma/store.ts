@@ -6,6 +6,8 @@
  * leaves server-side integration code; no route returns it.
  */
 
+import type { SupabaseClient } from "@supabase/supabase-js";
+
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type { FigmaAccount } from "./api";
 
@@ -38,8 +40,9 @@ const COLUMNS =
 export async function getFigmaConnection(
   projectId: string,
   userId: string,
+  injected?: SupabaseClient | null,
 ): Promise<FigmaStoreResult<FigmaConnectionRow | null>> {
-  const supabase = await createSupabaseServerClient();
+  const supabase = injected ?? (await createSupabaseServerClient());
   if (!supabase) return { ok: false, code: "store_unavailable" };
 
   const { data, error } = await supabase

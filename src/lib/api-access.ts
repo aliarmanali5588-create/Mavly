@@ -25,10 +25,18 @@
  *
  * `/api/config` answers one boolean with no key, env value, or other secret in
  * the payload (`src/app/api/config/route.ts`). The dashboard no longer calls it,
- * but the public compatibility contract is retained; it is the only public API
- * route in this app, deliberately and by approval.
+ * but the public compatibility contract is retained.
+ *
+ * `/api/generation/worker` has no user session by design: it is the durable
+ * generation worker's internal invocation endpoint. Exempting it here does not
+ * make it public — the route performs its own constant-time bearer-secret check
+ * and answers 404 when disabled (`src/app/api/generation/worker/route.ts`).
+ * Both exceptions are exact-path matches; a near-miss under either is gated.
  */
-export const PUBLIC_API_PATHS: readonly string[] = ["/api/config"];
+export const PUBLIC_API_PATHS: readonly string[] = [
+  "/api/config",
+  "/api/generation/worker",
+];
 
 /** True for the exact paths in `PUBLIC_API_PATHS`. */
 export function isPublicApiPath(pathname: string): boolean {

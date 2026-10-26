@@ -215,10 +215,12 @@ export async function proxy(request: NextRequest) {
   /**
    * ── THE API GATE (F-1) ────────────────────────────────────────────────────
    *
-   * Everything under `/api/` except the approved public `/api/config` must
-   * present a session the Auth server just verified (`refreshSession`'s
-   * `getUser()` — a cookie's mere presence is not a session). Without one the
-   * request is answered HERE, with JSON, before any route handler runs.
+   * Everything under `/api/` except the exact public paths (`/api/config` and
+   * the worker's `/api/generation/worker`, which authenticates itself with a
+   * bearer secret) must present a session the Auth server just verified
+   * (`refreshSession`'s `getUser()` — a cookie's mere presence is not a
+   * session). Without one the request is answered HERE, with JSON, before any
+   * route handler runs.
    */
   if (apiSessionDecision(request.nextUrl.pathname, user !== null) === "unauthenticated") {
     const unauthorized = NextResponse.json(

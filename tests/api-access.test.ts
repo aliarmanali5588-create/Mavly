@@ -12,14 +12,18 @@ import {
  * and what counts as an exception, is decided here.
  */
 
-// ── The public exception is exactly /api/config ─────────────────────────────
+// ── The public exceptions are exact paths ───────────────────────────────────
 
-test("the only public API path is /api/config", () => {
-  assert.deepEqual([...PUBLIC_API_PATHS], ["/api/config"]);
+test("the public API paths are the config probe and the internal worker", () => {
+  assert.deepEqual([...PUBLIC_API_PATHS], [
+    "/api/config",
+    "/api/generation/worker",
+  ]);
   assert.equal(isPublicApiPath("/api/config"), true);
+  assert.equal(isPublicApiPath("/api/generation/worker"), true);
 });
 
-test("the exception is an exact match, not a prefix", () => {
+test("the exceptions are exact matches, not prefixes", () => {
   // Near-miss shapes must fall on the protected side.
   assert.equal(isPublicApiPath("/api/configx"), false);
   assert.equal(isPublicApiPath("/api/config/"), false);
@@ -27,6 +31,15 @@ test("the exception is an exact match, not a prefix", () => {
   assert.equal(isPublicApiPath("/API/config"), false);
   assert.equal(isPublicApiPath("/apiconfig"), false);
   assert.equal(isPublicApiPath(""), false);
+});
+
+test("the worker exception does not leak to neighbouring paths", () => {
+  assert.equal(isPublicApiPath("/api/generation/workerx"), false);
+  assert.equal(isPublicApiPath("/api/generation/worker/"), false);
+  assert.equal(isPublicApiPath("/api/generation/worker/run"), false);
+  assert.equal(isPublicApiPath("/api/generation"), false);
+  assert.equal(isPublicApiPath("/api/generation/workers"), false);
+  assert.equal(isPublicApiPath("/API/generation/worker"), false);
 });
 
 // ── The gate decision matrix ────────────────────────────────────────────────
@@ -64,6 +77,13 @@ test("a verified session lets every API path through", () => {
 
 test("/api/config is allowed even without a session", () => {
   assert.equal(apiSessionDecision("/api/config", false), "allow");
+});
+
+test("the internal worker passes the session gate but authenticates itself", () => {
+  // The gate answers "is anybody home?", not "may this caller run work?". The
+  // worker route requires a server-only bearer secret of its own.
+  assert.equal(apiSessionDecision("/api/generation/worker", false), "allow");
+  assert.equal(apiSessionDecision("/api/generation/worker/run", false), "unauthenticated");
 });
 
 test("non-API paths are never this gate's business", () => {

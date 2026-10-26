@@ -1,25 +1,38 @@
 /**
- * Background execution for one durable agent run.
+ * Execution for one durable agent run.
  *
  * ═══ THE ORDER IS THE GUARANTEE ═════════════════════════════════════════════
  *
- *   1. CLAIM      — one caller moves the queued row to `validating`.
+ *   1. CLAIM      — the inline path moves `queued` to `validating`; the durable
+ *                   worker claims with a fencing lease before this module runs.
  *   2. BASELINE   — the state before the first write is captured once per run.
- *   3. MANIFEST   — the validated plan is persisted so a resume can reuse it.
- *   4. BATCH      — each validated batch is written, then checkpointed with
- *                   per-path hashes. A later failure preserves earlier batches.
+ *   3. MANIFEST   — the validated plan is persisted so a retry can reuse it.
+ *   4. BATCH      — each validated batch is written AND checkpointed in one
+ *                   fenced transaction. A later failure preserves earlier work.
  *   5. COMPLETE   — only after every planned file is present and valid.
+ *
+ * ⚠️ TWO EXECUTION MODES, ONE STATE MACHINE.
+ *
+ *   · Inline (`after()`) still exists for projects outside the worker cohort.
+ *     It claims with `claimed_at` and writes with the caller's session client.
+ *   · The worker claims with a random `lease_token` and runs with the verified
+ *     service-role client. Every write presents the token, so a worker whose
+ *     lease expired cannot finish a run another worker now owns.
+ *
+ * ⚠️ A FAILED ATTEMPT IS NOT ALWAYS A FAILED JOB. The worker classifies the
+ * failure conservatively; only a transient/timeout/rate-limit/persistence
+ * failure is retried, within the durable attempt budget. Everything else is
+ * terminal immediately. A retry is a new attempt, not an exactly-once
+ * guarantee: provider calls already made are never undone.
  *
  * ⚠️ A TRUNCATED RESPONSE IS NEVER WRITTEN. `generateApp` validates a whole
  * batch before handing it here, and the agent discards any response with
  * `finish_reason: "length"`.
  *
- * ⚠️ A RESUME REUSES THE SAME RUN. The resume RPC reopens the interrupted row;
- * a new run row is not created, so the job identity, baseline and checkpoints
- * stay bound together.
- *
  * ⚠️ NO GENERATED CODE IS EXECUTED HERE.
  */
+
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { chatCompletion } from "@/lib/ai/provider";
 import {
@@ -38,6 +51,7 @@ import {
 import {
   claimRun,
   finishRun,
+  getProject,
   getRun,
   heartbeatRun,
   insertMessage,
@@ -45,6 +59,7 @@ import {
   listFiles,
   listRunBatches,
   recordRunBatch,
+  scheduleGenerationRetry,
   setRunManifest,
   touchProject,
   writeFiles,
@@ -62,6 +77,26 @@ import {
 } from "./snapshots";
 import { verifyCheckpointBatches } from "./checkpoints";
 import { loadFigmaDesignContext } from "@/lib/integrations/figma/service";
+import {
+  classifyGenerationFailure,
+  type FailureSignals,
+} from "@/lib/generation/state-machine";
+import { retryDelaySeconds, WORKER_LEASE_SECONDS } from "@/lib/generation/leases";
+import { reportedCostOf } from "@/lib/observability/cost";
+import { emitGenerationEvent } from "@/lib/observability/events";
+
+/**
+ * Present only when the durable worker claimed this run. The worker has no user
+ * session, so it passes the owner it verified and the service-role client.
+ */
+export interface WorkerRunContext {
+  client: SupabaseClient;
+  leaseToken: string;
+  jobAttempt: number;
+  maxJobAttempts: number;
+  workerId: string;
+  traceId: string;
+}
 
 export interface RunAgentInput {
   userId: string;
@@ -69,46 +104,207 @@ export interface RunAgentInput {
   runId: string;
   prompt: string;
   requestedModel?: string | null;
-  /** True when this is a resume of an interrupted/failed run. */
+  /** True when this is a resume/retry of an interrupted run. */
   resume?: boolean;
+  /** The durable worker context. Absent means the inline `after()` path. */
+  worker?: WorkerRunContext;
 }
 
-export async function runAgent(input: RunAgentInput): Promise<void> {
+/**
+ * A truthful account of what this invocation did. The inline path ignores it;
+ * the worker route returns it, so an operator can tell "worked", "scheduled a
+ * retry" and "wrote nothing because another owner took over" apart.
+ */
+export type RunAgentOutcome =
+  | { status: "completed"; runId: string }
+  | { status: "failed"; runId: string; errorClass: string }
+  | { status: "retry"; runId: string; errorClass: string; retryAfterSeconds: number }
+  | { status: "dead_letter"; runId: string; errorClass: string }
+  | { status: "cancelled"; runId: string }
+  | { status: "skipped"; runId: string; reason: string };
+
+/** Everything a write needs to prove it still owns the run. */
+interface RunGuard {
+  claimedAt: string | null;
+  leaseToken: string | null;
+  client: SupabaseClient | null;
+  traceId: string | null;
+  workerId: string | null;
+  jobAttempt: number;
+  maxAttempts: number;
+  startedAtMs: number;
+}
+
+interface FailInput {
+  message: string;
+  before?: readonly SnapshotFile[];
+  baseline?: SnapshotSummary | null;
+  failure?: AgentGenerationFailure;
+  signals?: FailureSignals;
+}
+
+export async function runAgent(input: RunAgentInput): Promise<RunAgentOutcome> {
+  if (input.worker) return runWorkerAgent(input, input.worker);
+  return runInlineAgent(input);
+}
+
+// ── Inline `after()` path ───────────────────────────────────────────────────
+
+async function runInlineAgent(input: RunAgentInput): Promise<RunAgentOutcome> {
   const claimed = await claimRun(input.projectId, input.runId);
   if (isStoreFailure(claimed)) {
     console.error(`[mavly] could not claim run ${input.runId}:`, claimed.error);
-    return;
+    return { status: "skipped", runId: input.runId, reason: "claim_failed" };
   }
   if (!claimed.data) {
     // Another invocation owns this run, or it already reached a terminal state.
     console.warn(`[mavly] run ${input.runId} was already claimed or is not queued`);
-    return;
+    return { status: "skipped", runId: input.runId, reason: "not_queued" };
   }
 
-  const claimToken = claimed.data.claimed_at ?? claimed.data.started_at;
+  const run = claimed.data;
+  const guard: RunGuard = {
+    claimedAt: run.claimed_at ?? run.started_at,
+    leaseToken: null,
+    client: null,
+    traceId: run.trace_id,
+    workerId: null,
+    jobAttempt: 1,
+    maxAttempts: 1,
+    startedAtMs: Date.now(),
+  };
 
   try {
-    await execute(input, claimed.data, claimToken);
+    return await execute(input, run, guard);
   } catch (error) {
-    if (error instanceof RunSupersededError) {
-      // A resume claimed this run after this worker's lease went stale. The new
-      // worker owns the run now; write nothing.
-      return;
+    if (error instanceof RunSupersededError || error instanceof RunLeaseLostError) {
+      // A newer attempt owns this run now; write nothing.
+      return { status: "skipped", runId: input.runId, reason: "superseded" };
     }
     if (error instanceof RunCancelledError) {
-      // `agent/cancel` already moved the row to `cancelled`; do not overwrite
-      // that with a generic failure, and do not write any further batches.
+      // The user's cancel is already terminal; do not overwrite it. The guarded
+      // update below is a no-op when the cancellation landed first.
       await finishRun(input.runId, "cancelled", "The run was cancelled by the user.", {
         stage: "cancelled",
         errorCode: "RUN_CANCELLED",
-        expectedClaimedAt: claimToken,
+        ...guardPatch(guard),
       });
-      return;
+      return { status: "cancelled", runId: input.runId };
     }
     const message = error instanceof Error ? error.message : String(error);
-    await fail(input, `The agent run failed unexpectedly: ${message}`, undefined, undefined, undefined, claimToken);
+    return fail(input, guard, {
+      message: `The agent run failed unexpectedly: ${message}`,
+      ...(error instanceof RunStoreError
+        ? { signals: { code: "GENERATION_PERSIST_FAILED" } }
+        : {}),
+    });
   }
 }
+
+// ── Durable worker path ─────────────────────────────────────────────────────
+
+async function runWorkerAgent(
+  input: RunAgentInput,
+  worker: WorkerRunContext,
+): Promise<RunAgentOutcome> {
+  const latest = await getRun(input.projectId, input.runId, worker.client);
+  if (isStoreFailure(latest)) {
+    emitWorkerError(input, worker, "store_unavailable");
+    return { status: "skipped", runId: input.runId, reason: "store_unavailable" };
+  }
+
+  const run = latest.data;
+  if (!run) return { status: "skipped", runId: input.runId, reason: "run_missing" };
+  if (run.dispatch_mode !== "worker") {
+    return { status: "skipped", runId: input.runId, reason: "not_worker_dispatched" };
+  }
+  if (run.finished_at) {
+    return run.stage === "cancelled"
+      ? { status: "cancelled", runId: input.runId }
+      : { status: "skipped", runId: input.runId, reason: "already_finished" };
+  }
+  if (run.stage === "cancelled" || run.cancellation_requested_at) {
+    return { status: "cancelled", runId: input.runId };
+  }
+  if (run.lease_token !== worker.leaseToken) {
+    return { status: "skipped", runId: input.runId, reason: "lease_mismatch" };
+  }
+  if (
+    run.stage !== "validating" &&
+    run.stage !== "generating" &&
+    run.stage !== "retrying"
+  ) {
+    return { status: "skipped", runId: input.runId, reason: "not_execution_stage" };
+  }
+
+  /**
+   * ⚠️ THE SERVICE-ROLE WORKER RE-VERIFIES THE OWNER. `claim_generation_job`
+   * returned an owner, but this module never trusts a claim answer as proof.
+   * A missing row and a foreign row are the same non-enumerating refusal.
+   */
+  const project = await getProject(input.userId, input.projectId, worker.client);
+  if (isStoreFailure(project)) {
+    emitWorkerError(input, worker, "store_unavailable");
+    return { status: "skipped", runId: input.runId, reason: "store_unavailable" };
+  }
+  if (!project.data || project.data.user_id !== input.userId) {
+    emitWorkerError(input, worker, "owner_mismatch");
+    return { status: "skipped", runId: input.runId, reason: "owner_mismatch" };
+  }
+
+  const guard: RunGuard = {
+    claimedAt: run.claimed_at,
+    leaseToken: worker.leaseToken,
+    client: worker.client,
+    traceId: worker.traceId,
+    workerId: worker.workerId,
+    jobAttempt: worker.jobAttempt,
+    maxAttempts: worker.maxJobAttempts,
+    startedAtMs: Date.now(),
+  };
+
+  try {
+    return await execute(input, run, guard);
+  } catch (error) {
+    if (error instanceof RunSupersededError || error instanceof RunLeaseLostError) {
+      emitGenerationEvent("generation.lease_lost", {
+        traceId: guard.traceId,
+        runId: input.runId,
+        projectId: input.projectId,
+        workerId: guard.workerId,
+        attempt: guard.jobAttempt,
+        reason: "fenced_off",
+      });
+      return { status: "skipped", runId: input.runId, reason: "lease_lost" };
+    }
+    if (error instanceof RunCancelledError) {
+      return { status: "cancelled", runId: input.runId };
+    }
+    const message = error instanceof Error ? error.message : String(error);
+    return fail(input, guard, {
+      message: `The agent run failed unexpectedly: ${message}`,
+      ...(error instanceof RunStoreError
+        ? { signals: { code: "GENERATION_PERSIST_FAILED" } }
+        : {}),
+    });
+  }
+}
+
+function emitWorkerError(
+  input: RunAgentInput,
+  worker: WorkerRunContext,
+  reason: string,
+): void {
+  emitGenerationEvent("generation.worker_error", {
+    traceId: worker.traceId,
+    runId: input.runId,
+    projectId: input.projectId,
+    workerId: worker.workerId,
+    reason,
+  });
+}
+
+// ── Ownership errors ────────────────────────────────────────────────────────
 
 class RunCancelledError extends Error {
   constructor() {
@@ -124,29 +320,72 @@ class RunSupersededError extends Error {
   }
 }
 
-async function assertRunOwned(
-  projectId: string,
-  runId: string,
-  claimToken: string,
-): Promise<void> {
-  const latest = await getRun(projectId, runId);
-  if (isStoreFailure(latest)) {
-    console.warn(`[mavly] could not re-read run ${runId} before a write:`, latest.error);
-    return;
-  }
-  const current = latest.data;
-  if (!current || current.claimed_at !== claimToken) {
-    throw new RunSupersededError();
-  }
-  if (current.stage === "cancelled" || current.finished_at) {
-    throw new RunCancelledError();
+class RunLeaseLostError extends Error {
+  constructor() {
+    super("LEASE_LOST");
+    this.name = "RunLeaseLostError";
   }
 }
 
-async function execute(input: RunAgentInput, run: RunRow, claimToken: string): Promise<void> {
+class RunStoreError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "RunStoreError";
+  }
+}
+
+/**
+ * Re-read the run before a write and refuse to continue unless THIS invocation
+ * still owns it.
+ *
+ * ⚠️ A STORE FAILURE IS NOT PERMISSION. The old inline path returned on a read
+ * error and kept writing; that could overwrite a run another attempt owned.
+ * It now throws a retryable persistence failure instead.
+ */
+async function assertRunOwned(input: RunAgentInput, guard: RunGuard): Promise<void> {
+  const latest = await getRun(input.projectId, input.runId, guard.client);
+  if (isStoreFailure(latest)) {
+    throw new RunStoreError(`Could not re-read the run before a write: ${latest.error}`);
+  }
+  const current = latest.data;
+  if (!current) throw new RunSupersededError();
+  if (current.stage === "cancelled" || current.cancellation_requested_at) {
+    throw new RunCancelledError();
+  }
+  if (current.finished_at) throw new RunSupersededError();
+
+  if (guard.leaseToken) {
+    if (current.lease_token !== guard.leaseToken) throw new RunLeaseLostError();
+    return;
+  }
+  if (!guard.claimedAt || current.claimed_at !== guard.claimedAt) {
+    throw new RunSupersededError();
+  }
+}
+
+// ── The run itself ──────────────────────────────────────────────────────────
+
+async function execute(
+  input: RunAgentInput,
+  run: RunRow,
+  guard: RunGuard,
+): Promise<RunAgentOutcome> {
   const runId = input.runId;
-  await heartbeatRun(runId, { stage: "validating", expectedClaimedAt: claimToken });
-  await touchProject(input.userId, input.projectId);
+  const client = guard.client;
+
+  const alive = await heartbeatRun(
+    runId,
+    {
+      stage: "validating",
+      ...(guard.leaseToken
+        ? { expectedLeaseToken: guard.leaseToken, leaseSeconds: WORKER_LEASE_SECONDS }
+        : { expectedClaimedAt: guard.claimedAt ?? undefined }),
+    },
+    client,
+  );
+  if (guard.leaseToken && !alive) throw new RunLeaseLostError();
+
+  await touchProject(input.userId, input.projectId, client);
 
   /**
    * A Figma link in the prompt is a reference the agent must actually read.
@@ -157,21 +396,23 @@ async function execute(input: RunAgentInput, run: RunRow, claimToken: string): P
     projectId: input.projectId,
     userId: input.userId,
     prompt: input.prompt,
+    client,
   });
   if (design.ok === false) {
-    await fail(input, design.error, undefined, undefined, undefined, claimToken);
-    return;
+    return fail(input, guard, { message: design.error });
   }
 
-  await assertRunOwned(input.projectId, runId, claimToken);
+  await assertRunOwned(input, guard);
 
-  const current = await listFiles(input.projectId);
+  const current = await listFiles(input.projectId, client);
   if (isStoreFailure(current)) {
-    await fail(input, `Could not read the project files: ${current.error}`, undefined, undefined, undefined, claimToken);
-    return;
+    return fail(input, guard, {
+      message: `Could not read the project files: ${current.error}`,
+      signals: { code: "GENERATION_PERSIST_FAILED" },
+    });
   }
 
-  await assertRunOwned(input.projectId, runId, claimToken);
+  await assertRunOwned(input, guard);
 
   const before: SnapshotFile[] = current.data.map((file) => ({
     path: file.path,
@@ -183,27 +424,24 @@ async function execute(input: RunAgentInput, run: RunRow, claimToken: string): P
 
   /**
    * ⭐ THE BASELINE OF THIS RUN. Created once, before the first write. On a
-   * resume the original baseline is reused; a second one would hide the state
-   * the user actually wants to restore to.
+   * retry/resume the original baseline is reused; a second one would hide the
+   * state the user actually wants to restore to.
    */
-  const baseline = await ensureBaseline(input, before);
+  const baseline = await ensureBaseline(input, before, guard.client);
 
   let resumeManifest: AgentManifest | null = parseManifest(run.generation_manifest);
   let completedPaths: string[] = [];
   let nextBatchIndex = 0;
 
-  const batches = await listRunBatches(runId);
+  const batches = await listRunBatches(runId, client);
   if (isStoreFailure(batches)) {
     if (input.resume) {
-      await fail(
-        input,
-        `Could not verify the saved checkpoints, so the run was not resumed: ${batches.error}`,
+      return fail(input, guard, {
+        message: `Could not verify the saved checkpoints, so the run was not resumed: ${batches.error}`,
         before,
         baseline,
-        undefined,
-        claimToken,
-      );
-      return;
+        signals: { code: "GENERATION_PERSIST_FAILED" },
+      });
     }
     console.error(`[mavly] checkpoint read failed for run ${runId}:`, batches.error);
   } else {
@@ -220,9 +458,9 @@ async function execute(input: RunAgentInput, run: RunRow, claimToken: string): P
   }
 
   /**
-   * A resumed run needs its plan. If the manifest was not persisted (the run
-   * died before planning finished), the agent plans again and still skips the
-   * verified completed paths.
+   * A retried/reopened run needs its plan. If the manifest was not persisted
+   * (the run died before planning finished), the agent plans again and still
+   * skips the verified completed paths.
    */
   if (input.resume && !resumeManifest) {
     console.warn(`[mavly] run ${runId} has no persisted manifest; it will be re-planned`);
@@ -232,72 +470,105 @@ async function execute(input: RunAgentInput, run: RunRow, claimToken: string): P
   let latestProviderRequestId: string | null = null;
 
   const onManifest = async (manifest: AgentManifest): Promise<void> => {
-    const saved = await setRunManifest(runId, manifest, claimToken);
+    const saved = await setRunManifest(
+      runId,
+      manifest,
+      guard.claimedAt ?? undefined,
+      guard.leaseToken ?? undefined,
+      client,
+    );
     if (isStoreFailure(saved)) {
-      throw new Error(`Could not save the generation plan: ${saved.error}`);
+      if (saved.code === "CONFLICT") throw new RunLeaseLostError();
+      throw new RunStoreError(`Could not save the generation plan: ${saved.error}`);
     }
     resumeManifest = manifest;
   };
 
   const onBatch = async (batch: AgentBatchCheckpoint): Promise<void> => {
-    await assertRunOwned(input.projectId, runId, claimToken);
-    const written = await writeFiles(
-      input.userId,
-      input.projectId,
-      batch.files,
-      [],
-    );
-    if (isStoreFailure(written)) {
-      throw new Error(`Could not save a generated batch: ${written.error}`);
-    }
+    await assertRunOwned(input, guard);
 
     for (const file of batch.files) writtenPaths.add(file.path);
 
+    /**
+     * ⚠️ FILES AND CHECKPOINT ARE ONE TRANSACTION. The old path wrote files
+     * first and recorded the checkpoint second, so a crash in between left
+     * files that a resume could not trust. The RPC checks the lease before it
+     * writes either, so a stale worker writes nothing at all.
+     */
     const checkpoint = await recordRunBatch({
       runId,
       projectId: input.projectId,
       batchIndex: batch.batchIndex,
       files: batch.files,
       filesWritten: writtenPaths.size,
-      expectedClaimedAt: claimToken,
+      expectedClaimedAt: guard.leaseToken ? undefined : guard.claimedAt ?? undefined,
+      leaseToken: guard.leaseToken ?? undefined,
+      userId: guard.leaseToken ? input.userId : undefined,
+      leaseSeconds: WORKER_LEASE_SECONDS,
+      supabase: client,
     });
     if (isStoreFailure(checkpoint)) {
-      // The files are already written, but without a checkpoint a resume
-      // cannot know they are complete. Failing here is honest; a retry will
-      // rewrite the same idempotent paths and create the checkpoint.
-      throw new Error(`Could not record the batch checkpoint: ${checkpoint.error}`);
+      if (checkpoint.code === "LEASE_LOST" || checkpoint.code === "FORBIDDEN") {
+        throw new RunLeaseLostError();
+      }
+      throw new RunStoreError(`Could not record the batch checkpoint: ${checkpoint.error}`);
     }
-    await heartbeatRun(runId, { stage: "generating", expectedClaimedAt: claimToken });
+
+    emitGenerationEvent("generation.checkpoint", {
+      traceId: guard.traceId,
+      runId,
+      projectId: input.projectId,
+      workerId: guard.workerId,
+      attempt: guard.jobAttempt,
+      checkpoints: checkpoint.data.batch_index + 1,
+      filesWritten: writtenPaths.size,
+    });
   };
 
   const onProgress = async (event: AgentProgressEvent): Promise<void> => {
+    const stage =
+      event.type === "retrying" || event.type === "shrinking"
+        ? ("retrying" as const)
+        : event.type === "validating"
+          ? ("validating" as const)
+          : ("generating" as const);
+
+    const patch: Parameters<typeof heartbeatRun>[1] = { stage };
     if (event.type === "retrying") {
-      await heartbeatRun(runId, {
-        stage: "retrying",
-        errorCode: event.retryAfterMs !== null ? "PROVIDER_RATE_LIMITED" : "PROVIDER_RETRY",
-        retryAfterSeconds:
-          event.retryAfterMs !== null ? Math.ceil(event.retryAfterMs / 1_000) : null,
-        expectedClaimedAt: claimToken,
-      });
-      return;
+      patch.errorCode =
+        event.retryAfterMs !== null ? "PROVIDER_RATE_LIMITED" : "PROVIDER_RETRY";
+      patch.retryAfterSeconds =
+        event.retryAfterMs !== null ? Math.ceil(event.retryAfterMs / 1_000) : null;
     }
     if (event.type === "shrinking") {
-      await heartbeatRun(runId, {
-        stage: "retrying",
-        errorCode: event.reason === "truncated" ? "GENERATION_TRUNCATED" : "GENERATION_COMPACT_RETRY",
-        expectedClaimedAt: claimToken,
-      });
-      return;
+      patch.errorCode =
+        event.reason === "truncated" ? "GENERATION_TRUNCATED" : "GENERATION_COMPACT_RETRY";
     }
-    if (event.type === "validating") {
-      await heartbeatRun(runId, { stage: "validating", expectedClaimedAt: claimToken });
-      return;
+    if (guard.leaseToken) {
+      patch.expectedLeaseToken = guard.leaseToken;
+      patch.leaseSeconds = WORKER_LEASE_SECONDS;
+    } else {
+      patch.expectedClaimedAt = guard.claimedAt ?? undefined;
     }
-    await heartbeatRun(runId, { stage: "generating", expectedClaimedAt: claimToken });
+
+    const renewed = await heartbeatRun(runId, patch, client);
+    // `emitProgress` in the agent swallows callback errors, so this is a
+    // best-effort early stop; the next checkpoint is fenced regardless.
+    if (guard.leaseToken && !renewed) throw new RunLeaseLostError();
   };
 
   if (resumeManifest?.files.some((file) => !completedPaths.includes(file.path))) {
-    await heartbeatRun(runId, { stage: "generating", expectedClaimedAt: claimToken });
+    const resumed = await heartbeatRun(
+      runId,
+      {
+        stage: "generating",
+        ...(guard.leaseToken
+          ? { expectedLeaseToken: guard.leaseToken, leaseSeconds: WORKER_LEASE_SECONDS }
+          : { expectedClaimedAt: guard.claimedAt ?? undefined }),
+      },
+      client,
+    );
+    if (guard.leaseToken && !resumed) throw new RunLeaseLostError();
   }
 
   const generated = await generateApp(
@@ -332,11 +603,15 @@ async function execute(input: RunAgentInput, run: RunRow, claimToken: string): P
   );
 
   if (isGenerationFailure(generated)) {
-    await fail(input, generated.error, before, baseline, generated, claimToken);
-    return;
+    return fail(input, guard, {
+      message: generated.error,
+      before,
+      baseline,
+      failure: generated,
+    });
   }
 
-  await assertRunOwned(input.projectId, runId, claimToken);
+  await assertRunOwned(input, guard);
 
   if (generated.result.deletedPaths.length > 0) {
     const deleted = await writeFiles(
@@ -344,124 +619,360 @@ async function execute(input: RunAgentInput, run: RunRow, claimToken: string): P
       input.projectId,
       [],
       generated.result.deletedPaths,
+      client,
     );
     if (isStoreFailure(deleted)) {
-      await fail(
-        input,
-        `Could not apply the generated deletions: ${deleted.error}`,
+      return fail(input, guard, {
+        message: `Could not apply the generated deletions: ${deleted.error}`,
         before,
         baseline,
-        undefined,
-        claimToken,
-      );
-      return;
+        signals: { code: "GENERATION_PERSIST_FAILED" },
+        failure: generated,
+      });
     }
   }
 
-  await complete(
+  return complete(
     input,
+    guard,
     generated.result,
     before,
     baseline,
     writtenPaths.size,
     latestProviderRequestId,
-    claimToken,
   );
 }
+
+// ── Terminal transitions ────────────────────────────────────────────────────
 
 /**
  * The run finished and the files were written. The result state is captured as
  * its own recovery point, and the message is linked to the baseline so the
  * chat's restore action undoes THIS run.
+ *
+ * ⚠️ THE TERMINAL WRITE IS LAST AND FENCED. A completion that another attempt
+ * or a cancellation won is reported as skipped, never as a success.
  */
 async function complete(
   input: RunAgentInput,
+  guard: RunGuard,
   result: AgentGenerationResult,
   before: readonly SnapshotFile[],
   baseline: SnapshotSummary | null,
   filesWritten: number,
   latestProviderRequestId: string | null,
-  claimToken: string,
-): Promise<void> {
-  await assertRunOwned(input.projectId, input.runId, claimToken);
-  const after = await readCurrentFiles(input.projectId);
+): Promise<RunAgentOutcome> {
+  await assertRunOwned(input, guard);
+
+  const after = await readCurrentFiles(input.projectId, guard.client);
   const diff = diffSource(before, after);
   const changed = !diff.unchanged;
 
   if (changed) {
-    await captureResult(input, after, diffPaths(diff), "The source this run produced");
+    await captureResult(
+      input,
+      guard.client,
+      after,
+      diffPaths(diff),
+      "The source this run produced",
+    );
   }
 
-  await assertRunOwned(input.projectId, input.runId, claimToken);
+  const cost = reportedCostOf(result.attempts);
 
   /**
    * ⚠️ THE RESTORE TARGET IS THE BASELINE — the state BEFORE the run. A user
    * who clicks "Restore Code" wants the code they had, not the code the agent
    * just produced.
    */
+  const finished = await finishRun(
+    input.runId,
+    "done",
+    undefined,
+    {
+      ...metadataPatch(result.usage, result.attempts, null),
+      stage: "completed",
+      filesWritten,
+      providerRequestId: latestProviderRequestId ?? lastProviderRequestId(result.attempts),
+      reportedCostUsd: cost.costUsd,
+      costKnown: cost.known,
+      ...guardPatch(guard),
+    },
+    guard.client,
+  );
+
+  if (!finished) {
+    // A cancellation, a recovery, or a newer attempt finalized the run first.
+    return { status: "skipped", runId: input.runId, reason: "finish_not_applied" };
+  }
+
   await insertMessage(
     input.projectId,
     "agent",
     result.message,
     "finished",
     changed ? baseline?.id ?? null : null,
+    guard.client,
   );
-  await finishRun(input.runId, "done", undefined, {
-    ...metadataPatch(result.usage, result.attempts, null),
-    stage: "completed",
+
+  emitGenerationEvent("generation.completed", {
+    traceId: guard.traceId,
+    runId: input.runId,
+    projectId: input.projectId,
+    workerId: guard.workerId,
+    attempt: guard.jobAttempt,
+    durationMs: Date.now() - guard.startedAtMs,
     filesWritten,
-    providerRequestId: latestProviderRequestId ?? lastProviderRequestId(result.attempts),
-    expectedClaimedAt: claimToken,
+    checkpoints: result.batches,
+    model: result.model?.id,
+    promptTokens: result.usage.promptTokens,
+    completionTokens: result.usage.completionTokens,
+    costUsd: cost.costUsd,
+    costKnown: cost.known,
   });
+
+  return { status: "completed", runId: input.runId };
 }
 
 /**
- * The run failed. If it failed after changing some files, the partial state is
- * captured as a recovery point and the error message points at the baseline.
+ * The attempt failed. The worker classifies it, schedules a bounded retry when
+ * that can plausibly help, and otherwise writes one terminal failure. The
+ * inline path keeps its existing terminal behaviour.
  */
 async function fail(
   input: RunAgentInput,
-  message: string,
-  before?: readonly SnapshotFile[],
-  baseline?: SnapshotSummary | null,
-  failure?: AgentGenerationFailure,
-  claimToken?: string,
-): Promise<void> {
-  const latest = await getRun(input.projectId, input.runId);
+  guard: RunGuard,
+  options: FailInput,
+): Promise<RunAgentOutcome> {
+  const { message, before, baseline, failure, signals } = options;
+
+  const latest = await getRun(input.projectId, input.runId, guard.client);
   if (isStoreFailure(latest)) {
-    // Continue: the terminal write below is claim-guarded and will no-op if
-    // the run was superseded or cancelled.
-  } else if (
-    !latest.data ||
-    (claimToken && latest.data.claimed_at !== claimToken) ||
-    latest.data.stage === "cancelled" ||
-    latest.data.finished_at
-  ) {
-    return;
+    // Write nothing: we cannot prove we still own the row. If this worker dies,
+    // expired-lease recovery advances the job without deleting it.
+    emitGenerationEvent("generation.worker_error", {
+      traceId: guard.traceId,
+      runId: input.runId,
+      projectId: input.projectId,
+      workerId: guard.workerId,
+      reason: "finalize_unavailable",
+    });
+    return { status: "skipped", runId: input.runId, reason: "finalize_unavailable" };
   }
 
-  console.error(`[mavly] agent run ${input.runId} failed:`, message);
+  const current = latest.data;
+  if (!current) return { status: "skipped", runId: input.runId, reason: "run_missing" };
+  if (current.stage === "cancelled" || current.cancellation_requested_at) {
+    return { status: "cancelled", runId: input.runId };
+  }
+  if (current.finished_at) {
+    return { status: "skipped", runId: input.runId, reason: "already_finished" };
+  }
+  if (guard.leaseToken && current.lease_token !== guard.leaseToken) {
+    return { status: "skipped", runId: input.runId, reason: "lease_lost" };
+  }
+  if (!guard.leaseToken && guard.claimedAt && current.claimed_at !== guard.claimedAt) {
+    return { status: "skipped", runId: input.runId, reason: "superseded" };
+  }
+
+  const classification = classifyGenerationFailure({
+    code: failure?.code,
+    attemptErrorCode: signals?.attemptErrorCode ?? lastAttemptErrorCode(failure?.attempts),
+    message,
+    retryAfterSeconds:
+      signals?.retryAfterSeconds ?? lastAttemptRetryAfterSeconds(failure?.attempts),
+  });
+
+  if (classification.errorClass === "cancelled") {
+    return { status: "cancelled", runId: input.runId };
+  }
+  if (classification.errorClass === "lease_lost") {
+    return { status: "skipped", runId: input.runId, reason: "lease_lost" };
+  }
+
+  console.error(
+    `[mavly] agent run ${input.runId} failed (${classification.errorClass}):`,
+    classification.summary,
+  );
 
   let restoreTarget: string | null = null;
-
   if (before) {
-    const after = await readCurrentFiles(input.projectId);
+    const after = await readCurrentFiles(input.projectId, guard.client);
     const diff = diffSource(before, after);
     if (!diff.unchanged) {
-      await captureResult(input, after, diffPaths(diff), "The partial source of a failed run");
+      await captureResult(
+        input,
+        guard.client,
+        after,
+        diffPaths(diff),
+        "The partial source of a failed run",
+      );
       restoreTarget = baseline?.id ?? null;
     }
   }
 
-  await insertMessage(input.projectId, "agent", message, "error", restoreTarget);
-  await finishRun(input.runId, "error", message, {
-    ...(failure
-      ? metadataPatch(failure.usage, failure.attempts, failure.code)
-      : { stage: "failed" as const }),
-    stage: "failed",
-    ...(claimToken ? { expectedClaimedAt: claimToken } : {}),
+  const cost = failure
+    ? reportedCostOf(failure.attempts)
+    : { costUsd: null, known: false };
+
+  // ── Worker: bounded retry, then dead letter ───────────────────────────────
+  if (
+    guard.leaseToken &&
+    guard.client &&
+    classification.retryable &&
+    guard.jobAttempt < guard.maxAttempts
+  ) {
+    const retryAfterSeconds = retryDelaySeconds(guard.jobAttempt);
+    const scheduled = await scheduleGenerationRetry(guard.client, {
+      runId: input.runId,
+      leaseToken: guard.leaseToken,
+      errorClass: classification.errorClass,
+      errorSummary: classification.summary,
+      retryAfterSeconds,
+    });
+
+    if (isStoreFailure(scheduled)) {
+      // The lease is still ours and the run remains unfinished; the next
+      // recovery pass or the scheduler can retry it. Never claim a retry here.
+      emitGenerationEvent("generation.worker_error", {
+        traceId: guard.traceId,
+        runId: input.runId,
+        projectId: input.projectId,
+        workerId: guard.workerId,
+        reason: "retry_schedule_failed",
+      });
+      return { status: "skipped", runId: input.runId, reason: "retry_schedule_failed" };
+    }
+
+    if (scheduled.data.status === "retry") {
+      emitGenerationEvent("generation.retry_scheduled", {
+        traceId: guard.traceId,
+        runId: input.runId,
+        projectId: input.projectId,
+        workerId: guard.workerId,
+        attempt: scheduled.data.attempt,
+        maxAttempts: guard.maxAttempts,
+        errorClass: classification.errorClass,
+        retryAfterSeconds: scheduled.data.retryAfterSeconds,
+      });
+      return {
+        status: "retry",
+        runId: input.runId,
+        errorClass: classification.errorClass,
+        retryAfterSeconds: scheduled.data.retryAfterSeconds,
+      };
+    }
+
+    if (scheduled.data.status === "dead_letter") {
+      const note =
+        guard.jobAttempt >= guard.maxAttempts
+          ? ` The generation stopped after ${guard.jobAttempt} attempt(s). You can resume this run from the workspace.`
+          : "";
+      await insertMessage(
+        input.projectId,
+        "agent",
+        `${message}${note}`,
+        "error",
+        restoreTarget,
+        guard.client,
+      );
+      emitGenerationEvent("generation.dead_letter", {
+        traceId: guard.traceId,
+        runId: input.runId,
+        projectId: input.projectId,
+        workerId: guard.workerId,
+        attempt: guard.jobAttempt,
+        maxAttempts: guard.maxAttempts,
+        errorClass: classification.errorClass,
+      });
+      return {
+        status: "dead_letter",
+        runId: input.runId,
+        errorClass: classification.errorClass,
+      };
+    }
+
+    return { status: "skipped", runId: input.runId, reason: "lease_lost" };
+  }
+
+  /**
+   * A retryable failure with no attempt budget left is the real dead-letter
+   * path; `schedule_generation_retry` only sees that branch if the guard's
+   * attempt count is stale. Record the timestamp so recovery queries and
+   * operator alerts agree.
+   */
+  const exhausted =
+    !!guard.leaseToken &&
+    classification.retryable &&
+    guard.jobAttempt >= guard.maxAttempts;
+
+  // ── Terminal failure ──────────────────────────────────────────────────────
+  const finished = await finishRun(
+    input.runId,
+    "error",
+    message,
+    {
+      ...(failure
+        ? metadataPatch(failure.usage, failure.attempts, failure.code)
+        : { stage: "failed" as const }),
+      stage: "failed",
+      errorClass: classification.errorClass,
+      errorSummary: classification.summary,
+      reportedCostUsd: cost.costUsd,
+      costKnown: cost.known,
+      ...(exhausted ? { deadLetter: true } : {}),
+      ...guardPatch(guard),
+    },
+    guard.client,
+  );
+
+  if (!finished) {
+    return { status: "skipped", runId: input.runId, reason: "finish_not_applied" };
+  }
+
+  await insertMessage(
+    input.projectId,
+    "agent",
+    message,
+    "error",
+    restoreTarget,
+    guard.client,
+  );
+  await touchProject(input.userId, input.projectId, guard.client);
+
+  emitGenerationEvent("generation.failed", {
+    traceId: guard.traceId,
+    runId: input.runId,
+    projectId: input.projectId,
+    workerId: guard.workerId,
+    attempt: guard.jobAttempt,
+    maxAttempts: guard.maxAttempts,
+    errorClass: classification.errorClass,
+    durationMs: Date.now() - guard.startedAtMs,
+    filesWritten: writtenCount(before, failure),
+    costUsd: cost.costUsd,
+    costKnown: cost.known,
   });
-  await touchProject(input.userId, input.projectId);
+
+  if (exhausted) {
+    emitGenerationEvent("generation.dead_letter", {
+      traceId: guard.traceId,
+      runId: input.runId,
+      projectId: input.projectId,
+      workerId: guard.workerId,
+      attempt: guard.jobAttempt,
+      maxAttempts: guard.maxAttempts,
+      errorClass: classification.errorClass,
+    });
+  }
+
+  return { status: "failed", runId: input.runId, errorClass: classification.errorClass };
+}
+
+function guardPatch(guard: RunGuard): Partial<RunFinishPatch> {
+  if (guard.leaseToken) return { expectedLeaseToken: guard.leaseToken };
+  if (guard.claimedAt) return { expectedClaimedAt: guard.claimedAt };
+  return {};
 }
 
 function metadataPatch(
@@ -469,7 +980,8 @@ function metadataPatch(
   attempts: readonly AgentProviderAttempt[],
   errorCode: string | null,
 ): RunFinishPatch {
-  const last = [...attempts].reverse().find((attempt) => !!attempt.providerRequestId) ??
+  const last =
+    [...attempts].reverse().find((attempt) => !!attempt.providerRequestId) ??
     attempts[attempts.length - 1] ??
     null;
 
@@ -499,9 +1011,44 @@ function lastProviderRequestId(attempts: readonly AgentProviderAttempt[]): strin
   return null;
 }
 
+function lastAttemptErrorCode(
+  attempts: readonly AgentProviderAttempt[] | undefined,
+): string | null {
+  if (!attempts || attempts.length === 0) return null;
+  for (let index = attempts.length - 1; index >= 0; index -= 1) {
+    const code = attempts[index]?.errorCode;
+    if (code) return code;
+  }
+  return null;
+}
+
+function lastAttemptRetryAfterSeconds(
+  attempts: readonly AgentProviderAttempt[] | undefined,
+): number | null {
+  if (!attempts || attempts.length === 0) return null;
+  const retryAfterMs = attempts[attempts.length - 1]?.retryAfterMs;
+  return typeof retryAfterMs === "number" && Number.isFinite(retryAfterMs)
+    ? Math.max(0, Math.ceil(retryAfterMs / 1_000))
+    : null;
+}
+
+function writtenCount(
+  before: readonly SnapshotFile[] | undefined,
+  failure: AgentGenerationFailure | undefined,
+): number {
+  // The run row already holds the durable checkpoint count; this event field is
+  // informational only. Completed paths are the only verified count available
+  // without another read.
+  if (before && failure) return failure.partial.completedPaths.length;
+  return 0;
+}
+
 /** The project's files right now. A read failure is an empty list, not a crash. */
-async function readCurrentFiles(projectId: string): Promise<SnapshotFile[]> {
-  const current = await listFiles(projectId);
+async function readCurrentFiles(
+  projectId: string,
+  client: SupabaseClient | null,
+): Promise<SnapshotFile[]> {
+  const current = await listFiles(projectId, client);
   if (isStoreFailure(current)) return [];
   return current.data.map((file) => ({ path: file.path, content: file.content }));
 }
@@ -516,8 +1063,9 @@ async function readCurrentFiles(projectId: string): Promise<SnapshotFile[]> {
 async function ensureBaseline(
   input: RunAgentInput,
   files: readonly SnapshotFile[],
+  client: SupabaseClient | null,
 ): Promise<SnapshotSummary | null> {
-  const existing = await listSnapshots(input.projectId, { limit: 200 });
+  const existing = await listSnapshots(input.projectId, { limit: 200 }, client);
   if (!isSnapshotFailure(existing)) {
     const baseline = existing.data.find(
       (snapshot) => snapshot.runId === input.runId && snapshot.kind === "baseline",
@@ -525,14 +1073,17 @@ async function ensureBaseline(
     if (baseline) return baseline;
   }
 
-  const snapshot = await createSnapshot({
-    userId: input.userId,
-    projectId: input.projectId,
-    kind: "baseline",
-    description: `Before this run: ${input.prompt.slice(0, 200)}`,
-    files,
-    runId: input.runId,
-  });
+  const snapshot = await createSnapshot(
+    {
+      userId: input.userId,
+      projectId: input.projectId,
+      kind: "baseline",
+      description: `Before this run: ${input.prompt.slice(0, 200)}`,
+      files,
+      runId: input.runId,
+    },
+    client,
+  );
 
   if (isSnapshotFailure(snapshot)) {
     await insertMessage(
@@ -540,6 +1091,8 @@ async function ensureBaseline(
       "agent",
       "Warning: we could not save a recovery point for this run, so this change cannot be undone from the chat.",
       "error",
+      null,
+      client,
     );
     return null;
   }
@@ -549,19 +1102,23 @@ async function ensureBaseline(
 /** Capture a source state as a recovery point. */
 async function captureResult(
   input: RunAgentInput,
+  client: SupabaseClient | null,
   files: readonly SnapshotFile[],
   changedPaths: readonly string[],
   description: string,
 ): Promise<void> {
-  const snapshot = await createSnapshot({
-    userId: input.userId,
-    projectId: input.projectId,
-    kind: "result",
-    description,
-    files,
-    changedPaths,
-    runId: input.runId,
-  });
+  const snapshot = await createSnapshot(
+    {
+      userId: input.userId,
+      projectId: input.projectId,
+      kind: "result",
+      description,
+      files,
+      changedPaths,
+      runId: input.runId,
+    },
+    client,
+  );
 
   if (isSnapshotFailure(snapshot)) {
     console.error("[mavly] result snapshot failed:", snapshot.error);
@@ -579,9 +1136,10 @@ function parseManifest(value: unknown): AgentManifest | null {
     const file = entry as Record<string, unknown>;
     const path = sanitizeProjectPath(file.path);
     if (!path) return null;
-    const estimated = typeof file.estimatedBytes === "number" && Number.isFinite(file.estimatedBytes)
-      ? file.estimatedBytes
-      : 8_000;
+    const estimated =
+      typeof file.estimatedBytes === "number" && Number.isFinite(file.estimatedBytes)
+        ? file.estimatedBytes
+        : 8_000;
     files.push({ path, estimatedBytes: Math.max(0, Math.floor(estimated)) });
   }
 
@@ -594,7 +1152,10 @@ function parseManifest(value: unknown): AgentManifest | null {
   }
 
   return {
-    message: typeof record.message === "string" ? record.message.slice(0, 8_000) : "Updated the project.",
+    message:
+      typeof record.message === "string"
+        ? record.message.slice(0, 8_000)
+        : "Updated the project.",
     files,
     deletedPaths,
   };

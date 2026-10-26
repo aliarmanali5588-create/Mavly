@@ -74,6 +74,8 @@ import {
   type RunStage,
 } from "./store";
 import { runAgent } from "./run-agent";
+import { dispatchModeForProject } from "@/lib/generation/worker-config";
+import { emitGenerationEvent } from "@/lib/observability/events";
 import { imageGenerationLimiter, type ImageGenerationLimitDecision } from "./image-limits";
 import {
   getDeploymentRow,
@@ -142,7 +144,14 @@ function rebuildUnavailable(): NextResponse {
   );
 }
 
-function stageOf(run: RunRow | null): RunStage | null {
+/**
+ * The durable `retry_wait` stage is reported as `retrying`: the job is accepted
+ * and scheduled, and `nextAttemptAt` carries the exact truth. The public stage
+ * vocabulary does not grow a value that copied UI does not understand.
+ */
+type PublicRunStage = Exclude<RunStage, "retry_wait">;
+
+function stageOf(run: RunRow | null): PublicRunStage | null {
   if (!run) return null;
   if (
     run.stage === "completed" ||
@@ -153,21 +162,33 @@ function stageOf(run: RunRow | null): RunStage | null {
     return run.stage;
   }
   if (run.finished_at) return run.status === "done" ? "completed" : "failed";
-  if (run.stage && ACTIVE_STAGES.has(run.stage)) return run.stage;
+  if (run.stage === "retry_wait") return "retrying";
+  if (run.stage && ACTIVE_STAGES.has(run.stage)) return run.stage as PublicRunStage;
   return "queued";
 }
 
-/** A run is active only while it is unfinished, in an active stage, and heartbeating. */
+/**
+ * ⚠️ A WORKER-DISPATCHED JOB IS NEVER DECLARED STALE BY THE USER PATH. Its
+ * lease and the service-role recovery RPC are authoritative, and a queued
+ * worker job must survive a backlog. Only the inline `after()` path keeps the
+ * heartbeat heuristic, because it has no lease.
+ */
+function isWorkerDispatched(run: RunRow | null): boolean {
+  return run?.dispatch_mode === "worker";
+}
+
+/** A run is active while it is unfinished and in an accepted/running stage. */
 function isRunActive(run: RunRow | null): boolean {
   if (!run || run.finished_at) return false;
   const stage = stageOf(run);
   if (!stage || !ACTIVE_STAGES.has(stage)) return false;
+  if (isWorkerDispatched(run)) return true;
   const last = Date.parse(run.heartbeat_at ?? run.started_at);
   return Number.isFinite(last) && Date.now() - last < RUN_STALE_MS;
 }
 
 function isRunStale(run: RunRow | null): boolean {
-  if (!run || run.finished_at) return false;
+  if (!run || run.finished_at || isWorkerDispatched(run)) return false;
   const stage = stageOf(run);
   if (!stage || !ACTIVE_STAGES.has(stage)) return false;
   const last = Date.parse(run.heartbeat_at ?? run.started_at);
@@ -444,21 +465,39 @@ async function launchProjectResponse(userId: string, body: unknown): Promise<Nex
   }
 
   const model = resolveModel(stringOf(record.model), "app-generation");
+  const dispatchMode = dispatchModeForProject(created.data.project_id);
   const admission = await createGenerationJob({
     projectId: created.data.project_id,
     model: model.id,
     prompt,
     idempotencyKey: idempotencyKeyOf(record),
+    dispatchMode,
   });
   if (isStoreFailure(admission)) {
+    emitGenerationEvent("generation.rejected", {
+      projectId: created.data.project_id,
+      reason: admission.code ?? "admission_failed",
+      dispatchMode,
+    });
     await deleteProject(userId, created.data.project_id);
     return admissionFailure(admission);
   }
   if (admission.data.status === "rate_limited") {
+    emitGenerationEvent("generation.rejected", {
+      projectId: created.data.project_id,
+      reason: "rate_limited",
+      status: admission.data.scope,
+      dispatchMode,
+    });
     await deleteProject(userId, created.data.project_id);
     return rateLimited(admission.data.scope, admission.data.retryAfterSeconds);
   }
   if (admission.data.status === "conflict" || admission.data.status === "existing") {
+    emitGenerationEvent("generation.rejected", {
+      projectId: created.data.project_id,
+      reason: "conflict",
+      dispatchMode,
+    });
     await deleteProject(userId, created.data.project_id);
     return fail(409, "CONFLICT", "A generation is already active for this project.");
   }
@@ -471,15 +510,29 @@ async function launchProjectResponse(userId: string, body: unknown): Promise<Nex
     return fail(500, "UNKNOWN", "Could not start the agent.");
   }
 
-  after(() =>
-    runAgent({
-      userId,
-      projectId: created.data.project_id,
-      runId: run.id,
-      prompt,
-      requestedModel: stringOf(record.model),
-    }),
-  );
+  emitGenerationEvent("generation.accepted", {
+    traceId: run.trace_id,
+    runId: run.id,
+    projectId: created.data.project_id,
+    model: run.model,
+    dispatchMode: run.dispatch_mode,
+  });
+
+  /**
+   * ⚠️ A WORKER JOB IS NOT STARTED INLINE. The scheduler's worker tick claims
+   * it; starting `after()` here would create a second executor for one job.
+   */
+  if (run.dispatch_mode !== "worker") {
+    after(() =>
+      runAgent({
+        userId,
+        projectId: created.data.project_id,
+        runId: run.id,
+        prompt,
+        requestedModel: stringOf(record.model),
+      }),
+    );
+  }
 
   const data: ProjectLaunchResult = {
     projectId: created.data.project_id,
@@ -776,18 +829,38 @@ async function startAgentResponse(userId: string, projectId: string, body: unkno
   if (!prompt) return fail(400, "VALIDATION", "A prompt is required.");
 
   const model = resolveModel(stringOf(record.model), "app-generation");
+  const dispatchMode = dispatchModeForProject(projectId);
   const admission = await createGenerationJob({
     projectId,
     model: model.id,
     prompt,
     idempotencyKey: idempotencyKeyOf(record),
+    dispatchMode,
   });
-  if (isStoreFailure(admission)) return admissionFailure(admission);
+  if (isStoreFailure(admission)) {
+    emitGenerationEvent("generation.rejected", {
+      projectId,
+      reason: admission.code ?? "admission_failed",
+      dispatchMode,
+    });
+    return admissionFailure(admission);
+  }
 
   if (admission.data.status === "rate_limited") {
+    emitGenerationEvent("generation.rejected", {
+      projectId,
+      reason: "rate_limited",
+      status: admission.data.scope,
+      dispatchMode,
+    });
     return rateLimited(admission.data.scope, admission.data.retryAfterSeconds);
   }
   if (admission.data.status === "conflict") {
+    emitGenerationEvent("generation.rejected", {
+      projectId,
+      reason: "conflict",
+      dispatchMode,
+    });
     return fail(
       409,
       "CONFLICT",
@@ -819,15 +892,26 @@ async function startAgentResponse(userId: string, projectId: string, body: unkno
     return fail(500, "UNKNOWN", "Could not start the agent.");
   }
 
-  after(() =>
-    runAgent({
-      userId,
-      projectId,
-      runId: run.id,
-      prompt,
-      requestedModel: stringOf(record.model),
-    }),
-  );
+  emitGenerationEvent("generation.accepted", {
+    traceId: run.trace_id,
+    runId: run.id,
+    projectId,
+    model: run.model,
+    dispatchMode: run.dispatch_mode,
+  });
+
+  // A worker-dispatched run belongs to the scheduler's worker tick.
+  if (run.dispatch_mode !== "worker") {
+    after(() =>
+      runAgent({
+        userId,
+        projectId,
+        runId: run.id,
+        prompt,
+        requestedModel: stringOf(record.model),
+      }),
+    );
+  }
 
   return ok({ status: "init", stage: "queued", runId: run.id });
 }
@@ -864,16 +948,28 @@ async function resumeAgentResponse(userId: string, projectId: string): Promise<N
     return fail(409, "RUN_NOT_RESUMABLE", "That run cannot be resumed.");
   }
 
-  after(() =>
-    runAgent({
-      userId,
-      projectId,
-      runId: reopened.data!.id,
-      prompt: reopened.data!.prompt,
-      requestedModel: reopened.data!.model,
-      resume: true,
-    }),
-  );
+  emitGenerationEvent("generation.accepted", {
+    traceId: reopened.data.trace_id,
+    runId: reopened.data.id,
+    projectId,
+    model: reopened.data.model,
+    dispatchMode: reopened.data.dispatch_mode,
+    status: "resumed",
+  });
+
+  // A resumed worker run goes back to the durable queue; the scheduler claims it.
+  if (reopened.data.dispatch_mode !== "worker") {
+    after(() =>
+      runAgent({
+        userId,
+        projectId,
+        runId: reopened.data!.id,
+        prompt: reopened.data!.prompt,
+        requestedModel: reopened.data!.model,
+        resume: true,
+      }),
+    );
+  }
 
   return ok({ status: "init", stage: "queued", runId: reopened.data.id, resumed: true });
 }
@@ -884,13 +980,33 @@ async function cancelAgentResponse(userId: string, projectId: string): Promise<N
   if (!current.data) return fail(404, "RUN_NOT_FOUND", "There is no run to cancel.");
 
   const run = await interruptIfStale(current.data);
+
+  // A repeated cancel is idempotent and does not add a second message.
+  if (run?.stage === "cancelled") {
+    return ok({
+      runId: run.id,
+      status: "cancelled",
+      stage: "cancelled",
+      alreadyCancelled: true,
+    });
+  }
+
   if (!isRunActive(run)) {
     return fail(409, "RUN_NOT_ACTIVE", "That run is not in progress.");
   }
 
+  /**
+   * ⚠️ THE TERMINAL UPDATE IS THE CANCELLATION. `finished_at` also fences the
+   * worker out: a queued job is never claimed, and a running worker's next
+   * checkpoint fails. `cancellation_requested_at` records when the request
+   * landed, as distinct from when the worker observed it. An already-submitted
+   * provider request cannot be recalled; the run simply keeps none of its
+   * output.
+   */
   const cancelled = await finishRun(run.id, "cancelled", "The run was cancelled by the user.", {
     stage: "cancelled",
     errorCode: "RUN_CANCELLED",
+    cancellationRequestedAt: new Date().toISOString(),
   });
   if (!cancelled) {
     return fail(409, "RUN_NOT_ACTIVE", "That run finished before it could be cancelled.");
@@ -901,6 +1017,14 @@ async function cancelAgentResponse(userId: string, projectId: string): Promise<N
     "The run was cancelled. Completed batches were kept and the code was not rolled back automatically.",
     "error",
   );
+
+  emitGenerationEvent("generation.cancelled", {
+    traceId: run.trace_id,
+    runId: run.id,
+    projectId,
+    dispatchMode: run.dispatch_mode,
+    stage: "cancelled",
+  });
 
   return ok({ runId: run.id, status: "cancelled", stage: "cancelled" });
 }
@@ -928,11 +1052,12 @@ async function agentStatusResponse(projectId: string): Promise<NextResponse> {
         .map(toConversationMessage);
 
   const status = isRunActive(run) ? "init" : "done";
+  const stage = stageOf(run);
   const manifest = parseManifestFileCount(run.generation_manifest);
   return ok({
     projectId,
     status,
-    stage: stageOf(run),
+    stage,
     startedAt: run.started_at,
     finishedAt: run.finished_at,
     realtimeConversation,
@@ -946,7 +1071,16 @@ async function agentStatusResponse(projectId: string): Promise<NextResponse> {
     batchCount: run.batch_count,
     checkpointCount: run.checkpoint_count,
     attemptCount: run.attempt_count,
-    failureCode: run.error_code,
+    // A scheduled retry is not a failure. Its last error is still exposed as
+    // `lastErrorClass`, which is machine-readable and sanitized.
+    failureCode:
+      stage === "failed" || stage === "cancelled" ? run.error_code : null,
+    traceId: run.trace_id ?? undefined,
+    jobAttempt: run.job_attempt,
+    maxJobAttempts: run.max_job_attempts,
+    nextAttemptAt: run.next_attempt_at,
+    lastErrorClass: run.last_error_class,
+    dispatchMode: run.dispatch_mode,
     model: run.model_used ?? run.model ?? undefined,
     usage: {
       promptTokens: run.prompt_tokens,
@@ -1154,7 +1288,13 @@ function activityOutcomeOf(
   if (stage === "cancelled") return "cancelled";
   if (stage === "interrupted") return "interrupted";
   if (stage === "failed") return "failed";
-  if (stage === "queued" || stage === "validating" || stage === "generating" || stage === "retrying") {
+  if (
+    stage === "queued" ||
+    stage === "validating" ||
+    stage === "generating" ||
+    stage === "retrying" ||
+    stage === "retry_wait"
+  ) {
     return stage === "queued" ? "queued" : "active";
   }
   return status === "done" ? "completed" : status === "error" ? "failed" : "queued";

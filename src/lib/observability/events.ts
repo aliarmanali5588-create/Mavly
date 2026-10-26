@@ -1,0 +1,176 @@
+/**
+ * ═══ STRUCTURED GENERATION EVENTS ════════════════════════════════════════════
+ *
+ * One JSON object per line, with an allowlisted set of fields. There is no
+ * metrics vendor and no database event table: these lines are what the
+ * operator's log pipeline receives, and they are the source for the runbook's
+ * thresholds.
+ *
+ * ⚠️ NEVER LOG THE PROMPT, GENERATED CODE, A CREDENTIAL, AN EMAIL OR A PROVIDER
+ * RESPONSE BODY. This module is the boundary that enforces that: only known
+ * event names and scalar allowlisted fields are emitted, and every string is
+ * redacted before it is serialized.
+ */
+
+import { isTraceId, isUuid, redactSensitiveText } from "./correlation";
+
+export const GENERATION_EVENTS = [
+  "generation.accepted",
+  "generation.rejected",
+  "generation.claimed",
+  "generation.claim_failed",
+  "generation.heartbeat_failed",
+  "generation.checkpoint",
+  "generation.retry_scheduled",
+  "generation.lease_recovered",
+  "generation.lease_lost",
+  "generation.completed",
+  "generation.failed",
+  "generation.cancelled",
+  "generation.dead_letter",
+  "generation.worker_empty",
+  "generation.worker_unavailable",
+  "generation.worker_error",
+] as const;
+
+export type GenerationEventName = (typeof GENERATION_EVENTS)[number];
+
+/** Every field a log line may carry. Anything else is dropped. */
+const ALLOWED_FIELDS = new Set([
+  "traceId",
+  "runId",
+  "projectId",
+  "workerId",
+  "stage",
+  "status",
+  "dispatchMode",
+  "attempt",
+  "maxAttempts",
+  "errorClass",
+  "reason",
+  "durationMs",
+  "queueLagMs",
+  "retryAfterSeconds",
+  "filesWritten",
+  "checkpoints",
+  "recovered",
+  "model",
+  "promptTokens",
+  "completionTokens",
+  "costUsd",
+  "costKnown",
+]);
+
+const NUMERIC_FIELDS = new Set([
+  "attempt",
+  "maxAttempts",
+  "durationMs",
+  "queueLagMs",
+  "retryAfterSeconds",
+  "filesWritten",
+  "checkpoints",
+  "recovered",
+  "promptTokens",
+  "completionTokens",
+  "costUsd",
+]);
+
+const BOOLEAN_FIELDS = new Set(["costKnown"]);
+
+type EmitValue = string | number | boolean | null | undefined;
+
+function sanitize(name: string, value: EmitValue): string | number | boolean | null | undefined {
+  if (value === undefined || value === null) return undefined;
+
+  if (NUMERIC_FIELDS.has(name)) {
+    if (typeof value !== "number" || !Number.isFinite(value) || value < 0) return undefined;
+    return Math.round(value * 1_000_000) / 1_000_000;
+  }
+  if (BOOLEAN_FIELDS.has(name)) {
+    return typeof value === "boolean" ? value : undefined;
+  }
+  if (typeof value !== "string") return undefined;
+
+  if (name === "runId") return isUuid(value) ? value : undefined;
+  if (name === "traceId") return isTraceId(value) ? value : undefined;
+  if (name === "projectId") {
+    return /^[a-z0-9][a-z0-9-]{0,62}$/.test(value) ? value : undefined;
+  }
+  if (name === "workerId") {
+    return /^[A-Za-z0-9._:-]{1,120}$/.test(value) ? value : undefined;
+  }
+  if (
+    name === "stage" ||
+    name === "status" ||
+    name === "dispatchMode" ||
+    name === "errorClass" ||
+    name === "reason"
+  ) {
+    return /^[A-Za-z0-9._:-]{1,80}$/.test(value) ? value : undefined;
+  }
+  if (name === "model") {
+    return /^[A-Za-z0-9._:/-]{1,120}$/.test(value) ? value : undefined;
+  }
+  return redactSensitiveText(value, 200) || undefined;
+}
+
+export interface GenerationEventFields {
+  traceId?: string | null;
+  runId?: string | null;
+  projectId?: string | null;
+  workerId?: string | null;
+  stage?: string | null;
+  status?: string | null;
+  dispatchMode?: string | null;
+  attempt?: number | null;
+  maxAttempts?: number | null;
+  errorClass?: string | null;
+  reason?: string | null;
+  durationMs?: number | null;
+  queueLagMs?: number | null;
+  retryAfterSeconds?: number | null;
+  filesWritten?: number | null;
+  checkpoints?: number | null;
+  recovered?: number | null;
+  model?: string | null;
+  promptTokens?: number | null;
+  completionTokens?: number | null;
+  costUsd?: number | null;
+  costKnown?: boolean | null;
+}
+
+/**
+ * Emit one structured line. Emitting NEVER throws: a logging failure must not
+ * fail a generation. Unknown/oversized fields are dropped, not truncated into
+ * something misleading.
+ */
+export function emitGenerationEvent(
+  event: GenerationEventName,
+  fields: GenerationEventFields = {},
+): void {
+  if (!(GENERATION_EVENTS as readonly string[]).includes(event)) return;
+
+  const body: Record<string, string | number | boolean> = {
+    event,
+    at: new Date().toISOString(),
+  };
+
+  for (const [name, raw] of Object.entries(fields)) {
+    if (!ALLOWED_FIELDS.has(name)) continue;
+    const value = sanitize(name, raw as EmitValue);
+    if (value !== undefined) body[name] = value;
+  }
+
+  const line = JSON.stringify(body);
+  try {
+    if (event === "generation.failed" || event === "generation.dead_letter" || event === "generation.worker_error") {
+      console.error(`[generation] ${line}`);
+    } else if (event === "generation.retry_scheduled" || event === "generation.lease_lost" || event === "generation.heartbeat_failed") {
+      console.warn(`[generation] ${line}`);
+    } else {
+      console.info(`[generation] ${line}`);
+    }
+  } catch {
+    // A console transport failure is not a generation failure.
+  }
+}

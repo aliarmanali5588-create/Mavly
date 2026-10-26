@@ -67,14 +67,17 @@ jobs, `03_ai_builder.sql` before using the builder,
 `14_shared_hosting.sql` before deploying this build (it is additive, but the deployment
 mapping now reads `active_version_id`), then `15_shared_hosting_attempt_state.sql` before
 enabling shared tenant hosting (it separates the live active version from the latest publish
-attempt and adds the publish preflight),
+attempt and adds the publish preflight), then `16_durable_generation_worker.sql` before
+enabling the durable generation worker (it adds queue leases, retries, recovery and the
+schema preflight; additive and non-destructive),
 `08_figma_integration.sql`
 before using Figma, and `11_project_secrets.sql` before using project secrets. Project-secret encryption also
 requires the server-only `MAVLY_PROJECT_SECRETS_ENCRYPTION_KEY` (32 random bytes,
 base64-encoded); without it create/update fail closed. `npm test` covers the pure
-auth/redirect/ownership/scope modules and static route invariants. It does not exercise a
-real Supabase session, Groq, the Supabase OAuth connection, Vercel publishing, or a
-generated app.
+auth/redirect/ownership/scope modules, the generation state/lease/claim/observability
+modules, and static route/migration invariants. It does not exercise a
+real Supabase session, Groq, a live worker/queue, the Supabase OAuth connection, Vercel
+publishing, or a generated app.
 
 ---
 
@@ -135,7 +138,7 @@ generated app.
   `supabase_integrations`; single-use OAuth state lives in `supabase_oauth_states`.
   Database browsing, SQL, schema changes and per-project linking are not implemented.
 - **Generation jobs are durable per run.** `project_runs.stage` records
-  `queued/validating/generating/retrying/completed/failed/cancelled/interrupted`;
+  `queued/validating/generating/retrying/retry_wait/completed/failed/cancelled/interrupted`;
   `project_run_batches` stores a validated batch and per-path SHA-256 hashes. A run plans a
   manifest, generates bounded batches and checkpoints each one; `finish_reason: "length"`
   is never success, and a resume skips only paths whose current content still matches.
@@ -143,8 +146,28 @@ generated app.
   user, 8 global, serialized with a Postgres advisory lock; a trigger re-checks the
   limits on resume). `agent/resume` and `agent/stop` are user-authenticated. Run,
   manifest and heartbeat writes carry the run's `claimed_at` lease (checkpoints are
-  written between lease checks), so a resumed run cannot be finalized by a stale worker. `after()` is still opportunistic: there is no
-  autonomous worker, so an external worker would need a service-role design and review.
+  written between lease checks), so a resumed run cannot be finalized by a stale worker.
+- **The durable generation worker is implemented but off by default.** It is enabled only
+  when `MAVLY_GENERATION_WORKER_ENABLED` is truthy AND
+  `MAVLY_GENERATION_WORKER_SECRET` (≥32 characters),
+  `MAVLY_GENERATION_WORKER_PROJECTS` (an explicit cohort, never `*` or empty),
+  `SUPABASE_SERVICE_ROLE_KEY` and `NEXT_PUBLIC_SUPABASE_URL` are all present. Admission
+  records `dispatch_mode` before the run exists: cohort projects are `worker`, everything
+  else (and every misconfiguration) keeps the existing `after()` inline path, so the two
+  mechanisms never compete for the same job. The scheduler calls
+  `POST|GET /api/generation/worker` with `Authorization: Bearer <secret>`; one invocation
+  recovers expired leases, claims one ready job with `FOR UPDATE SKIP LOCKED`, re-verifies
+  the owner and cohort with a service-role client, executes the unchanged generation
+  pipeline under a 420 s fenced `lease_token`, and renews it every 120 s. Retries reuse
+  only verified checkpoints and back off 15 s→300 s with jitter; exhaustion dead-letters
+  the run without deleting it. Expired leases become retries or dead letters, never
+  duplicates. Cancellation is persisted and fences the worker at safe checkpoints; a
+  provider request already sent cannot be undone. **The service-role client is confined to
+  `src/lib/supabase/worker.ts`, the worker orchestrator and its route. RLS is unchanged,
+  and the authenticated role's UPDATE grant explicitly excludes all worker-owned columns.**
+  There is no built-in scheduler; see `docs/runbooks/generation-worker.md` for invocation,
+  alerting, pause/drain, safe rollback and capacity limits. Do not raise the 2/user or
+  8/global admission caps to claim support for 1,000 concurrent users.
 - **Restore points are implemented.** Every completed AI execution that changes the
   project's source leaves a durable snapshot (`project_snapshots` +
   `project_snapshot_files`). The chat renders a **Restore Code** action on that execution,
@@ -245,11 +268,13 @@ browser ── src/lib/vcaas.ts (client catalog, same-origin only)
    ├── /api/vcaas/[...path]        auth → scope → ownership → handler or 503
    │      ├── src/lib/mavly/api.ts       project/agent/file handlers
    │      ├── src/lib/mavly/store.ts     Supabase RLS-scoped persistence
-   │      ├── src/lib/mavly/run-agent.ts background run after the response
+   │      ├── src/lib/mavly/run-agent.ts inline run after the response, or worker run
    │      │      └── src/lib/ai/agent.ts → src/lib/ai/provider.ts → src/lib/ai/groq.ts
    │      └── src/lib/deployments/*      opt-in static publish/unpublish
    │             ├── store.ts            project_deployments (RLS)
    │             └── service.ts → src/lib/vercel/provider.ts → api.vercel.com
+   ├── /api/generation/worker      Bearer secret → service-role worker tick
+   │      └── src/lib/generation/worker.ts → run-agent (worker mode)
    ├── /api/vcaas/source-code/{id} auth + ownership → ZIP from project_files
    ├── /api/preview/{id}/…         auth + ownership → sandboxed static site
    ├── /api/vcaas/upload|env|git-diff
@@ -279,7 +304,17 @@ paths with `src/lib/vcaas-scope.ts`, so unknown shapes are refused before any wo
 | `src/app/api/vcaas/[...path]/route.ts` | Auth → scope → ownership → `handleMavlyVcaasRequest` or 503. |
 | `src/lib/mavly/api.ts` | Implemented project/agent/file handlers and response mapping. |
 | `src/lib/mavly/store.ts` | Project, file, message and run persistence through the caller's client. |
-| `src/lib/mavly/run-agent.ts` | Background run: claim → baseline → checkpointed batches → complete/fail; cooperative cancel. |
+| `src/lib/mavly/run-agent.ts` | Generation execution in both modes: inline claim, or worker execution under a fenced lease; baseline → checkpointed atomic batches → complete/fail/retry; cooperative cancellation. |
+| `src/lib/generation/state-machine.ts` | Pure stage set/transitions and conservative failure classification with redaction. |
+| `src/lib/generation/leases.ts` | Lease bounds, retry backoff, timing-safe secret comparison and worker-id sanitation. |
+| `src/lib/generation/worker-config.ts` | Opt-in worker prerequisites, cohort parsing and the admission dispatch mode. |
+| `src/lib/generation/verification.ts` | Claim parsing plus owner/cohort re-verification for the service-role worker. |
+| `src/lib/generation/worker.ts` | One bounded worker tick: preflight → recover → claim → verify → execute → renew. |
+| `src/app/api/generation/worker/route.ts` | Internal worker invocation endpoint; bearer secret, no user session, 404 when disabled. |
+| `src/lib/supabase/worker.ts` | The confined service-role client factory (worker only). |
+| `src/lib/observability/` | Correlation ids, structured generation events, redaction and reported-cost accounting. |
+| `supabase/migrations/16_durable_generation_worker.sql` | Queue columns/constraints/indexes, claim/lease/retry/recovery/resume RPCs, least-privilege grants and the worker schema marker. |
+| `docs/runbooks/generation-worker.md` | Operator runbook for the durable worker. |
 | `src/lib/ai/retry.ts` | Bounded exponential retry, jitter and `Retry-After` parsing. |
 | `src/lib/mavly/checkpoints.ts` | Pure verification of resumed batch hashes. |
 | `supabase/migrations/10_generation_jobs.sql` | Run lifecycle columns, batch checkpoints, admission RPC and RLS. |
@@ -329,9 +364,13 @@ paths with `src/lib/vcaas-scope.ts`, so unknown shapes are refused before any wo
    the same non-enumerating 403. Lookup errors fail closed with 500.
 3. **No secret reaches the browser.** Only `NEXT_PUBLIC_SUPABASE_URL` and
    `NEXT_PUBLIC_SUPABASE_ANON_KEY` are public. `GROQ_API_KEY`,
-   `OPENROUTER_API_KEY` (currently used by images) and `VERCEL_API_TOKEN` are server-only
+   `OPENROUTER_API_KEY` (currently used by images), `VERCEL_API_TOKEN`,
+   `SUPABASE_SERVICE_ROLE_KEY`, `MAVLY_GENERATION_WORKER_SECRET` and the worker's
+   server-only configuration are server-only
    and must never be renamed with a `NEXT_PUBLIC_`
-   prefix. Never commit `.env*` files.
+   prefix. Never commit `.env*` files. The service-role client is confined to
+   `src/lib/supabase/worker.ts`, the worker orchestrator and `/api/generation/worker`;
+   nothing under `components/` or the browser catalog may import it.
 4. **Any future server route that fetches a client-supplied URL is an SSRF hole until it
    calls `publicUrlRejectionReason` (async, resolves DNS) from `src/lib/safe-url.ts`, with
    `redirect: "error"` and a timeout.** The synchronous `urlRejectionReason` is for IP

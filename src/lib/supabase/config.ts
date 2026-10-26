@@ -18,9 +18,9 @@
  * Vercel the project has to be REBUILT (a redeploy without a cache bust) —
  * saving the variable alone changes nothing that is already deployed.
  *
- * ⚠️ THE SERVICE-ROLE KEY IS DELIBERATELY NOT READ HERE. This app needs no
- * privileged Supabase access, and a key that only the server can read has no
- * business in a module a client bundle can pull in.
+ * ⚠️ THE SERVICE-ROLE KEY IS DELIBERATELY NOT READ HERE. Its only reader is
+ * `src/lib/supabase/worker.ts`, which must never be imported by a client
+ * bundle or a page; no key belongs in a module a client can pull in.
  *
  * ⚠️ THE APP FAILS CLOSED WITHOUT THESE. Authentication is not optional for the
  * builder: with no keys there is no way to prove who the visitor is, so `/dashboard`

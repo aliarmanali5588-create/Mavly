@@ -1,7 +1,8 @@
 # Mavly — Clean Backend Baseline
 
-**Status:** local AI builder, Phase 1 user-owned Supabase connection, and an off-by-default
-static-publishing path implemented; the rest of the platform backend remains unavailable.
+**Status:** local AI builder, Phase 1 user-owned Supabase connection, an off-by-default
+static-publishing path, and an off-by-default durable generation worker implemented; the
+rest of the platform backend remains unavailable.
 **Scope:** the Totalum VCaaS integration stays removed. Supabase authentication, OAuth,
 sessions, project ownership and RLS are preserved. Groq is the active server-only
 website/code-generation provider. The existing OpenRouter chat client, model catalog and
@@ -25,7 +26,8 @@ revocation or database mutation was performed while preparing this document.
 | API session gate | `/api/*` returns JSON `401 UNAUTHENTICATED` without a verified session. |
 | Project ownership | `public.projects`, RLS, `registerProjectOwnership`, `checkProjectAccess`, `enforceProjectScope`. |
 | Project CRUD | Create/list/launch/get/update/delete, stored in Supabase. |
-| AI generation | `src/lib/mavly/run-agent.ts` → `src/lib/ai/agent.ts` → `src/lib/ai/provider.ts` → `src/lib/ai/groq.ts`. |
+| AI generation | `src/lib/mavly/run-agent.ts` → `src/lib/ai/agent.ts` → `src/lib/ai/provider.ts` → `src/lib/ai/groq.ts`. The default execution path is still the inline `after()` run; a durable worker is available opt-in per project cohort. |
+| Durable generation worker (opt-in) | Off unless `MAVLY_GENERATION_WORKER_ENABLED`, a ≥32-char `MAVLY_GENERATION_WORKER_SECRET`, an explicit `MAVLY_GENERATION_WORKER_PROJECTS` cohort, `SUPABASE_SERVICE_ROLE_KEY` and the Supabase URL are all configured. Admission records `dispatch_mode`; only worker-dispatched runs are claimed. An operator-supplied scheduler calls `/api/generation/worker`, which executes one job per tick under a fenced lease, renews it, recovers expired leases into bounded retries or dead letters, and never deletes accepted work. Uncohort projects remain inline. See `docs/runbooks/generation-worker.md`. |
 | Generation preview | New-project plans always include `preview.html`; it is generated in its own batch. Batch parsing accepts only requested paths. Progress stages use durable run state, manifest/checkpoints, and the static-preview resolver; the UI uses an indeterminate bar rather than estimated completion percentages. |
 | Preserved provider | `src/lib/ai/openrouter.ts` and its model catalog remain available but are not used by active website-generation requests. |
 | Conversation and runs | Persisted in `project_messages` and `project_runs`, polled by the workspace. |
@@ -89,9 +91,32 @@ address can be published again. Shared `mavly.xyz` DNS/wildcard records are neve
   idempotency, one active run per project, 2 per user, 8 global, serialized by a Postgres
   advisory lock).
 
-Apply migration `10` before deploying code that reads these columns. There is still no
-autonomous worker: `after()` starts the run opportunistically, and the user-authenticated
-`agent/resume` endpoint reopens a failed/interrupted run from its verified checkpoints.
+Apply migration `10` before deploying code that reads these columns. By default the inline
+`after()` path starts the run opportunistically; the user-authenticated `agent/resume`
+endpoint reopens a failed/interrupted run from its verified checkpoints.
+
+`supabase/migrations/16_durable_generation_worker.sql` adds the opt-in durable worker:
+
+- queue/lease/retry columns on `project_runs` (`lease_token`, `lease_expires_at`,
+  `job_attempt`, `max_job_attempts`, `next_attempt_at`, `enqueued_at`, `dispatched_at`,
+  `dead_lettered_at`, `worker_id`, `trace_id`, `dispatch_mode`, sanitized error class and
+  summary, reported cost);
+- a `retry_wait` stage that is ready but not executing;
+- indexes for the ready queue, expired leases, dead letters, trace lookup and worker
+  heartbeat;
+- `claim_generation_job` (`FOR UPDATE SKIP LOCKED`, service-role only), lease renewal,
+  bounded retry scheduling, expired-lease recovery and an owner-only resume RPC;
+- a column-level UPDATE grant for `authenticated` that excludes every worker-owned field,
+  plus a `generation_worker_schema_version()` preflight (returns 16).
+
+The admission RPC gains a `p_dispatch_mode` argument, so a run is either inline or worker
+before it exists and the two mechanisms never compete. Apply migration `16` after `10`
+(and after `14`/`15` when shared hosting is used) and before enabling the worker.
+
+The app still uses the caller's own RLS-scoped Supabase client everywhere except the
+durable worker. `SUPABASE_SERVICE_ROLE_KEY` is server-only and is confined to
+`src/lib/supabase/worker.ts`, the worker orchestrator and `/api/generation/worker`; the
+worker re-verifies the project owner and cohort itself. RLS is unchanged.
 
 `supabase/migrations/04_supabase_integration.sql` adds:
 
@@ -100,8 +125,8 @@ autonomous worker: `after()` starts the run opportunistically, and the user-auth
 - `supabase_oauth_states`, short-lived hashed state with an encrypted PKCE verifier;
 - RLS policies for both tables and grants for `authenticated` only.
 
-The caller's own RLS-scoped Supabase client is used everywhere. There is no service-role
-key.
+The user-owned Supabase connection continues to use the caller's RLS-scoped client; the
+service-role exception described above is limited to the generation worker.
 
 ### API paths
 
@@ -299,7 +324,7 @@ the explicit 503. No mock data, fabricated id or fake success is returned.
 | Versions / visual edits | versions, Git diff, `/api/visual-edit/.../apply` |
 | Data platform | database browsing, SQL execution, schema changes, migrations, backups, backup download |
 | Integrations | customer-owned domains/DNS, environment files. Project secrets are stored and managed (see above) but not injected into generated sites. |
-| Account/product | usage, credits, payments, cron, mobile builds, visitor analytics, webhooks |
+| Account/product | usage, credits, payments, an included scheduler (the durable worker requires an operator-provided one), mobile builds, visitor analytics, webhooks |
 | Project transfer | export, import, duplicate |
 
 Those routes return:
@@ -455,7 +480,8 @@ The Totalum client `src/lib/vcaas-server.ts` remains deleted and must not be rec
 - The Supabase connection is account-level. It is not linked to individual Mavly
   `projects.project_id` rows, and it grants no SQL/schema/data access in Phase 1.
 - The workspace More view supports project metadata editing, project secrets, the derived
-  Mavly address and real generation activity. API keys, cron, mobile builds, runtime logs,
+  Mavly address and real generation activity. API keys, an included scheduler, mobile
+  builds, runtime logs,
   visitor analytics and custom domains have no local backend and render an explicit
   unavailable state instead of calling the former platform routes. Usage and payments
   remain deferred with the credits/billing scope.

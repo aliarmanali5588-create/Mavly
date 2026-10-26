@@ -43,6 +43,7 @@ audits listed at the end of this file; it is not a runtime dependency.
 | Figma design reference | Personal access token validated with Figma, encrypted per project, and a bounded design summary injected into generation |
 | Publishing (opt-in, disabled by default) | Static files → deterministic Vercel project, published at `<project-id>.mavly.xyz`; framework builds are not run. Deployment and domain state persisted and polled. **Unpublish** removes the Mavly project domain and production deployments, preserving the project/files for republishing. Requires `MAVLY_VERCEL_DEPLOYMENTS_ENABLED=1`, `VERCEL_API_TOKEN` and operator-configured `mavly.xyz` DNS/SSL. See [`MAVLY_VERCEL_DEPLOYMENTS.md`](MAVLY_VERCEL_DEPLOYMENTS.md). |
 | Shared tenant hosting (opt-in, off by default) | Immutable published versions stored in Supabase and served at `<project-id>.mavly.xyz` by Mavly's own tenant runtime. Enabled per project cohort with `MAVLY_HOSTING_MODE=shared` + `MAVLY_SHARED_HOSTING_PROJECTS`; the legacy Vercel path remains the default. See [`MAVLY_SHARED_HOSTING.md`](MAVLY_SHARED_HOSTING.md). |
+| Durable generation worker (opt-in, off by default) | A project-cohort worker claims durable runs with `FOR UPDATE SKIP LOCKED`, executes them under a fenced lease, renews the lease, recovers crashed/expired jobs into bounded retries or dead letters, and never deletes accepted work. Requires `MAVLY_GENERATION_WORKER_ENABLED`, a ≥32-char secret, an explicit cohort, `SUPABASE_SERVICE_ROLE_KEY` and an operator-supplied scheduler. Uncohort projects keep the inline `after()` path. See [`docs/runbooks/generation-worker.md`](docs/runbooks/generation-worker.md). |
 | `/api/config` | `200 { "ok": true, "data": { "configured": false } }` |
 | Visual shell | Dashboard, workspace, chat, composer, dialogs and preview frame render |
 
@@ -53,8 +54,9 @@ files, not as a running service.
 
 Uploads/attachments, rebuilds, database browsing, schema changes, SQL execution,
 customer-owned custom domains, runtime logs, visitor analytics, mobile builds, payments,
-cron, usage, credits, versions and visual edits do not have a local
-implementation. Secrets are stored and managed, but are not injected into generated
+an included scheduler, usage, credits, versions and visual edits do not have a local
+implementation. The durable generation worker is implemented but needs an operator-provided
+scheduler; without one, worker-dispatched runs stay queued. Secrets are stored and managed, but are not injected into generated
 sites (the preview and published output are static). The workspace still offers real
 project metadata editing and generation
 activity; unsupported settings sections state that they are unavailable instead of
@@ -94,6 +96,8 @@ browser ── src/lib/vcaas.ts (client catalog, same-origin only)
    │      └── src/lib/deployments/*      opt-in publish/unpublish orchestration
    │             ├── store.ts            project_deployments (RLS)
    │             └── service.ts → src/lib/vercel/provider.ts → api.vercel.com
+   ├── /api/generation/worker      Bearer secret → service-role worker tick
+   │      └── src/lib/generation/worker.ts → run-agent (worker mode)
    ├── /api/vcaas/source-code/{id} auth + ownership → generated ZIP
    ├── /api/preview/{id}/…         auth + ownership → sandboxed static site
    ├── /api/vcaas/upload|env|git-diff
@@ -114,12 +118,17 @@ browser ── src/lib/vcaas.ts (client catalog, same-origin only)
   non-enumerating 403; lookup failures fail closed. Child tables inherit that ownership
   through RLS.
 - **Generation:** `POST …/agent/start` atomically admits one run per project (and bounded
-  per-user/global concurrency) through `create_generation_job`. `after()` then runs the
-  agent: plan a manifest, request small file batches, validate every path and size, and
-  checkpoint each batch before starting the next. A truncated response is never written; a
+  per-user/global concurrency) through `create_generation_job`. By default `after()` then
+  runs the agent: plan a manifest, request small file batches, validate every path and size,
+  and checkpoint each batch before starting the next. A truncated response is never written; a
   failed/interrupted run can be resumed from its verified checkpoints with
-  `POST …/agent/resume`, and `POST …/agent/stop` cooperatively cancels it. See
-  [Generation reliability](#generation-reliability).
+  `POST …/agent/resume`, and `POST …/agent/stop` cooperatively cancels it. When the durable
+  worker is enabled for a project cohort, admission records `dispatch_mode = 'worker'`
+  instead and an external scheduler invokes `/api/generation/worker`; that path adds a
+  fenced lease, heartbeat renewal, expired-lease recovery, bounded retries and dead letters
+  while reusing the same generator and checkpoints. See
+  [Generation reliability](#generation-reliability) and the
+  [worker runbook](docs/runbooks/generation-worker.md).
 - **Publishing:** disabled unless `MAVLY_VERCEL_DEPLOYMENTS_ENABLED` is one of
   `1`/`true`/`yes`/`on` and `VERCEL_API_TOKEN` is set. The server uploads the static
   entry point (`preview.html`, `index.html`, or `public/index.html`) and its local assets
@@ -175,11 +184,13 @@ The invariants are:
 4. Smoke-test: start a run, verify `agent/status.stage` advances and batches appear; stop
    one and verify `cancelled`; interrupt one and verify `interrupted` then `agent/resume`.
 
-**No autonomous worker exists.** `after()` is opportunistic and a serverless instance can
-be terminated after the response. The durable row, checkpoints and user-authenticated
-resume endpoint make recovery possible, but they do not by themselves restart a run. A
-production worker that polls unfinished runs would need a service-role design and a
-security review; this repository intentionally has no service-role key.
+**The inline path has no autonomous worker.** `after()` is opportunistic and a serverless
+instance can be terminated after the response. The durable row, checkpoints and
+user-authenticated resume endpoint make recovery possible, but they do not by themselves
+restart an inline run. The opt-in durable worker (`docs/runbooks/generation-worker.md`)
+executes worker-dispatched runs under a lease and recovers crashed jobs, but it requires an
+operator-provided scheduler; no scheduler is included. The service-role key it needs is
+server-only and confined to the worker code path.
 
 ### Metric definitions
 
@@ -244,11 +255,14 @@ VERCEL_PROJECT_PREFIX=mavly
 Only the two `NEXT_PUBLIC_SUPABASE_*` values and `NEXT_PUBLIC_APP_URL` are public.
 `GROQ_API_KEY`, `OPENROUTER_API_KEY` (used by images; preserved chat client only if
 explicitly reactivated), the OAuth client secrets,
-`MAVLY_INTEGRATION_ENCRYPTION_KEY`, `MAVLY_PROJECT_SECRETS_ENCRYPTION_KEY` and
-`VERCEL_API_TOKEN` are server-only: never prefix them with `NEXT_PUBLIC_`, never commit
-them, and configure provider usage/spend limits in Groq and OpenRouter as appropriate.
-Groq's selected model is metered, not free; confirm the current price and organization
-limits in Groq's account console. Never put a service-role key in this app. The
+`MAVLY_INTEGRATION_ENCRYPTION_KEY`, `MAVLY_PROJECT_SECRETS_ENCRYPTION_KEY`,
+`VERCEL_API_TOKEN`, `MAVLY_GENERATION_WORKER_SECRET` and
+`SUPABASE_SERVICE_ROLE_KEY` are server-only: never prefix them with `NEXT_PUBLIC_`, never
+commit them, and configure provider usage/spend limits in Groq and OpenRouter as
+appropriate. The service-role key is required only when the opt-in durable worker is
+enabled, and is confined to `src/lib/supabase/worker.ts`, the worker orchestrator and
+`/api/generation/worker`. Groq's selected model is metered, not free; confirm the current
+price and organization limits in Groq's account console. The
 project-secrets key must not be stored in the database: losing it makes existing saved
 values unrecoverable.
 

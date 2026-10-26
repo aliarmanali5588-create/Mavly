@@ -23,6 +23,8 @@
 
 import { createHash } from "node:crypto";
 
+import type { SupabaseClient } from "@supabase/supabase-js";
+
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 /** One file of a project, as stored in `project_files` and in a snapshot. */
@@ -207,8 +209,9 @@ export interface CreateSnapshotInput {
  */
 export async function createSnapshot(
   input: CreateSnapshotInput,
+  injected?: SupabaseClient | null,
 ): Promise<SnapshotResult<SnapshotSummary>> {
-  const supabase = await createSupabaseServerClient();
+  const supabase = injected ?? (await createSupabaseServerClient());
   if (!supabase) {
     return { ok: false, error: "Supabase is not configured", code: "store_unavailable" };
   }
@@ -279,8 +282,9 @@ export async function createSnapshot(
 export async function listSnapshots(
   projectId: string,
   options: { limit?: number } = {},
+  injected?: SupabaseClient | null,
 ): Promise<SnapshotResult<SnapshotSummary[]>> {
-  const supabase = await createSupabaseServerClient();
+  const supabase = injected ?? (await createSupabaseServerClient());
   if (!supabase) {
     return { ok: false, error: "Supabase is not configured", code: "store_unavailable" };
   }

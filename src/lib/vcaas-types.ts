@@ -482,6 +482,17 @@ export interface AgentStatus {
   checkpointCount?: number;
   attemptCount?: number;
   failureCode?: string | null;
+  /** Non-secret correlation id for this run; also appears in worker log events. */
+  traceId?: string;
+  /** Durable job attempts (claims), distinct from provider `attemptCount`. */
+  jobAttempt?: number;
+  maxJobAttempts?: number;
+  /** Earliest claim time of a scheduled retry; `null` when none is pending. */
+  nextAttemptAt?: string | null;
+  /** Sanitized failure class of the latest attempt; safe to show or log. */
+  lastErrorClass?: string | null;
+  /** `inline` = request `after()` hook; `worker` = durable scheduler claim. */
+  dispatchMode?: "inline" | "worker";
   /** The model that actually served the most recent provider call. */
   model?: string;
   usage?: {

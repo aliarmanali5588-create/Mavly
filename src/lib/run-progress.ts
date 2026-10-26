@@ -71,6 +71,8 @@ export type DurableGenerationStage =
   | "validating"
   | "generating"
   | "retrying"
+  /** A scheduled retry: accepted and durable, with no worker owning it yet. */
+  | "retry_wait"
   | "completed"
   | "failed"
   | "cancelled"
@@ -100,6 +102,7 @@ export function projectGenerationProgressStage(
         retrying: false,
       };
     case "retrying":
+    case "retry_wait":
       return {
         stage: hasManifest
           ? allPathsCheckpointed && previewReady

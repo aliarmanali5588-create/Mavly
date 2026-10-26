@@ -158,6 +158,17 @@ test("retry, failure, interruption, cancellation, and completion remain terminal
   ]);
 });
 
+test("a scheduled durable retry is reported as retrying, not as a new queue entry", () => {
+  assert.deepEqual(projectGenerationProgressStage("retry_wait", true, true, false), {
+    stage: "writing-files",
+    retrying: true,
+  });
+  assert.deepEqual(projectGenerationProgressStage("retry_wait", false, false, false), {
+    stage: "planning",
+    retrying: true,
+  });
+});
+
 test("progress sanitization remains compatible with responses predating preview readiness", () => {
   const progress = sanitizeRunProgress({
     runId: "d2719f9b-b17a-4c9d-9f50-10f1f26a0149",
