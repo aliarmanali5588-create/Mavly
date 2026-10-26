@@ -6,6 +6,8 @@
  *   MAVLY_VERIFICATION_SANDBOX_ENABLED   1 / true / yes / on
  *   MAVLY_VERIFICATION_SANDBOX_PROVIDER  vercel (default) — e2b is not implemented
  *   MAVLY_VERIFICATION_SANDBOX_PROJECTS  comma/semicolon separated project ids
+ *   MAVLY_VERIFICATION_REPAIR_ENABLED    1 / true / yes / on (bounded AI repair)
+ *   MAVLY_VERIFICATION_MAX_REPAIRS       0..2, default 1 when repair is enabled
  *   VERCEL_OIDC_TOKEN                    or VERCEL_TOKEN + VERCEL_TEAM_ID + VERCEL_PROJECT_ID
  *   SUPABASE_SERVICE_ROLE_KEY            worker-owned rows only
  *   NEXT_PUBLIC_SUPABASE_URL             the project URL
@@ -21,11 +23,13 @@
 import { isRoutableProjectSlug } from "@/lib/project-slug";
 import { SERVICE_ROLE_ENV, SUPABASE_URL_ENV } from "@/lib/generation/worker-config";
 
-import type { VerificationProvider } from "./state";
+import { clampMaxRepairs, type VerificationProvider } from "./state";
 
 export const SANDBOX_ENABLED_ENV = "MAVLY_VERIFICATION_SANDBOX_ENABLED";
 export const SANDBOX_PROVIDER_ENV = "MAVLY_VERIFICATION_SANDBOX_PROVIDER";
 export const SANDBOX_PROJECTS_ENV = "MAVLY_VERIFICATION_SANDBOX_PROJECTS";
+export const REPAIR_ENABLED_ENV = "MAVLY_VERIFICATION_REPAIR_ENABLED";
+export const MAX_REPAIRS_ENV = "MAVLY_VERIFICATION_MAX_REPAIRS";
 export const VERCEL_OIDC_TOKEN_ENV = "VERCEL_OIDC_TOKEN";
 export const VERCEL_TOKEN_ENV = "VERCEL_TOKEN";
 export const VERCEL_TEAM_ID_ENV = "VERCEL_TEAM_ID";
@@ -57,6 +61,10 @@ export interface VerificationSandboxConfig {
   ready: boolean;
   provider: VerificationProvider | null;
   cohort: string[];
+  /** Bounded repair is separately opt-in and never implied by verification. */
+  repairEnabled: boolean;
+  /** 0 disables repair; otherwise 1 by default and never more than 2. */
+  maxRepairs: number;
   problems: VerificationConfigProblem[];
   /** Server-only. Never serialize or log this field. */
   credentials: ProviderCredentials;
@@ -124,6 +132,15 @@ export function parseVerificationConfig(env: SandboxEnvironment): VerificationSa
   if (!env[SERVICE_ROLE_ENV]?.trim()) problems.push("missing_service_role");
   if (!env[SUPABASE_URL_ENV]?.trim()) problems.push("missing_supabase_url");
 
+  const repairRequested = isOn(env[REPAIR_ENABLED_ENV]);
+  const rawMaxRepairs = env[MAX_REPAIRS_ENV]?.trim();
+  const parsedMaxRepairs = rawMaxRepairs
+    ? Number.parseInt(rawMaxRepairs, 10)
+    : Number.NaN;
+  const maxRepairs = repairRequested
+    ? clampMaxRepairs(Number.isFinite(parsedMaxRepairs) ? parsedMaxRepairs : undefined)
+    : 0;
+
   /**
    * A disabled deployment has selected no provider, even though the provider
    * name defaults to Vercel once it is switched on. Reporting "vercel" here
@@ -136,6 +153,8 @@ export function parseVerificationConfig(env: SandboxEnvironment): VerificationSa
     ready: problems.length === 0,
     provider,
     cohort,
+    repairEnabled: repairRequested && maxRepairs > 0,
+    maxRepairs,
     problems,
     credentials,
   };

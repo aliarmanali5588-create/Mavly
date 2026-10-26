@@ -35,7 +35,13 @@ export interface SnapshotFile {
   content: string;
 }
 
-export type SnapshotKind = "baseline" | "result" | "pre_restore" | "import" | "manual";
+export type SnapshotKind =
+  | "baseline"
+  | "result"
+  | "pre_restore"
+  | "import"
+  | "manual"
+  | "repair";
 
 export const SNAPSHOT_KINDS: readonly SnapshotKind[] = [
   "baseline",
@@ -43,6 +49,7 @@ export const SNAPSHOT_KINDS: readonly SnapshotKind[] = [
   "pre_restore",
   "import",
   "manual",
+  "repair",
 ];
 
 /** The metadata of one snapshot. It never carries file content. */

@@ -13,20 +13,25 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import {
+  PREVIEW_UNAVAILABLE_REASON,
   publicVerificationStatus,
   type VerificationErrorClass,
+  type VerificationPreviewStatus,
   type VerificationProvider,
+  type VerificationRepairStatus,
   type VerificationResult,
   type VerificationStage,
 } from "./state";
 
-/** The columns exposed to an authenticated reader. Mirrors migration 17. */
+/** The columns exposed to an authenticated reader. Mirrors migrations 17 and 19. */
 const PUBLIC_COLUMNS = [
   "id",
   "project_id",
   "run_id",
   "snapshot_id",
   "source_hash",
+  "effective_snapshot_id",
+  "effective_source_hash",
   "status",
   "attempt",
   "max_attempts",
@@ -44,6 +49,22 @@ const PUBLIC_COLUMNS = [
   "finished_at",
   "stage_started_at",
   "updated_at",
+  "build_passed",
+  "runtime_started",
+  "health_passed",
+  "runtime_profile",
+  "runtime_port",
+  "runtime_exit_code",
+  "health_http_status",
+  "runtime_started_at",
+  "runtime_finished_at",
+  "health_checked_at",
+  "preview_status",
+  "preview_reason",
+  "repair_attempts",
+  "repair_max_attempts",
+  "repair_status",
+  "repaired_snapshot_id",
 ].join(",");
 
 interface VerificationRow {
@@ -52,6 +73,8 @@ interface VerificationRow {
   run_id: string;
   snapshot_id: string;
   source_hash: string;
+  effective_snapshot_id?: string | null;
+  effective_source_hash?: string | null;
   status: VerificationStage;
   attempt: number;
   max_attempts: number;
@@ -69,6 +92,22 @@ interface VerificationRow {
   finished_at: string | null;
   stage_started_at: string | null;
   updated_at: string | null;
+  build_passed?: boolean | null;
+  runtime_started?: boolean | null;
+  health_passed?: boolean | null;
+  runtime_profile?: string | null;
+  runtime_port?: number | null;
+  runtime_exit_code?: number | null;
+  health_http_status?: number | null;
+  runtime_started_at?: string | null;
+  runtime_finished_at?: string | null;
+  health_checked_at?: string | null;
+  preview_status?: string | null;
+  preview_reason?: string | null;
+  repair_attempts?: number | null;
+  repair_max_attempts?: number | null;
+  repair_status?: string | null;
+  repaired_snapshot_id?: string | null;
 }
 
 interface WorkerVerificationRow extends VerificationRow {
@@ -81,13 +120,22 @@ interface WorkerVerificationRow extends VerificationRow {
 }
 
 export interface VerificationRecord extends VerificationResult {
+  /** The project owner, needed only to write an immutable repair snapshot. */
+  userId: string;
   /** The immutable snapshot hash this verification was enqueued for. */
   sourceHash: string;
+  /** The snapshot currently being built: original, or the last repair. */
+  effectiveSnapshotId: string | null;
+  effectiveSourceHash: string | null;
   sandboxId: string | null;
   workerId: string | null;
   leaseToken: string | null;
   leaseExpiresAt: string | null;
   deadlineAt: string | null;
+  repairStatus: VerificationRepairStatus;
+  repairAttempts: number;
+  repairMaxAttempts: number;
+  repairedSnapshotId: string | null;
 }
 
 function providerOf(value: string | null): VerificationProvider | null {
@@ -99,6 +147,26 @@ function diagnosticsOf(value: unknown): string[] {
   return value
     .filter((entry): entry is string => typeof entry === "string")
     .slice(0, 80);
+}
+
+function repairStatusOf(value: string | null | undefined): VerificationRepairStatus {
+  return value === "requested" ||
+    value === "applied" ||
+    value === "failed" ||
+    value === "rejected" ||
+    value === "ineligible"
+    ? value
+    : "none";
+}
+
+function previewOf(row: VerificationRow) {
+  const status: VerificationPreviewStatus =
+    row.preview_status === "disabled" ? "disabled" : "unavailable";
+  return {
+    status,
+    reason: row.preview_reason ?? PREVIEW_UNAVAILABLE_REASON,
+    authenticated: false as const,
+  };
 }
 
 function toResult(row: VerificationRow): VerificationResult {
@@ -127,19 +195,45 @@ function toResult(row: VerificationRow): VerificationResult {
     cleanupComplete: Boolean(row.cleanup_complete),
     partial: Boolean(row.partial),
     correlationId: row.trace_id,
+    buildPassed: row.build_passed ?? null,
+    runtimeStarted: row.runtime_started ?? null,
+    healthPassed: row.health_passed ?? null,
+    runtimeProfile: row.runtime_profile ?? null,
+    runtimePort: row.runtime_port ?? null,
+    runtimeExitCode: row.runtime_exit_code ?? null,
+    healthHttpStatus: row.health_http_status ?? null,
+    healthChecked: Boolean(row.health_checked_at),
+    runtimeStartedAt: row.runtime_started_at ?? null,
+    runtimeFinishedAt: row.runtime_finished_at ?? null,
+    healthCheckedAt: row.health_checked_at ?? null,
+    preview: previewOf(row),
+    repair: {
+      status: repairStatusOf(row.repair_status),
+      attempts: Number(row.repair_attempts ?? 0),
+      maxAttempts: Number(row.repair_max_attempts ?? 0),
+      snapshotId: row.repaired_snapshot_id ?? null,
+    },
   };
 }
 
 function toRecord(row: WorkerVerificationRow): VerificationRecord {
+  const result = toResult(row);
   return {
-    ...toResult(row),
+    ...result,
+    userId: row.user_id,
     sourceHash: row.source_hash,
+    effectiveSnapshotId: row.effective_snapshot_id ?? row.snapshot_id,
+    effectiveSourceHash: row.effective_source_hash ?? row.source_hash,
     resourceRef: row.sandbox_id,
     sandboxId: row.sandbox_id,
     workerId: row.worker_id,
     leaseToken: row.lease_token,
     leaseExpiresAt: row.lease_expires_at,
     deadlineAt: row.deadline_at,
+    repairStatus: result.repair.status,
+    repairAttempts: result.repair.attempts,
+    repairMaxAttempts: result.repair.maxAttempts,
+    repairedSnapshotId: result.repair.snapshotId,
   };
 }
 
@@ -157,6 +251,8 @@ export interface EnqueueVerificationInput {
   sourceHash: string;
   provider: VerificationProvider;
   traceId: string | null;
+  /** The persisted repair budget; 0 disables repair for this row. */
+  maxRepairs?: number;
 }
 
 export type EnqueueVerificationResult =
@@ -180,6 +276,7 @@ export async function enqueueVerification(
     p_source_hash: input.sourceHash,
     p_provider: input.provider,
     p_trace_id: input.traceId,
+    p_max_repairs: input.maxRepairs ?? 0,
   });
   if (error) return storeFailure("enqueue_verification", error.message);
 
@@ -254,7 +351,12 @@ export async function noteVerificationStage(
   input: {
     verificationId: string;
     leaseToken: string;
-    status: "preparing" | "installing" | "building";
+    status:
+      | "preparing"
+      | "installing"
+      | "building"
+      | "runtime_starting"
+      | "health_checking";
     sandboxId?: string | null;
     exitCode?: number | null;
   },
@@ -341,6 +443,16 @@ export interface CompleteVerificationInput {
   diagnosticsTruncated: boolean;
   partial: boolean;
   cleanupComplete: boolean;
+  buildPassed?: boolean | null;
+  runtimeStarted?: boolean | null;
+  healthPassed?: boolean | null;
+  healthChecked?: boolean;
+  runtimeExitCode?: number | null;
+  healthHttpStatus?: number | null;
+  runtimePort?: number | null;
+  runtimeProfile?: string | null;
+  previewStatus?: VerificationPreviewStatus;
+  previewReason?: string | null;
 }
 
 export type CompleteVerificationResult =
@@ -363,6 +475,16 @@ export async function completeVerification(
     p_diagnostics_truncated: input.diagnosticsTruncated,
     p_partial: input.partial,
     p_cleanup_complete: input.cleanupComplete,
+    p_build_passed: input.buildPassed ?? null,
+    p_runtime_started: input.runtimeStarted ?? null,
+    p_health_passed: input.healthPassed ?? null,
+    p_health_checked: input.healthChecked ?? false,
+    p_runtime_exit_code: input.runtimeExitCode ?? null,
+    p_health_http_status: input.healthHttpStatus ?? null,
+    p_runtime_port: input.runtimePort ?? null,
+    p_runtime_profile: input.runtimeProfile ?? null,
+    p_preview_status: input.previewStatus ?? "unavailable",
+    p_preview_reason: input.previewReason ?? null,
   });
   if (error) return storeFailure("complete_verification", error.message);
 
@@ -376,6 +498,149 @@ export async function completeVerification(
   const row = payload.verification as WorkerVerificationRow | undefined;
   if (!row) return storeFailure("complete_verification", "missing row");
   return { ok: true, status: payload.status, verification: toResult(row) };
+}
+
+// ── Bounded repair ──────────────────────────────────────────────────────────
+
+export type ClearSandboxResult =
+  | { ok: true; status: "cleared" | "not_confirmed" | "lost" }
+  | { ok: false; error: string };
+
+/**
+ * Forget a sandbox reference only after the provider confirmed deletion. The
+ * SQL function refuses to clear it otherwise, so a failed cleanup stays queued.
+ */
+export async function clearVerificationSandbox(
+  supabase: SupabaseClient,
+  verificationId: string,
+  leaseToken: string,
+  confirmed: boolean,
+): Promise<ClearSandboxResult> {
+  const { data, error } = await supabase.rpc("clear_verification_sandbox", {
+    p_verification_id: verificationId,
+    p_lease_token: leaseToken,
+    p_confirmed: confirmed,
+  });
+  if (error) return storeFailure("clear_verification_sandbox", error.message);
+
+  const payload = (data ?? {}) as Record<string, unknown>;
+  if (
+    payload.status !== "cleared" &&
+    payload.status !== "not_confirmed" &&
+    payload.status !== "lost"
+  ) {
+    return storeFailure("clear_verification_sandbox", "unexpected response");
+  }
+  return { ok: true, status: payload.status };
+}
+
+export type BeginRepairStatus =
+  | "begun"
+  | "not_found"
+  | "already_terminal"
+  | "lease_lost"
+  | "sandbox_present"
+  | "invalid_stage"
+  | "exhausted"
+  | "duplicate";
+
+export type BeginRepairResult =
+  | { ok: true; status: BeginRepairStatus; attempt?: number }
+  | { ok: false; error: string };
+
+export async function beginVerificationRepair(
+  supabase: SupabaseClient,
+  verificationId: string,
+  leaseToken: string,
+  maxRepairs: number,
+): Promise<BeginRepairResult> {
+  const { data, error } = await supabase.rpc("begin_verification_repair", {
+    p_verification_id: verificationId,
+    p_lease_token: leaseToken,
+    p_max_repairs: maxRepairs,
+  });
+  if (error) return storeFailure("begin_verification_repair", error.message);
+
+  const payload = (data ?? {}) as Record<string, unknown>;
+  const status = payload.status;
+  if (
+    status !== "begun" &&
+    status !== "not_found" &&
+    status !== "already_terminal" &&
+    status !== "lease_lost" &&
+    status !== "sandbox_present" &&
+    status !== "invalid_stage" &&
+    status !== "exhausted" &&
+    status !== "duplicate"
+  ) {
+    return storeFailure("begin_verification_repair", "unexpected response");
+  }
+  return {
+    ok: true,
+    status,
+    ...(typeof payload.attempt === "number" ? { attempt: payload.attempt } : {}),
+  };
+}
+
+export interface FinishRepairInput {
+  verificationId: string;
+  leaseToken: string;
+  attempt: number;
+  status: "applied" | "failed" | "rejected";
+  repairedSnapshotId?: string | null;
+  repairedHash?: string | null;
+  errorClass?: VerificationErrorClass | null;
+  summary?: string | null;
+  model?: string | null;
+  promptTokens?: number | null;
+  completionTokens?: number | null;
+  costUsd?: number | null;
+  costKnown?: boolean;
+}
+
+export type FinishRepairResult =
+  | { ok: true; status: "applied" | "failed" | "rejected" }
+  | {
+      ok: true;
+      status: "not_found" | "already_terminal" | "lease_lost" | "not_requested";
+    }
+  | { ok: false; error: string };
+
+export async function finishVerificationRepair(
+  supabase: SupabaseClient,
+  input: FinishRepairInput,
+): Promise<FinishRepairResult> {
+  const { data, error } = await supabase.rpc("finish_verification_repair", {
+    p_verification_id: input.verificationId,
+    p_lease_token: input.leaseToken,
+    p_attempt: input.attempt,
+    p_status: input.status,
+    p_repaired_snapshot_id: input.repairedSnapshotId ?? null,
+    p_repaired_hash: input.repairedHash ?? null,
+    p_error_class: input.errorClass ?? null,
+    p_summary: input.summary ?? null,
+    p_model: input.model ?? null,
+    p_prompt_tokens: input.promptTokens ?? null,
+    p_completion_tokens: input.completionTokens ?? null,
+    p_cost_usd: input.costUsd ?? null,
+    p_cost_known: input.costKnown ?? false,
+  });
+  if (error) return storeFailure("finish_verification_repair", error.message);
+
+  const payload = (data ?? {}) as Record<string, unknown>;
+  const status = payload.status;
+  if (
+    status !== "applied" &&
+    status !== "failed" &&
+    status !== "rejected" &&
+    status !== "not_found" &&
+    status !== "already_terminal" &&
+    status !== "lease_lost" &&
+    status !== "not_requested"
+  ) {
+    return storeFailure("finish_verification_repair", "unexpected response");
+  }
+  return { ok: true, status };
 }
 
 // ── Recovery / cleanup ──────────────────────────────────────────────────────

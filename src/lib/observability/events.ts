@@ -46,6 +46,9 @@ export const VERIFICATION_EVENTS = [
   "verification.enqueue_failed",
   "verification.claimed",
   "verification.stage",
+  "verification.runtime",
+  "verification.health",
+  "verification.repair",
   "verification.completed",
   "verification.cleanup",
   "verification.recovered",
@@ -86,6 +89,10 @@ const ALLOWED_FIELDS = new Set([
   "completionTokens",
   "costUsd",
   "costKnown",
+  "runtimePort",
+  "healthHttpStatus",
+  "repairAttempt",
+  "repairStatus",
 ]);
 
 const NUMERIC_FIELDS = new Set([
@@ -102,6 +109,9 @@ const NUMERIC_FIELDS = new Set([
   "promptTokens",
   "completionTokens",
   "costUsd",
+  "runtimePort",
+  "healthHttpStatus",
+  "repairAttempt",
 ]);
 
 const BOOLEAN_FIELDS = new Set(["costKnown", "cleanupComplete"]);
@@ -139,7 +149,8 @@ function sanitize(name: string, value: EmitValue): string | number | boolean | n
     name === "status" ||
     name === "dispatchMode" ||
     name === "errorClass" ||
-    name === "reason"
+    name === "reason" ||
+    name === "repairStatus"
   ) {
     return /^[A-Za-z0-9._:-]{1,80}$/.test(value) ? value : undefined;
   }
@@ -236,6 +247,15 @@ export interface VerificationEventFields {
   cleaned?: number | null;
   exitCode?: number | null;
   cleanupComplete?: boolean | null;
+  runtimePort?: number | null;
+  healthHttpStatus?: number | null;
+  repairAttempt?: number | null;
+  repairStatus?: string | null;
+  model?: string | null;
+  promptTokens?: number | null;
+  completionTokens?: number | null;
+  costUsd?: number | null;
+  costKnown?: boolean | null;
 }
 
 /** Emit one verification lifecycle line under the same allowlist. */

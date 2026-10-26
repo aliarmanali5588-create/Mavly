@@ -1127,6 +1127,19 @@ function toPublicVerification(result: VerificationResult): ProjectVerification {
     cleanupComplete: result.cleanupComplete,
     partial: result.partial,
     correlationId: result.correlationId,
+    buildPassed: result.buildPassed,
+    runtimeStarted: result.runtimeStarted,
+    healthPassed: result.healthPassed,
+    runtimeProfile: result.runtimeProfile,
+    runtimePort: result.runtimePort,
+    runtimeExitCode: result.runtimeExitCode,
+    healthHttpStatus: result.healthHttpStatus,
+    healthChecked: result.healthChecked,
+    runtimeStartedAt: result.runtimeStartedAt,
+    runtimeFinishedAt: result.runtimeFinishedAt,
+    healthCheckedAt: result.healthCheckedAt,
+    preview: result.preview,
+    repair: result.repair,
   };
 }
 

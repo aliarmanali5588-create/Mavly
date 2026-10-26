@@ -35,6 +35,21 @@ export type SandboxResult<T> =
   | { ok: true; value: T }
   | { ok: false; error: SandboxError };
 
+/**
+ * Explicit success guard for a `SandboxResult<T>`.
+ *
+ * This project compiles with `strictNullChecks: false`, where a bare
+ * `if (!result.ok)` does not reliably narrow the union (the same workaround is
+ * used in `src/lib/hosting/serve.ts`). A user-defined type predicate narrows by
+ * declaration, so a branch that reads `.error` or `.value` is checked against
+ * the member that actually has that property.
+ */
+export function isSandboxOk<T>(
+  result: SandboxResult<T>,
+): result is { ok: true; value: T } {
+  return result.ok === true;
+}
+
 export interface SandboxSession {
   id: string;
   provider: VerificationProvider;

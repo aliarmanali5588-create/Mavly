@@ -205,7 +205,7 @@ export interface VerificationResult {
   // ── Phase 4: build, runtime, health, preview and repair ──────────────────
   /** `true` only when the production build exited 0. `null` = not reached. */
   buildPassed: boolean | null;
-  /** `true` only when a healthy HTTP response proved the runtime was serving. */
+  /** `true` when the runtime answered the health connection at all. */
   runtimeStarted: boolean | null;
   /** `true` only when the sandbox-local request returned a 2xx/3xx status. */
   healthPassed: boolean | null;

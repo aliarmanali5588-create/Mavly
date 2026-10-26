@@ -64,6 +64,7 @@ export async function maybeEnqueueVerification(
       sourceHash: input.sourceHash,
       provider: config.provider,
       traceId: input.traceId,
+      maxRepairs: config.repairEnabled ? config.maxRepairs : 0,
     });
 
     if (!result.ok) {

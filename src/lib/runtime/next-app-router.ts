@@ -155,6 +155,17 @@ export function planNextAppRouter(files: readonly SourceFile[]): RuntimeResoluti
       build: { cmd: "./node_modules/.bin/next", args: ["build"] },
       buildScript: ACCEPTED_BUILD_SCRIPT,
       lockfile: lockfile.present ? "npm" : null,
+      /**
+       * Loopback only. Even if a provider mapped a port, `127.0.0.1` is not
+       * reachable from outside the microVM, and this phase registers no port.
+       */
+      runtime: {
+        cmd: "./node_modules/.bin/next",
+        args: ["start", "-H", "127.0.0.1", "-p", String(RUNTIME_PORT)],
+      },
+      startScript: startScript || null,
+      runtimePort: RUNTIME_PORT,
+      runtimeHealthPath: RUNTIME_HEALTH_PATH,
     },
   };
 }

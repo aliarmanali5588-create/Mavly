@@ -1,9 +1,20 @@
 # Phase 3 — Isolated verification sandbox
 
-Status: **implemented, disabled by default, not yet exercised against a live
-provider or a real Supabase database in this repository.**
+Status: **Phase 3 baseline. Extended by Phase 4, implemented, disabled by
+default, and not yet exercised against a live provider or a real Supabase
+database in this repository.**
 
-This document describes what the code actually does. It does not claim that a
+> **Phase 4 supersedes several details below.** The current implementation also
+> starts the validated production server on loopback and runs a sandbox-local
+> health check, so `passed` requires build **and** runtime **and** health. It
+> adds `runtime_starting` / `health_checking` / `repairing`, a separately opt-in
+> bounded AI repair, migration `19`, a 22-minute session, a 26-minute deadline
+> and a preview status contract (no URL). Where this document and
+> [`phase-4-runtime-verification.md`](phase-4-runtime-verification.md)
+> disagree, the Phase 4 document is authoritative. This page remains the
+> Phase 3 baseline and the provider decision.
+
+This document describes what the Phase 3 code does. It does not claim that a
 project has been built successfully in an isolated sandbox.
 
 ---
@@ -19,9 +30,11 @@ Phase 3 answers the next question honestly:
 > Does that snapshot actually install and build?
 
 The answer comes from a **production build inside a managed microVM**, never
-from the Mavly server and never from a mock. `passed` means the build command
-exited 0. It does **not** mean the app was served, reached in a browser,
-deployed or crawled.
+from the Mavly server and never from a mock. In Phase 3, `passed` means the
+build command exited 0. **Phase 4 extends this:** the current `passed` also
+requires the validated runtime to start and a sandbox-local health request to
+return `2xx`/`3xx`. Neither version means the app was served publicly, reached
+in a browser, deployed, crawled or proven correct.
 
 ### In scope
 
@@ -33,13 +46,18 @@ deployed or crawled.
 - Sanitized, bounded diagnostics and structured lifecycle events.
 - A backward-compatible verification block in `agent/status`.
 
+Phase 4 adds detached runtime start, sandbox-local health, bounded repair and a
+preview status contract; see the Phase 4 document.
+
 ### Explicit non-goals
 
 - Replacing or rewriting the Phase 2 queue, worker or scheduler.
 - Running generated code on Mavly infrastructure.
 - Full backend runtime hosting, arbitrary deployments, public preview URLs.
-- Browser/health checks of a running app (deferred).
-- An unbounded AI repair loop.
+- Browser/health checks of a publicly running app. Phase 4 performs only a
+  sandbox-local HTTP check; no browser or external probe exists.
+- An unbounded AI repair loop. Phase 4 allows at most two bounded, opt-in
+  attempts.
 - A credits or billing engine.
 - A general runtime-profile system. Exactly one profile exists today.
 
@@ -71,7 +89,7 @@ instead of silently falling back.
 
 - Vercel plan/terms eligibility for Mavly-managed sandbox workloads.
 - The account's maximum sandbox lifetime and concurrency limits (this design
-  assumes an 18-minute session and one vCPU per verification).
+  assumes a 22-minute session (Phase 4) and one vCPU per verification).
 - OIDC availability in the actual runtime, or a team-scoped access token.
 - Current pricing. Cost accounting is **not** implemented: the provider does not
   return an authoritative per-build cost here, so no cost is reported.
@@ -86,7 +104,7 @@ generation worker tick (/api/generation/worker)
        ├─ generation queue (unchanged Phase 2)
        └─ when the generation claim is EMPTY:
             runVerificationTick
-              ├─ preflight: config + migration 17 + provider adapter
+              ├─ preflight: config + migration 19 marker + provider adapter
               ├─ recover never-ending rows (deadline / expired lease)
               ├─ bounded orphan cleanup
               ├─ claim ONE verification (SKIP LOCKED)
@@ -103,11 +121,13 @@ generation worker tick (/api/generation/worker)
 | `src/lib/sandbox/vercel-sandbox.ts` | The real Vercel Sandbox adapter. |
 | `src/lib/sandbox/e2b.ts` | `not_implemented`; never silently selected. |
 | `src/lib/sandbox/provider.ts` | Configuration → adapter, with no fallback. |
-| `src/lib/sandbox/verification.ts` | The durable tick: recover, clean, claim, advance, finalize. |
+| `src/lib/sandbox/verification.ts` | The durable tick: recover, clean, claim, advance, finalize; Phase 4 also starts the runtime, health-checks and begins bounded repair. |
+| `src/lib/sandbox/repair.ts` | Phase 4 bounded repair policy: eligibility, context, protected paths, parsing, merge bounds. |
 | `src/lib/sandbox/enqueue.ts` | Enqueue after a completed worker run; never fails the run. |
 | `src/lib/sandbox/store.ts` | Typed RPC wrappers and the public read model. |
-| `src/lib/runtime/*` | The one supported runtime profile (Next.js App Router) and manifest/lockfile validation. |
-| `supabase/migrations/17_verification_sandbox.sql` | Table, RLS, grants, queue/lease/recovery/cleanup/cancel RPCs, schema marker. |
+| `src/lib/runtime/*` | The one supported runtime profile (Next.js App Router), manifest/lockfile validation, the build plan and the fixed loopback runtime start. |
+| `supabase/migrations/17_verification_sandbox.sql` | Table, RLS, grants, queue/lease/recovery/cleanup/cancel RPCs, schema marker 17. |
+| `supabase/migrations/19_runtime_verification.sql` | Phase 4 build/runtime/health/preview/repair state, the runtime-enforced `passed` rule and schema marker 19. |
 | `src/app/api/generation/worker/route.ts` | Returns the non-sensitive verification tick summary. |
 | `src/lib/mavly/api.ts` | `agent/status` verification block; `agent/stop` cancels an in-flight verification. |
 
@@ -120,13 +140,19 @@ generation worker tick (/api/generation/worker)
 Key columns:
 
 - `project_id`, `user_id`, `run_id`, `snapshot_id`, `source_hash`
-- `status` (`queued` / `preparing` / `installing` / `building` / terminal)
+- `status` (`queued` / `preparing` / `installing` / `building` / terminal;
+  Phase 4 adds `runtime_starting` / `health_checking` / `repairing`)
 - `attempt` / `max_attempts`
 - `provider`, `sandbox_id` (opaque, worker-only)
 - `exit_code`, `error_class`, `summary`, bounded `diagnostics` JSON
 - `cleanup_complete`, `cleanup_attempts`, `partial`
 - `trace_id`, `worker_id`, `lease_token`, `lease_expires_at`
 - `enqueued_at`, `started_at`, `stage_started_at`, `deadline_at`, `finished_at`
+
+Phase 4 adds effective snapshot/hash, build/runtime/health results, preview
+status/reason, repair counters/status and `repaired_snapshot_id`, plus the
+`project_verification_repairs` audit table. See the Phase 4 document and
+migration 19.
 
 Access:
 
@@ -138,8 +164,10 @@ Access:
 - `cancel_verification` is the one owner-facing mutation and verifies ownership
   inside the function.
 
-Apply **after** migration 16. Additive and non-destructive; nothing in
+Apply migration 17 **after** migration 16, then migration 19 **after** 17. Both
+are additive and non-destructive; nothing in
 `project_runs`, `project_files`, `project_snapshots` or hosting tables changes.
+`verification_schema_version()` must return `19` before the worker claims work.
 
 ---
 
@@ -151,7 +179,16 @@ queued ──claim──▶ preparing ──upload──▶ installing ──mar
    │                  │ tick died           │ tick died              │ tick died
    │                  ▼                     ▼                        ▼
    └─ recover (no sandbox, attempts left)   continue the SAME sandbox (never a second one)
+
+Phase 4 continues from `building`:
+
+building ──marker──▶ runtime_starting ──marker──▶ health_checking ──▶ terminal
 ```
+
+Phase 4 makes the terminal result depend on the build, the runtime start and the
+sandbox-local health response. A live sandbox reference keeps the row
+continuable; a `repairing` row is not resumed after a lost worker and fails
+closed. See the Phase 4 document for the repair sequence and preview contract.
 
 - **Enqueue** happens only after a *worker* run reaches `completed`, with a
   ready snapshot belonging to that run and a matching hash. It is idempotent on
@@ -177,18 +214,21 @@ queued ──claim──▶ preparing ──upload──▶ installing ──mar
 
 | Bound | Value | Why |
 |---|---|---|
-| Sandbox lifetime | 18 min | Provider-enforced; outlives install + build |
+| Sandbox lifetime | 22 min | Provider-enforced; outlives install + build + runtime start |
 | Install | 5 min | `npm ci` / `npm install` for a generated app |
 | Build | 8 min | `next build` |
-| Verification deadline | 20 min from first claim | Recovery stops a row even if a sandbox lives |
+| Runtime readiness | 4 min (+30 s grace) | `next start` on `127.0.0.1:3000` |
+| One health request | 5 s | Sandbox-local request, clamped 1–10 s |
+| Verification deadline | 26 min from first claim | Recovery stops a row even if a sandbox lives |
 | Lease | 120 s per tick | Renewed before long provider calls |
 | Worker tick budget | 200 s | Inside the route's 300 s `maxDuration` |
 | Cleanup attempts | 5 | Durable, bounded orphan queue |
+| Deadline extension per applied repair | 20 min | Bounded repair gets its own rebuild window |
 
 Timeouts are enforced at two layers: the adapter races every provider request
 against a local timeout and aborts it, and a detached stage with no exit marker
 after its budget (plus a 30-second grace) becomes `timed_out` on the next tick.
-Because the provider SDK has no per-command timeout, the sandbox's 18-minute
+Because the provider SDK has no per-command timeout, the sandbox's 22-minute
 lifetime is the backstop if no tick runs: deleting it (or the provider expiring
 it) stops the detached command. A later tick that finds the sandbox absent
 records `infrastructure_error`/`sandbox_not_found`, never a fabricated pass.
@@ -229,9 +269,21 @@ records `infrastructure_error`/`sandbox_not_found`, never a fabricated pass.
    kept (80 lines, 400 chars/line, 6000 chars total).
 8. **Admission caps** are enforced in SQL: one active verification per project,
    two per user, eight globally.
+9. **Runtime and health are fixed.** Phase 4 starts
+   `./node_modules/.bin/next start -H 127.0.0.1 -p 3000` inside the microVM; no
+   provider port or ingress is created, and the generated `start` script is
+   validated but never executed. The health request uses a constant host, port
+   and path, has a bounded timeout and discards the response body.
+10. **Repair is bounded and non-destructive.** Phase 4 may replace only
+    existing, editable source paths the model was shown; manifests, lockfiles,
+    `.env*`, reserved `.mavly` files, credentials, new files and deletions are
+    refused. A repair becomes a new immutable `repair` snapshot; `project_files`
+    is never edited.
 
-**Not implemented:** secret injection, secret scanning inside dependency code,
-a dedicated verification-only database credential, and a per-build cost cap.
+**Not implemented:** an authenticated preview proxy (so preview stays
+unavailable), secret injection, secret scanning inside dependency code,
+a dedicated verification-only database credential, authoritative sandbox
+compute cost accounting, and a per-build cost cap.
 
 ---
 
@@ -242,12 +294,12 @@ All events use the existing allowlisted structured logger
 
 `verification.enqueued`, `enqueue_skipped`, `enqueue_failed`, `claimed`,
 `stage`, `completed`, `cleanup`, `recovered`, `unavailable`, `lease_lost`,
-`error`.
+`error`. Phase 4 adds `runtime`, `health` and `repair`.
 
 Fields are restricted to: trace/run/project/verification/snapshot ids, worker
 id, provider, stage, status, attempt counters, error class, reason, duration,
-exit code and a cleanup flag. **No prompt, file content, credential or provider
-body is ever logged.**
+exit code, runtime port, health status, repair attempt/status and a cleanup
+flag. **No prompt, file content, credential or provider body is ever logged.**
 
 ---
 
@@ -256,6 +308,11 @@ body is ever logged.**
 `GET /api/vcaas/projects/{id}/agent/status` gains an optional `verification`
 object when one exists for the latest run. It is read through the caller's
 RLS-scoped client and omits the provider sandbox reference and internal row id.
+
+Phase 4 adds `buildPassed`, `runtimeStarted`, `healthPassed`, `healthChecked`,
+the runtime profile/port/exit/status and timestamps, a `preview` object and a
+`repair` summary. `preview.status` is only `unavailable` or `disabled` and
+contains no URL; there is no authenticated preview proxy.
 
 `POST /api/vcaas/projects/{id}/agent/stop` also cancels an in-flight
 verification for a completed run and answers
@@ -271,17 +328,22 @@ There is no new route, no new public URL and no preview endpoint.
   call was executed by the agent that wrote this. The provider's isolation,
   plan limits, pricing and network behaviour are assumptions until an operator
   runs the integration checklist.
-- **One runtime only.** Next.js App Router with an exact `next build` script.
-  Other shapes are reported as `unsupported_runtime`.
-- **No preview/health check.** A passing build is not a running app.
-- **No repair loop.** Diagnostics are actionable, but no automatic code fix is
-  applied.
+- **One runtime profile only.** Next.js App Router with an exact `next build`
+  script, an absent or exact `next start`, npm only and no workspaces. Other
+  shapes are reported as `unsupported_runtime`.
+- **No public preview.** Phase 4 starts the runtime on loopback inside the
+  microVM and performs a sandbox-local health check. It does not publish a port
+  or return a provider URL, because no authenticated preview proxy exists.
+- **Bounded repair only.** Phase 4 may spend at most two (default one) opt-in AI
+  attempts on source-level build/runtime/health failures. It creates an
+  immutable `repair` snapshot; it does not edit `project_files`, fix
+  dependency/install/infrastructure problems, or prove the app correct.
 - **Verification yields to generation.** It advances only when the generation
   claim is empty, preserving Phase 2's order. Under constant generation load,
   verification waits; the scheduler cadence is the scaling knob.
 - **Retry semantics.** A verification row gets at most two *new* claim attempts;
-  continuation ticks do not consume attempts. The 20-minute deadline is the
-  hard stop.
+  continuation ticks do not consume attempts. The 26-minute deadline is the
+  hard stop; an applied repair extends it by at most 20 minutes.
 - **Cleanup is best-effort.** Five bounded attempts; a permanently failing
   provider leaves `cleanup_complete = false` for operator review. The sandbox
   lifetime still destroys the VM eventually.
@@ -305,8 +367,10 @@ There is no new route, no new public URL and no preview endpoint.
 
 ## 11. Rollout and rollback
 
-Rollout is cohort-scoped and off by default; see the runbook. Rollback is
-disabling the flag: no generation job, file, checkpoint, snapshot or hosting row
-is touched, and queued verifications simply stop advancing. Migration 17 is
-additive; leaving it installed is safe. Because disabling also stops cleanup,
-drain in-flight rows first (runbook §6).
+Rollout is cohort-scoped and off by default; see the runbook. Apply migration
+17 and then migration 19. Rollback is disabling the flag: no generation job,
+file, checkpoint, snapshot or hosting row
+is touched, and queued verifications simply stop advancing. Migrations 17 and
+19 are additive; leaving them installed is safe. Because disabling also stops
+cleanup, drain in-flight rows first (runbook §6). Phase 4 repair is disabled
+separately and never edits `project_files`.

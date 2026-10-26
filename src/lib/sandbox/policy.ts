@@ -18,7 +18,10 @@ import { hashSource } from "@/lib/mavly/source-hash";
 import { planNextAppRouter } from "@/lib/runtime/next-app-router";
 import type { RuntimePlan } from "@/lib/runtime/profile";
 
-import type { VerificationErrorClass, VerificationStage } from "./state";
+import type {
+  VerificationErrorClass,
+  VerificationStage,
+} from "./state";
 import {
   MAX_DIAGNOSTIC_CHARS,
   MAX_DIAGNOSTIC_LINE_CHARS,
@@ -65,6 +68,9 @@ export const INSTALL_EXIT_MARKER = `${MARKER_DIRECTORY}/install.exit`;
 export const INSTALL_LOG_MARKER = `${MARKER_DIRECTORY}/install.log`;
 export const BUILD_EXIT_MARKER = `${MARKER_DIRECTORY}/build.exit`;
 export const BUILD_LOG_MARKER = `${MARKER_DIRECTORY}/build.log`;
+export const RUNTIME_EXIT_MARKER = `${MARKER_DIRECTORY}/runtime.exit`;
+export const RUNTIME_LOG_MARKER = `${MARKER_DIRECTORY}/runtime.log`;
+export const RUNTIME_PID_MARKER = `${MARKER_DIRECTORY}/runtime.pid`;
 
 const SECRET_BASENAMES = new Set([
   ".env",
@@ -267,6 +273,87 @@ export function detachedStageScript(stage: "install" | "build", plan: RuntimePla
 }
 
 /**
+ * Start the validated production runtime detached and record its pid and exit
+ * status. The command comes from the fixed runtime profile, never from the
+ * generated `start` script. The pid file is what lets a later tick stop it
+ * without a provider reattach-by-command capability.
+ */
+export function detachedRuntimeScript(plan: RuntimePlan): string {
+  const invocation = [plan.runtime.cmd, ...plan.runtime.args]
+    .map(shellQuote)
+    .join(" ");
+  return [
+    "set +e",
+    `mkdir -p ${shellQuote(MARKER_DIRECTORY)}`,
+    `rm -f ${shellQuote(RUNTIME_EXIT_MARKER)} ${shellQuote(RUNTIME_PID_MARKER)}`,
+    `${invocation} > ${shellQuote(RUNTIME_LOG_MARKER)} 2>&1 &`,
+    "pid=$!",
+    `printf '%s' "$pid" > ${shellQuote(RUNTIME_PID_MARKER)}`,
+    'wait "$pid"',
+    "code=$?",
+    `printf '%s' "$code" > ${shellQuote(RUNTIME_EXIT_MARKER)}`,
+    "exit 0",
+  ].join("\n");
+}
+
+/**
+ * ⚠️ SANDBOX-LOCAL ONLY. The request targets a constant host, port and path;
+ * nothing from the project or the browser reaches it. No response body is
+ * read, so a generated page cannot flood the worker with output.
+ */
+const HEALTH_SCRIPT = [
+  'const http=require("http");',
+  'const port=Number(process.argv[1]);',
+  'const path=String(process.argv[2]||"/");',
+  'const timeout=Number(process.argv[3]||5000);',
+  'if(!port||!timeout){process.stdout.write("error:bad_args");process.exit(0);}',
+  'let done=false;',
+  'const finish=function(value){if(done)return;done=true;process.stdout.write(value);process.exit(0);};',
+  'const req=http.get({host:"127.0.0.1",port:port,path:path,timeout:timeout,headers:{"user-agent":"mavly-verification"}},function(res){res.resume();finish("status:"+res.statusCode);});',
+  'req.on("timeout",function(){try{req.destroy();}catch(e){}finish("timeout");});',
+  'req.on("error",function(e){finish("error:"+String((e&&e.code)||"unknown"));});',
+].join("");
+
+export function runtimeHealthCommand(
+  plan: RuntimePlan,
+  requestTimeoutMs: number,
+): { cmd: "node"; args: string[] } {
+  return {
+    cmd: "node",
+    args: [
+      "-e",
+      HEALTH_SCRIPT,
+      String(plan.runtimePort),
+      plan.runtimeHealthPath,
+      String(Math.max(1_000, Math.min(10_000, requestTimeoutMs))),
+    ],
+  };
+}
+
+export type HealthObservation =
+  | { kind: "status"; status: number }
+  | { kind: "timeout" }
+  | { kind: "unreachable"; code: string }
+  | { kind: "unknown" };
+
+export function parseHealthOutput(raw: string | null | undefined): HealthObservation {
+  const value = (raw ?? "").trim().slice(0, 80);
+  if (/^status:\d{3}$/.test(value)) {
+    return { kind: "status", status: Number.parseInt(value.slice(7), 10) };
+  }
+  if (value === "timeout") return { kind: "timeout" };
+  if (/^error:[A-Za-z0-9_.-]{1,40}$/.test(value)) {
+    return { kind: "unreachable", code: value.slice(6) };
+  }
+  return { kind: "unknown" };
+}
+
+/** A redirect still proves the server is listening; a 4xx/5xx does not. */
+export function isHealthyHttpStatus(status: number): boolean {
+  return status >= 200 && status < 400;
+}
+
+/**
  * Environment for both stages. Telemetry is disabled; no secret is injected.
  *
  * ⚠️ `NODE_ENV` IS DELIBERATELY NOT SET HERE. `npm ci`/`npm install` treats
@@ -418,4 +505,24 @@ export function classifyStageFailure(
     return "dependency_resolution_failed";
   }
   return "build_failed";
+}
+
+const PORT_BINDING = [
+  /\bEADDRINUSE\b/i,
+  /address already in use/i,
+  /\bEACCES\b/i,
+  /permission denied.*(?:port|bind)/i,
+];
+
+/**
+ * A non-zero runtime exit is either an environment/port problem or an
+ * application startup failure. Only the latter is repair-eligible.
+ */
+export function classifyRuntimeStartFailure(
+  output: SanitizedDiagnostics,
+): VerificationErrorClass {
+  const text = output.lines.join("\n");
+  return PORT_BINDING.some((pattern) => pattern.test(text))
+    ? "runtime_port_unavailable"
+    : "runtime_start_failed";
 }

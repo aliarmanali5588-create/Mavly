@@ -408,7 +408,13 @@ export interface ConversationMessage {
  * A restore point is a complete, restorable copy of a project's source files.
  * It is Mavly's own recovery mechanism and does not depend on GitHub.
  */
-export type SnapshotKind = "baseline" | "result" | "pre_restore" | "import" | "manual";
+export type SnapshotKind =
+  | "baseline"
+  | "result"
+  | "pre_restore"
+  | "import"
+  | "manual"
+  | "repair";
 
 export interface ProjectSnapshot {
   id: string;
@@ -462,12 +468,15 @@ export interface ConversationHistory {
 }
 
 /**
- * ═══ VERIFICATION (Phase 3) ═════════════════════════════════════════════════
+ * ═══ VERIFICATION (Phase 3 + Phase 4) ═══════════════════════════════════════
  *
- * Whether the generated source was built inside an isolated sandbox. `passed`
- * means the production build exited 0 — not that a preview was reached, served
- * or deployed. Absent from `AgentStatus` means no verification was enqueued for
- * this run (feature off, outside the cohort, or no snapshot).
+ * Whether the generated source was built AND started inside an isolated
+ * sandbox. `passed` means the production build exited 0, the validated runtime
+ * started, and a sandbox-local HTTP request returned 2xx/3xx — not that the app
+ * is correct, that a preview is reachable, or that anything was deployed.
+ *
+ * Absent from `AgentStatus` means no verification was enqueued for this run
+ * (feature off, outside the cohort, or no snapshot).
  */
 export type ProjectVerificationStatus =
   | "pending"
@@ -485,6 +494,9 @@ export type ProjectVerificationStage =
   | "preparing"
   | "installing"
   | "building"
+  | "runtime_starting"
+  | "health_checking"
+  | "repairing"
   | "passed"
   | "failed"
   | "timed_out"
@@ -492,6 +504,35 @@ export type ProjectVerificationStage =
   | "unsupported_runtime"
   | "configuration_error"
   | "infrastructure_error";
+
+export type ProjectVerificationPreviewStatus = "unavailable" | "disabled";
+
+/**
+ * ⚠️ THERE IS NO PREVIEW URL. The sandbox provider can mint a public,
+ * unauthenticated URL, and Mavly has no authenticated proxy in front of it, so
+ * this contract intentionally carries a status and reason only.
+ */
+export interface ProjectVerificationPreview {
+  status: ProjectVerificationPreviewStatus;
+  reason: string;
+  authenticated: false;
+}
+
+export type ProjectVerificationRepairStatus =
+  | "none"
+  | "requested"
+  | "applied"
+  | "failed"
+  | "rejected"
+  | "ineligible";
+
+export interface ProjectVerificationRepairSummary {
+  status: ProjectVerificationRepairStatus;
+  attempts: number;
+  maxAttempts: number;
+  /** The immutable snapshot produced by the last applied repair, if any. */
+  snapshotId: string | null;
+}
 
 export interface ProjectVerification {
   status: ProjectVerificationStatus;
@@ -514,6 +555,24 @@ export interface ProjectVerification {
   /** Terminal, but a non-essential part (e.g. full logs) was unavailable. */
   partial: boolean;
   correlationId: string | null;
+
+  // ── Phase 4: build, runtime, health, preview and repair ──────────────────
+  /** `true` only when the production build exited 0. `null` = not reached. */
+  buildPassed: boolean | null;
+  /** `true` when the runtime answered the health connection at all. */
+  runtimeStarted: boolean | null;
+  /** `true` only when the sandbox-local request returned a 2xx/3xx status. */
+  healthPassed: boolean | null;
+  runtimeProfile: string | null;
+  runtimePort: number | null;
+  runtimeExitCode: number | null;
+  healthHttpStatus: number | null;
+  healthChecked: boolean;
+  runtimeStartedAt: string | null;
+  runtimeFinishedAt: string | null;
+  healthCheckedAt: string | null;
+  preview: ProjectVerificationPreview;
+  repair: ProjectVerificationRepairSummary;
 }
 
 export interface AgentStatus {

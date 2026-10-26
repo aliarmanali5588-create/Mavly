@@ -24,6 +24,7 @@ import { APIError, Sandbox, type NetworkPolicy } from "@vercel/sandbox";
 
 import {
   boundOutput,
+  isSandboxOk,
   sandboxError,
   sandboxIdSafe,
   withTimeout,
@@ -78,19 +79,6 @@ function networkPolicyFor(options: SandboxCreateOptions): NetworkPolicy {
   return { allow };
 }
 
-/**
- * Explicit success guard.
- *
- * This project compiles with `strictNullChecks: false`, where narrowing a union
- * by its `ok` discriminant after an early return is unreliable (the same
- * workaround is used in `src/lib/hosting/serve.ts`). A type predicate narrows
- * by declaration instead, so the failure return below is typed as the failure
- * member rather than as the whole `SandboxResult`.
- */
-function isOk<T>(result: SandboxResult<T>): result is { ok: true; value: T } {
-  return result.ok === true;
-}
-
 export function createVercelSandboxAdapter(
   credentials: VercelSandboxCredentials,
 ): SandboxAdapter {
@@ -116,7 +104,7 @@ export function createVercelSandboxAdapter(
       RECONNECT_TIMEOUT_MS,
       mapProviderError,
     );
-    if (isOk(result)) live.set(name, result.value);
+    if (isSandboxOk(result)) live.set(name, result.value);
     return result;
   }
 
@@ -157,7 +145,7 @@ export function createVercelSandboxAdapter(
         CREATE_TIMEOUT_MS,
         mapProviderError,
       );
-      if (!isOk(result)) return result;
+      if (!isSandboxOk(result)) return result;
 
       live.set(result.value.name, result.value);
       return { ok: true, value: { id: result.value.name, provider: "vercel" } };
@@ -178,14 +166,14 @@ export function createVercelSandboxAdapter(
       }
       if (!live.has(sandboxId)) {
         const opened = await open(sandboxId);
-        if (!isOk(opened)) return opened;
+        if (!isSandboxOk(opened)) return opened;
       }
       return { ok: true, value: { id: sandboxId, provider: "vercel" } };
     },
 
     async upload(session, files: readonly UploadFile[]) {
       const sandbox = await ensure(session);
-      if (!isOk(sandbox)) return sandbox;
+      if (!isSandboxOk(sandbox)) return sandbox;
 
       const payload = files.map((file) => ({
         path: file.path,
@@ -198,13 +186,13 @@ export function createVercelSandboxAdapter(
         UPLOAD_TIMEOUT_MS,
         mapProviderError,
       );
-      if (!isOk(result)) return result;
+      if (!isSandboxOk(result)) return result;
       return { ok: true, value: undefined };
     },
 
     async startDetached(session, script) {
       const sandbox = await ensure(session);
-      if (!isOk(sandbox)) return sandbox;
+      if (!isSandboxOk(sandbox)) return sandbox;
 
       const result = await withTimeout(
         async (signal) => {
@@ -219,13 +207,13 @@ export function createVercelSandboxAdapter(
         START_TIMEOUT_MS,
         mapProviderError,
       );
-      if (!isOk(result)) return result;
+      if (!isSandboxOk(result)) return result;
       return { ok: true, value: undefined };
     },
 
     async exec(session, cmd, args) {
       const sandbox = await ensure(session);
-      if (!isOk(sandbox)) return sandbox;
+      if (!isSandboxOk(sandbox)) return sandbox;
 
       return withTimeout<SandboxExecution>(
         async (signal) => {
@@ -259,7 +247,7 @@ export function createVercelSandboxAdapter(
       }
 
       const sandbox = await ensure(session);
-      if (!isOk(sandbox)) {
+      if (!isSandboxOk(sandbox)) {
         // A sandbox the provider no longer knows is already clean.
         return sandbox.error.code === "not_found"
           ? { ok: true, value: "absent" }
@@ -282,7 +270,7 @@ export function createVercelSandboxAdapter(
         mapProviderError,
       );
 
-      if (isOk(result)) live.delete(session.id);
+      if (isSandboxOk(result)) live.delete(session.id);
       return result;
     },
   };
