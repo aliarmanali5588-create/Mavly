@@ -544,12 +544,12 @@ async function publishSharedVersion(input: {
 
   let domainStatus: "verified" | "pending";
   let domainError: string | null;
-  if (probe.ok) {
-    domainStatus = "verified";
-    domainError = null;
-  } else {
+  if ("reason" in probe) {
     domainStatus = "pending";
     domainError = probe.reason;
+  } else {
+    domainStatus = "verified";
+    domainError = null;
   }
 
   const saved = await updateDeploymentRow(projectId, {
@@ -575,7 +575,7 @@ async function publishSharedVersion(input: {
   const removed = await pruneSupersededVersions(projectId, PUBLISHED_VERSION_RETENTION);
   if (removed > 0) logHostingEvent("versions_pruned", { project: projectId, removed });
 
-  if (!probe.ok) {
+  if ("reason" in probe) {
     logHostingEvent("publish_failed", {
       project: projectId,
       stage: "probe",
@@ -598,12 +598,12 @@ async function refreshSharedPublication(row: DeploymentRow): Promise<DeploymentR
 
   let domainStatus: "verified" | "pending";
   let domainError: string | null;
-  if (probe.ok) {
-    domainStatus = "verified";
-    domainError = null;
-  } else {
+  if ("reason" in probe) {
     domainStatus = "pending";
     domainError = probe.reason;
+  } else {
+    domainStatus = "verified";
+    domainError = null;
   }
 
   const patched = await updateDeploymentRow(row.project_id, {
