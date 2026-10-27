@@ -155,7 +155,8 @@ test("dashboard project mode persists, filters by stored type, and governs creat
 });
 
 test("dashboard imports use the selected type and duplicates preserve their source type", () => {
-  assert.match(dashboard, /<ImportProjectDialog[\s\S]*?projectType=\{promptMode\}/);
+  assert.doesNotMatch(dashboard, /ImportProjectDialog|importOpen|setImportOpen/);
+  assert.doesNotMatch(projectTransferDialogs, /ImportProjectDialog|transfer\.import\./);
   assert.match(dashboard, /<CloneProjectDialog[\s\S]*?projectType=\{projects\.find/);
   assert.match(projectTransferDialogs, /projectType === "android"[\s\S]*?crypto\.randomUUID\(\)/);
   assert.match(projectTransferDialogs, /\.\.\.\(requestId \? \{ clientRequestId: requestId \} : \{\}\)/);

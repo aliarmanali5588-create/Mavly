@@ -9,7 +9,6 @@ import {
     LoaderIcon,
     ShieldAlertIcon,
     TriangleAlertIcon,
-    UploadIcon,
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -31,7 +30,6 @@ import {
     hasCreatedProject,
     isBusyPhase,
     isStepComplete,
-    looksLikeImportCode,
     suggestCopyName,
     type TransferPhase,
 } from "@/lib/project-transfer";
@@ -357,129 +355,6 @@ export function ExportProjectDialog({ open, onOpenChange, projectId }: ExportPro
                             {busy && <LoaderIcon className="size-4 animate-spin" aria-hidden />}
                             <DownloadIcon className="size-4" aria-hidden />
                             {t("transfer.export.action")}
-                        </Button>
-                    )}
-                </div>
-            </div>
-        </Modal>
-    );
-}
-
-// ────────────────────────────────── Import ──────────────────────────────────
-
-export interface ImportProjectDialogProps {
-    open: boolean;
-    onOpenChange: (open: boolean) => void;
-    projectType: ProjectType;
-    /** The caller's own project slugs — the availability check, as in creation. */
-    takenNames: ReadonlySet<string>;
-    onImported: () => void;
-}
-
-export function ImportProjectDialog({
-    open,
-    onOpenChange,
-    projectType,
-    takenNames,
-    onImported,
-}: ImportProjectDialogProps) {
-    const t = useT();
-    const [code, setCode] = React.useState("");
-    const [name, setName] = React.useState("");
-    const transfer = useTransferRun();
-
-    React.useEffect(() => {
-        if (!open) return;
-        setCode("");
-        setName("");
-        transfer.reset();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [open]);
-
-    const slugProblem = name ? validateProjectSlug(name) : null;
-    const isMine = !slugProblem && takenNames.has(name);
-    // ⚠️ Validate the CODE before anything is created or charged.
-    const codeLooksRight = looksLikeImportCode(code);
-    const canStart = codeLooksRight && !!name && !slugProblem && !isMine && !transfer.busy;
-
-    async function run() {
-        await transfer.runImport({
-            importCode: code.trim(),
-            targetName: name,
-            create: true,
-            projectType,
-        });
-        onImported();
-    }
-
-    return (
-        <Modal
-            open={open}
-            onOpenChange={next => {
-                if (!transfer.busy) onOpenChange(next);
-            }}
-            size="lg"
-            title={t("transfer.import.title")}
-            description={t("transfer.import.description")}
-        >
-            <div className="space-y-4">
-                {transfer.phase === "idle" || transfer.phase === "failed" ? (
-                    <>
-                        <div className="space-y-1.5">
-                            <Label htmlFor="import-code" className="text-xs">
-                                {t("transfer.import.codeLabel")}
-                            </Label>
-                            <Input
-                                id="import-code"
-                                value={code}
-                                onChange={event => setCode(event.target.value)}
-                                placeholder="my-app-export-project-….zip"
-                                spellCheck={false}
-                                className="font-mono text-xs"
-                            />
-                            {code && !codeLooksRight && (
-                                <p className="text-destructive text-xs">{t("transfer.import.codeInvalid")}</p>
-                            )}
-                        </div>
-
-                        <NameField
-                            value={name}
-                            onChange={setName}
-                            problem={slugProblem}
-                            isMine={isMine}
-                            disabled={transfer.busy}
-                        />
-
-                        <CostNotice
-                            credits={TRANSFER_COSTS.createProject + TRANSFER_COSTS.import}
-                            detailKey="transfer.import.costDetail"
-                        />
-                    </>
-                ) : null}
-
-                {transfer.busy && <StepRail current={transfer.phase} />}
-
-                {transfer.phase === "failed" && (
-                    <>
-                        <TransferError
-                            code={transfer.failure?.code ?? null}
-                            message={transfer.failure?.message ?? null}
-                        />
-                        {hasCreatedProject(transfer.phase, transfer.createdSlug) && (
-                            <PartialProjectNotice slug={transfer.createdSlug!} />
-                        )}
-                    </>
-                )}
-
-                <div className="flex flex-wrap justify-end gap-2 pt-1">
-                    <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={transfer.busy}>
-                        {t("common.cancel")}
-                    </Button>
-                    {transfer.phase !== "done" && (
-                        <Button onClick={() => void run()} disabled={!canStart}>
-                            {transfer.busy && <LoaderIcon className="size-4 animate-spin" aria-hidden />}
-                            <UploadIcon className="size-4" aria-hidden />
-                            {t("transfer.import.action")}
                         </Button>
                     )}
                 </div>

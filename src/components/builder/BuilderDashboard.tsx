@@ -6,7 +6,6 @@ import { vcaasApi } from "@/lib/vcaas";
 import {
   CloneProjectDialog,
   ExportProjectDialog,
-  ImportProjectDialog,
 } from "@/components/workspace/ProjectTransferDialogs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,7 +24,7 @@ import { filesFromClipboard } from "@/lib/attachments";
 import { t } from "@/i18n";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
-  Plus, Loader2, Trash2, Send, Paperclip, X, ArrowRight, Copy, Upload, Download,
+  Plus, Loader2, Trash2, Send, Paperclip, X, ArrowRight, Copy, Upload,
   Search, LayoutGrid, Table as TableIcon, ArrowUpDown, ChevronLeft, ChevronRight,
   AlertCircle, MoreVertical, AlertTriangle, Monitor, Globe, Smartphone,
 } from "lucide-react";
@@ -444,7 +443,6 @@ export default function DashboardPage({ profile }: { profile: ProfileSummary }) 
    */
   const [exportTarget, setExportTarget] = useState<string | null>(null);
   const [cloneTarget, setCloneTarget] = useState<string | null>(null);
-  const [importOpen, setImportOpen] = useState(false);
   /** The availability check the dialogs run before creating: names already in use here. */
   const takenNames = useMemo(
     () => new Set(projects.map((p) => p.projectId)),
@@ -1176,28 +1174,6 @@ export default function DashboardPage({ profile }: { profile: ProfileSummary }) 
                     <TableIcon className="w-3.5 h-3.5" />
                   </button>
                 </div>
-
-                {/*
-                  ⭐ IMPORT — the other half of Export. It creates a fresh project and
-                  restores the code INTO it, because an import always drops whatever is in
-                  the target first and upstream refuses a target that is not nearly empty.
-                */}
-                <button
-                  onClick={() => setImportOpen(true)}
-                  className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700 h-8 px-2.5 rounded-lg border border-gray-200 bg-white/70 hover:bg-white transition-colors"
-                  title="Import a project from a code"
-                >
-                  <Download className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Import</span>
-                </button>
-
-                {/* ⭐ New project = focus the composer. See `focusComposer`. */}
-                <button
-                  onClick={focusComposer}
-                  className="mavly-btn-secondary h-8 px-3 text-xs font-semibold"
-                  title="New project"
-                >
-                  <Plus className="w-3.5 h-3.5" /> <span className="hidden sm:inline">New</span>
-                </button>
               </div>
             </div>
 
@@ -1561,13 +1537,6 @@ export default function DashboardPage({ profile }: { profile: ProfileSummary }) 
           if (!open) setExportTarget(null);
         }}
         projectId={exportTarget ?? ""}
-      />
-      <ImportProjectDialog
-        open={importOpen}
-        onOpenChange={setImportOpen}
-        projectType={promptMode}
-        takenNames={takenNames}
-        onImported={refreshProjects}
       />
       <CloneProjectDialog
         open={cloneTarget !== null}
