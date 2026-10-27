@@ -923,7 +923,7 @@ export default function DashboardPage({ profile }: { profile: ProfileSummary }) 
                   referrerPolicy="no-referrer"
                 />
               </div>
-              <h1 className={`font-bold tracking-tight text-gray-900 ${hasProjects ? "text-xl" : "text-3xl sm:text-4xl"}`}>
+              <h1 className="text-[2rem] font-bold leading-[1.12] tracking-tight text-gray-900 sm:text-[2.5rem] lg:text-[3.25rem]">
                 What do you want to build?
               </h1>
               {promptMode === "android" ? (
@@ -931,7 +931,7 @@ export default function DashboardPage({ profile }: { profile: ProfileSummary }) 
                   Mavly generates native Kotlin and Jetpack Compose source. Debug APK builds are available only where an operator enables them for this project; emulator previews, release signing, AAB and store publishing are not configured. Local attachments are not transferred.
                 </p>
               ) : (
-                !hasProjects && <p className="text-gray-500 max-w-md mx-auto mt-2 text-sm">Describe your app and AI will build it in minutes.</p>
+                <p className="text-gray-500 max-w-md mx-auto mt-2 text-sm">Describe your app and AI will build it in minutes.</p>
               )}
             </div>
             <div className="mb-2 px-4 sm:px-5">
