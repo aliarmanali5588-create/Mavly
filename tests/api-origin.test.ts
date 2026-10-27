@@ -156,6 +156,67 @@ test("same-origin browser requests work even when the allowlist is missing", () 
   );
 });
 
+test("a same-origin request is never blocked by a stale or mismatched allowlist", () => {
+  /**
+   * The production regression: `NEXT_PUBLIC_APP_URL` named another origin (or
+   * only `MAVLY_ALLOWED_ORIGINS` was set), so `https://mavly.xyz` was not in the
+   * allowlist and every dashboard POST — including projects/launch — was
+   * answered 403 even though the browser proved it was same-origin.
+   */
+  const mismatchedAppUrl = {
+    NEXT_PUBLIC_APP_URL: "https://staging.mavly.example",
+  } as unknown as NodeJS.ProcessEnv;
+  const onlyExtraOrigins = {
+    MAVLY_ALLOWED_ORIGINS: "https://ops.mavly.example",
+  } as unknown as NodeJS.ProcessEnv;
+  const wrongProtocol = {
+    NEXT_PUBLIC_APP_URL: "http://mavly.xyz",
+  } as unknown as NodeJS.ProcessEnv;
+
+  for (const env of [mismatchedAppUrl, onlyExtraOrigins, wrongProtocol]) {
+    assert.equal(
+      crossOriginMutationReason(
+        {
+          method: "POST",
+          origin: "https://mavly.xyz",
+          secFetchSite: "same-origin",
+          isProduction: true,
+        },
+        env,
+      ),
+      null,
+    );
+  }
+
+  // A tenant is still same-site, so a mismatched allowlist keeps it refused.
+  assert.equal(
+    crossOriginMutationReason(
+      {
+        method: "POST",
+        origin: "https://meri-ek-car-ki.mavly.xyz",
+        secFetchSite: "same-site",
+        isProduction: true,
+      },
+      mismatchedAppUrl,
+    ),
+    "origin_not_allowed",
+  );
+
+  // So is a genuine third-party cross-site caller.
+  assert.equal(
+    crossOriginMutationReason(
+      {
+        method: "POST",
+        origin: "https://evil.example",
+        secFetchSite: "cross-site",
+        isProduction: true,
+      },
+      mismatchedAppUrl,
+    ),
+    "origin_not_allowed",
+  );
+});
+
 test("a server-to-server client with no browser signals is allowed", () => {
   assert.equal(
     crossOriginMutationReason(

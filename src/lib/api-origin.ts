@@ -22,7 +22,9 @@
  * A credential-bearing mutation is therefore allowed only when:
  *
  *   · its Origin is explicitly allowlisted; or
- *   · the browser reports `same-origin` / `none`; or
+ *   · the browser reports `same-origin` / `none`, which is computed by the
+ *     browser against the URL actually fetched and cannot be produced by a
+ *     tenant page; or
  *   · there is no browser signal at all (a server-to-server client), while an
  *     Origin that IS present must still be allowlisted.
  *
@@ -115,17 +117,25 @@ export function crossOriginMutationReason(
    */
   const site = (input.secFetchSite ?? "").toLowerCase();
   const browserSameOrigin = site === "same-origin" || site === "none";
-  const allowlist = allowedAppOrigins(env);
 
   if (input.origin) {
     if (isAllowedAppOrigin(input.origin, env)) return null;
     /**
-     * Only when NO allowlist is configured at all: a same-origin browser
-     * request is still safe, because the browser computed it against the URL it
-     * fetched. A tenant page is `same-site`, never `same-origin`, so this
-     * exception cannot be abused by published content.
+     * ⚠️ `same-origin` IS PROOF, NOT CONFIGURATION — AND MUST NOT DEPEND ON THE
+     * ALLOWLIST. The browser computes `Sec-Fetch-Site` against the URL it
+     * actually fetched, and page script cannot set it. A tenant page at
+     * `<project>.mavly.xyz` calling `https://mavly.xyz/api/...` is `same-site`,
+     * never `same-origin`, so accepting this signal cannot be produced by
+     * published content.
+     *
+     * Gating this exception on `allowlist.length === 0` turned a stale or
+     * mismatched `NEXT_PUBLIC_APP_URL` / `MAVLY_ALLOWED_ORIGINS` into a total
+     * launch outage: the real dashboard is same-origin with the API, yet its
+     * POST was refused because the configured allowlist named a different
+     * origin. The allowlist still governs `same-site` and `cross-site`
+     * requests below.
      */
-    if (allowlist.length === 0 && browserSameOrigin) return null;
+    if (browserSameOrigin) return null;
     return "origin_not_allowed";
   }
 
