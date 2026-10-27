@@ -6,7 +6,9 @@ isolated verification sandbox implemented; the
 rest of the platform backend remains unavailable.
 **Scope:** the Totalum VCaaS integration stays removed. Supabase authentication, OAuth,
 sessions, project ownership and RLS are preserved. OpenRouter is the active server-only
-website/code-generation provider, and the same server-only key serves the image path.
+website/code-generation provider, and the same server-only key serves the image path. Token
+Harbor is an approved additional text provider that stays off unless an operator explicitly
+selects it.
 Vercel is used only when an operator explicitly
 enables publishing.
 
@@ -31,7 +33,7 @@ revocation or database mutation was performed while preparing this document.
 | Durable generation worker (opt-in) | Off unless `MAVLY_GENERATION_WORKER_ENABLED`, a ≥32-char `MAVLY_GENERATION_WORKER_SECRET`, an explicit `MAVLY_GENERATION_WORKER_PROJECTS` cohort, `SUPABASE_SERVICE_ROLE_KEY` and the Supabase URL are all configured. Admission records `dispatch_mode`; only worker-dispatched runs are claimed. An operator-supplied scheduler calls `/api/generation/worker`, which executes one job per tick under a fenced lease, renews it, recovers expired leases into bounded retries or dead letters, and never deletes accepted work. Uncohort projects remain inline. See `docs/runbooks/generation-worker.md`. |
 | Verification sandbox (opt-in) | Off unless `MAVLY_VERIFICATION_SANDBOX_ENABLED`, an explicit `MAVLY_VERIFICATION_SANDBOX_PROJECTS` cohort, a Vercel provider credential, `SUPABASE_SERVICE_ROLE_KEY` and the Supabase URL are all configured, and migrations 17 then 19 are applied. Only worker-dispatched runs enqueue one verification per completed run and ready snapshot. Later worker ticks re-validate the snapshot, build it in an isolated Vercel Sandbox microVM, start the validated production server on loopback and run a sandbox-local health check. `passed` requires the build, the runtime start and a `2xx`/`3xx` health response; build-only success is never `passed`. Stages run detached and are polled across ticks; every terminal path destroys the sandbox. Unsupported formats return `unsupported_runtime`. A separately opt-in bounded AI repair (default 1, hard cap 2) may create a new immutable snapshot for a source-level failure and rerun the checks. Preview stays unavailable because there is no authenticated proxy. Status appears only in the existing authorized `agent/status` / `agent/stop` responses. See `docs/architecture/phase-4-runtime-verification.md`. |
 | Generation preview | New-project plans always include `preview.html`; it is generated in its own batch. Batch parsing accepts only requested paths. Progress stages use durable run state, manifest/checkpoints, and the static-preview resolver; the UI uses an indeterminate bar rather than estimated completion percentages. |
-| Active provider | `src/lib/ai/openrouter.ts` serves every website/Android generation request through `src/lib/ai/provider.ts`; its model catalog is the allowlist the adapter enforces before a request leaves the server. |
+| Text providers | `src/lib/ai/provider.ts` serves every website/Android generation request from one OpenAI-compatible provider. **OpenRouter is the default** (`src/lib/ai/openrouter.ts`, `deepseek/deepseek-v4.1-flash`); **Token Harbor is off by default** (`src/lib/ai/tokenharbor.ts`, `deepseek-v4.1-flash:free`) and is used only when `MAVLY_AI_PROVIDER=tokenharbor`. Each adapter enforces its own catalog allowlist before a request leaves the server, the shared contract lives in `src/lib/ai/chat-contract.ts`, and there is no automatic fallback between providers. |
 | Conversation and runs | Persisted in `project_messages` and `project_runs`, polled by the workspace. |
 | Project settings | Owner-editable name/description through `PATCH /projects/{id}`; the derived Mavly address is read-only. |
 | Project secrets | Write-only AES-256-GCM ciphertext per project/environment; API responses carry metadata only. Values are not injected into the static output. |
@@ -344,10 +346,12 @@ and the stored token never reaches the model or a log.
 
 ### Generation
 
-- `MAVLY_DEFAULT_MODEL` selects the default catalog model; the built-in default is
-  `deepseek/deepseek-v4.1-flash`, served by OpenRouter. Only a catalog entry is sent to
-  OpenRouter; an unsupported explicit or configured model never selects another provider or
-  reaches the wire.
+- `MAVLY_AI_PROVIDER` selects the provider (`openrouter`, the default for any unset or
+  unrecognized value, or `tokenharbor`). `MAVLY_DEFAULT_MODEL` selects the default catalog
+  model **of the selected provider**; the built-in defaults are
+  `deepseek/deepseek-v4.1-flash` (OpenRouter) and `deepseek-v4.1-flash:free` (Token Harbor).
+  Only a catalog entry of the selected provider is ever sent; an unsupported explicit or
+  configured model never selects another provider and never reaches the wire.
 - The run plans a manifest, then requests bounded file batches. The model must return JSON
   with full file contents; one focused repair is made per malformed/empty response.
 - `finish_reason: "length"` is always a failure. The truncated response is discarded, the
@@ -453,10 +457,14 @@ with HTTP **503** and `cache-control: private, no-store, max-age=0`.
 - `src/lib/mavly/image-limits.ts` — best-effort per-user/per-instance request admission.
 - `src/lib/image-generation-options.ts` — aspect-ratio/format constants shared by the
   server validation and the workspace panel.
-- `src/lib/ai/openrouter.ts` — the active OpenRouter chat-completions call, the catalog
-  gate and the redacted failure classification; server-only key.
-- `src/lib/ai/provider.ts` — the provider-neutral website-generation boundary, currently
-  bound only to OpenRouter.
+- `src/lib/ai/chat-contract.ts` — the provider-neutral chat-completions contract: result
+  types, response parsing, token/cost extraction and failure classification. Pure.
+- `src/lib/ai/openrouter.ts` — the default OpenRouter chat-completions call, its catalog
+  gate and redacted failures; server-only key.
+- `src/lib/ai/tokenharbor.ts` — the additional Token Harbor adapter, off by default: its
+  endpoint, credential, provider-local catalog gate and provider wording.
+- `src/lib/ai/provider.ts` — the provider boundary: server-configured selection, dispatch
+  and the provider-aware configuration error.
 - `src/lib/ai/agent.ts` — prompt, JSON parsing/repair, path and size validation.
 - `src/lib/mavly/store.ts` — Supabase persistence through the caller's client.
 - `src/lib/mavly/run-agent.ts` — claim → baseline → checkpointed batches → complete/fail.
@@ -576,8 +584,11 @@ The Totalum client `src/lib/vcaas-server.ts` remains deleted and must not be rec
 - Project secrets require `supabase/migrations/11_project_secrets.sql` and the server-only
   `MAVLY_PROJECT_SECRETS_ENCRYPTION_KEY` (32 random bytes, base64). The migration and key
   are not applied automatically.
-- Website/code generation uses `OPENROUTER_API_KEY` from the Next.js server runtime; the
-  same key serves image generation. The runtime
+- Website/code generation uses `OPENROUTER_API_KEY` from the Next.js server runtime when
+  the selected provider is OpenRouter (the default), where the same key serves image
+  generation; selecting Token Harbor (`MAVLY_AI_PROVIDER=tokenharbor`) needs the
+  server-only `TOKEN_HARBOR_API_KEY` instead, and an unselected provider's key alone makes
+  nothing ready. The runtime
   is Vercel/Next.js `nodejs` with `after()` scheduling; this repository has no Supabase
   Edge Function or autonomous worker that needs the key. Configure it in Vercel Project
   Environment Variables and redeploy, and in local `.env.local` for development.

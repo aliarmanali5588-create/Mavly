@@ -51,6 +51,7 @@ export const RESERVED_ENV_KEYS: ReadonlySet<string> = new Set([
   "MAVLY_INTEGRATION_ENCRYPTION_KEY",
   "MAVLY_GENERATION_WORKER_SECRET",
   "OPENROUTER_API_KEY",
+  "TOKEN_HARBOR_API_KEY",
 ]);
 
 export const RESERVED_ENV_PREFIXES: readonly string[] = [

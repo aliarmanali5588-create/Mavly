@@ -7,7 +7,8 @@ editor surfaces and settings dialogs of an AI app builder.
 > **Current status: local AI builder.** Supabase authentication and project ownership are
 > real. OpenRouter, called only from the server, generates a complete frontend and backend
 > project through its OpenAI-compatible chat-completions API; the same server-only key
-> serves the separate OpenRouter image API. Supabase
+> serves the separate OpenRouter image API. Token Harbor is an optional additional text
+> provider, off unless an operator explicitly selects it. Supabase
 > stores the generated source, conversation and run state; the workspace
 > previews the generated static `preview.html`, or an imported static site with an
 > `index.html` / `public/index.html` and local assets. A user-owned Supabase account can
@@ -35,7 +36,7 @@ audits listed at the end of this file; it is not a runtime dependency.
 | API session gate | `/api/*` returns JSON `401 UNAUTHENTICATED` without a verified session |
 | Project ownership checks | `public.projects` plus RLS, checked by every project-scoped route |
 | Project create/launch/list/get/update/delete | Stored in Supabase |
-| Agent generation | OpenRouter (`deepseek/deepseek-v4.1-flash`), server-side; durable run rows, bounded batches, per-batch checkpoints, resume and cooperative cancel |
+| Agent generation | OpenRouter (`deepseek/deepseek-v4.1-flash`) by default, or Token Harbor (`deepseek-v4.1-flash:free`) when explicitly selected, server-side; durable run rows, bounded batches, per-batch checkpoints, resume and cooperative cancel |
 | Conversations and run status | Persisted in Supabase and polled by the workspace |
 | Project settings | Owner-editable project name and description; the derived Mavly address is read-only |
 | Project secrets | Write-only AES-256-GCM encrypted values per project/environment; list returns metadata only and update replaces without retrieval; **not injected into previews or published static sites** |
@@ -248,8 +249,26 @@ Storage. An OpenRouter API key is needed for website/code generation, and the sa
 serves the image-generation path.
 The default model is the verified OpenRouter ID `deepseek/deepseek-v4.1-flash`, requested
 from `https://openrouter.ai/api/v1/chat/completions`. Mavly preserves its existing
-24,000-token project cap; `MAVLY_DEFAULT_MODEL` may only name a model in the catalog in
-`src/lib/ai/models.ts`.
+24,000-token project cap; `MAVLY_DEFAULT_MODEL` may only name a model in the selected
+provider's catalog in `src/lib/ai/models.ts`.
+
+### Text-generation providers
+
+OpenRouter is the default provider for website and native Android source generation.
+Token Harbor is an additional, OpenAI-compatible provider that an operator can select for
+controlled testing:
+
+- leave `MAVLY_AI_PROVIDER` unset (or set it to `openrouter`) for the default behaviour;
+- set `MAVLY_AI_PROVIDER=tokenharbor` **and** `TOKEN_HARBOR_API_KEY` to use Token Harbor;
+  the model is `deepseek-v4.1-flash:free`, and `TOKEN_HARBOR_BASE_URL` defaults to
+  `https://tokenharbor.ai/v1`.
+
+An unrecognized provider value keeps the default. There is no automatic fallback between
+providers: a failure is reported as the selected provider's failure. Deleting
+`MAVLY_AI_PROVIDER` and redeploying restores the previous behaviour — no data migration is
+needed. Token Harbor serves **text/code generation only**; image generation stays on the
+OpenRouter image API, and the free route is rate-limited by the provider. See
+[`docs/architecture/phase-10-token-harbor-provider.md`](docs/architecture/phase-10-token-harbor-provider.md).
 
 ```bash
 npm install
@@ -262,8 +281,12 @@ Set these in `.env.local`:
 NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your-publishable-key
 NEXT_PUBLIC_APP_URL=http://localhost:3000
-MAVLY_DEFAULT_MODEL=deepseek/deepseek-v4.1-flash  # optional; must be a catalog entry
-OPENROUTER_API_KEY=your-openrouter-api-key  # website/Android generation and image generation
+MAVLY_AI_PROVIDER=            # optional: openrouter (default) | tokenharbor
+MAVLY_DEFAULT_MODEL=          # optional; must be a catalog entry of the selected provider
+OPENROUTER_API_KEY=your-openrouter-api-key  # default generation provider + image generation
+# Optional, only when MAVLY_AI_PROVIDER=tokenharbor. Server-only, never public.
+TOKEN_HARBOR_API_KEY=
+TOKEN_HARBOR_BASE_URL=        # optional; defaults to https://tokenharbor.ai/v1
 
 SUPABASE_OAUTH_CLIENT_ID=your-oauth-app-client-id
 SUPABASE_OAUTH_CLIENT_SECRET=your-oauth-app-client-secret
@@ -299,7 +322,8 @@ MAVLY_FULLSTACK_HOSTING_PROJECTS=
 ```
 
 Only the two `NEXT_PUBLIC_SUPABASE_*` values and `NEXT_PUBLIC_APP_URL` are public.
-`OPENROUTER_API_KEY` (website/Android generation and images), the OAuth client secrets,
+`OPENROUTER_API_KEY` (default generation provider and images), `TOKEN_HARBOR_API_KEY`
+(optional generation provider), the OAuth client secrets,
 `MAVLY_INTEGRATION_ENCRYPTION_KEY`, `MAVLY_PROJECT_SECRETS_ENCRYPTION_KEY`,
 `VERCEL_API_TOKEN`, `VERCEL_OIDC_TOKEN`, `VERCEL_TOKEN`, `VERCEL_PROJECT_ID`,
 `MAVLY_GENERATION_WORKER_SECRET` and
@@ -413,7 +437,8 @@ npm run build && npm start
 ```
 
 Unit tests cover the pure auth/redirect/ownership/scope modules, static route invariants,
-OpenRouter request/response classification, generation validator/batching/truncation rules,
+OpenRouter and Token Harbor request/response classification and the provider-selection
+policy, generation validator/batching/truncation rules,
 provider retry classification, checkpoint verification, deployment host/state rules, the
 verification runtime/health/preview/config/state/result modules, the bounded repair policy
 and parsers, and static invariants of migration `19` (including the build+runtime+health

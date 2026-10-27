@@ -38,7 +38,7 @@ import type {
   VcaasProjectSummary,
   VcaasSecret,
 } from "@/lib/vcaas-types";
-import { isAiConfigured } from "@/lib/ai/provider";
+import { generationConfigurationError, isAiConfigured } from "@/lib/ai/provider";
 import { resolveModel } from "@/lib/ai/models";
 import { parseImageGenerationRequest, resolveImageModel } from "@/lib/ai/image-models";
 import {
@@ -656,7 +656,7 @@ async function launchProjectResponse(userId: string, body: unknown): Promise<Nex
     return fail(400, "VALIDATION", "A valid clientRequestId is required to launch an Android project.");
   }
   if (!isAiConfigured()) {
-    return fail(503, "BACKEND_NOT_CONFIGURED", "OpenRouter is not configured. Add OPENROUTER_API_KEY to the server runtime.");
+    return fail(503, "BACKEND_NOT_CONFIGURED", generationConfigurationError());
   }
 
   const prompt = (stringOf(record.prompt)?.trim() ?? "").slice(0, 32_000);
@@ -1651,7 +1651,7 @@ async function previewRotateUrlResponse(
 
 async function startAgentResponse(userId: string, projectId: string, body: unknown): Promise<NextResponse> {
   if (!isAiConfigured()) {
-    return fail(503, "BACKEND_NOT_CONFIGURED", "OpenRouter is not configured. Add OPENROUTER_API_KEY to the server runtime.");
+    return fail(503, "BACKEND_NOT_CONFIGURED", generationConfigurationError());
   }
 
   const record = recordOf(body);
@@ -1748,7 +1748,7 @@ async function startAgentResponse(userId: string, projectId: string, body: unkno
 
 async function resumeAgentResponse(userId: string, projectId: string): Promise<NextResponse> {
   if (!isAiConfigured()) {
-    return fail(503, "BACKEND_NOT_CONFIGURED", "OpenRouter is not configured. Add OPENROUTER_API_KEY to the server runtime.");
+    return fail(503, "BACKEND_NOT_CONFIGURED", generationConfigurationError());
   }
 
   const current = await latestRun(projectId);
