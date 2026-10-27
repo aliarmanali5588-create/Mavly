@@ -35,7 +35,7 @@ function claim(overrides: {
       lease_token: LEASE,
       trace_id: TRACE,
       prompt: "build a small site",
-      model: "claude-opus-4.8",
+      model: "claude-opus-4.7",
       stage: "validating",
       dispatch_mode: "worker",
       finished_at: null,

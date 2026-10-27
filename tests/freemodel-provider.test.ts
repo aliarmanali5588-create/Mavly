@@ -59,7 +59,7 @@ test("a successful request uses FreeModel auth, the catalog model, and supported
     const messages: ChatMessage[] = [{ role: "system", content: "Return JSON." }, { role: "user", content: "x" }];
     const result = await chatCompletion(model, messages, { maxTokens: 400, temperature: 0.2 });
     assert.equal(result.ok, true);
-    assert.equal(result.ok && result.model, "claude-opus-4.8");
+    assert.equal(result.ok && result.model, "claude-opus-4.7");
     assert.deepEqual(sent, {
       model: model.id,
       messages,
@@ -221,7 +221,58 @@ test("empty and truncated completions are failures, not successes", async () => 
 });
 
 test("the website-generation model catalog contains only the supported FreeModel model", () => {
-  assert.deepEqual(AI_MODEL_CATALOG.map((entry) => entry.id), ["claude-opus-4.8"]);
+  assert.deepEqual(AI_MODEL_CATALOG.map((entry) => entry.id), ["claude-opus-4.7"]);
+});
+
+test("MAVLY_DEFAULT_MODEL selects the catalog model and an unknown value stays on the catalog default", () => {
+  const previousDefault = process.env.MAVLY_DEFAULT_MODEL;
+  try {
+    process.env.MAVLY_DEFAULT_MODEL = "claude-opus-4.7";
+    assert.equal(resolveModel(null, "app-generation").id, "claude-opus-4.7");
+
+    // An unrecognized value must never reach the provider; it falls back to the
+    // catalog default rather than being forwarded on the wire.
+    process.env.MAVLY_DEFAULT_MODEL = "claude-fable-5-1";
+    assert.equal(resolveModel(null, "app-generation").id, "claude-opus-4.7");
+  } finally {
+    if (previousDefault === undefined) delete process.env.MAVLY_DEFAULT_MODEL;
+    else process.env.MAVLY_DEFAULT_MODEL = previousDefault;
+  }
+});
+
+test("the base URL defaults to FreeModel and trailing slashes are stripped", async () => {
+  useApiKey();
+  const previousBaseUrl = process.env.FREEMODEL_BASE_URL;
+  const seen: string[] = [];
+  globalThis.fetch = (async (input) => {
+    seen.push(String(input));
+    return new Response(JSON.stringify({
+      model: model.id,
+      choices: [{ message: { content: '{"files":[]}' }, finish_reason: "stop" }],
+    }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  }) as typeof fetch;
+
+  try {
+    delete process.env.FREEMODEL_BASE_URL;
+    const byDefault = await chatCompletion(model, [{ role: "user", content: "x" }]);
+    assert.equal(byDefault.ok, true);
+
+    process.env.FREEMODEL_BASE_URL = "https://freemodel.example/v1///";
+    const overridden = await chatCompletion(model, [{ role: "user", content: "x" }]);
+    assert.equal(overridden.ok, true);
+
+    assert.deepEqual(seen, [
+      "https://freemodel.in/v1/chat/completions",
+      "https://freemodel.example/v1/chat/completions",
+    ]);
+  } finally {
+    if (previousBaseUrl === undefined) delete process.env.FREEMODEL_BASE_URL;
+    else process.env.FREEMODEL_BASE_URL = previousBaseUrl;
+    restoreEnvironment();
+  }
 });
 
 test("FreeModel usage safely extracts token and reasoning counts", () => {

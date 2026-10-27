@@ -20,12 +20,12 @@ export interface AiModel {
   maxOutputTokens: number;
 }
 
-const DEFAULT_MODEL_ID = "claude-opus-4.8";
+const DEFAULT_MODEL_ID = "claude-opus-4.7";
 
 export const AI_MODEL_CATALOG: readonly AiModel[] = [
   {
     id: DEFAULT_MODEL_ID,
-    label: "Claude Opus 4.8 (FreeModel)",
+    label: "Claude Opus 4.7 (FreeModel)",
     tasks: ["app-generation", "repair", "review", "fast", "reasoning"],
     maxOutputTokens: 24_000,
   },

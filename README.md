@@ -36,7 +36,7 @@ audits listed at the end of this file; it is not a runtime dependency.
 | API session gate | `/api/*` returns JSON `401 UNAUTHENTICATED` without a verified session |
 | Project ownership checks | `public.projects` plus RLS, checked by every project-scoped route |
 | Project create/launch/list/get/update/delete | Stored in Supabase |
-| Agent generation | FreeModel (`claude-opus-4.8`), server-side; durable run rows, bounded batches, per-batch checkpoints, resume and cooperative cancel |
+| Agent generation | FreeModel (`claude-opus-4.7`), server-side; durable run rows, bounded batches, per-batch checkpoints, resume and cooperative cancel |
 | Conversations and run status | Persisted in Supabase and polled by the workspace |
 | Project settings | Owner-editable project name and description; the derived Mavly address is read-only |
 | Project secrets | Write-only AES-256-GCM encrypted values per project/environment; list returns metadata only and update replaces without retrieval; **not injected into previews or published static sites** |
@@ -247,7 +247,7 @@ run the staged load test.
 Requirements: Node.js 20+ and npm. Supabase is needed for sign-in, project access and
 Storage. A FreeModel API key is needed for website/code generation. OpenRouter remains a
 separate, optional key for the image-generation path.
-The default FreeModel model is `claude-opus-4.8` from the OpenAI-compatible API at
+The default FreeModel model is `claude-opus-4.7` from the OpenAI-compatible API at
 `https://freemodel.in/v1`. Mavly preserves its existing 24,000-token project cap while
 using the provider's compatible chat-completions model catalog.
 
@@ -264,7 +264,7 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=your-publishable-key
 NEXT_PUBLIC_APP_URL=http://localhost:3000
 FREEMODEL_API_KEY=your-freemodel-api-key
 FREEMODEL_BASE_URL=https://freemodel.in/v1
-MAVLY_DEFAULT_MODEL=claude-opus-4.8
+MAVLY_DEFAULT_MODEL=claude-opus-4.7
 OPENROUTER_API_KEY=your-openrouter-api-key  # image generation; preserved chat client is not active
 
 SUPABASE_OAUTH_CLIENT_ID=your-oauth-app-client-id

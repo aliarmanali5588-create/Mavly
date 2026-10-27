@@ -112,7 +112,7 @@ test("an emitted line carries only allowlisted, validated fields", () => {
     attempt: 1,
     maxAttempts: 3,
     queueLagMs: 1200,
-    model: "claude-opus-4.8",
+    model: "claude-opus-4.7",
     prompt: "SECRET PROMPT",
     generatedCode: "<html>secret</html>",
   } as GenerationEventFields);
@@ -126,7 +126,7 @@ test("an emitted line carries only allowlisted, validated fields", () => {
   assert.equal(line.body.dispatchMode, "worker");
   assert.equal(line.body.attempt, 1);
   assert.equal(line.body.queueLagMs, 1200);
-  assert.equal(line.body.model, "claude-opus-4.8");
+  assert.equal(line.body.model, "claude-opus-4.7");
   assert.equal("prompt" in line.body, false);
   assert.equal("generatedCode" in line.body, false);
 });

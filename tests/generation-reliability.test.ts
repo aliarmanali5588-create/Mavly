@@ -251,7 +251,7 @@ test("follow-up edits resolve legacy model IDs to the FreeModel catalog", async 
   );
 
   assert.equal(isGenerationFailure(outcome), false);
-  assert.deepEqual(calledModels, ["claude-opus-4.8", "claude-opus-4.8"]);
+  assert.deepEqual(calledModels, ["claude-opus-4.7", "claude-opus-4.7"]);
 });
 
 test("a truncated single file gets exactly one compact retry", async () => {
