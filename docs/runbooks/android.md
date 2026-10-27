@@ -5,7 +5,7 @@
 | Capability | State |
 |---|---|
 | Android project creation | Available (authenticated, idempotent with `clientRequestId`) |
-| Kotlin/Compose source generation | Available through the existing FreeModel pipeline |
+| Kotlin/Compose source generation | Available through the existing OpenRouter pipeline |
 | Source validation | Available (`src/lib/android/contract.ts`) |
 | Download source ZIP | Available through the authorized source-code route |
 | Debug APK build | **Implemented, off by default** (migration 26 + explicit cohort + pinned image) |
@@ -288,7 +288,7 @@ Run these as the human developer; agents must not run them under `AGENTS.md`.
    `java -version` (17), `gradle --version` (8.9), platform 35, build-tools 35.0.0,
    `aapt`, and the warmed cache. Confirm the VCR repository is `Ready` and use its
    `@sha256:` digest.
-3. Set `FREEMODEL_API_KEY`, Vercel Sandbox credentials, `SUPABASE_SERVICE_ROLE_KEY`,
+3. Set `OPENROUTER_API_KEY`, Vercel Sandbox credentials, `SUPABASE_SERVICE_ROLE_KEY`,
    `NEXT_PUBLIC_SUPABASE_URL`, the generation-worker variables, and the Android
    build variables above.
 4. Confirm the worker end to end: call `POST /api/generation/worker` with the

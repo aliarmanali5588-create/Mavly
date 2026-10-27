@@ -141,7 +141,7 @@ test("MAVLY_IMAGE_MODEL selects a catalog entry, and only a catalog entry", () =
     // MAVLY_DEFAULT_MODEL stays the website/code-generation selector.
     process.env.MAVLY_DEFAULT_MODEL = "provider/unsupported-model";
     assert.equal(resolveImageModel().id, FLUX);
-    assert.equal(resolveModel(null, "app-generation").id, "claude-opus-4.7");
+    assert.equal(resolveModel(null, "app-generation").id, "deepseek/deepseek-v4.1-flash");
   } finally {
     if (previousImage === undefined) delete process.env.MAVLY_IMAGE_MODEL;
     else process.env.MAVLY_IMAGE_MODEL = previousImage;

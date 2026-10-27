@@ -9,7 +9,7 @@
  * and the exact blocker is reported.
  *
  * Native Kotlin/Compose SOURCE generation is available through the existing
- * FreeModel pipeline. A saved source tree is not a build, an installable app, a
+ * OpenRouter pipeline. A saved source tree is not a build, an installable app, a
  * store submission or a verified device run.
  */
 
@@ -29,7 +29,7 @@ export type AndroidBuildCapabilityStatus = "available" | "not_configured";
 export interface AndroidCapability {
   sourceGeneration: {
     available: true;
-    provider: "freemodel";
+    provider: "openrouter";
     languages: readonly ["kotlin"];
     ui: readonly ["jetpack-compose"];
   };
@@ -95,7 +95,7 @@ export function androidCapability(
   return {
     sourceGeneration: {
       available: true,
-      provider: "freemodel",
+      provider: "openrouter",
       languages: ["kotlin"],
       ui: ["jetpack-compose"],
     },

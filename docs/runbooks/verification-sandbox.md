@@ -27,7 +27,7 @@ the baseline and provider decision. Where they disagree, Phase 4 and migration
 - The plan's maximum sandbox lifetime is at least 22 minutes (the design uses a
   22-minute session inside a 26-minute deadline).
 - An explicit list of project ids. There is no `*` and no default cohort.
-- For repair only: a configured generation model (`FREEMODEL_API_KEY`) and the
+- For repair only: a configured generation model (`OPENROUTER_API_KEY`) and the
   separate repair flag below.
 
 Apply the migrations with your normal process. Do **not** apply them as part of

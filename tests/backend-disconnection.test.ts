@@ -8,7 +8,7 @@ import { isVcaasErrorCode } from "../src/lib/vcaas-errors";
 /**
  * ═══ THE BACKEND BOUNDARY ══════════════════════════════════════════════════
  *
- * Mavly now has one local builder backend (FreeModel + Supabase) plus the
+ * Mavly now has one local builder backend (OpenRouter + Supabase) plus the
  * unchanged explicit 503 for everything else. These tests pin the boundary:
  *
  *  · Totalum stays removed, and no runtime reads its key or host;
@@ -105,7 +105,7 @@ test("the proxy no longer trusts any Totalum host for CORS", () => {
 
 // ── The local builder boundary ─────────────────────────────────────────────
 
-test("FreeModel is the active website-generation provider and its key stays server-only", () => {
+test("OpenRouter is the only text-generation provider and its key stays server-only", () => {
   const files = [
     ...(readdirSync(new URL("src", root), { recursive: true }) as string[])
       .filter((entry) => entry.endsWith(".ts") || entry.endsWith(".tsx"))
@@ -115,34 +115,53 @@ test("FreeModel is the active website-generation provider and its key stays serv
   for (const file of files) {
     const source = read(file);
     assert.equal(
-      source.includes("NEXT_PUBLIC_GROQ"),
+      source.includes("NEXT_PUBLIC_OPENROUTER"),
       false,
-      `${file} must not make the FreeModel key public`,
+      `${file} must not make the OpenRouter key public`,
     );
     if (file.endsWith(".tsx")) {
       assert.equal(
-        source.includes("GROQ_API_KEY"),
+        source.includes("OPENROUTER_API_KEY"),
         false,
-        `${file} is a component and must not read the FreeModel server key`,
+        `${file} is a component and must not read the OpenRouter server key`,
       );
     }
   }
 
-  assert.equal(read("src/lib/ai/freemodel.ts").includes("FREEMODEL_API_KEY"), false);
-  assert.equal(read("src/lib/ai/freemodel.ts").includes("console."), false);
+  // The retired provider is deleted, not merely unimported.
+  assert.equal(existsSync(new URL("src/lib/ai/freemodel.ts", root)), false);
   assert.equal(read("src/lib/ai/agent.ts").includes('"./provider"'), true);
   assert.equal(read("src/lib/mavly/run-agent.ts").includes("@/lib/ai/provider"), true);
   assert.equal(read("src/lib/mavly/run-agent.ts").includes("@/lib/ai/openrouter"), false);
   assert.equal(read("src/lib/mavly/api.ts").includes('from "@/lib/ai/provider"'), true);
-  assert.equal(read("src/lib/ai/provider.ts").includes('from "./freemodel"'), true);
-  assert.equal(read("src/lib/ai/provider.ts").includes('from "./openrouter"'), false);
+  assert.equal(read("src/lib/ai/provider.ts").includes('from "./openrouter"'), true);
   assert.equal(read("src/lib/ai/openrouter.ts").includes("OPENROUTER_API_KEY"), true);
+  assert.equal(read("src/lib/ai/openrouter.ts").includes("console."), false);
   assert.equal(read("src/lib/ai/openrouter-images.ts").includes("OPENROUTER_API_KEY"), true);
-  assert.equal(existsSync(new URL("src/lib/ai/openrouter.ts", root)), true);
+  assert.equal(read("src/lib/hosting/deployment-env.ts").includes('"OPENROUTER_API_KEY"'), true);
+});
+
+test("no active runtime or example env references the retired provider", () => {
+  const files = [
+    ...(readdirSync(new URL("src", root), { recursive: true }) as string[])
+      .filter((entry) => entry.endsWith(".ts") || entry.endsWith(".tsx"))
+      .map((entry) => `src/${entry.replaceAll("\\", "/")}`),
+  ].filter((file) => existsSync(new URL(file, root)));
+
+  for (const file of files) {
+    const source = read(file).toLowerCase();
+    for (const token of ["freemodel", "freemodel.in"]) {
+      assert.equal(source.includes(token), false, `${file} still references ${token}`);
+    }
+  }
+
+  const envExample = read(".env.example").toLowerCase();
+  assert.equal(envExample.includes("freemodel"), false, `.env.example still references the retired provider`);
+  assert.equal(envExample.includes("openrouter_api_key"), true, `.env.example must document the active key`);
 });
 
 test("the AI modules do not execute generated output", () => {
-  for (const file of ["src/lib/ai/agent.ts", "src/lib/ai/freemodel.ts", "src/lib/mavly/run-agent.ts"]) {
+  for (const file of ["src/lib/ai/agent.ts", "src/lib/ai/openrouter.ts", "src/lib/mavly/run-agent.ts"]) {
     const source = read(file);
     for (const dangerous of ["eval(", "new Function(", "child_process", "execSync("]) {
       assert.equal(source.includes(dangerous), false, `${file} must not use ${dangerous}`);

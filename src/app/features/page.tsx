@@ -92,7 +92,7 @@ export default function FeaturesPage() {
               {
                 step: "02",
                 title: "Generate initial build",
-                desc: "The FreeModel-hosted model produces HTML, Tailwind CSS styling, component structures, and copy.",
+                desc: "The OpenRouter-hosted model produces HTML, Tailwind CSS styling, component structures, and copy.",
                 icon: Terminal,
               },
               {
@@ -161,7 +161,7 @@ export default function FeaturesPage() {
               </div>
               <h3 className="text-base font-bold text-gray-950">Prompt-Based Website Generation</h3>
               <p className="text-xs text-gray-600 leading-relaxed">
-                The server-side FreeModel Claude Opus 4.8 model translates conversational prompts into complete HTML, CSS, and component files.
+                The server-side OpenRouter model (DeepSeek V4.1 Flash) translates conversational prompts into complete HTML, CSS, and component files.
               </p>
             </div>
 

@@ -1,14 +1,16 @@
 /**
- * Active website-generation provider boundary.
+ * Active website/Android source-generation provider boundary.
  *
  * Business logic depends on this provider-neutral surface; select a different
- * adapter here only when the active website-generation provider changes.
+ * adapter here only when the active generation provider changes. OpenRouter is
+ * the only text-generation provider: the same module serves website and native
+ * Android source generation, the durable worker and bounded verification repair.
  */
 export {
   chatCompletion,
   isAiConfigured,
   isChatCompletionFailure,
-} from "./freemodel";
+} from "./openrouter";
 export type {
   ChatCompletionErrorCode,
   ChatCompletionFailure,
@@ -18,4 +20,4 @@ export type {
   ChatCompletionSuccess,
   ChatCompletionUsage,
   ChatMessage,
-} from "./freemodel";
+} from "./openrouter";

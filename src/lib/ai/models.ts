@@ -4,8 +4,10 @@
  * ⚠️ SERVER-ONLY. This module reads `process.env`; never import it from a client
  * component. The browser only sees model ids the server chooses to expose.
  *
- * Website generation uses the FreeModel-hosted catalog below. Keep model IDs
- * limited to models verified for the OpenAI-compatible FreeModel API.
+ * Website and native Android source generation both use OpenRouter's
+ * OpenAI-compatible chat-completions API. Keep model IDs limited to models
+ * verified for that API: this catalog is the allowlist the adapter enforces
+ * before a request leaves the server.
  */
 
 export type AiTask = "app-generation" | "repair" | "review" | "fast" | "reasoning";
@@ -20,57 +22,34 @@ export interface AiModel {
   maxOutputTokens: number;
 }
 
-const DEFAULT_MODEL_ID = "claude-opus-4.7";
+/**
+ * The verified OpenRouter model ID. This is OpenRouter's DeepSeek V4.1 Flash
+ * endpoint and the repository's designated OpenRouter default.
+ *
+ * ⚠️ It is an OpenRouter ID (`vendor/model`). Provider-local aliases — including
+ * the retired provider-local `claude-opus-*` names — are never valid here: they
+ * would be sent verbatim and rejected upstream.
+ */
+const DEFAULT_MODEL_ID = "deepseek/deepseek-v4.1-flash";
 
+/**
+ * The active generation catalog. It contains only verified IDs so `resolveModel`
+ * can never silently route a project to an unverified or unrelated model.
+ */
 export const AI_MODEL_CATALOG: readonly AiModel[] = [
   {
     id: DEFAULT_MODEL_ID,
-    label: "Claude Opus 4.7 (FreeModel)",
+    label: "DeepSeek V4.1 Flash (OpenRouter)",
     tasks: ["app-generation", "repair", "review", "fast", "reasoning"],
     maxOutputTokens: 24_000,
   },
 ];
 
-const OPENROUTER_DEFAULT_MODEL_ID = "deepseek/deepseek-v4.1-flash";
-
 /**
- * Preserve the previous OpenRouter model catalog for explicitly reactivated
- * OpenRouter workflows. The active website-generation resolver below uses only
- * the FreeModel catalog; these entries are never sent by the current run-agent path.
- * Revalidate these historical model IDs against OpenRouter before reactivation.
+ * The active catalog *is* the OpenRouter catalog: text generation has exactly one
+ * provider. Kept as a named export for callers that resolve explicitly.
  */
-export const OPENROUTER_MODEL_CATALOG: readonly AiModel[] = [
-  {
-    id: OPENROUTER_DEFAULT_MODEL_ID,
-    label: "DeepSeek V4.1 Flash",
-    tasks: ["app-generation", "repair", "fast"],
-    maxOutputTokens: 24_000,
-  },
-  {
-    id: "anthropic/claude-sonnet-4.5",
-    label: "Claude Sonnet 4.5",
-    tasks: ["app-generation", "repair", "review"],
-    maxOutputTokens: 24_000,
-  },
-  {
-    id: "openai/gpt-5.1",
-    label: "GPT-5.1",
-    tasks: ["app-generation", "reasoning", "review"],
-    maxOutputTokens: 24_000,
-  },
-  {
-    id: "google/gemini-2.5-pro",
-    label: "Gemini 2.5 Pro",
-    tasks: ["review", "fast"],
-    maxOutputTokens: 24_000,
-  },
-  {
-    id: "qwen/qwen3-coder",
-    label: "Qwen3 Coder",
-    tasks: ["app-generation", "repair"],
-    maxOutputTokens: 24_000,
-  },
-];
+export const OPENROUTER_MODEL_CATALOG: readonly AiModel[] = AI_MODEL_CATALOG;
 
 export function configuredDefaultModelId(): string {
   const override = process.env.MAVLY_DEFAULT_MODEL?.trim();
@@ -79,7 +58,11 @@ export function configuredDefaultModelId(): string {
 
 /**
  * Pick the model for a task. An explicit request wins when it names a catalog
- * model; otherwise the first catalog entry that supports the task is used.
+ * model; otherwise the configured default is used when it is itself a catalog
+ * entry for the task, and the first suitable catalog entry is the last resort.
+ *
+ * A configured or requested value that is not in the catalog never reaches the
+ * wire: it resolves to a verified entry instead.
  */
 export function resolveModel(
   requestedModel?: string | null,
@@ -98,22 +81,16 @@ export function resolveModel(
   return AI_MODEL_CATALOG.find((model) => model.tasks.includes(task)) ?? AI_MODEL_CATALOG[0];
 }
 
+/**
+ * Explicit OpenRouter resolution. The active catalog is the OpenRouter catalog,
+ * so this is the same policy as `resolveModel`; it stays a named export for
+ * callers that name the provider on purpose.
+ */
 export function resolveOpenRouterModel(
   requestedModel?: string | null,
   task: AiTask = "app-generation",
 ): AiModel {
-  const requested = requestedModel?.trim();
-  if (requested) {
-    const exact = OPENROUTER_MODEL_CATALOG.find((model) => model.id === requested);
-    if (exact) return exact;
-  }
-  return (
-    OPENROUTER_MODEL_CATALOG.find(
-      (model) => model.id === OPENROUTER_DEFAULT_MODEL_ID && model.tasks.includes(task),
-    ) ??
-    OPENROUTER_MODEL_CATALOG.find((model) => model.tasks.includes(task)) ??
-    OPENROUTER_MODEL_CATALOG[0]
-  );
+  return resolveModel(requestedModel, task);
 }
 
 export function modelCatalogIds(): string[] {

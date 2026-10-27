@@ -164,7 +164,7 @@ MAVLY_VERIFICATION_MAX_REPAIRS=1     # 0..2, default 1
 ```
 
 Repair also requires the generation provider to be configured (`isAiConfigured`,
-currently FreeModel). The enqueue persists a bounded budget; every later tick may
+currently OpenRouter). The enqueue persists a bounded budget; every later tick may
 only lower it.
 
 ### 4.1 Eligible failures

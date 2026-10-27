@@ -362,9 +362,7 @@
 │   │   └── types.ts
 │   ├── lib
 │   │   ├── ai
-│   │   │   ├── agent.ts
-│   │   │   ├── freemodel.ts
-│   │   │   ├── image-models.ts
+│   │   │   ├── agent.ts│   │   ├── openrouter-images.ts
 │   │   │   ├── models.ts
 │   │   │   ├── openrouter-images.ts
 │   │   │   ├── openrouter.ts
@@ -544,8 +542,7 @@
 │   ├── generation-checkpoints.test.ts
 │   ├── generation-migration.test.ts
 │   ├── generation-reliability.test.ts
-│   ├── github-installation.test.ts
-│   ├── freemodel-provider.test.ts
+│   ├── github-installation.test.ts│   ├── openrouter-provider.test.ts
 │   ├── image-generation-limits.test.ts
 │   ├── image-generation.test.ts
 │   ├── openrouter-metadata.test.ts

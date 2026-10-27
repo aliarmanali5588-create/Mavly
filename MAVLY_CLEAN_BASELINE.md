@@ -5,10 +5,9 @@ static-publishing path, an off-by-default durable generation worker, and an off-
 isolated verification sandbox implemented; the
 rest of the platform backend remains unavailable.
 **Scope:** the Totalum VCaaS integration stays removed. Supabase authentication, OAuth,
-sessions, project ownership and RLS are preserved. Groq is the active server-only
-website/code-generation provider. The existing OpenRouter chat client, model catalog and
-key support are preserved but are not called by the active generation path; image
-generation continues to use OpenRouter. Vercel is used only when an operator explicitly
+sessions, project ownership and RLS are preserved. OpenRouter is the active server-only
+website/code-generation provider, and the same server-only key serves the image path.
+Vercel is used only when an operator explicitly
 enables publishing.
 
 No Totalum endpoint is called. No deployment, GitHub push, production SQL, secret
@@ -28,11 +27,11 @@ revocation or database mutation was performed while preparing this document.
 | Project ownership | `public.projects`, RLS, `registerProjectOwnership`, `checkProjectAccess`, `enforceProjectScope`. |
 | Project CRUD | Create/list/launch/get/update/delete, stored in Supabase. |
 | Project type and Android workspace | `public.projects.project_type` (migration 22) distinguishes `website` and `android`. Android projects are created idempotently (migration 25), appear as Android in dashboard cards, and open a Kotlin/Compose source workspace using the same authorized `/project/{id}` route. Android prompts use the same durable generation pipeline with a native profile; the resulting complete source is re-validated by `src/lib/android/contract.ts`. Optional, cohort-gated isolated debug builds are implemented in migration 26 and the generation worker: a pinned toolchain image builds an immutable snapshot offline, validates the APK and stores it privately for an owner-authorized short-lived download. The reproducible image definition lives in `infra/android-build/` (digest-pinned base, checksum-verified JDK 17/Gradle 8.9/SDK 35, seed-warmed offline Gradle cache); the repository does not build or publish it. Release signing, AABs, store publishing and emulator/device preview remain unavailable and are reported as such. |
-| AI generation | The active `src/lib/mavly/run-agent.ts` → `src/lib/ai/agent.ts` → `src/lib/ai/provider.ts` → `src/lib/ai/groq.ts` pipeline serves both websites (Next.js profile) and Android apps (Kotlin/Compose profile). The default execution path is still the inline `after()` run; a durable worker is available opt-in per project cohort. Worker execution rechecks the persisted project type before generation and does not enqueue the Next.js verification sandbox for an Android run. |
+| AI generation | The active `src/lib/mavly/run-agent.ts` → `src/lib/ai/agent.ts` → `src/lib/ai/provider.ts` → `src/lib/ai/openrouter.ts` pipeline serves both websites (Next.js profile) and Android apps (Kotlin/Compose profile). The default execution path is still the inline `after()` run; a durable worker is available opt-in per project cohort. Worker execution rechecks the persisted project type before generation and does not enqueue the Next.js verification sandbox for an Android run. |
 | Durable generation worker (opt-in) | Off unless `MAVLY_GENERATION_WORKER_ENABLED`, a ≥32-char `MAVLY_GENERATION_WORKER_SECRET`, an explicit `MAVLY_GENERATION_WORKER_PROJECTS` cohort, `SUPABASE_SERVICE_ROLE_KEY` and the Supabase URL are all configured. Admission records `dispatch_mode`; only worker-dispatched runs are claimed. An operator-supplied scheduler calls `/api/generation/worker`, which executes one job per tick under a fenced lease, renews it, recovers expired leases into bounded retries or dead letters, and never deletes accepted work. Uncohort projects remain inline. See `docs/runbooks/generation-worker.md`. |
 | Verification sandbox (opt-in) | Off unless `MAVLY_VERIFICATION_SANDBOX_ENABLED`, an explicit `MAVLY_VERIFICATION_SANDBOX_PROJECTS` cohort, a Vercel provider credential, `SUPABASE_SERVICE_ROLE_KEY` and the Supabase URL are all configured, and migrations 17 then 19 are applied. Only worker-dispatched runs enqueue one verification per completed run and ready snapshot. Later worker ticks re-validate the snapshot, build it in an isolated Vercel Sandbox microVM, start the validated production server on loopback and run a sandbox-local health check. `passed` requires the build, the runtime start and a `2xx`/`3xx` health response; build-only success is never `passed`. Stages run detached and are polled across ticks; every terminal path destroys the sandbox. Unsupported formats return `unsupported_runtime`. A separately opt-in bounded AI repair (default 1, hard cap 2) may create a new immutable snapshot for a source-level failure and rerun the checks. Preview stays unavailable because there is no authenticated proxy. Status appears only in the existing authorized `agent/status` / `agent/stop` responses. See `docs/architecture/phase-4-runtime-verification.md`. |
 | Generation preview | New-project plans always include `preview.html`; it is generated in its own batch. Batch parsing accepts only requested paths. Progress stages use durable run state, manifest/checkpoints, and the static-preview resolver; the UI uses an indeterminate bar rather than estimated completion percentages. |
-| Preserved provider | `src/lib/ai/openrouter.ts` and its model catalog remain available but are not used by active website-generation requests. |
+| Active provider | `src/lib/ai/openrouter.ts` serves every website/Android generation request through `src/lib/ai/provider.ts`; its model catalog is the allowlist the adapter enforces before a request leaves the server. |
 | Conversation and runs | Persisted in `project_messages` and `project_runs`, polled by the workspace. |
 | Project settings | Owner-editable name/description through `PATCH /projects/{id}`; the derived Mavly address is read-only. |
 | Project secrets | Write-only AES-256-GCM ciphertext per project/environment; API responses carry metadata only. Values are not injected into the static output. |
@@ -346,8 +345,9 @@ and the stored token never reaches the model or a log.
 ### Generation
 
 - `MAVLY_DEFAULT_MODEL` selects the default catalog model; the built-in default is
-  `openai/gpt-oss-120b`, served by Groq. The only catalog entry is sent to Groq; an
-  unsupported explicit or configured model never selects another provider.
+  `deepseek/deepseek-v4.1-flash`, served by OpenRouter. Only a catalog entry is sent to
+  OpenRouter; an unsupported explicit or configured model never selects another provider or
+  reaches the wire.
 - The run plans a manifest, then requests bounded file batches. The model must return JSON
   with full file contents; one focused repair is made per malformed/empty response.
 - `finish_reason: "length"` is always a failure. The truncated response is discarded, the
@@ -402,7 +402,7 @@ with HTTP **503** and `cache-control: private, no-store, max-age=0`.
 - **Unknown API path:** `404 NOT_FOUND` from the scope allowlist.
 - **Authenticated, authorized, unimplemented:** `503 BACKEND_NOT_CONFIGURED`.
 - **Agent run conflicts:** `409`; stale in-flight runs are closed after ten minutes.
-- **Missing Groq key:** `503 BACKEND_NOT_CONFIGURED`, before any project is created or run admitted.
+- **Missing OpenRouter key:** `503 BACKEND_NOT_CONFIGURED`, before any project is created or run admitted.
 - **Supabase integration not configured:** `503 SUPABASE_INTEGRATION_NOT_CONFIGURED`.
 - **Not connected / reconnect required:** `409`; no upstream call is attempted after a
   terminal refresh failure.
@@ -418,10 +418,9 @@ with HTTP **503** and `cache-control: private, no-store, max-age=0`.
    presence, URL, body or header.
 2. Project access is an owned row read through the caller's RLS client. Missing and foreign
    rows are indistinguishable.
-3. `GROQ_API_KEY` is server-only for active generation; `OPENROUTER_API_KEY` remains
-   server-only for the separate image feature and the preserved, inactive chat client.
-   Only the `NEXT_PUBLIC_*` Supabase/URL values are public. No secret is committed.
-4. The Groq and OpenRouter image URLs are constant. Route parameters only select a Supabase
+3. `OPENROUTER_API_KEY` is server-only; it serves active generation and the separate image
+   feature. Only the `NEXT_PUBLIC_*` Supabase/URL values are public. No secret is committed.
+4. The OpenRouter chat-completions and image URLs are constant. Route parameters only select a Supabase
    row after ownership is proved.
 5. Generated output is text. It is validated and stored; it is never imported, transpiled,
    evaluated or executed on a Mavly host. The only exception is the opt-in verification
@@ -454,11 +453,10 @@ with HTTP **503** and `cache-control: private, no-store, max-age=0`.
 - `src/lib/mavly/image-limits.ts` — best-effort per-user/per-instance request admission.
 - `src/lib/image-generation-options.ts` — aspect-ratio/format constants shared by the
   server validation and the workspace panel.
-- `src/lib/ai/groq.ts` — the active outbound website/code-generation call; server-only key.
+- `src/lib/ai/openrouter.ts` — the active OpenRouter chat-completions call, the catalog
+  gate and the redacted failure classification; server-only key.
 - `src/lib/ai/provider.ts` — the provider-neutral website-generation boundary, currently
-  bound only to Groq.
-- `src/lib/ai/openrouter.ts` — preserved chat-completions client and OpenRouter key support;
-  not called by active website-generation paths.
+  bound only to OpenRouter.
 - `src/lib/ai/agent.ts` — prompt, JSON parsing/repair, path and size validation.
 - `src/lib/mavly/store.ts` — Supabase persistence through the caller's client.
 - `src/lib/mavly/run-agent.ts` — claim → baseline → checkpointed batches → complete/fail.
@@ -578,7 +576,8 @@ The Totalum client `src/lib/vcaas-server.ts` remains deleted and must not be rec
 - Project secrets require `supabase/migrations/11_project_secrets.sql` and the server-only
   `MAVLY_PROJECT_SECRETS_ENCRYPTION_KEY` (32 random bytes, base64). The migration and key
   are not applied automatically.
-- Website/code generation uses `GROQ_API_KEY` from the Next.js server runtime. The runtime
+- Website/code generation uses `OPENROUTER_API_KEY` from the Next.js server runtime; the
+  same key serves image generation. The runtime
   is Vercel/Next.js `nodejs` with `after()` scheduling; this repository has no Supabase
   Edge Function or autonomous worker that needs the key. Configure it in Vercel Project
   Environment Variables and redeploy, and in local `.env.local` for development.
@@ -589,12 +588,11 @@ The Totalum client `src/lib/vcaas-server.ts` remains deleted and must not be rec
   `VERCEL_PROJECT_ID`. All are server-only. A half-configured deployment disables
   verification and leaves generation unchanged; `e2b` is not implemented. Bounded repair
   is separately opt-in through `MAVLY_VERIFICATION_REPAIR_ENABLED` and
-  `MAVLY_VERIFICATION_MAX_REPAIRS` (`0..2`, default 1) and also needs `GROQ_API_KEY`; it
+  `MAVLY_VERIFICATION_MAX_REPAIRS` (`0..2`, default 1) and also needs `OPENROUTER_API_KEY`; it
   never changes whether verification itself is configured.
 - Image generation is operator-cost-bearing but user-unbilled: it uses
-  `OPENROUTER_API_KEY` and no credit policy exists to charge against. The restored
-  OpenRouter chat client also reads that server key, but the active generation path never
-  calls it. Enabling billing for
+  `OPENROUTER_API_KEY` and no credit policy exists to charge against. The active generation
+  path reads the same server key, so both share one provider account. Enabling billing for
   it is a product decision that needs a real credit engine first. Generated images are not
   saved to the project and are not available to the generated app; they are shown in the
   More view's Image generation section until the user leaves it.
@@ -602,8 +600,8 @@ The Totalum client `src/lib/vcaas-server.ts` remains deleted and must not be rec
   `organizations:read` and `projects:read`.
 - Changing `MAVLY_INTEGRATION_ENCRYPTION_KEY`, the OAuth client ID or the OAuth app makes
   stored connections undecryptable; users must reconnect.
-- `MAVLY_DEFAULT_MODEL` selects from the Groq catalog; the verified default is
-  `openai/gpt-oss-120b`. The client refuses a model ID outside that catalog.
+- `MAVLY_DEFAULT_MODEL` selects from the OpenRouter catalog; the verified default is
+  `deepseek/deepseek-v4.1-flash`. The client refuses a model ID outside that catalog.
 
 ---
 
@@ -643,8 +641,8 @@ Static inspection and `git diff` remain allowed. See `AGENTS.md`
    suite.
 2. Run a real OAuth check with a configured Supabase app: connect, discover, select,
    refresh, disconnect and confirm revocation.
-3. Verify any future Groq model IDs against the official Groq model catalog before adding
-   them to `src/lib/ai/models.ts`.
+3. Verify any future OpenRouter model IDs against the official OpenRouter model catalog
+   before adding them to `src/lib/ai/models.ts`.
 4. Add a real build/run sandbox if generated backends must execute; do not fake it.
 5. Implement uploads and rebuild status only behind explicit product approval. Static
    publishing already exists behind an operator flag; confirm Vercel plan eligibility

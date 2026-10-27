@@ -12,7 +12,7 @@ import {
   type ChatCompletionResult,
   type ChatCompletionSuccess,
   type ChatMessage,
-} from "../src/lib/ai/freemodel";
+} from "../src/lib/ai/provider";
 import { resolveModel } from "../src/lib/ai/models";
 
 /**
@@ -228,13 +228,13 @@ test("follow-up edits keep preview.html in its planned batch", async () => {
   await assertPreviewStaysInItsOwnBatch("update");
 });
 
-test("follow-up edits resolve legacy model IDs to the FreeModel catalog", async () => {
+test("follow-up edits resolve retired provider model IDs to the active OpenRouter catalog", async () => {
   const calledModels: string[] = [];
   const outcome = await generateApp(
     {
       prompt: "Change the existing page title.",
       mode: "update",
-      requestedModel: "deepseek/deepseek-v4.1-flash",
+      requestedModel: "claude-opus-4.7",
       existingFiles: [{ path: "app/page.tsx", content: "old page" }],
     },
     {
@@ -251,7 +251,10 @@ test("follow-up edits resolve legacy model IDs to the FreeModel catalog", async 
   );
 
   assert.equal(isGenerationFailure(outcome), false);
-  assert.deepEqual(calledModels, ["claude-opus-4.7", "claude-opus-4.7"]);
+  assert.deepEqual(calledModels, [
+    "deepseek/deepseek-v4.1-flash",
+    "deepseek/deepseek-v4.1-flash",
+  ]);
 });
 
 test("a truncated single file gets exactly one compact retry", async () => {

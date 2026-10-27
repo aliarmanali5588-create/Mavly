@@ -307,6 +307,7 @@ test("the run path uses the native profile and skips website verification for An
 test("Android builds are off by default and report an honest capability", () => {
   const capability = androidCapability();
   assert.equal(capability.sourceGeneration.available, true);
+  assert.equal(capability.sourceGeneration.provider, "openrouter");
   assert.equal(capability.build.available, false);
   assert.equal(capability.build.status, "not_configured");
   assert.equal(capability.artifact.available, false);

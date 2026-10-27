@@ -78,7 +78,7 @@ export default function PrivacyPage() {
           <section id="ai-providers" className="space-y-2">
             <h2 className="text-base font-bold text-gray-950">6. AI Providers &amp; Data Transmission</h2>
             <p>
-              To generate websites, your natural language prompts and current project file context are transmitted securely over HTTPS to our server-side FreeModel integration. Image-generation requests use a separate OpenRouter image API path. We do not send your email address or account credentials to either provider.
+              To generate websites, your natural language prompts and current project file context are transmitted securely over HTTPS to our server-side OpenRouter integration. Image-generation requests use OpenRouter&apos;s separate image API path. We do not send your email address or account credentials to the provider.
             </p>
           </section>
 
@@ -113,7 +113,7 @@ export default function PrivacyPage() {
           <section id="sharing" className="space-y-2">
             <h2 className="text-base font-bold text-gray-950">10. When Information is Shared</h2>
             <p>
-              We do not sell, rent, or trade your personal data. We share information only with trusted infrastructure service providers necessary to operate Mavly: hosting providers (Vercel), database infrastructure (Supabase), and AI model APIs (FreeModel for website/code generation and OpenRouter for image generation).
+              We do not sell, rent, or trade your personal data. We share information only with trusted infrastructure service providers necessary to operate Mavly: hosting providers (Vercel), database infrastructure (Supabase), and AI model APIs (OpenRouter for website/code generation and image generation).
             </p>
           </section>
 

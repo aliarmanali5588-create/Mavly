@@ -6,7 +6,7 @@ and the operator procedures for running, pausing, recovering and rolling it back
 
 The worker does **not** execute generated code. It runs the existing generation pipeline
 (`src/lib/mavly/run-agent.ts` → `src/lib/ai/agent.ts` → `src/lib/ai/provider.ts` →
-`src/lib/ai/freemodel.ts`) outside the request that admitted the job. Prompt, output, checkpoint
+`src/lib/ai/openrouter.ts`) outside the request that admitted the job. Prompt, output, checkpoint
 and file semantics are unchanged.
 
 ---

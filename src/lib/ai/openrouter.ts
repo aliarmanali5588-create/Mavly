@@ -21,6 +21,7 @@
  */
 
 import type { AiModel } from "./models";
+import { OPENROUTER_MODEL_CATALOG } from "./models";
 import { parseRetryAfterMs } from "./retry";
 
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
@@ -142,6 +143,21 @@ export async function chatCompletion(
     });
   }
 
+  /**
+   * ⚠️ CATALOG MEMBERSHIP IS CHECKED BEFORE ANY NETWORK CALL. This is the last
+   * gate between a resolved model and the wire: a stale `MAVLY_DEFAULT_MODEL`, a
+   * client-supplied ID or a retired provider alias must fail here rather than be
+   * forwarded and rejected upstream (or, worse, silently served by another model).
+   */
+  if (!OPENROUTER_MODEL_CATALOG.some((candidate) => candidate.id === model.id)) {
+    return failureResult({
+      code: "INVALID_REQUEST",
+      retryable: false,
+      error: `The requested OpenRouter model "${model.id}" is not in Mavly's supported model catalog.`,
+      metadata: baseMetadata(model, null),
+    });
+  }
+
   const appUrl = process.env.NEXT_PUBLIC_APP_URL?.trim();
   const headers: Record<string, string> = {
     Authorization: `Bearer ${apiKey}`,
@@ -191,7 +207,7 @@ export async function chatCompletion(
 
     if (!response.ok) {
       const classified = classifyHttpFailure(response.status);
-      const detail = providerErrorDetail(payload) || text.slice(0, 500);
+      const detail = redactSecret(providerErrorDetail(payload) || text.slice(0, 500), apiKey);
       return failureResult({
         code: classified.code,
         retryable: classified.retryable,
@@ -210,7 +226,7 @@ export async function chatCompletion(
         retryable: false,
         status: response.status,
         retryAfterMs,
-        error: `OpenRouter reported an error: ${providerErrorDetail(payload)}`,
+        error: `OpenRouter reported an error: ${redactSecret(providerErrorDetail(payload) ?? "", apiKey)}`,
         metadata,
       });
     }
@@ -246,7 +262,7 @@ export async function chatCompletion(
         retryable: false,
         status: response.status,
         retryAfterMs,
-        error: `OpenRouter reported an error${detail ? `: ${detail}` : "."}`,
+        error: `OpenRouter reported an error${detail ? `: ${redactSecret(detail, apiKey)}` : "."}`,
         metadata,
       });
     }
@@ -259,7 +275,10 @@ export async function chatCompletion(
         retryable: false,
         status: response.status,
         retryAfterMs,
-        error: `OpenRouter returned an empty completion.${detail ? ` ${detail}` : ""}`,
+        error: redactSecret(
+          `OpenRouter returned an empty completion.${detail ? ` ${detail}` : ""}`,
+          apiKey,
+        ),
         metadata,
       });
     }
@@ -285,7 +304,7 @@ export async function chatCompletion(
       retryable: true,
       error: timedOut
         ? "OpenRouter did not answer before the request deadline."
-        : `OpenRouter request failed: ${message}`,
+        : redactSecret(`OpenRouter request failed: ${message}`, apiKey),
       metadata: baseMetadata(model, null),
     });
   }
@@ -517,4 +536,13 @@ function numericValue(value: unknown): number | null {
     if (Number.isFinite(parsed)) return parsed;
   }
   return null;
+}
+
+/**
+ * A provider or proxy can echo request material in an error body. The key must
+ * never reach a response, a run row or a log, so every outbound error string is
+ * scrubbed and bounded here.
+ */
+function redactSecret(value: string, apiKey: string): string {
+  return value.split(apiKey).join("[redacted]").slice(0, 500);
 }

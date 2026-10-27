@@ -19,11 +19,11 @@ import { MarketingPageShell } from "@/components/common/MarketingPageShell";
 export const metadata: Metadata = {
   title: "Integrations — Mavly AI Website Builder",
   description:
-    "Connect GitHub repositories and Supabase projects, publish static sites, and generate website code with FreeModel.",
+    "Connect GitHub repositories and Supabase projects, publish static sites, and generate website code with OpenRouter.",
   openGraph: {
     title: "Integrations — Mavly AI Website Builder",
     description:
-      "Connect GitHub repositories and Supabase projects, publish static sites, and generate website code with FreeModel.",
+      "Connect GitHub repositories and Supabase projects, publish static sites, and generate website code with OpenRouter.",
     images: ["/logo/Mavly.png"],
   },
 };
@@ -187,7 +187,7 @@ export default function IntegrationsPage() {
             </div>
           </div>
 
-          {/* FreeModel code generation */}
+          {/* OpenRouter code generation */}
           <div className="p-8 rounded-3xl bg-white border border-black/[0.08] shadow-[0_4px_20px_rgba(0,0,0,0.02)] space-y-6">
             <div className="flex items-center justify-between">
               <div className="w-12 h-12 rounded-2xl bg-purple-600 text-white flex items-center justify-center">
@@ -199,9 +199,9 @@ export default function IntegrationsPage() {
             </div>
 
             <div className="space-y-2">
-              <h3 className="text-xl font-bold text-gray-950">FreeModel Code Generation</h3>
+              <h3 className="text-xl font-bold text-gray-950">OpenRouter Code Generation</h3>
               <p className="text-xs text-gray-600 leading-relaxed">
-                Website and code-generation requests use FreeModel from the server-side Next.js runtime.
+                Website and code-generation requests use OpenRouter from the server-side Next.js runtime.
               </p>
             </div>
 
@@ -210,11 +210,11 @@ export default function IntegrationsPage() {
               <ul className="space-y-2">
                 <li className="flex items-start gap-2">
                   <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-                  <span><strong>Claude Opus 4.8:</strong> FreeModel default model for website creation and follow-up code edits.</span>
+                  <span><strong>DeepSeek V4.1 Flash:</strong> OpenRouter default model for website creation and follow-up code edits.</span>
                 </li>
                 <li className="flex items-start gap-2">
                   <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-                  <span>Generation fails explicitly if FreeModel is unavailable; no provider fallback is configured.</span>
+                  <span>Generation fails explicitly if OpenRouter is unavailable; no provider fallback is configured.</span>
                 </li>
                 <li className="flex items-start gap-2">
                   <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
