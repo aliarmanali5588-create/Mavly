@@ -604,11 +604,13 @@ async function listProjectResponse(userId: string, query: URLSearchParams): Prom
     return fail(400, "VALIDATION", "Project type must be website or android.");
   }
   const requestedType = requestedTypes[0];
-  if (requestedType !== undefined && requestedType !== "website" && requestedType !== "android") {
+  const projectType: ProjectType | undefined =
+    requestedType === "website" || requestedType === "android" ? requestedType : undefined;
+  if (requestedType !== undefined && projectType === undefined) {
     return fail(400, "VALIDATION", "Project type must be website or android.");
   }
 
-  const result = await listProjects(userId, requestedType);
+  const result = await listProjects(userId, projectType);
   if (isStoreFailure(result)) return fail(500, "UNKNOWN", "Could not load projects.");
 
   const data: VcaasProjectSummary[] = result.data.map((row) => ({
