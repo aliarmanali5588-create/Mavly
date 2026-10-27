@@ -9,6 +9,9 @@ import {
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { vcaasApi } from "@/lib/vcaas";
+import { PremiumAiActivity, type ActivityChecklistStage } from "@/components/workspace/GenerationProgressVisuals";
+import { RunProgress } from "@/components/workspace/RunProgress";
+import { useRunClock } from "@/components/workspace/use-run-clock";
 import type {
   AgentStatus, ConversationMessage, FileContent, FileTreeEntry, MobileBuild, VcaasProject,
 } from "@/lib/vcaas-types";
@@ -171,6 +174,17 @@ export function AndroidWorkspace({ project }: { project: VcaasProject }) {
   }, [refreshStatus]);
 
   const inFlight = status?.status === "init";
+  const stageIsTerminal =
+    status?.stage === "completed" ||
+    status?.stage === "failed" ||
+    status?.stage === "cancelled" ||
+    status?.stage === "interrupted";
+  const startedAt = status?.startedAt ? Date.parse(status.startedAt) : NaN;
+  const { elapsedMs } = useRunClock({
+    projectId: project.projectId,
+    isRunning: inFlight,
+    startedAtFromStream: Number.isFinite(startedAt) ? startedAt : null,
+  });
   useEffect(() => {
     if (!inFlight) return;
     const timer = window.setInterval(() => void refreshStatus(), 3_500);
@@ -410,6 +424,45 @@ export function AndroidWorkspace({ project }: { project: VcaasProject }) {
 
   const projectName = project.label?.trim() || project.projectId;
   const generationFailed = status?.stage === "failed";
+  const activityStages: ActivityChecklistStage[] = [
+    {
+      label: "Understanding prompt",
+      status: status?.stage === "queued"
+        ? "active"
+        : status?.stage === "validating" || status?.stage === "generating"
+          ? "completed"
+          : "pending",
+    },
+    {
+      label: "Validating Android source",
+      status: status?.stage === "validating"
+        ? "active"
+        : status?.stage === "generating"
+          ? "completed"
+          : "pending",
+    },
+    {
+      label: "Generating Kotlin and Compose",
+      status: status?.stage === "generating" ? "active" : "pending",
+    },
+  ];
+  const activityTitle = status?.stage === "queued"
+    ? "Understanding prompt"
+    : status?.stage === "validating"
+      ? "Validating Android source"
+      : status?.stage === "retrying"
+        ? "Retrying generation"
+        : status?.stage === "generating"
+          ? "Generating Kotlin and Compose"
+          : status?.stage === "failed"
+            ? "Generation failed"
+            : status?.stage === "cancelled"
+              ? "Generation cancelled"
+              : status?.stage === "interrupted"
+                ? "Generation interrupted"
+                : status?.stage === "completed"
+                  ? "Generation complete"
+                  : "Generating Android source";
   const runStatus = status?.status === "init"
     ? `Generating${status.stage ? ` · ${status.stage.replaceAll("_", " ")}` : "..."}`
     : generationFailed
@@ -541,12 +594,16 @@ export function AndroidWorkspace({ project }: { project: VcaasProject }) {
                   </li>
                 ))}
                 {inFlight ? (
-                  <li className="flex items-center gap-2.5 text-sm text-muted-foreground" aria-live="polite">
-                    <span className="flex size-7 items-center justify-center rounded-full bg-muted"><Bot className="size-3.5" aria-hidden="true" /></span>
-                    <span className="inline-flex items-center gap-2">
-                      <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
-                      {status?.stage ? `Working · ${status.stage.replaceAll("_", " ")}` : "Generating Android source..."}
-                    </span>
+                  <li className="flex items-start gap-2.5 text-sm text-muted-foreground">
+                    <span className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full bg-muted"><Bot className="size-3.5" aria-hidden="true" /></span>
+                    <div className="min-w-0 flex-1">
+                      <RunProgress
+                        elapsedMs={elapsedMs}
+                        expectedMinutes={status?.expectedMinutes}
+                        showEstimate={typeof status?.expectedMinutes === "number" && status.expectedMinutes > 0}
+                      />
+                      <PremiumAiActivity title={activityTitle} stages={activityStages} active={inFlight && !stageIsTerminal} />
+                    </div>
                   </li>
                 ) : null}
                 <li aria-hidden="true" className="h-px list-none" />

@@ -199,6 +199,10 @@ test("progress visuals stay indeterminate, accessible, and reduced-motion aware"
     new URL("../src/components/workspace/RunActivity.tsx", import.meta.url),
     "utf8",
   );
+  const androidWorkspace = readFileSync(
+    new URL("../src/components/workspace/AndroidWorkspace.tsx", import.meta.url),
+    "utf8",
+  );
   const runProgress = readFileSync(
     new URL("../src/components/workspace/RunProgress.tsx", import.meta.url),
     "utf8",
@@ -208,8 +212,13 @@ test("progress visuals stay indeterminate, accessible, and reduced-motion aware"
   assert.equal(css.includes(".run-progress-indeterminate"), true);
   assert.equal(loader.includes('role="progressbar"'), true);
   assert.equal(loader.includes('aria-live="polite"'), true);
-  assert.equal(activity.includes('aria-busy={!!live}'), true);
-  assert.equal(activity.includes('aria-live="polite"'), true);
+  assert.equal(activity.includes("PremiumAiActivity"), true);
+  assert.equal(visuals.includes("aria-busy={active}"), true);
+  assert.equal(visuals.includes('aria-live="polite"'), true);
+  assert.equal(androidWorkspace.includes("PremiumAiActivity"), true);
+  assert.equal(androidWorkspace.includes("showEstimate={typeof status?.expectedMinutes === \"number\""), true);
+  assert.equal(runProgress.includes("showEstimate = true"), true);
+  assert.equal(css.includes('.generation-indicator-orbit[data-active="true"]'), true);
   assert.equal(visuals.includes('aria-current={current ? "step" : undefined}'), true);
   assert.equal(visuals.includes('className="sr-only"'), true);
   assert.equal(visuals.includes("motion-reduce:transition-none"), true);

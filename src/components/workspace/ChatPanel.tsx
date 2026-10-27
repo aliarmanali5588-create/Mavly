@@ -21,6 +21,7 @@ import { useT } from "@/i18n";
 import { cn } from "@/lib/utils";
 import { RunProgress } from "@/components/workspace/RunProgress";
 import { RunActivity } from "@/components/workspace/RunActivity";
+import { PremiumAiActivity } from "@/components/workspace/GenerationProgressVisuals";
 import { RestoreCodeAction } from "@/components/workspace/RestoreCodeAction";
 import type { RunProgressView } from "@/lib/run-progress";
 import { useRunClock } from "@/components/workspace/use-run-clock";
@@ -798,18 +799,11 @@ export function ChatPanel({
 
         {isBuilding && (
           <div className="py-2">
-            {/* New engine: `RunActivity` below carries the live status, so no second "Building…" line. */}
-            {!v2 && <div className="flex items-center gap-2">
-              <div className="flex gap-1">
-                <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce motion-reduce:animate-none" style={{ animationDelay: "0ms" }} />
-                <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce motion-reduce:animate-none" style={{ animationDelay: "150ms" }} />
-                <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce motion-reduce:animate-none" style={{ animationDelay: "300ms" }} />
-              </div>
-              <span className="text-sm text-gray-400">{"Building..."}</span>
-            </div>}
             {/* The platform's run progress bar, copied verbatim — see `RunProgress`. */}
             <RunProgress elapsedMs={elapsedMs} expectedMinutes={expectedMinutes} />
-            {v2 && <RunActivity progress={runProgress} />}
+            {v2
+              ? <RunActivity progress={runProgress} />
+              : <PremiumAiActivity title="Generating" />}
           </div>
         )}
       </div>

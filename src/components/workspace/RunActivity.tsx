@@ -6,13 +6,17 @@ import {
   ListChecksIcon, PlugIcon, SearchIcon, SquareTerminalIcon, UsersIcon,
 } from "lucide-react";
 import { vcaasApi } from "@/lib/vcaas";
-import { isRunOver, sanitizeRunProgress, stepText, type RunProgressView, type StepKind } from "@/lib/run-progress";
-import { cn } from "@/lib/utils";
 import {
-  GenerationIndicator,
-  GenerationStages,
-  generationStatusText,
-} from "@/components/workspace/GenerationProgressVisuals";
+  GENERATION_STAGE_LABELS,
+  generationStepStatuses,
+  isRunOver,
+  sanitizeRunProgress,
+  stepText,
+  type RunProgressView,
+  type StepKind,
+} from "@/lib/run-progress";
+import { cn } from "@/lib/utils";
+import { PremiumAiActivity, generationStatusText } from "@/components/workspace/GenerationProgressVisuals";
 
 const POLL_MS = 3_000;
 const MAX_POLL_MS = 30_000;
@@ -24,10 +28,13 @@ const RECENT_STEPS = 6;
  * the tab is hidden.
  */
 export function useRunProgress(projectId: string, isRunning: boolean, enabled: boolean): RunProgressView | null {
-  const [progress, setProgress] = React.useState<RunProgressView | null>(null);
+  const [result, setResult] = React.useState<{
+    projectId: string;
+    progress: RunProgressView | null;
+  } | null>(null);
   React.useEffect(() => {
     if (enabled && isRunning) return;
-    setProgress(null);
+    setResult(null);
   }, [projectId, isRunning, enabled]);
   React.useEffect(() => {
     if (!enabled || !isRunning) return;
@@ -40,7 +47,7 @@ export function useRunProgress(projectId: string, isRunning: boolean, enabled: b
         if (cancelled) return;
         if (res?.ok) {
           failures = 0;
-          setProgress(sanitizeRunProgress(res.data));
+          setResult({ projectId, progress: sanitizeRunProgress(res.data) });
         } else {
           failures = Math.min(failures + 1, 4);
         }
@@ -53,7 +60,7 @@ export function useRunProgress(projectId: string, isRunning: boolean, enabled: b
     void loop();
     return () => { cancelled = true; clearTimeout(timer); };
   }, [projectId, isRunning, enabled]);
-  return enabled ? progress : null;
+  return enabled && isRunning && result?.projectId === projectId ? result.progress : null;
 }
 
 const STEP_ICON: Record<StepKind, React.ComponentType<{ className?: string }>> = {
@@ -75,21 +82,20 @@ export function RunActivity({ progress }: { progress: RunProgressView | null }) 
   const stage = live?.stage ?? null;
   const recent = (live?.steps ?? []).slice(-RECENT_STEPS).reverse();
   const files = live?.files.length ?? 0;
+  const stages = GENERATION_STAGE_LABELS.map((label, index) => ({
+    label,
+    status: generationStepStatuses(stage, live?.previewReady)[index] ?? "pending",
+  }));
+  const activityMeta = live && live.turns > 0
+    ? (
+      <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">
+        {files > 0 ? `${files} file${files === 1 ? "" : "s"} · ` : ""}{live.totalSteps} step{live.totalSteps === 1 ? "" : "s"}
+      </span>
+    )
+    : null;
 
   return (
-    <section aria-label="Agent activity" aria-busy={!!live} data-testid="run-activity" className="mt-3 rounded-xl border border-border bg-card p-3 shadow-xs">
-      <div className="flex items-center gap-2">
-        <GenerationIndicator className="size-6" />
-        <p role="status" aria-live="polite" aria-atomic="true" className="min-w-0 flex-1 truncate text-sm font-medium" data-testid="run-activity-stage">
-          {generationStatusText(stage, live?.retrying)}
-        </p>
-        {live && live.turns > 0 && (
-          <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">
-            {files > 0 ? `${files} file${files === 1 ? "" : "s"} · ` : ""}{live.totalSteps} step{live.totalSteps === 1 ? "" : "s"}
-          </span>
-        )}
-      </div>
-      <GenerationStages stage={stage} previewReady={live?.previewReady} compact />
+    <PremiumAiActivity title={generationStatusText(stage, live?.retrying)} stages={stages} active={!!live} meta={activityMeta}>
       {recent.length > 0 && (
         <ol className="mt-2.5 space-y-1.5">
           {recent.map((s, i) => {
@@ -117,6 +123,6 @@ export function RunActivity({ progress }: { progress: RunProgressView | null }) 
           })}
         </ol>
       )}
-    </section>
+    </PremiumAiActivity>
   );
 }

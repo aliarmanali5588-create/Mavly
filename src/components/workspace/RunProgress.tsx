@@ -16,40 +16,45 @@ import { cn } from "@/lib/utils";
 export function RunProgress({
     elapsedMs,
     expectedMinutes,
+    showEstimate = true,
     className,
 }: {
     elapsedMs: number;
     /** The engine's estimated duration, when available. */
     expectedMinutes?: number | null;
+    /** Hide inferred duration copy when this workspace has no estimate from the engine. */
+    showEstimate?: boolean;
     className?: string;
 }) {
     const t = useT();
-    const { overrun, estimateMs, previousEstimateMs } = expectedMinutes
+    const progress = typeof expectedMinutes === "number" && expectedMinutes > 0
         ? expectedRunProgress(elapsedMs, expectedMinutes * 60_000)
-        : runProgress(elapsedMs);
-    const estimateMinutes = Math.round(estimateMs / 60_000);
-    const estimateFloorMinutes = Math.round(previousEstimateMs / 60_000);
+        : showEstimate
+            ? runProgress(elapsedMs)
+            : null;
 
     return (
         <div className={cn("mt-1.5 space-y-1", className)}>
-            <div className="flex items-baseline justify-between gap-2">
-                <p data-tabular className="text-muted-foreground text-2xs">
-                    <span className="text-foreground font-medium">{formatDuration(elapsedMs)}</span>
-                    <span className="mx-1">/</span>
-                    <span>
-                        {t("workspace.chat.progressEstimate", {
-                            from: estimateFloorMinutes,
-                            minutes: estimateMinutes,
-                        })}
-                    </span>
-                </p>
-
-                {overrun && (
-                    <p data-tabular className="text-2xs shrink-0 font-medium text-warning-subtle-foreground">
-                        {t("workspace.chat.progressOverrun")}
+            {progress && (
+                <div className="flex items-baseline justify-between gap-2">
+                    <p data-tabular className="text-muted-foreground text-2xs">
+                        <span className="text-foreground font-medium">{formatDuration(elapsedMs)}</span>
+                        <span className="mx-1">/</span>
+                        <span>
+                            {t("workspace.chat.progressEstimate", {
+                                from: Math.round(progress.previousEstimateMs / 60_000),
+                                minutes: Math.round(progress.estimateMs / 60_000),
+                            })}
+                        </span>
                     </p>
-                )}
-            </div>
+
+                    {progress.overrun && (
+                        <p data-tabular className="text-2xs shrink-0 font-medium text-warning-subtle-foreground">
+                            {t("workspace.chat.progressOverrun")}
+                        </p>
+                    )}
+                </div>
+            )}
 
             <div
                 role="progressbar"
@@ -59,7 +64,7 @@ export function RunProgress({
             >
                 <div aria-hidden className={cn(
                     "run-progress-indeterminate h-full rounded-full",
-                    overrun ? "bg-warning" : "bg-primary",
+                    progress?.overrun ? "bg-warning" : "bg-primary",
                 )} />
             </div>
         </div>

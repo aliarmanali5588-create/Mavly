@@ -679,19 +679,13 @@ button {
   will-change: transform;
 }
 
-.generation-indicator-orbit {
-  will-change: transform;
-}
-
 @media (prefers-reduced-motion: no-preference) {
   .run-progress-indeterminate {
     animation: run-progress-sweep 1.8s var(--ease-in-out-soft) infinite;
   }
-  .generation-indicator-orbit {
+  .generation-indicator-orbit[data-active="true"] {
     animation: generation-orbit 2.2s linear infinite;
-  }
-  .generation-indicator-core {
-    animation: generation-core 1.8s var(--ease-in-out-soft) infinite;
+    will-change: transform;
   }
   .preview-panel-enter {
     animation: preview-panel-enter 220ms ease-out both;
@@ -822,10 +816,6 @@ button {
   }
   @keyframes generation-orbit {
     to { transform: rotate(360deg); }
-  }
-  @keyframes generation-core {
-    0%, 100% { transform: scale(0.82); opacity: 0.7; }
-    50% { transform: scale(1.1); opacity: 1; }
   }
 }
 
