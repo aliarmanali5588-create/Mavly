@@ -120,6 +120,15 @@ function requiresSession(pathname: string): boolean {
   if (pathname.startsWith("/api/")) return false;
   if (pathname === "/dashboard" || pathname.startsWith("/dashboard/")) return true;
   if (pathname.startsWith("/project/")) return true;
+  /**
+   * ⚠️ THE ADMIN CONSOLE IS NOT PUBLIC. `/adminsh/auth` used to be a client
+   * side `setTimeout`, and every `/adminsh/*` page was reachable signed-out.
+   * This is the coarse session gate; `app/adminsh/layout.tsx` performs the
+   * real, database-backed `current_user_is_admin()` check and returns 404 to a
+   * signed-in non-admin. Keeping both means a future page under `/adminsh`
+   * cannot accidentally bypass the session layer.
+   */
+  if (pathname === "/adminsh" || pathname.startsWith("/adminsh/")) return true;
   return false;
 }
 

@@ -181,6 +181,51 @@ export async function listIntegrationPayments(
   return { ok: true, data: (data ?? []) as IntegrationPaymentRow[] };
 }
 
+/**
+ * Phase 7's durable limiter is a prerequisite for the gateway. The status
+ * endpoint stays readable when it is missing and reports `false`, so the owner
+ * sees an actionable warning instead of only a 503 from the app.
+ */
+export async function productionHardeningReady(): Promise<boolean> {
+  const supabase = await ownerClient();
+  if (!supabase) return false;
+  const { data, error } = await supabase.rpc("production_hardening_schema_version");
+  if (error) return false;
+  return Number(data) >= 23;
+}
+
+export interface IntegrationEventRow {
+  provider_event_id: string;
+  event_type: string;
+  status: string;
+  error_code: string | null;
+  received_at: string;
+  processed_at: string | null;
+}
+
+/**
+ * Recent webhook audit rows for the owner. Deliberately selects no evidence
+ * digest, no raw body and no RPC hash; only the metadata needed to reconcile a
+ * failed/unmatched event against the provider dashboard.
+ */
+export async function listIntegrationEvents(
+  projectId: string,
+  limit = 20,
+): Promise<StoreResult<IntegrationEventRow[]>> {
+  const supabase = await ownerClient();
+  if (!supabase) return failure("unavailable", "Supabase is not configured.");
+
+  const { data, error } = await supabase
+    .from("project_integration_events")
+    .select("provider_event_id,event_type,status,error_code,received_at,processed_at")
+    .eq("project_id", projectId)
+    .order("received_at", { ascending: false })
+    .limit(Math.max(1, Math.min(100, limit)));
+
+  if (error) return mapDatabaseError("list integration events", error);
+  return { ok: true, data: (data ?? []) as IntegrationEventRow[] };
+}
+
 export async function readOwnerPaymentCredentials(
   projectId: string,
   provider: string,
@@ -425,6 +470,45 @@ export async function gatewayPaymentStatus(input: {
   if (error) return mapDatabaseError("gateway status", error);
   const row = Array.isArray(data) ? data[0] : null;
   return { ok: true, data: (row as GatewayStatusRow | undefined) ?? null };
+}
+
+export interface IntegrationRateLimitRow {
+  allowed: boolean;
+  remaining: number;
+  retry_after_seconds: number;
+}
+
+/**
+ * Durable, shared attempt window (migration 23). The limits are fixed in SQL;
+ * the caller cannot raise them. A missing RPC is a migration failure and the
+ * gateway fails closed rather than falling back to a per-instance counter.
+ */
+export async function consumeIntegrationRateLimit(input: {
+  keyHash: string;
+  provider: string;
+  rpcHash: string;
+  operation: "order_create" | "payment_verify";
+}): Promise<StoreResult<IntegrationRateLimitRow | null>> {
+  const supabase = createIntegrationPublicClient();
+  if (!supabase) return failure("unavailable", "Supabase is not configured.");
+
+  const { data, error } = await supabase.rpc("consume_integration_rate_limit", {
+    p_key_hash: input.keyHash,
+    p_provider: input.provider,
+    p_rpc_hash: input.rpcHash,
+    p_operation: input.operation,
+  });
+  if (error) return mapDatabaseError("consume rate limit", error);
+  const row = Array.isArray(data) ? data[0] : null;
+  if (!row) return { ok: true, data: null };
+  return {
+    ok: true,
+    data: {
+      allowed: row.allowed === true,
+      remaining: Number(row.remaining ?? 0),
+      retry_after_seconds: Number(row.retry_after_seconds ?? 0),
+    },
+  };
 }
 
 // ── Webhook RPCs (public client) ────────────────────────────────────────────

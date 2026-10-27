@@ -1,11 +1,19 @@
 /**
- * Best-effort, per-instance request windows for the integration gateway.
+ * Phase 6's per-instance window helper, retained as a pure utility/test seam.
  *
- * ⚠️ NOT A HARD GLOBAL CAP. Counters live in module memory, so N serverless
- * instances multiply the effective ceiling by N and a cold start forgets them.
- * They stop a single client loop and ordinary overuse; a hard cap needs a
- * persisted admission RPC, which this phase does not add.
+ * ⚠️ THE GATEWAY NO LONGER USES THIS FOR ITS PRODUCTION LIMIT. Phase 7 adds
+ * `public.consume_integration_rate_limit()` (migration 23), a durable shared
+ * counter keyed by integration and operation. Counters in module memory are not
+ * a global production limit: N instances multiply the ceiling and a cold start
+ * forgets it. The gateway fails closed if that RPC is missing.
+ *
+ * The fixed production limits are declared here so documentation/tests and the
+ * SQL cannot silently disagree.
  */
+
+export const PAYMENT_ORDER_LIMIT_PER_WINDOW = 30;
+export const PAYMENT_VERIFY_LIMIT_PER_WINDOW = 60;
+export const PAYMENT_RATE_WINDOW_SECONDS = 60;
 
 export interface WindowLimiterOptions {
   perKeyLimit: number;

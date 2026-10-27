@@ -34,6 +34,7 @@ import {
 } from "./razorpay";
 import { statusFromProviderPayment } from "./state";
 import {
+  consumeIntegrationRateLimit,
   gatewayBeginPayment,
   gatewayFailPayment,
   gatewayMarkPayment,
@@ -48,11 +49,11 @@ import type {
   PaymentStatusView,
 } from "./types";
 import { isPaymentFailure, type PaymentFailureCode } from "./types";
+import { emitPaymentEvent } from "@/lib/observability/payments";
 import {
   validateCreateOrderInput,
   validateVerifyPaymentInput,
 } from "./validation";
-import { paymentOrderLimiter, paymentVerifyLimiter } from "@/lib/integrations/rate-limit";
 
 export const PAYMENT_PROVIDER = "razorpay" as const;
 
@@ -188,6 +189,36 @@ async function authenticate(authorization: string | null): Promise<PaymentResult
   };
 }
 
+/**
+ * The durable, shared window (migration 23). A DB failure is a closed gate, not
+ * a fallback: a per-instance counter would multiply the ceiling across
+ * instances. Missing rows mean the key/integration/hash no longer matches.
+ */
+async function consumeRateLimit(
+  auth: GatewayAuth,
+  operation: "order_create" | "payment_verify",
+): Promise<PaymentResult<null>> {
+  const limited = await consumeIntegrationRateLimit({
+    keyHash: auth.keyHash,
+    provider: PAYMENT_PROVIDER,
+    rpcHash: auth.rpcHash,
+    operation,
+  });
+  if (isStoreFailure(limited)) {
+    return gatewayFailure(503, "unavailable", "The payment gateway is unavailable.");
+  }
+  if (!limited.data) return UNAUTHORIZED;
+  if (!limited.data.allowed) {
+    return gatewayFailure(
+      429,
+      "rate_limited",
+      "Too many payment requests. Retry shortly.",
+      limited.data.retry_after_seconds,
+    );
+  }
+  return { ok: true, data: null };
+}
+
 function providerFailure(
   code: "credentials_invalid" | "provider_timeout" | "provider_unavailable" | "provider_rate_limited" | "provider_rejected" | "invalid_response" | "invalid_input",
   message: string,
@@ -225,6 +256,7 @@ export async function createPaymentOrder(input: {
   const validated = validateCreateOrderInput(input.body);
   if (!validated.ok) return gatewayFailure(400, "invalid_request", validated.error);
 
+  const startedAt = Date.now();
   const auth = await authenticate(input.authorization);
   if (isPaymentFailure(auth)) return auth;
   const ineligible = eligibilityFailure(auth.data.projectId);
@@ -233,9 +265,22 @@ export async function createPaymentOrder(input: {
     return gatewayFailure(409, "integration_disabled", "Payments are disabled for this project.");
   }
 
-  const limited = paymentOrderLimiter.consume(auth.data.projectId);
+  const limited = await consumeRateLimit(auth.data, "order_create");
   if (!limited.ok) {
-    return gatewayFailure(429, "rate_limited", "Too many payment orders. Retry shortly.", (limited as { retryAfterSeconds: number }).retryAfterSeconds);
+    emitPaymentEvent(
+      (limited as { code: string }).code === "rate_limited" ? "payment.rate_limited" : "payment.gateway_unavailable",
+      {
+        integrationId: auth.data.integrationId,
+        projectId: auth.data.projectId,
+        operation: "order_create",
+        status: (limited as { code: string }).code,
+        errorClass: (limited as { code: string }).code,
+        httpStatus: (limited as { status: number }).status,
+        retryAfterSeconds: (limited as { retryAfterSeconds?: number }).retryAfterSeconds ?? null,
+        durationMs: Date.now() - startedAt,
+      },
+    );
+    return limited;
   }
 
   const begun = await gatewayBeginPayment({
@@ -249,6 +294,15 @@ export async function createPaymentOrder(input: {
     rpcHash: auth.data.rpcHash,
   });
   if (isStoreFailure(begun)) {
+    emitPaymentEvent("payment.gateway_unavailable", {
+      integrationId: auth.data.integrationId,
+      projectId: auth.data.projectId,
+      operation: "order_create",
+      status: "unavailable",
+      errorClass: "order_record_failed",
+      httpStatus: 503,
+      durationMs: Date.now() - startedAt,
+    });
     return gatewayFailure(503, "unavailable", "The payment order could not be recorded.");
   }
   const row = begun.data;
@@ -299,6 +353,16 @@ export async function createPaymentOrder(input: {
       failureCode: created.code,
       rpcHash: auth.data.rpcHash,
     });
+    emitPaymentEvent("payment.order_failed", {
+      integrationId: auth.data.integrationId,
+      projectId: auth.data.projectId,
+      operation: "order_create",
+      status: "failed",
+      errorClass: created.code,
+      httpStatus: created.status,
+      retryAfterSeconds: created.retryAfterSeconds ?? null,
+      durationMs: Date.now() - startedAt,
+    });
     return providerFailure(created.code, created.message, created.retryAfterSeconds);
   }
 
@@ -311,6 +375,15 @@ export async function createPaymentOrder(input: {
       keyHash: auth.data.keyHash,
       failureCode: "provider_rejected",
       rpcHash: auth.data.rpcHash,
+    });
+    emitPaymentEvent("payment.order_failed", {
+      integrationId: auth.data.integrationId,
+      projectId: auth.data.projectId,
+      operation: "order_create",
+      status: "failed",
+      errorClass: "provider_mismatch",
+      httpStatus: 502,
+      durationMs: Date.now() - startedAt,
     });
     return gatewayFailure(
       502,
@@ -335,6 +408,15 @@ export async function createPaymentOrder(input: {
       rpcHash: auth.data.rpcHash,
     });
     if (isStoreFailure(recorded) || !recorded.data) {
+      emitPaymentEvent("payment.gateway_unavailable", {
+        integrationId: auth.data.integrationId,
+        projectId: auth.data.projectId,
+        operation: "order_create",
+        status: "unavailable",
+        errorClass: "order_record_failed",
+        httpStatus: 502,
+        durationMs: Date.now() - startedAt,
+      });
       return gatewayFailure(
         502,
         "unavailable",
@@ -342,6 +424,15 @@ export async function createPaymentOrder(input: {
       );
     }
   }
+
+  emitPaymentEvent("payment.order_created", {
+    integrationId: auth.data.integrationId,
+    projectId: auth.data.projectId,
+    operation: "order_create",
+    status: "created",
+    httpStatus: 200,
+    durationMs: Date.now() - startedAt,
+  });
 
   return {
     ok: true,
@@ -365,15 +456,11 @@ export async function verifyPayment(input: {
   const validated = validateVerifyPaymentInput(input.body);
   if (!validated.ok) return gatewayFailure(400, "invalid_request", validated.error);
 
+  const startedAt = Date.now();
   const auth = await authenticate(input.authorization);
   if (isPaymentFailure(auth)) return auth;
   const ineligible = eligibilityFailure(auth.data.projectId);
   if (ineligible) return ineligible;
-
-  const limited = paymentVerifyLimiter.consume(auth.data.projectId);
-  if (!limited.ok) {
-    return gatewayFailure(429, "rate_limited", "Too many payment checks. Retry shortly.", (limited as { retryAfterSeconds: number }).retryAfterSeconds);
-  }
 
   if (
     !verifyCheckoutSignature(
@@ -383,19 +470,79 @@ export async function verifyPayment(input: {
       validated.value.signature,
     )
   ) {
+    emitPaymentEvent("payment.verify_failed", {
+      integrationId: auth.data.integrationId,
+      projectId: auth.data.projectId,
+      operation: "payment_verify",
+      status: "failed",
+      errorClass: "signature_invalid",
+      httpStatus: 400,
+      durationMs: Date.now() - startedAt,
+    });
     return gatewayFailure(400, "signature_invalid", "The payment signature is not valid.");
+  }
+
+  /**
+   * Consume only after the HMAC check: an invalid signature never reaches the
+   * provider, and must not let a key holder spend a real payment's verification
+   * budget for the rest of the window.
+   */
+  const limited = await consumeRateLimit(auth.data, "payment_verify");
+  if (!limited.ok) {
+    emitPaymentEvent(
+      (limited as { code: string }).code === "rate_limited" ? "payment.rate_limited" : "payment.gateway_unavailable",
+      {
+        integrationId: auth.data.integrationId,
+        projectId: auth.data.projectId,
+        operation: "payment_verify",
+        status: (limited as { code: string }).code,
+        errorClass: (limited as { code: string }).code,
+        httpStatus: (limited as { status: number }).status,
+        retryAfterSeconds: (limited as { retryAfterSeconds?: number }).retryAfterSeconds ?? null,
+        durationMs: Date.now() - startedAt,
+      },
+    );
+    return limited;
   }
 
   const fetched = await fetchRazorpayPayment(auth.data.credentials, validated.value.paymentId);
   if (isRazorpayFailure(fetched)) {
+    emitPaymentEvent("payment.verify_failed", {
+      integrationId: auth.data.integrationId,
+      projectId: auth.data.projectId,
+      operation: "payment_verify",
+      status: "failed",
+      errorClass: fetched.code,
+      httpStatus: fetched.status,
+      retryAfterSeconds: fetched.retryAfterSeconds ?? null,
+      durationMs: Date.now() - startedAt,
+    });
     return providerFailure(fetched.code, fetched.message, fetched.retryAfterSeconds);
   }
   if (fetched.data.orderId !== validated.value.orderId) {
+    emitPaymentEvent("payment.verify_failed", {
+      integrationId: auth.data.integrationId,
+      projectId: auth.data.projectId,
+      operation: "payment_verify",
+      status: "failed",
+      errorClass: "order_mismatch",
+      httpStatus: 409,
+      durationMs: Date.now() - startedAt,
+    });
     return gatewayFailure(409, "order_mismatch", "That payment belongs to a different order.");
   }
 
   const status = statusFromProviderPayment(fetched.data.status, fetched.data.captured);
   if (status === "unknown") {
+    emitPaymentEvent("payment.verify_failed", {
+      integrationId: auth.data.integrationId,
+      projectId: auth.data.projectId,
+      operation: "payment_verify",
+      status: "unknown",
+      errorClass: "unknown_provider_status",
+      httpStatus: 200,
+      durationMs: Date.now() - startedAt,
+    });
     return {
       ok: true,
       data: {
@@ -421,17 +568,66 @@ export async function verifyPayment(input: {
     rpcHash: auth.data.rpcHash,
   });
   if (isStoreFailure(marked)) {
+    emitPaymentEvent("payment.gateway_unavailable", {
+      integrationId: auth.data.integrationId,
+      projectId: auth.data.projectId,
+      operation: "payment_verify",
+      status: "unavailable",
+      errorClass: "payment_state_unrecorded",
+      httpStatus: 503,
+      durationMs: Date.now() - startedAt,
+    });
     return gatewayFailure(503, "unavailable", "The payment state could not be recorded.");
   }
   if (!marked.data) {
+    emitPaymentEvent("payment.verify_failed", {
+      integrationId: auth.data.integrationId,
+      projectId: auth.data.projectId,
+      operation: "payment_verify",
+      status: "failed",
+      errorClass: "order_not_found",
+      httpStatus: 404,
+      durationMs: Date.now() - startedAt,
+    });
     return gatewayFailure(404, "not_found", "That order was not created for this project.");
   }
   if (!marked.data.matched) {
+    emitPaymentEvent("payment.verify_failed", {
+      integrationId: auth.data.integrationId,
+      projectId: auth.data.projectId,
+      operation: "payment_verify",
+      status: "failed",
+      errorClass: "amount_mismatch",
+      httpStatus: 409,
+      durationMs: Date.now() - startedAt,
+    });
     return gatewayFailure(
       409,
       "amount_mismatch",
       "The payment does not match the recorded amount or currency.",
     );
+  }
+
+  if (marked.data.status === "paid" || marked.data.status === "authorized") {
+    emitPaymentEvent("payment.verify_succeeded", {
+      integrationId: auth.data.integrationId,
+      projectId: auth.data.projectId,
+      operation: "payment_verify",
+      status: marked.data.status,
+      httpStatus: 200,
+      durationMs: Date.now() - startedAt,
+    });
+  } else {
+    emitPaymentEvent("payment.verify_failed", {
+      integrationId: auth.data.integrationId,
+      projectId: auth.data.projectId,
+      operation: "payment_verify",
+      status: marked.data.status,
+      errorClass:
+        marked.data.status === "failed" ? "provider_rejected" : "provider_not_captured",
+      httpStatus: 200,
+      durationMs: Date.now() - startedAt,
+    });
   }
 
   return {
@@ -462,10 +658,8 @@ export async function paymentStatus(input: {
   const ineligible = eligibilityFailure(auth.data.projectId);
   if (ineligible) return ineligible;
 
-  const limited = paymentVerifyLimiter.consume(auth.data.projectId);
-  if (!limited.ok) {
-    return gatewayFailure(429, "rate_limited", "Too many payment checks. Retry shortly.", (limited as { retryAfterSeconds: number }).retryAfterSeconds);
-  }
+  const limited = await consumeRateLimit(auth.data, "payment_verify");
+  if (!limited.ok) return limited;
 
   const row = await gatewayPaymentStatus({
     keyHash: auth.data.keyHash,

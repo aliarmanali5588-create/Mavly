@@ -4,6 +4,8 @@
 
 - Migration `supabase/migrations/21_business_integrations.sql` applied after 11
   (project secrets) and 12 (project API keys).
+- Migration `supabase/migrations/23_production_hardening.sql` applied after 21
+  and 22; the payment gateway fails closed if its rate-limit RPC is missing.
 - Server environment:
   - `MAVLY_BUSINESS_INTEGRATIONS_ENABLED=on`
   - `MAVLY_BUSINESS_INTEGRATIONS_PROJECTS=<explicit ids>` (never `*`)
@@ -137,7 +139,10 @@ curl -sS "$MAVLY_APP_ORIGIN/api/app/v1/payments/order_…" \
 - Webhook replay protection is the SHA-256 of the signed body, not the unsigned
   event-id header; Razorpay does not sign a timestamp. Do not delete event rows
   while retries may still arrive.
-- Rate limits are per instance, not a global budget.
+- Rate limits are durable and shared (migration 23): 30 order attempts and 60
+  verification attempts per 60 seconds per integration, fixed in SQL. Webhooks
+  are not rate-limited by this table; duplicates are idempotent and provider
+  retries must not be dropped.
 - A payment that Razorpay reports as `authorized` but not `captured` is shown as
   `authorized` and must not be fulfilled.
 - One active key set per project. Switching between test and live keys replaces

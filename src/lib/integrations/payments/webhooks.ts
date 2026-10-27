@@ -6,10 +6,12 @@
  *
  * ⚠️ AN UNVERIFIED BODY IS NEVER PARSED FOR STATE. The signature check happens
  * before JSON parsing, and nothing is written on a bad signature.
- * ⚠️ REPLAY PROTECTION IS THE EVENT ID. Razorpay does not sign a timestamp, so a
- * redelivered event is de-duplicated by `(integration_id, provider_event_id)`.
+ * ⚠️ REPLAY PROTECTION IS THE SIGNED BODY DIGEST. Razorpay does not sign a
+ * timestamp, and the event-id header is not covered by the HMAC, so a captured
+ * body replayed with a new header must still be deduplicated. The unique key is
+ * `(integration_id, sha256(exact raw body))`.
  * ⚠️ NO RAW BODY, HEADER OR PERSONAL DATA IS STORED OR LOGGED. Only the event
- * type, the event id and a SHA-256 digest are persisted.
+ * type, the event id (for audit) and a SHA-256 digest are persisted.
  */
 
 import { createHash } from "node:crypto";
@@ -31,6 +33,7 @@ import {
 } from "./store";
 import { statusFromProviderPayment } from "./state";
 import type { PaymentStatus } from "./types";
+import { emitPaymentEvent } from "@/lib/observability/payments";
 
 /** Events this build acts on. Anything else is recorded and ignored. */
 const HANDLED_EVENTS = new Set([
@@ -134,6 +137,7 @@ export async function handleRazorpayWebhook(input: {
   signature: string | null;
   eventId: string | null;
 }): Promise<WebhookOutcome> {
+  const startedAt = Date.now();
   const config = readBusinessIntegrationsConfig();
   if (!("config" in config)) return outcome(404, false);
   const rpcHash = integrationRpcHash();
@@ -184,6 +188,15 @@ export async function handleRazorpayWebhook(input: {
   if (!webhookSecret) return outcome(503, false);
 
   if (!verifyWebhookSignature(webhookSecret, input.rawBody, input.signature)) {
+    emitPaymentEvent("payment.webhook_failed", {
+      integrationId: first.integration_id,
+      projectId: first.project_id,
+      operation: "webhook",
+      status: "failed",
+      errorClass: "invalid_signature",
+      httpStatus: 401,
+      durationMs: Date.now() - startedAt,
+    });
     return outcome(401, false);
   }
 
@@ -211,22 +224,74 @@ export async function handleRazorpayWebhook(input: {
       ? outcome(503, false)
       : outcome(500, false);
   }
-  if (!recorded.data.fresh) return outcome(200, true);
+  if (!recorded.data.fresh) {
+    emitPaymentEvent("payment.webhook_duplicate", {
+      integrationId: first.integration_id,
+      projectId: first.project_id,
+      operation: "webhook",
+      status: "duplicate",
+      eventType,
+      eventStatus: "duplicate",
+      httpStatus: 200,
+      durationMs: Date.now() - startedAt,
+    });
+    return outcome(200, true);
+  }
 
   const eventId = recorded.data.event_id;
 
+  /**
+   * A finish failure leaves the event `received`. Returning 500 makes the
+   * provider retry, and the retry resumes the idempotent processing path; never
+   * acknowledge a state that the database did not record.
+   */
+  const finishEvent = async (
+    status: "processed" | "ignored" | "failed",
+    errorCode: string | null,
+  ): Promise<boolean> => {
+    const finished = await gatewayFinishWebhookEvent({ eventId, status, errorCode, rpcHash });
+    if (!isStoreFailure(finished)) return true;
+    emitPaymentEvent("payment.gateway_unavailable", {
+      integrationId: first.integration_id,
+      projectId: first.project_id,
+      operation: "webhook",
+      status: "unavailable",
+      eventType,
+      errorClass: "webhook_finish_failed",
+      httpStatus: 500,
+      durationMs: Date.now() - startedAt,
+    });
+    return false;
+  };
+
   if (!HANDLED_EVENTS.has(eventType)) {
-    await gatewayFinishWebhookEvent({ eventId, status: "ignored", errorCode: null, rpcHash });
+    if (!(await finishEvent("ignored", null))) return outcome(500, false);
+    emitPaymentEvent("payment.webhook_ignored", {
+      integrationId: first.integration_id,
+      projectId: first.project_id,
+      operation: "webhook",
+      status: "ignored",
+      eventType,
+      eventStatus: "ignored",
+      httpStatus: 200,
+      durationMs: Date.now() - startedAt,
+    });
     return outcome(200, true);
   }
 
   const event = parsePaymentEvent(eventType, nested(body, "payload"));
   if (!event) {
-    await gatewayFinishWebhookEvent({
-      eventId,
+    if (!(await finishEvent("failed", "invalid_payload"))) return outcome(500, false);
+    emitPaymentEvent("payment.webhook_failed", {
+      integrationId: first.integration_id,
+      projectId: first.project_id,
+      operation: "webhook",
       status: "failed",
-      errorCode: "invalid_payload",
-      rpcHash,
+      eventType,
+      eventStatus: "failed",
+      errorClass: "invalid_payload",
+      httpStatus: 200,
+      durationMs: Date.now() - startedAt,
     });
     return outcome(200, true);
   }
@@ -247,34 +312,62 @@ export async function handleRazorpayWebhook(input: {
       errorCode: "processing_error",
       rpcHash,
     });
+    emitPaymentEvent("payment.webhook_failed", {
+      integrationId: first.integration_id,
+      projectId: first.project_id,
+      operation: "webhook",
+      status: "failed",
+      eventType,
+      eventStatus: "failed",
+      errorClass: "processing_error",
+      httpStatus: 500,
+      durationMs: Date.now() - startedAt,
+    });
     return outcome(500, false);
   }
   if (!applied.data) {
     // A signed event for an order this integration did not create. Acknowledge
     // it so the provider stops retrying, and keep the audit row.
-    await gatewayFinishWebhookEvent({
-      eventId,
+    if (!(await finishEvent("failed", "order_not_found"))) return outcome(500, false);
+    emitPaymentEvent("payment.webhook_failed", {
+      integrationId: first.integration_id,
+      projectId: first.project_id,
+      operation: "webhook",
       status: "failed",
-      errorCode: "order_not_found",
-      rpcHash,
+      eventType,
+      eventStatus: "failed",
+      errorClass: "order_not_found",
+      httpStatus: 200,
+      durationMs: Date.now() - startedAt,
     });
     return outcome(200, true);
   }
   if (!applied.data.matched) {
-    await gatewayFinishWebhookEvent({
-      eventId,
+    if (!(await finishEvent("failed", "amount_mismatch"))) return outcome(500, false);
+    emitPaymentEvent("payment.webhook_failed", {
+      integrationId: first.integration_id,
+      projectId: first.project_id,
+      operation: "webhook",
       status: "failed",
-      errorCode: "amount_mismatch",
-      rpcHash,
+      eventType,
+      eventStatus: "failed",
+      errorClass: "amount_mismatch",
+      httpStatus: 200,
+      durationMs: Date.now() - startedAt,
     });
     return outcome(200, true);
   }
 
-  await gatewayFinishWebhookEvent({
-    eventId,
+  if (!(await finishEvent("processed", null))) return outcome(500, false);
+  emitPaymentEvent("payment.webhook_processed", {
+    integrationId: first.integration_id,
+    projectId: first.project_id,
+    operation: "webhook",
     status: "processed",
-    errorCode: null,
-    rpcHash,
+    eventType,
+    eventStatus: "processed",
+    httpStatus: 200,
+    durationMs: Date.now() - startedAt,
   });
   return outcome(200, true);
 }

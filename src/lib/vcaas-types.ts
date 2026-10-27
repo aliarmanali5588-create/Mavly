@@ -282,6 +282,16 @@ export interface ProjectPaymentTransaction {
   paidAt: string | null;
 }
 
+/** One provider webhook event, metadata only (never the raw body or digest). */
+export interface ProjectPaymentEvent {
+  eventId: string;
+  eventType: string;
+  status: "received" | "processed" | "ignored" | "failed";
+  errorCode: string | null;
+  receivedAt: string;
+  processedAt: string | null;
+}
+
 /**
  * The workspace's truthful view of the payments integration. It never carries a
  * secret value or ciphertext; `keyId` is Razorpay's publishable key id.
@@ -299,6 +309,10 @@ export interface PaymentsIntegrationStatus {
   lastCheckedAt: string | null;
   lastError: string | null;
   transactions: ProjectPaymentTransaction[];
+  /** Recent webhook audit rows for reconciliation; metadata only. */
+  events: ProjectPaymentEvent[];
+  /** Migration 23's durable rate limiter is installed. */
+  hardeningReady: boolean;
   credentialNames: string[];
 }
 

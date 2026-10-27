@@ -612,6 +612,8 @@ test("the payment status type exposes metadata only", () => {
     lastCheckedAt: null,
     lastError: null,
     transactions: [],
+    events: [],
+    hardeningReady: true,
     credentialNames: integrationCredentialNames(RAZORPAY_INTEGRATION),
   };
   assert.equal(JSON.stringify(sample).includes(KEY_SECRET), false);

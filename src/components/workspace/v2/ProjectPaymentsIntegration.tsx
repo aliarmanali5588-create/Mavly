@@ -43,6 +43,13 @@ const TONE: Record<PaymentsIntegrationStatus["status"], StatusTone> = {
     not_configured: "neutral",
 };
 
+const EVENT_TONE: Record<string, StatusTone> = {
+    processed: "success",
+    received: "info",
+    ignored: "neutral",
+    failed: "danger",
+};
+
 const PAYMENT_TONE: Record<string, StatusTone> = {
     paid: "success",
     authorized: "info",
@@ -248,6 +255,15 @@ export function ProjectPaymentsIntegration({
                             </div>
                         </Card>
 
+                        {status.hardeningReady === false ? (
+                            <Callout tone="warning" title="Migration 23 is missing">
+                                This deployment does not have the durable rate-limit migration. Payment order and
+                                verification requests will be refused until
+                                <code className="mx-1">supabase/migrations/23_production_hardening.sql</code>
+                                is applied.
+                            </Callout>
+                        ) : null}
+
                         {status.enabled ? (
                             <Card title="Razorpay webhook">
                                 <p className="text-muted-foreground text-xs leading-relaxed">
@@ -351,6 +367,46 @@ export function ProjectPaymentsIntegration({
                                             <span className="text-muted-foreground text-xs">
                                                 {new Date(transaction.createdAt).toLocaleString()}
                                             </span>
+                                        </li>
+                                    ))}
+                                </ul>
+                            )}
+                        </Card>
+
+                        <Card title="Webhook events">
+                            <p className="text-muted-foreground text-xs leading-relaxed">
+                                Provider events are shown for reconciliation. A <strong>failed</strong> event never changed payment
+                                state here; compare it with the Razorpay dashboard before acting. Raw bodies and signatures are
+                                never stored or shown.
+                            </p>
+                            {(status.events ?? []).length === 0 ? (
+                                <EmptyState
+                                    variant="panel"
+                                    icon={<ShieldCheckIcon />}
+                                    title="No webhook events yet"
+                                    description="Events appear after Razorpay calls the webhook address."
+                                />
+                            ) : (
+                                <ul className="divide-border divide-y">
+                                    {(status.events ?? []).map(event => (
+                                        <li key={`${event.eventId}-${event.receivedAt}`} className="space-y-1 py-2">
+                                            <div className="flex flex-wrap items-center gap-2">
+                                                <code className="min-w-0 flex-1 truncate font-mono text-xs">
+                                                    {event.eventType}
+                                                </code>
+                                                <StatusPill tone={EVENT_TONE[event.status] ?? "neutral"}>
+                                                    {event.status}
+                                                </StatusPill>
+                                                <span className="text-muted-foreground text-xs">
+                                                    {new Date(event.receivedAt).toLocaleString()}
+                                                </span>
+                                                <CopyButton value={event.eventId} size="sm" />
+                                            </div>
+                                            {event.errorCode ? (
+                                                <p className="text-destructive text-xs">
+                                                    {event.errorCode} — reconcile with the provider; no payment state was guessed.
+                                                </p>
+                                            ) : null}
                                         </li>
                                     ))}
                                 </ul>

@@ -82,15 +82,21 @@ enabling business integrations (it adds the per-project provider metadata, payme
 webhook-event tables, the owner/gateway/webhook SECURITY DEFINER RPCs and schema marker
 21; additive, applied after 11 and 12),
 `08_figma_integration.sql`
-before using Figma, and `11_project_secrets.sql` before using project secrets. Project-secret encryption also
+before using Figma, `11_project_secrets.sql` before using project secrets, and
+`18_admin_allowlist.sql` before opening `/adminsh` (the server layout fails closed
+without `current_user_is_admin()`). Apply `23_production_hardening.sql` after 21 and 22
+and before deploying this build to an environment that serves payment orders: the gateway
+fails closed without its durable rate-limit RPC. Migration 23 is additive and safe to
+apply while the previous application version is still deployed. Project-secret encryption also
 requires the server-only `MAVLY_PROJECT_SECRETS_ENCRYPTION_KEY` (32 random bytes,
 base64-encoded); without it create/update fail closed. `npm test` covers the pure
 auth/redirect/ownership/scope modules, the generation state/lease/claim/observability
 modules, the verification runtime/health/preview/policy/config/state/result modules, the
 bounded repair policy and parsers, the full-stack runtime/config/database/env/address
 rules, the business-integration registry/config/validation, Razorpay signature and
-provider-error mapping, the payment state machine, the gateway session exemptions and
-static route/migration invariants. It does not
+provider-error mapping, the payment state machine, the gateway session exemptions, the
+Phase 7 durable rate-limit migration contracts, payment-event metadata/redaction, the
+admin surface gate and static route/migration invariants. It does not
 exercise a
 real Supabase session, Groq, a live worker/queue, the Supabase OAuth connection, Vercel
 publishing, a real Vercel Sandbox, a generated app, a repair model call, a real Vercel
@@ -290,6 +296,30 @@ a delivered webhook, or the migrations against a database.
   gateway from the browser. No live Razorpay account, webhook delivery or real payment
   has been verified. See `docs/architecture/phase-6-business-integrations.md` and
   `docs/runbooks/business-integrations.md`.
+- **Production hardening is implemented, with live acceptance still pending (Phase 7).**
+  `/adminsh/*` is no longer a public mock console: the proxy requires a session and
+  `app/adminsh/layout.tsx` calls `public.current_user_is_admin()` from migration 18,
+  returning 404 to a signed-in non-admin and failing closed if the allowlist migration is
+  missing. Payment order/verification attempts now use the durable
+  `consume_integration_rate_limit()` RPC (migration 23): **30 order attempts and 60
+  verification attempts per 60 seconds per integration**, fixed in SQL and shared across
+  instances. The gateway fails closed if that RPC is missing, and the owner status shows
+  a migration warning instead of silently degrading. Webhook audit metadata (event type,
+  status, error code, timestamps — never the raw body/digest/secret) is exposed to the
+  owner for reconciliation; unmatched/mismatched events remain `failed` and never guess a
+  payment state. A signed retry can reclaim a `received` webhook row older than two
+  minutes (migration 23), so a crash/finish failure cannot strand the audit row; processed
+  and ignored events are never re-applied. Structured `[payments]` events carry only
+  allowlisted identifiers and classifications. **Unresolved, documented risks:** a database read compromise exposes
+  the API-key hash and RPC-secret hash that the anon RPCs accept as bearer values (a
+  service-role/asymmetric-proof redesign is required; re-hashing with a pepper would not
+  close it); the authenticated Phase 5 `claim`/`settle` RPCs still allow an owner to
+  misrepresent their own deployment readiness (self-only; documented in Phase 5); webhook
+  writes have no shared rate limit on purpose so provider retries are not dropped; there
+  is no platform-wide database backup/restore implementation in this repository (source
+  snapshots/restores are implemented; Supabase/provider backups are external). See
+  `docs/architecture/phase-7-production-hardening.md` and
+  `docs/runbooks/production-hardening.md`.
 - **Restore points are implemented.** Every completed AI execution that changes the
   project's source leaves a durable snapshot (`project_snapshots` +
   `project_snapshot_files`). The chat renders a **Restore Code** action on that execution,
@@ -500,12 +530,17 @@ paths with `src/lib/vcaas-scope.ts`, so unknown shapes are refused before any wo
 | `src/lib/integrations/payments/service.ts` | Owner save/test/disable/status; encrypted credential upsert and provider test-before-save. |
 | `src/lib/integrations/payments/gateway.ts` | Generated-app order/verify/status path: project API key auth, local idempotency, authoritative capture check. |
 | `src/lib/integrations/payments/webhooks.ts` | Raw-body webhook verification, event idempotency and the audit-only event record. |
-| `src/lib/integrations/rate-limit.ts` | Best-effort per-project/per-instance windows for the payment gateway. |
+| `src/lib/integrations/rate-limit.ts` | Phase 6's pure per-instance window utility and the documented gateway limit constants; production limits are enforced by migration 23's shared RPC. |
 | `src/app/api/app/v1/payments/` | Public generated-app payments API (self-authenticating; the only `/api/app/v1/` exemption). |
 | `src/app/api/integrations/webhooks/razorpay/[token]/route.ts` | Public Razorpay webhook receiver (signed raw body; token resolves one integration). |
 | `src/components/workspace/v2/ProjectPaymentsIntegration.tsx` | Real Business payments panel: truthful status, test, disable, webhook address and recent orders. |
 | `supabase/migrations/21_business_integrations.sql` | Integration metadata, payment and webhook-event tables, owner/gateway/webhook SECURITY DEFINER RPCs, column grants and schema marker 21. Additive; apply after 11 and 12. |
+| `supabase/migrations/23_production_hardening.sql` | Durable per-integration payment attempt windows, fixed-limit consume RPC, bounded cleanup, stale-`received` webhook recovery and schema marker 23. Additive; apply after 21 and 22. |
+| `src/lib/integrations/payments/event-view.ts` | Pure owner-visible webhook-event metadata projection; never includes the raw body, digest or secret. |
+| `src/lib/observability/payments.ts` | Allowlisted, secret-free structured payment diagnostic events. |
+| `src/app/adminsh/layout.tsx` | Server-side session + `current_user_is_admin()` gate for every admin page; 404 for non-admins, fail closed on a missing migration. |
 | `docs/architecture/phase-6-business-integrations.md`, `docs/runbooks/business-integrations.md` | Phase 6 design, provider setup, security boundaries, rollout and manual acceptance. |
+| `docs/architecture/phase-7-production-hardening.md`, `docs/runbooks/production-hardening.md` | Phase 7 threat model, limits, recovery, observability, backup/DR limitations and acceptance. |
 | `src/app/api/tenant/[[...path]]/route.ts` | The tenant runtime (internal path reached by the validated-host rewrite). |
 | `src/lib/api-origin.ts` | Explicit credentialed-origin allowlist and cross-origin mutation policy. |
 | `supabase/migrations/14_shared_hosting.sql` | Published versions/files, active-version RPCs, published-only public lookup, RLS and grants. |
@@ -603,6 +638,14 @@ paths with `src/lib/vcaas-scope.ts`, so unknown shapes are refused before any wo
    authoritative provider read, or from a verified webhook; never from a redirect,
    client claim or amount the client supplied. Raw webhook bodies, provider secrets and
    authorization headers are never logged or stored.
+11. **The admin console is gated twice.** The proxy requires a session for `/adminsh/*`,
+    and `app/adminsh/layout.tsx` calls `public.current_user_is_admin()` server-side. A
+    signed-in non-admin gets 404; a missing migration 18 or an RPC error also fails
+    closed. A client-side `setTimeout`, a query parameter or a mock page is never
+    authorization. The payment gateway's 30/60 per-minute budgets are fixed in SQL
+    (migration 23), not caller-supplied, and are shared across instances; the gateway
+    fails closed if the counter RPC is missing. Payment diagnostics and webhook-history
+    views are metadata only: no amount, order/payment id, raw body, signature or secret.
 
 ## UI conventions
 

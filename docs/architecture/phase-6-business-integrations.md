@@ -101,8 +101,10 @@ stored hash).
 - Browser calls are not the supported path. In production the proxy's origin
   policy rejects a mutation from a tenant origin, and a static app cannot keep a
   key secret.
-- Rate limits are best-effort per instance (30 orders/min/project, 60
-  verifications/min/project), not a global budget.
+- The Phase 6 in-process windows were superseded by Phase 7's durable
+  `consume_integration_rate_limit` RPC (migration 23): 30 order attempts and 60
+  verification attempts per 60 seconds per integration. The limits are fixed in
+  SQL, shared across instances, and fail closed if the RPC is missing.
 
 ### Payment integrity
 

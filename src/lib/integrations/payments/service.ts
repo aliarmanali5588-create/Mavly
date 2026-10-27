@@ -52,8 +52,10 @@ import {
 import {
   disablePaymentIntegration,
   isStoreFailure,
+  listIntegrationEvents,
   listIntegrationPayments,
   markPaymentIntegrationChecked,
+  productionHardeningReady,
   readOwnerPaymentCredentials,
   readProjectIntegration,
   savePaymentIntegration,
@@ -61,7 +63,9 @@ import {
   type IntegrationRow,
   type StoreFailure,
 } from "./store";
+import { paymentEventMetadata } from "./event-view";
 import { validatePaymentCredentialsInput } from "./validation";
+import { emitPaymentEvent } from "@/lib/observability/payments";
 
 export const PAYMENT_PROVIDER = "razorpay" as const;
 
@@ -179,8 +183,13 @@ async function composeStatus(
 ): Promise<PaymentsServiceResult<PaymentsIntegrationStatus>> {
   const names = integrationCredentialNames(RAZORPAY_INTEGRATION);
   const present = await credentialsPresent(projectId, userId, names);
-  const payments = await listIntegrationPayments(projectId, 20);
+  const [payments, events, hardeningReady] = await Promise.all([
+    listIntegrationPayments(projectId, 20),
+    listIntegrationEvents(projectId, 20),
+    productionHardeningReady(),
+  ]);
   if (isStoreFailure(payments)) return storeFailure(payments);
+  if (isStoreFailure(events)) return storeFailure(events);
 
   return {
     ok: true,
@@ -198,6 +207,8 @@ async function composeStatus(
       lastCheckedAt: row?.last_checked_at ?? null,
       lastError: row?.last_error ?? null,
       transactions: payments.data.map(toTransaction),
+      events: events.data.map(paymentEventMetadata),
+      hardeningReady,
       credentialNames: names,
     },
   };
@@ -350,6 +361,13 @@ export async function savePaymentsIntegration(
 
   const row = await readProjectIntegration(projectId, PAYMENT_PROVIDER);
   if (isStoreFailure(row)) return storeFailure(row);
+  emitPaymentEvent("payment.integration_saved", {
+    integrationId: row.data?.id ?? null,
+    projectId,
+    operation: "owner",
+    status: "saved",
+    httpStatus: 200,
+  });
   return composeStatus(projectId, userId, row.data);
 }
 
@@ -430,6 +448,17 @@ export async function testPaymentsIntegration(
   });
   if (isStoreFailure(marked)) return storeFailure(marked);
 
+  if (!verified) {
+    emitPaymentEvent("payment.integration_test_failed", {
+      integrationId: integration.data.id,
+      projectId,
+      operation: "owner",
+      status: "test_failed",
+      errorClass: providerError?.code ?? "provider_failed",
+      httpStatus: 200,
+    });
+  }
+
   return {
     ok: true,
     data: {
@@ -459,5 +488,12 @@ export async function disablePaymentsIntegration(
 
   const row = await readProjectIntegration(projectId, PAYMENT_PROVIDER);
   if (isStoreFailure(row)) return storeFailure(row);
+  emitPaymentEvent("payment.integration_disabled", {
+    integrationId: row.data?.id ?? null,
+    projectId,
+    operation: "owner",
+    status: "disabled",
+    httpStatus: 200,
+  });
   return composeStatus(projectId, userId, row.data);
 }
