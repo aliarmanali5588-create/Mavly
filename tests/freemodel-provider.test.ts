@@ -6,7 +6,7 @@ import {
   completionUsage,
   isAiConfigured,
   type ChatMessage,
-} from "../src/lib/ai/groq";
+} from "../src/lib/ai/freemodel";
 import { AI_MODEL_CATALOG, resolveModel, type AiModel } from "../src/lib/ai/models";
 
 const model = resolveModel();
@@ -45,13 +45,13 @@ test("a successful request uses FreeModel auth, the catalog model, and supported
     sent = JSON.parse(String(init?.body)) as Record<string, unknown>;
     assert.equal(new Headers(init?.headers).get("authorization"), `Bearer ${TEST_API_KEY}`);
     return new Response(JSON.stringify({
-      id: "req-groq-1",
+      id: "req-freemodel-1",
       model: model.id,
       choices: [{ message: { content: '{"files":[]}' }, finish_reason: "stop" }],
       usage: { prompt_tokens: 12, completion_tokens: 9, total_tokens: 21 },
     }), {
       status: 200,
-      headers: { "content-type": "application/json", "x-request-id": "req-groq-1" },
+      headers: { "content-type": "application/json", "x-request-id": "req-freemodel-1" },
     });
   }) as typeof fetch;
 
@@ -67,7 +67,7 @@ test("a successful request uses FreeModel auth, the catalog model, and supported
       max_completion_tokens: 400,
       stream: false,
     });
-    assert.equal(result.metadata.providerRequestId, "req-groq-1");
+    assert.equal(result.metadata.providerRequestId, "req-freemodel-1");
     assert.equal(result.metadata.usage.totalTokens, 21);
     assert.equal(JSON.stringify(result).includes(TEST_API_KEY), false);
   } finally {

@@ -12,7 +12,7 @@ import {
   type ChatCompletionResult,
   type ChatCompletionSuccess,
   type ChatMessage,
-} from "../src/lib/ai/groq";
+} from "../src/lib/ai/freemodel";
 import { resolveModel } from "../src/lib/ai/models";
 
 /**

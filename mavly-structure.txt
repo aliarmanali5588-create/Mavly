@@ -363,7 +363,7 @@
 │   ├── lib
 │   │   ├── ai
 │   │   │   ├── agent.ts
-│   │   │   ├── groq.ts
+│   │   │   ├── freemodel.ts
 │   │   │   ├── image-models.ts
 │   │   │   ├── models.ts
 │   │   │   ├── openrouter-images.ts
@@ -545,7 +545,7 @@
 │   ├── generation-migration.test.ts
 │   ├── generation-reliability.test.ts
 │   ├── github-installation.test.ts
-│   ├── groq-provider.test.ts
+│   ├── freemodel-provider.test.ts
 │   ├── image-generation-limits.test.ts
 │   ├── image-generation.test.ts
 │   ├── openrouter-metadata.test.ts

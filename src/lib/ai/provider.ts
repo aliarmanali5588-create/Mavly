@@ -8,7 +8,7 @@ export {
   chatCompletion,
   isAiConfigured,
   isChatCompletionFailure,
-} from "./groq";
+} from "./freemodel";
 export type {
   ChatCompletionErrorCode,
   ChatCompletionFailure,
@@ -18,4 +18,4 @@ export type {
   ChatCompletionSuccess,
   ChatCompletionUsage,
   ChatMessage,
-} from "./groq";
+} from "./freemodel";

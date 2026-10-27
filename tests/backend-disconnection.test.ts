@@ -128,13 +128,13 @@ test("FreeModel is the active website-generation provider and its key stays serv
     }
   }
 
-  assert.equal(read("src/lib/ai/groq.ts").includes("GROQ_API_KEY"), false);
-  assert.equal(read("src/lib/ai/groq.ts").includes("console."), false);
+  assert.equal(read("src/lib/ai/freemodel.ts").includes("FREEMODEL_API_KEY"), false);
+  assert.equal(read("src/lib/ai/freemodel.ts").includes("console."), false);
   assert.equal(read("src/lib/ai/agent.ts").includes('"./provider"'), true);
   assert.equal(read("src/lib/mavly/run-agent.ts").includes("@/lib/ai/provider"), true);
   assert.equal(read("src/lib/mavly/run-agent.ts").includes("@/lib/ai/openrouter"), false);
   assert.equal(read("src/lib/mavly/api.ts").includes('from "@/lib/ai/provider"'), true);
-  assert.equal(read("src/lib/ai/provider.ts").includes('from "./groq"'), true);
+  assert.equal(read("src/lib/ai/provider.ts").includes('from "./freemodel"'), true);
   assert.equal(read("src/lib/ai/provider.ts").includes('from "./openrouter"'), false);
   assert.equal(read("src/lib/ai/openrouter.ts").includes("OPENROUTER_API_KEY"), true);
   assert.equal(read("src/lib/ai/openrouter-images.ts").includes("OPENROUTER_API_KEY"), true);
@@ -142,7 +142,7 @@ test("FreeModel is the active website-generation provider and its key stays serv
 });
 
 test("the AI modules do not execute generated output", () => {
-  for (const file of ["src/lib/ai/agent.ts", "src/lib/ai/groq.ts", "src/lib/mavly/run-agent.ts"]) {
+  for (const file of ["src/lib/ai/agent.ts", "src/lib/ai/freemodel.ts", "src/lib/mavly/run-agent.ts"]) {
     const source = read(file);
     for (const dangerous of ["eval(", "new Function(", "child_process", "execSync("]) {
       assert.equal(source.includes(dangerous), false, `${file} must not use ${dangerous}`);
