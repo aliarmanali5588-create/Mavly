@@ -6,6 +6,7 @@ import { strToU8, zipSync } from "fflate";
 import {
   androidBuildConfig,
   androidBuildProblemMessage,
+  androidBuildWarningMessage,
   isProjectInAndroidBuildCohort,
   parseAndroidBuildConfig,
 } from "../src/lib/android/build-config";
@@ -42,9 +43,15 @@ const BUILD_STORE = read("src/lib/android/build-store.ts");
 const BUILD_CONFIG = read("src/lib/android/build-config.ts");
 const DASHBOARD = read("src/components/builder/BuilderDashboard.tsx");
 const CAPABILITY = read("src/lib/android/capability.ts");
+const IMAGE_DOCKERFILE = read("infra/android-build/Dockerfile");
+const IMAGE_BUILD = read("infra/android-build/build.sh");
+const IMAGE_VERIFY = read("infra/android-build/verify.sh");
+const IMAGE_README = read("infra/android-build/README.md");
+const SEED_APP_GRADLE = read("infra/android-build/seed/app/build.gradle.kts");
+const SEED_ROOT_GRADLE = read("infra/android-build/seed/build.gradle.kts");
 
 const SHA = "a".repeat(64);
-const IMAGE = `registry.invalid/mavly/android-builder@sha256:${SHA}`;
+const IMAGE = `mavly-team/mavly-project/android-build@sha256:${SHA}`;
 
 function enabledEnv(): Record<string, string> {
   return {
@@ -129,7 +136,7 @@ test("Android build config is all-or-nothing and requires a digest-pinned image"
 
   const tagged = parseAndroidBuildConfig({
     ...enabledEnv(),
-    MAVLY_ANDROID_BUILD_IMAGE: "registry.invalid/mavly/android-builder:latest",
+    MAVLY_ANDROID_BUILD_IMAGE: "mavly-team/mavly-project/android-build:latest",
   });
   assert.equal(tagged.ready, false);
   assert.ok(tagged.problems.includes("image_not_pinned"));
@@ -579,4 +586,160 @@ test("Android builds are isolated from Next.js verification and never release pr
   assert.match(CAPABILITY, /googlePlayPublish: false/);
   assert.match(BUILD_CONFIG, /Vercel Container Registry/);
   assert.match(DASHBOARD, /Debug APK builds are available only where an operator enables them/);
+});
+
+test("the build image must resolve in VCR and vCPUs are parsed strictly", () => {
+  for (const image of [
+    `docker.io/library/android-build@sha256:${SHA}`,
+    `ghcr.io/mavly/android-build@sha256:${SHA}`,
+    `https://vcr.vercel.com/mavly/team/android-build@sha256:${SHA}`,
+    `localhost:5000/android-build@sha256:${SHA}`,
+  ]) {
+    const config = parseAndroidBuildConfig({
+      ...enabledEnv(),
+      MAVLY_ANDROID_BUILD_IMAGE: image,
+    });
+    assert.equal(config.ready, false, image);
+    assert.ok(config.problems.includes("image_registry_unsupported"), image);
+  }
+
+  for (const image of [
+    `android-build@sha256:${SHA}`,
+    `mavly-team/mavly-project/android-build@sha256:${SHA}`,
+    `vcr.vercel.com/mavly-team/mavly-project/android-build@sha256:${SHA}`,
+  ]) {
+    const config = parseAndroidBuildConfig({
+      ...enabledEnv(),
+      MAVLY_ANDROID_BUILD_IMAGE: image,
+    });
+    assert.equal(config.ready, true, image);
+  }
+
+  assert.match(
+    androidBuildProblemMessage("image_registry_unsupported"),
+    /Vercel Container Registry/,
+  );
+
+  for (const value of ["2abc", "0", "5", "-1", "1.5"]) {
+    const config = parseAndroidBuildConfig({
+      ...enabledEnv(),
+      MAVLY_ANDROID_BUILD_VCPUS: value,
+    });
+    assert.equal(config.ready, false, value);
+    assert.ok(config.problems.includes("invalid_vcpus"), value);
+  }
+  for (const value of ["1", "2", "4"]) {
+    const config = parseAndroidBuildConfig({
+      ...enabledEnv(),
+      MAVLY_ANDROID_BUILD_VCPUS: value,
+    });
+    assert.equal(config.ready, true, value);
+    assert.equal(config.vcpus, Number.parseInt(value, 10), value);
+  }
+});
+
+test("a non-default artifact bucket is reported as an operator assumption, not verified", () => {
+  const custom = parseAndroidBuildConfig({
+    ...enabledEnv(),
+    MAVLY_ANDROID_ARTIFACT_BUCKET: "custom-artifacts",
+  });
+  assert.equal(custom.ready, true);
+  assert.deepEqual(custom.warnings, ["non_default_bucket"]);
+  assert.match(androidBuildWarningMessage("non_default_bucket"), /private bucket/);
+  assert.match(androidBuildWarningMessage("non_default_bucket"), /migration 26/);
+  assert.doesNotMatch(
+    androidBuildWarningMessage("non_default_bucket"),
+    /service.role|token|secret/i,
+  );
+
+  const standard = parseAndroidBuildConfig(enabledEnv());
+  assert.deepEqual(standard.warnings, []);
+});
+
+test("the Android build image definition is reproducible, offline and secret-free", () => {
+  assert.match(IMAGE_DOCKERFILE, /ARG BASE_IMAGE/);
+  assert.match(IMAGE_DOCKERFILE, /FROM \$\{BASE_IMAGE\}/);
+  assert.doesNotMatch(IMAGE_DOCKERFILE, /:latest/);
+  assert.doesNotMatch(ANDROID_BUILD_COMMAND, /\.\/gradlew/);
+
+  for (const arg of ["GRADLE_SHA256", "JDK_SHA256", "CMDLINE_TOOLS_SHA256"]) {
+    assert.match(IMAGE_DOCKERFILE, new RegExp(`ARG ${arg}`), arg);
+    assert.match(IMAGE_BUILD, new RegExp(arg), arg);
+  }
+  assert.match(IMAGE_DOCKERFILE, /sha256sum -c -/);
+  assert.match(IMAGE_BUILD, /@sha256:\[a-fA-F0-9\]\{64\}/);
+  assert.match(IMAGE_BUILD, /BASE_IMAGE must be pinned/);
+
+  // Toolchain and layout the adapter/worker require.
+  assert.match(IMAGE_DOCKERFILE, /gradle-\$\{GRADLE_VERSION\}-bin\.zip/);
+  assert.match(IMAGE_DOCKERFILE, /platforms;android-\$\{ANDROID_PLATFORM\}/);
+  assert.match(IMAGE_DOCKERFILE, /build-tools;\$\{ANDROID_BUILD_TOOLS\}/);
+  assert.match(IMAGE_DOCKERFILE, /build-tools\/\$\{ANDROID_BUILD_TOOLS\}:\$\{ANDROID_HOME\}\/platform-tools/);
+  assert.match(IMAGE_DOCKERFILE, /GRADLE_USER_HOME=\/home\/mavly\/\.gradle/);
+  assert.match(IMAGE_DOCKERFILE, /WORKDIR \/vercel\/sandbox/);
+  assert.match(IMAGE_DOCKERFILE, /USER mavly/);
+  assert.match(IMAGE_DOCKERFILE, /assembleDebug --no-daemon/);
+  assert.match(IMAGE_DOCKERFILE, /rm -rf \/opt\/android-seed/);
+  assert.match(IMAGE_DOCKERFILE, /aapt dump badging/);
+  assert.match(IMAGE_DOCKERFILE, /com\.mavly\.android\.toolchain="android-debug-v1/);
+
+  // The warmed cache mirrors exactly the versions the planner is told to emit.
+  for (const pin of [
+    "8.7.3",
+    "2.0.21",
+    "androidx.core:core-ktx:1.13.1",
+    "androidx.activity:activity-compose:1.9.3",
+    "androidx.lifecycle:lifecycle-runtime-ktx:2.8.7",
+    "androidx.compose:compose-bom:2024.10.01",
+    "androidx.compose.material3:material3",
+    "androidx.compose.ui:ui-tooling",
+  ]) {
+    assert.ok(SEED_APP_GRADLE.includes(pin) || SEED_ROOT_GRADLE.includes(pin), pin);
+  }
+  assert.match(SEED_APP_GRADLE, /compileSdk = 35/);
+  assert.match(SEED_APP_GRADLE, /minSdk = 26/);
+
+  // Verification must reproduce the runtime network policy.
+  assert.match(IMAGE_VERIFY, /--network none/);
+  assert.match(IMAGE_VERIFY, /--offline/);
+  assert.match(IMAGE_VERIFY, /aapt dump badging/);
+
+  // Nothing secret is installed into an image layer.
+  assert.doesNotMatch(
+    IMAGE_DOCKERFILE,
+    /SUPABASE_SERVICE_ROLE_KEY|SUPABASE_SERVICE|VERCEL_TOKEN|VERCEL_OIDC_TOKEN|GROQ_API_KEY|BEGIN .*PRIVATE KEY/,
+  );
+  assert.doesNotMatch(IMAGE_BUILD, /VERCEL_TOKEN|SUPABASE_SERVICE_ROLE_KEY|GROQ_API_KEY/);
+});
+
+test("operator docs cover image publication, scheduler, bucket and safe enablement", () => {
+  const runbook = read("docs/runbooks/android.md");
+  const architecture = read("docs/architecture/phase-9-android.md");
+
+  for (const env of [
+    "MAVLY_ANDROID_BUILD_ENABLED",
+    "MAVLY_ANDROID_BUILD_PROJECTS",
+    "MAVLY_ANDROID_BUILD_IMAGE",
+    "MAVLY_ANDROID_ARTIFACT_BUCKET",
+    "MAVLY_ANDROID_BUILD_VCPUS",
+    "MAVLY_GENERATION_WORKER_ENABLED",
+    "MAVLY_GENERATION_WORKER_SECRET",
+    "MAVLY_GENERATION_WORKER_PROJECTS",
+    "MAVLY_GENERATION_WORKER_ID",
+    "SUPABASE_SERVICE_ROLE_KEY",
+    "NEXT_PUBLIC_SUPABASE_URL",
+  ]) {
+    assert.ok(runbook.includes(env), env);
+  }
+
+  assert.match(runbook, /@sha256:/);
+  assert.match(runbook, /scheduler/i);
+  assert.match(runbook, /Vercel Container Registry/);
+  assert.match(runbook, /private/i);
+  assert.match(runbook, /image_not_ready|Preparing/);
+  assert.match(architecture, /infra\/android-build/);
+  assert.match(architecture, /Gradle 8\.9/);
+  assert.match(IMAGE_README, /Vercel Container Registry/);
+  assert.match(IMAGE_README, /does not cache arbitrary|not cache arbitrary/i);
+  assert.match(IMAGE_README, /No credentials|no credentials|No secrets/i);
 });

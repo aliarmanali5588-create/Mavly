@@ -106,14 +106,16 @@ provider-error mapping, the payment state machine, the gateway session exemption
 Phase 7 durable rate-limit migration contracts, payment-event metadata/redaction, the
 admin surface gate, Phase 8 memory validation/retrieval/prompt framing/migration
 contracts, the Phase 9 Android source contract/profile/capability rules, the Android build
-config/policy/archive/artifact/migration contracts, and static route/migration invariants.
+config/policy/archive/artifact/migration contracts, the build-image reference/registry and
+offline-verification static contracts in `infra/android-build/`, the operator-doc coverage
+checks, and static route/migration invariants.
 It does not
 exercise a
 real Supabase session, Groq, a live worker/queue, the Supabase OAuth connection, Vercel
 publishing, a real Vercel Sandbox, a generated Android or website app, a real Gradle build,
 an APK/AAB artifact, a signed download, a repair model call, a real Vercel
 full-stack deployment, a real application database connection, a live Razorpay account,
-a delivered webhook, or the migrations against a database.
+a delivered webhook, a container image build/publish, or the migrations against a database.
 
 ---
 
@@ -142,8 +144,12 @@ a delivered webhook, or the migrations against a database.
   `MAVLY_ANDROID_BUILD_IMAGE` (a Vercel Container Registry image) pinned by `@sha256:`
   digest, a private artifact bucket,
   Vercel Sandbox credentials, migration 26, the service-role key and the Supabase URL.
-  The pinned image must contain JDK 17, Gradle 8.9, Android SDK/build-tools 35 and `aapt`,
-  with a pre-populated Gradle cache; builds run `:app:assembleDebug --no-daemon --offline`
+  A tag, an external registry host (Docker Hub/GHCR/ECR) and a non-numeric vCPU value are
+  rejected. The reproducible image definition lives in `infra/android-build/` (base and
+  every download digest/checksum pinned, seed-warmed Gradle cache, offline verification);
+  the repository does not build or publish it. The pinned image must contain JDK 17,
+  Gradle 8.9 on `PATH`, Android SDK/build-tools 35 and `aapt`, with a pre-populated
+  Gradle cache; builds run `:app:assembleDebug --no-daemon --offline`
   inside a Vercel microVM with **deny-all network**, never on a Mavly host. Each build is
   bound to an immutable source snapshot and re-verifies the snapshot hash, contract,
   artifact ZIP, package id, size and SHA-256 before a fenced `succeeded` write. APKs live
@@ -153,7 +159,8 @@ a delivered webhook, or the migrations against a database.
   `ANDROID_BUILD_NOT_CONFIGURED`; before migration 26 is applied,
   `GET …/mobile/builds` returns `503 MIGRATION_REQUIRED`, and afterwards the same
   request reports the exact capability. No build row, log or artifact is fabricated. See
-  `docs/architecture/phase-9-android.md` and `docs/runbooks/android.md`.
+  `docs/architecture/phase-9-android.md`, `docs/runbooks/android.md` and
+  `infra/android-build/README.md`.
 - **Vercel publishing is an optional, off-by-default hosting path**, not a builder backend.
   It is enabled only by `MAVLY_VERCEL_DEPLOYMENTS_ENABLED` (accepted: `1`, `true`, `yes`,
   `on`) plus `VERCEL_API_TOKEN`, and uploads only static files. It prefers the generated
@@ -570,13 +577,14 @@ paths with `src/lib/vcaas-scope.ts`, so unknown shapes are refused before any wo
 | `src/lib/ai/agent.ts` | Profile-aware prompt, JSON parsing/repair, path and size validation, and final Android contract validation. |
 | `src/lib/android/contract.ts` | Pure Kotlin/Compose project contract: required files, package/applicationId consistency, manifest/Gradle policy, forbidden binary/signing/secret paths, Compose entry point and size bounds. |
 | `src/lib/android/capability.ts` | Dynamic Android capability: source generation plus cohort/config-gated debug build and artifact availability with the exact blocker. |
-| `src/lib/android/build-config.ts` | Off-by-default build prerequisites: cohort, digest-pinned image, bucket, vCPUs, provider credentials, service role and Supabase URL. |
+| `src/lib/android/build-config.ts` | Off-by-default build prerequisites: cohort, digest-pinned Vercel Container Registry image (external registries refused), bucket, strict vCPUs, provider credentials, service role and Supabase URL, plus the non-fatal `non_default_bucket` warning. |
 | `src/lib/android/build-policy.ts` | Pure build policy: snapshot re-validation, fixed offline Gradle command, bounded/redacted logs, APK ZIP/zip-bomb validation and checksum. |
 | `src/lib/android/build-worker.ts` | One bounded build tick: recover → clean → claim → create/upload/build → validate APK → private upload → fenced completion; never runs on a Mavly host. |
 | `src/lib/android/build-store.ts`, `build-state.ts` | Typed migration-26 RPC wrappers and the shared status/artifact view model. |
 | `src/lib/android/artifact-store.ts` | Private Supabase Storage upload, delete and short-lived signed URL; object keys are server-derived. |
 | `src/lib/sandbox/vercel-sandbox.ts` | Adds custom image/vCPU purpose tags and bounded sandbox file reads for the Android artifact path. |
 | `supabase/migrations/26_android_builds.sql` | Durable Android build table, fenced lifecycle/recovery/cleanup RPCs, retention state, owner column grants, schema marker 26 and the private artifact bucket. |
+| `infra/android-build/` | Reproducible `android-debug-v1` image definition (digest-pinned base, checksum-verified JDK 17/Gradle 8.9/command-line tools, SDK 35 + `aapt`, seed-warmed offline Gradle cache), the seed project, pin templates, and `build.sh`/`verify.sh`/`publish.sh`. The repository never builds or publishes the image. |
 | `docs/architecture/phase-9-android.md`, `docs/runbooks/android.md` | Phase 9 Android profile, validation, isolation, artifact lifecycle, capability matrix, security boundaries and rollout. |
 | `src/lib/ai/image-models.ts` | Image-model catalog and image-request validation, kept apart from the text catalog. |
 | `src/lib/ai/openrouter-images.ts` | The separate OpenRouter image API client: response validation, size cap, bounded retry, server-only key. |

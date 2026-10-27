@@ -57,11 +57,20 @@ export type AndroidBuildConfigProblem =
   | "invalid_cohort"
   | "missing_image"
   | "image_not_pinned"
+  | "image_registry_unsupported"
   | "invalid_bucket"
   | "invalid_vcpus"
   | "missing_credentials"
   | "missing_service_role"
   | "missing_supabase_url";
+
+/**
+ * Non-fatal configuration observations. A warning never enables a build; it
+ * reports a state the operator must confirm externally. The storage policy
+ * itself cannot be proven from an environment variable, so the UI/docs say so
+ * instead of implying the bucket is private.
+ */
+export type AndroidBuildConfigWarning = "non_default_bucket";
 
 interface ProviderCredentials {
   oidcToken: string | null;
@@ -81,6 +90,7 @@ export interface AndroidBuildConfig {
   toolchain: string;
   variant: "debug";
   problems: AndroidBuildConfigProblem[];
+  warnings: AndroidBuildConfigWarning[];
   /** Server-only. Never serialize or log this field. */
   credentials: ProviderCredentials;
 }
@@ -107,6 +117,25 @@ function isPinnedImage(value: string): boolean {
   return /^[^\s@]+@sha256:[a-f0-9]{64}$/i.test(value);
 }
 
+/**
+ * Vercel Sandbox resolves `image` against Vercel Container Registry. A fully
+ * qualified reference is `vcr.vercel.com/<team>/<project>/<repo>`; a bare or
+ * team-scoped reference has no host at all. Any other host (Docker Hub, GHCR,
+ * ECR, a local registry, an `https://` URL) is not usable by the provider and
+ * fails closed here rather than as an opaque `not_found` later.
+ */
+const VCR_HOST = "vcr.vercel.com";
+
+function isExternalRegistry(image: string): boolean {
+  const reference = image.split("@", 1)[0] ?? "";
+  const slash = reference.indexOf("/");
+  if (slash === -1) return false;
+  const first = reference.slice(0, slash).toLowerCase();
+  // No dot/colon means `<team>/<project>/<repo>` or `<repo>/<path>`, not a host.
+  if (!first.includes(".") && !first.includes(":")) return false;
+  return first !== VCR_HOST;
+}
+
 export function parseAndroidBuildConfig(env: AndroidBuildEnvironment): AndroidBuildConfig {
   const requested = isOn(env[ANDROID_BUILD_ENABLED_ENV]);
   const cohort = splitCohort(env[ANDROID_BUILD_PROJECTS_ENV] ?? "");
@@ -114,7 +143,9 @@ export function parseAndroidBuildConfig(env: AndroidBuildEnvironment): AndroidBu
   const artifactBucket =
     env[ANDROID_ARTIFACT_BUCKET_ENV]?.trim() || ANDROID_DEFAULT_ARTIFACT_BUCKET;
   const rawVcpus = env[ANDROID_BUILD_VCPUS_ENV]?.trim();
-  const parsedVcpus = rawVcpus ? Number.parseInt(rawVcpus, 10) : ANDROID_DEFAULT_VCPUS;
+  const vcpusIsNumeric = !rawVcpus || /^\d{1,2}$/.test(rawVcpus);
+  const parsedVcpus =
+    vcpusIsNumeric && rawVcpus ? Number.parseInt(rawVcpus, 10) : ANDROID_DEFAULT_VCPUS;
   const vcpus =
     Number.isFinite(parsedVcpus) && parsedVcpus >= 1 && parsedVcpus <= ANDROID_MAX_VCPUS
       ? parsedVcpus
@@ -127,12 +158,25 @@ export function parseAndroidBuildConfig(env: AndroidBuildEnvironment): AndroidBu
     problems.push("invalid_cohort");
   }
   if (!image) problems.push("missing_image");
-  else if (!isPinnedImage(image)) problems.push("image_not_pinned");
+  else {
+    if (!isPinnedImage(image)) problems.push("image_not_pinned");
+    if (isExternalRegistry(image)) problems.push("image_registry_unsupported");
+  }
   if (!/^[a-z0-9][a-z0-9._-]{2,62}$/.test(artifactBucket)) {
     problems.push("invalid_bucket");
   }
-  if (rawVcpus && (!Number.isFinite(parsedVcpus) || parsedVcpus < 1 || parsedVcpus > ANDROID_MAX_VCPUS)) {
+  if (rawVcpus && (!vcpusIsNumeric || !Number.isFinite(parsedVcpus) || parsedVcpus < 1 || parsedVcpus > ANDROID_MAX_VCPUS)) {
     problems.push("invalid_vcpus");
+  }
+
+  const warnings: AndroidBuildConfigWarning[] = [];
+  /**
+   * Migration 26 creates `android-artifacts` private with a 100 MB / APK MIME
+   * policy. A different name is allowed, but Mavly cannot inspect its policy
+   * from here: the operator must create it private with the same limits.
+   */
+  if (artifactBucket !== ANDROID_DEFAULT_ARTIFACT_BUCKET) {
+    warnings.push("non_default_bucket");
   }
 
   const credentials: ProviderCredentials = {
@@ -144,6 +188,10 @@ export function parseAndroidBuildConfig(env: AndroidBuildEnvironment): AndroidBu
   const hasAccessToken = Boolean(
     credentials.token && credentials.teamId && credentials.projectId,
   );
+  /**
+   * Presence only. Mavly performs no live credential probe during admission;
+   * a non-empty value is not evidence that the provider accepts it.
+   */
   if (!credentials.oidcToken && !hasAccessToken) problems.push("missing_credentials");
 
   if (!env[SERVICE_ROLE_ENV]?.trim()) problems.push("missing_service_role");
@@ -160,6 +208,7 @@ export function parseAndroidBuildConfig(env: AndroidBuildEnvironment): AndroidBu
     toolchain: ANDROID_BUILD_TOOLCHAIN,
     variant: "debug",
     problems,
+    warnings,
     credentials,
   };
 }
@@ -187,6 +236,8 @@ export function androidBuildProblemMessage(problem: AndroidBuildConfigProblem): 
       return "MAVLY_ANDROID_BUILD_IMAGE is not configured.";
     case "image_not_pinned":
       return "The Android build image must be a Vercel Container Registry image pinned by an immutable @sha256 digest.";
+    case "image_registry_unsupported":
+      return "The Android build image must be hosted in Vercel Container Registry (vcr.vercel.com or a team-scoped repository); external registries are not supported.";
     case "invalid_bucket":
       return "MAVLY_ANDROID_ARTIFACT_BUCKET is not a valid private bucket name.";
     case "invalid_vcpus":
@@ -199,5 +250,14 @@ export function androidBuildProblemMessage(problem: AndroidBuildConfigProblem): 
       return "NEXT_PUBLIC_SUPABASE_URL is not configured.";
     default:
       return "Android build execution is not configured.";
+  }
+}
+
+export function androidBuildWarningMessage(warning: AndroidBuildConfigWarning): string {
+  switch (warning) {
+    case "non_default_bucket":
+      return "MAVLY_ANDROID_ARTIFACT_BUCKET is not the bucket created by migration 26; it must be an existing private bucket with the same 100 MB / APK MIME policy.";
+    default:
+      return "Android build configuration needs operator confirmation.";
   }
 }

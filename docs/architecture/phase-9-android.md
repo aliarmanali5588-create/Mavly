@@ -63,14 +63,18 @@ The allowed Maven prefixes are `dl.google.com/dl/android/maven2`,
    cancellation and orphan-sandbox cleanup are all enforced by migration-26 RPCs. Builds
    share the existing generation-worker tick and are advanced only when the generation
    queue is empty; a busy generation queue delays builds but never competes for a run.
-3. **Isolation.** `MAVLY_ANDROID_BUILD_IMAGE` must be a **Vercel Container Registry
-   (VCR)** image pinned by `@sha256:`; the provider's Sandbox `image` field accepts only
-   its own registry, not an arbitrary external one. The image must
-   contain JDK 17, Gradle 8.9, Android SDK/build-tools 35 and `aapt`, with the pinned
-   dependency cache pre-populated. The build runs exactly
-   `gradle :app:assembleDebug --no-daemon --offline --stacktrace --console=plain` with
-   **deny-all network**, 2 vCPUs (configurable 1–4; 2048 MB per vCPU), no secrets and no
-   host mounts. There is no local fallback.
+3. **Isolation.** `MAVLY_ANDROID_BUILD_IMAGE` must be a **Vercel Container
+   Registry (VCR)** image pinned by `@sha256:`; the provider's Sandbox `image`
+   field accepts only its own registry, not an arbitrary external one. An
+   external registry host (Docker Hub, GHCR, ECR, `localhost`, an `https://` URL)
+   is rejected by `build-config.ts` before a sandbox is created, and a tag is
+   rejected as unpinned. The reproducible definition is
+   [`infra/android-build/`](../../infra/android-build/README.md): JDK 17, Gradle
+   8.9 on `PATH`, Android platform 35, build-tools 35.0.0, `aapt`, and a warmed
+   `GRADLE_USER_HOME`. The build runs exactly
+   `gradle :app:assembleDebug --no-daemon --offline --stacktrace --console=plain`
+   with **deny-all network**, 2 vCPUs (configurable 1–4; 2048 MB per vCPU), no
+   secrets and no host mounts. There is no local fallback.
 4. **Artifact verification.** Gradle must exit `0`, `aapt dump badging` must report the
    expected application id, the APK must exist within 100 MB, and `fflate` must accept it
    without traversal, duplicate/oversized entries, unsupported compression or a
@@ -83,6 +87,47 @@ The allowed Maven prefixes are `dl.google.com/dl/android/maven2`,
 6. **Fenced terminal write.** `succeeded` is possible only with complete artifact metadata;
    a stale worker cannot publish after losing its lease. A failed cleanup never overwrites
    the build result and is retried by the cleanup sweep.
+
+## Build image contract
+
+The image is operator-built from [`infra/android-build/`](../../infra/android-build/README.md);
+the repository does not publish one. The application assumes exactly this layout:
+
+| Aspect | Contract |
+|---|---|
+| Registry | Vercel Container Registry, `linux/amd64`, repository status `Ready`. External registries and tags are refused. |
+| Base | Digest-pinned by the operator. Every tool archive is SHA-256 verified at image-build time. |
+| JDK | 17 at `/opt/jdk` (`JAVA_HOME`). |
+| Gradle | 8.9 at `/opt/gradle/gradle-8.9`, on `PATH`. The generated project cannot ship a wrapper JAR (`.jar` is refused), so the fixed command calls `gradle`, never `./gradlew`. |
+| Android SDK | `/opt/android-sdk`: platform 35, build-tools 35.0.0, platform-tools, accepted licenses. |
+| `aapt` | On `PATH` via build-tools; the worker's package check calls it by bare name. |
+| Cache | `GRADLE_USER_HOME=/home/mavly/.gradle`, warmed at image-build time by a seed build of the pinned baseline. Gradle must be able to write there at runtime. |
+| Global properties | `android.useAndroidX=true` in `$GRADLE_USER_HOME/gradle.properties`, because generated projects are not required to contain `gradle.properties`. |
+| User / cwd | Non-root `mavly` (uid 1000) owning `/home/mavly` and `/vercel/sandbox`. The adapter uploads relative to `/vercel/sandbox` and runs detached commands there. |
+| Network | Image build uses network; the runtime sandbox is **deny-all** and Gradle is `--offline`. |
+| Secrets | None. No token, key or project secret is installed in any layer. |
+| Entrypoint | None required; Vercel Sandbox does not run `ENTRYPOINT`/`CMD`. |
+
+### Cache scope and failure mode
+
+The seed warms AGP 8.7.3, Kotlin/Compose plugins 2.0.21, core-ktx 1.13.1,
+activity-compose 1.9.3, lifecycle-runtime-ktx 2.8.7, Compose BOM 2024.10.01 and its
+baseline artifacts. It does **not** warm arbitrary dependencies a model might add.
+A cache miss fails truthfully with `Could not resolve` / `No cached version`; the
+worker does not add network access to hide it. Supporting a new approved dependency
+means adding its exact coordinate to the seed, rebuilding, re-verifying, republishing
+and changing the digest.
+
+A successful seed build at image-build time is not proof that an arbitrary generated
+project compiles, and it is not a device test.
+
+### Provider plan and session lifetime
+
+The worker requests a 24-hour sandbox session with a 22-minute build deadline. Vercel
+documents a 45-minute sandbox maximum on Hobby and 24 hours on Pro/Enterprise, so a plan
+that rejects the requested timeout fails as `sandbox_create_failed`/`provider_error`
+(retried within the 2-attempt budget) rather than degrading to a local build. This has not
+been exercised against a live account; it is an operator acceptance step.
 
 ## What is deliberately not implemented
 
@@ -111,13 +156,33 @@ MAVLY_ANDROID_BUILD_VCPUS=2
 # The generation worker must be enabled and scheduled.
 ```
 
-A tag-only image, missing bucket, missing credentials, empty cohort or missing worker is
-reported as not ready; `POST …/mobile/builds` fails closed and no row/log/artifact is
-fabricated. Before migration 26 is applied, `GET …/mobile/builds` returns
-`503 MIGRATION_REQUIRED`; once it is applied, that request returns the persisted builds
-plus the exact capability, including the reason builds are unavailable. The private bucket
-is created by migration 26; a non-default bucket must be created by the operator with the
-same private policy.
+A tag-only image, an external registry, a non-numeric vCPU value, a missing bucket,
+missing credentials, an empty cohort or a missing worker is reported as not ready;
+`POST …/mobile/builds` fails closed and no row/log/artifact is fabricated. Before
+migration 26 is applied, `GET …/mobile/builds` returns `503 MIGRATION_REQUIRED`; once it
+is applied, that request returns the persisted builds plus the exact capability,
+including the reason builds are unavailable. The private bucket is created by migration
+26; a non-default bucket is allowed but surfaced as a `non_default_bucket` warning
+because Mavly cannot inspect its policy from the environment.
+
+**Presence is not proof.** Admission checks that credential values exist and that the
+image is a syntactically valid digest-pinned VCR reference. It does not call Vercel, does
+not verify the digest exists or is `Ready`, does not inspect the bucket policy, and does
+not prove a scheduler is invoking the worker. Those remain operator acceptance steps.
+
+### Durable worker and scheduler
+
+Android builds are advanced by the ordinary generation-worker tick: generation claims
+come first, and only an otherwise-empty tick advances **either** verification **or** one
+Android build. The route is authenticated by
+`Authorization: Bearer $MAVLY_GENERATION_WORKER_SECRET` (constant-time compare), has no
+user session, returns `404` when disabled, and is bounded to one claim per invocation.
+Leases are fenced and concurrency caps (1/project, 2/user, 4/global) are enforced in SQL.
+
+There is no built-in scheduler. The operator runs one invocation about once a minute;
+overlapping invocations are safe but consume the small global caps. Disabling the Android
+flag leaves DB-only recovery/retention running, but stopping the scheduler stops recovery
+too, so active builds must be cancelled or allowed to finish first.
 
 ### Enforced bounds
 
@@ -164,12 +229,12 @@ same private policy.
 
 ## Rollout
 
-1. Apply migrations 22, 25 and 26 (additive). Do not apply to production without explicit
-   authorization.
-2. Publish and test the pinned toolchain image in a disposable Vercel account, including
-   an offline Gradle cache hit and `aapt`.
+1. Apply migrations 22, 25 and 26 (additive; 20 before 26). Do not apply to production
+   without explicit authorization.
+2. Build, verify and publish the pinned toolchain image from `infra/android-build/` in a
+   disposable Vercel account, including an offline Gradle cache hit and `aapt`.
 3. Create/confirm the private artifact bucket and lifecycle policy.
-4. Enable the generation worker with a small cohort.
+4. Enable the generation worker with a small cohort and confirm a real scheduler tick.
 5. Set `MAVLY_ANDROID_BUILD_ENABLED` and the same small `MAVLY_ANDROID_BUILD_PROJECTS`
    cohort.
 6. Run the human acceptance checklist in `docs/runbooks/android.md`.

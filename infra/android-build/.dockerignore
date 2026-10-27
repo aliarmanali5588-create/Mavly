@@ -1,0 +1,7 @@
+# Keep the context small and prevent local pins/credentials from being sent to
+# the daemon. The Dockerfile and seed are the only build inputs.
+*
+!Dockerfile
+!gradle-user-home.properties
+!seed
+!seed/**

@@ -660,6 +660,11 @@ export function AndroidWorkspace({ project }: { project: VcaasProject }) {
                 {buildCapability.build.requirements.map((requirement) => <li key={requirement}>{requirement}</li>)}
               </ul>
             ) : null}
+            {buildCapability?.build.warnings.length ? (
+              <p className="text-xs text-amber-600 dark:text-amber-500">
+                {buildCapability.build.warnings.join(" ")}
+              </p>
+            ) : null}
           </DialogHeader>
           <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-5">
             <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-muted/30 p-4">

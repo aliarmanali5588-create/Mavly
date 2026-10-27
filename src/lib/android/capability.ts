@@ -19,6 +19,7 @@ import { generationWorkerConfig } from "@/lib/generation/worker-config";
 import {
   androidBuildConfig,
   androidBuildProblemMessage,
+  androidBuildWarningMessage,
   isProjectInAndroidBuildCohort,
   type AndroidBuildConfig,
 } from "./build-config";
@@ -46,6 +47,8 @@ export interface AndroidCapability {
     status: AndroidBuildCapabilityStatus;
     reason: string;
     requirements: readonly string[];
+    /** Operator confirmations Mavly cannot prove from the environment. */
+    warnings: readonly string[];
   };
   artifact: {
     available: boolean;
@@ -80,6 +83,7 @@ export function androidCapability(
       workerReady &&
       isProjectInAndroidBuildCohort(projectId, config),
   );
+  const warnings = config.warnings.map(androidBuildWarningMessage);
   const notConfiguredReason = !config.ready
     ? androidBuildProblemMessage(config.problems[0] ?? "disabled")
     : !workerReady
@@ -110,6 +114,7 @@ export function androidCapability(
         ? "Isolated Android debug builds are enabled for this project."
         : notConfiguredReason,
       requirements: buildAvailable ? [] : ANDROID_BUILD_REQUIREMENTS,
+      warnings,
     },
     artifact: {
       available: buildAvailable,

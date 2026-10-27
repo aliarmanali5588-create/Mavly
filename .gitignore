@@ -28,6 +28,9 @@ yarn-error.log*
 # local env files
 .env*.local
 
+# Android build image pins (local operator file; never committed)
+infra/android-build/pins.env
+
 # supabase CLI link state (contains the database connection details)
 supabase/.temp/
 
