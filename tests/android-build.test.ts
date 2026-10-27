@@ -707,9 +707,9 @@ test("the Android build image definition is reproducible, offline and secret-fre
   // Nothing secret is installed into an image layer.
   assert.doesNotMatch(
     IMAGE_DOCKERFILE,
-    /SUPABASE_SERVICE_ROLE_KEY|SUPABASE_SERVICE|VERCEL_TOKEN|VERCEL_OIDC_TOKEN|GROQ_API_KEY|BEGIN .*PRIVATE KEY/,
+    /SUPABASE_SERVICE_ROLE_KEY|SUPABASE_SERVICE|VERCEL_TOKEN|VERCEL_OIDC_TOKEN|BEGIN .*PRIVATE KEY/,
   );
-  assert.doesNotMatch(IMAGE_BUILD, /VERCEL_TOKEN|SUPABASE_SERVICE_ROLE_KEY|GROQ_API_KEY/);
+  assert.doesNotMatch(IMAGE_BUILD, /VERCEL_TOKEN|SUPABASE_SERVICE_ROLE_KEY/);
 });
 
 test("operator docs cover image publication, scheduler, bucket and safe enablement", () => {

@@ -29,7 +29,7 @@ export type AndroidBuildCapabilityStatus = "available" | "not_configured";
 export interface AndroidCapability {
   sourceGeneration: {
     available: true;
-    provider: "groq";
+    provider: "freemodel";
     languages: readonly ["kotlin"];
     ui: readonly ["jetpack-compose"];
   };
@@ -95,7 +95,7 @@ export function androidCapability(
   return {
     sourceGeneration: {
       available: true,
-      provider: "groq",
+      provider: "freemodel",
       languages: ["kotlin"],
       ui: ["jetpack-compose"],
     },

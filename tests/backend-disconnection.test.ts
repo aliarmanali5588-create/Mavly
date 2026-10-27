@@ -128,7 +128,7 @@ test("FreeModel is the active website-generation provider and its key stays serv
     }
   }
 
-  assert.equal(read("src/lib/ai/groq.ts").includes("GROQ_API_KEY"), true);
+  assert.equal(read("src/lib/ai/groq.ts").includes("GROQ_API_KEY"), false);
   assert.equal(read("src/lib/ai/groq.ts").includes("console."), false);
   assert.equal(read("src/lib/ai/agent.ts").includes('"./provider"'), true);
   assert.equal(read("src/lib/mavly/run-agent.ts").includes("@/lib/ai/provider"), true);

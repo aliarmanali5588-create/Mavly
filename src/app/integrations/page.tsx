@@ -187,7 +187,7 @@ export default function IntegrationsPage() {
             </div>
           </div>
 
-          {/* Groq code generation */}
+          {/* FreeModel code generation */}
           <div className="p-8 rounded-3xl bg-white border border-black/[0.08] shadow-[0_4px_20px_rgba(0,0,0,0.02)] space-y-6">
             <div className="flex items-center justify-between">
               <div className="w-12 h-12 rounded-2xl bg-purple-600 text-white flex items-center justify-center">

@@ -1,8 +1,8 @@
 /**
  * FreeModel chat-completions client for server-side website/code generation.
  *
- * FREEMODEL_API_KEY (with legacy GROQ_API_KEY fallback) is read only here and
- * must never be exposed to browser code, API responses, or logs.
+ * FREEMODEL_API_KEY is read only here and must never be exposed to browser code,
+ * API responses, or logs.
  */
 
 import type { AiModel } from "./models";
@@ -16,7 +16,7 @@ function freemodelBaseUrl(): string {
 }
 
 function freemodelApiKey(): string | undefined {
-  return process.env.FREEMODEL_API_KEY?.trim() || process.env.GROQ_API_KEY?.trim() || undefined;
+  return process.env.FREEMODEL_API_KEY?.trim() || undefined;
 }
 
 export interface ChatMessage {

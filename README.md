@@ -301,9 +301,8 @@ MAVLY_FULLSTACK_HOSTING_PROJECTS=
 ```
 
 Only the two `NEXT_PUBLIC_SUPABASE_*` values and `NEXT_PUBLIC_APP_URL` are public.
-`FREEMODEL_API_KEY` (plus the legacy `GROQ_API_KEY` compatibility fallback),
-`OPENROUTER_API_KEY` (used by images; preserved chat client only if explicitly
-reactivated), the OAuth client secrets,
+`FREEMODEL_API_KEY`, `OPENROUTER_API_KEY` (used by images; preserved chat client only if
+explicitly reactivated), the OAuth client secrets,
 `MAVLY_INTEGRATION_ENCRYPTION_KEY`, `MAVLY_PROJECT_SECRETS_ENCRYPTION_KEY`,
 `VERCEL_API_TOKEN`, `VERCEL_OIDC_TOKEN`, `VERCEL_TOKEN`, `VERCEL_PROJECT_ID`,
 `MAVLY_GENERATION_WORKER_SECRET` and
@@ -318,10 +317,9 @@ the FreeModel dashboard. The project-secrets key must not be stored in the datab
 losing it makes existing saved values unrecoverable.
 
 Generation runs in the Next.js `nodejs` runtime (including its `after()` run scheduling),
-not in Supabase Edge Functions. Add `FREEMODEL_API_KEY` (or the legacy `GROQ_API_KEY` while
-migrating) to Vercel Project → Settings → Environment Variables for each required Vercel
-environment, then redeploy so the runtime receives it. Do not add this key to Supabase
-secrets for the current implementation.
+not in Supabase Edge Functions. Add `FREEMODEL_API_KEY` to Vercel Project → Settings →
+Environment Variables for each required Vercel environment, then redeploy so the runtime
+receives it. Do not add this key to Supabase secrets for the current implementation.
 
 Apply the schema in `supabase/migrations/` with the Supabase CLI (`supabase db push`) or by
 pasting the migrations into the Supabase SQL editor. `03_ai_builder.sql` creates the file,
