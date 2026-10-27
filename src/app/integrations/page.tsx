@@ -19,11 +19,11 @@ import { MarketingPageShell } from "@/components/common/MarketingPageShell";
 export const metadata: Metadata = {
   title: "Integrations — Mavly AI Website Builder",
   description:
-    "Connect GitHub repositories and Supabase projects, publish static sites, and generate website code with Groq.",
+    "Connect GitHub repositories and Supabase projects, publish static sites, and generate website code with FreeModel.",
   openGraph: {
     title: "Integrations — Mavly AI Website Builder",
     description:
-      "Connect GitHub repositories and Supabase projects, publish static sites, and generate website code with Groq.",
+      "Connect GitHub repositories and Supabase projects, publish static sites, and generate website code with FreeModel.",
     images: ["/logo/Mavly.png"],
   },
 };
@@ -199,9 +199,9 @@ export default function IntegrationsPage() {
             </div>
 
             <div className="space-y-2">
-              <h3 className="text-xl font-bold text-gray-950">Groq Code Generation</h3>
+              <h3 className="text-xl font-bold text-gray-950">FreeModel Code Generation</h3>
               <p className="text-xs text-gray-600 leading-relaxed">
-                Website and code-generation requests use Groq from the server-side Next.js runtime.
+                Website and code-generation requests use FreeModel from the server-side Next.js runtime.
               </p>
             </div>
 
@@ -210,11 +210,11 @@ export default function IntegrationsPage() {
               <ul className="space-y-2">
                 <li className="flex items-start gap-2">
                   <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-                  <span><strong>GPT-OSS 120B:</strong> Groq-hosted default model for website creation and follow-up code edits.</span>
+                  <span><strong>Claude Opus 4.8:</strong> FreeModel default model for website creation and follow-up code edits.</span>
                 </li>
                 <li className="flex items-start gap-2">
                   <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-                  <span>Generation fails explicitly if Groq is unavailable; no provider fallback is configured.</span>
+                  <span>Generation fails explicitly if FreeModel is unavailable; no provider fallback is configured.</span>
                 </li>
                 <li className="flex items-start gap-2">
                   <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />

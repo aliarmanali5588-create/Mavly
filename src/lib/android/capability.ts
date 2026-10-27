@@ -9,7 +9,7 @@
  * and the exact blocker is reported.
  *
  * Native Kotlin/Compose SOURCE generation is available through the existing
- * Groq pipeline. A saved source tree is not a build, an installable app, a
+ * FreeModel pipeline. A saved source tree is not a build, an installable app, a
  * store submission or a verified device run.
  */
 

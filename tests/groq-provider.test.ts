@@ -11,17 +11,17 @@ import { AI_MODEL_CATALOG, resolveModel, type AiModel } from "../src/lib/ai/mode
 
 const model = resolveModel();
 const originalFetch = globalThis.fetch;
-const originalApiKey = process.env.GROQ_API_KEY;
-const TEST_API_KEY = "groq-test-secret";
+const originalApiKey = process.env.FREEMODEL_API_KEY;
+const TEST_API_KEY = "fm_test_secret";
 
 function useApiKey(value = TEST_API_KEY) {
-  process.env.GROQ_API_KEY = value;
+  process.env.FREEMODEL_API_KEY = value;
 }
 
 function stubFetch(status: number, body: unknown, headers: Record<string, string> = {}) {
   globalThis.fetch = (async (input, init) => {
-    assert.equal(String(input), "https://api.groq.com/openai/v1/chat/completions");
-    assert.equal(new Headers(init?.headers).get("authorization"), `Bearer ${TEST_API_KEY}`);
+    assert.equal(String(input), "https://freemodel.in/v1/chat/completions");
+    assert.equal(new Headers(init?.headers).get("authorization"), `Bearer ${TEST_API_KEY}`)
     return new Response(JSON.stringify(body), {
       status,
       headers: { "content-type": "application/json", ...headers },
@@ -31,15 +31,17 @@ function stubFetch(status: number, body: unknown, headers: Record<string, string
 
 function restoreEnvironment() {
   globalThis.fetch = originalFetch;
-  if (originalApiKey === undefined) delete process.env.GROQ_API_KEY;
-  else process.env.GROQ_API_KEY = originalApiKey;
+  if (originalApiKey === undefined) delete process.env.FREEMODEL_API_KEY;
+  else process.env.FREEMODEL_API_KEY = originalApiKey;
+  if (process.env.FREEMODEL_BASE_URL === undefined) delete process.env.FREEMODEL_BASE_URL;
+
 }
 
-test("a successful request uses Groq auth, the catalog model, and supported chat parameters", async () => {
+test("a successful request uses FreeModel auth, the catalog model, and supported chat parameters", async () => {
   useApiKey();
   let sent: Record<string, unknown> | null = null;
   globalThis.fetch = (async (input, init) => {
-    assert.equal(String(input), "https://api.groq.com/openai/v1/chat/completions");
+    assert.equal(String(input), "https://freemodel.in/v1/chat/completions");
     sent = JSON.parse(String(init?.body)) as Record<string, unknown>;
     assert.equal(new Headers(init?.headers).get("authorization"), `Bearer ${TEST_API_KEY}`);
     return new Response(JSON.stringify({
@@ -57,7 +59,7 @@ test("a successful request uses Groq auth, the catalog model, and supported chat
     const messages: ChatMessage[] = [{ role: "system", content: "Return JSON." }, { role: "user", content: "x" }];
     const result = await chatCompletion(model, messages, { maxTokens: 400, temperature: 0.2 });
     assert.equal(result.ok, true);
-    assert.equal(result.ok && result.model, "openai/gpt-oss-120b");
+    assert.equal(result.ok && result.model, "claude-opus-4.8");
     assert.deepEqual(sent, {
       model: model.id,
       messages,
@@ -73,8 +75,8 @@ test("a successful request uses Groq auth, the catalog model, and supported chat
   }
 });
 
-test("a missing GROQ_API_KEY fails closed without a network call", async () => {
-  delete process.env.GROQ_API_KEY;
+test("a missing FREEMODEL_API_KEY fails closed without a network call", async () => {
+  delete process.env.FREEMODEL_API_KEY;
   globalThis.fetch = (async () => {
     throw new Error("fetch must not run");
   }) as typeof fetch;
@@ -86,13 +88,13 @@ test("a missing GROQ_API_KEY fails closed without a network call", async () => {
     if (result.ok) return;
     assert.equal(result.code, "CONFIGURATION");
     assert.equal(result.retryable, false);
-    assert.match(result.error, /GROQ_API_KEY/);
+    assert.match(result.error, /FREEMODEL_API_KEY/);
   } finally {
     restoreEnvironment();
   }
 });
 
-test("an invalid Groq key is classified as a non-retryable authentication failure", async () => {
+test("an invalid FreeModel key is classified as a non-retryable authentication failure", async () => {
   useApiKey();
   stubFetch(401, { error: { message: `invalid API key: ${TEST_API_KEY}` } });
 
@@ -160,7 +162,7 @@ test("a transient provider failure is classified for the existing retry policy",
   }
 });
 
-test("an aborted Groq request is classified as a timeout without swallowing cancellation", async () => {
+test("an aborted FreeModel request is classified as a timeout without swallowing cancellation", async () => {
   useApiKey();
   const controller = new AbortController();
   controller.abort();
@@ -218,11 +220,11 @@ test("empty and truncated completions are failures, not successes", async () => 
   }
 });
 
-test("the website-generation model catalog contains only the supported Groq model", () => {
-  assert.deepEqual(AI_MODEL_CATALOG.map((entry) => entry.id), ["openai/gpt-oss-120b"]);
+test("the website-generation model catalog contains only the supported FreeModel model", () => {
+  assert.deepEqual(AI_MODEL_CATALOG.map((entry) => entry.id), ["claude-opus-4.8"]);
 });
 
-test("Groq usage safely extracts token and reasoning counts", () => {
+test("FreeModel usage safely extracts token and reasoning counts", () => {
   assert.deepEqual(completionUsage({
     usage: {
       prompt_tokens: "10",

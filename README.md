@@ -5,7 +5,7 @@ includes the dashboard, project workspace, prompt composer, preview frame, code/
 editor surfaces and settings dialogs of an AI app builder.
 
 > **Current status: local AI builder.** Supabase authentication and project ownership are
-> real. Groq, called only from the server, generates a complete frontend and backend
+> real. FreeModel, called only from the server, generates a complete frontend and backend
 > project. The existing OpenRouter chat client and configuration are preserved but inactive
 > for website generation; a separate OpenRouter image API handles image-generation
 > requests. Supabase
@@ -36,7 +36,7 @@ audits listed at the end of this file; it is not a runtime dependency.
 | API session gate | `/api/*` returns JSON `401 UNAUTHENTICATED` without a verified session |
 | Project ownership checks | `public.projects` plus RLS, checked by every project-scoped route |
 | Project create/launch/list/get/update/delete | Stored in Supabase |
-| Agent generation | Groq (`openai/gpt-oss-120b`), server-side; durable run rows, bounded batches, per-batch checkpoints, resume and cooperative cancel |
+| Agent generation | FreeModel (`claude-opus-4.8`), server-side; durable run rows, bounded batches, per-batch checkpoints, resume and cooperative cancel |
 | Conversations and run status | Persisted in Supabase and polled by the workspace |
 | Project settings | Owner-editable project name and description; the derived Mavly address is read-only |
 | Project secrets | Write-only AES-256-GCM encrypted values per project/environment; list returns metadata only and update replaces without retrieval; **not injected into previews or published static sites** |
@@ -245,13 +245,11 @@ run the staged load test.
 ## Local setup
 
 Requirements: Node.js 20+ and npm. Supabase is needed for sign-in, project access and
-Storage. A Groq API key is needed for website/code generation. OpenRouter remains a
+Storage. A FreeModel API key is needed for website/code generation. OpenRouter remains a
 separate, optional key for the image-generation path.
-The default Groq model is `openai/gpt-oss-120b` (currently documented at 131,072 context
-tokens and up to 65,536 output tokens; Mavly preserves its existing 24,000-token project
-cap). See the [official Groq model card](https://console.groq.com/docs/model/openai/gpt-oss-120b)
-and [rate-limit documentation](https://console.groq.com/docs/rate-limits); actual rate
-limits depend on the Groq organization and plan.
+The default FreeModel model is `claude-opus-4.8` from the OpenAI-compatible API at
+`https://freemodel.in/v1`. Mavly preserves its existing 24,000-token project cap while
+using the provider's compatible chat-completions model catalog.
 
 ```bash
 npm install
@@ -264,8 +262,9 @@ Set these in `.env.local`:
 NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your-publishable-key
 NEXT_PUBLIC_APP_URL=http://localhost:3000
-GROQ_API_KEY=your-groq-api-key
-MAVLY_DEFAULT_MODEL=openai/gpt-oss-120b
+FREEMODEL_API_KEY=your-freemodel-api-key
+FREEMODEL_BASE_URL=https://freemodel.in/v1
+MAVLY_DEFAULT_MODEL=claude-opus-4.8
 OPENROUTER_API_KEY=your-openrouter-api-key  # image generation; preserved chat client is not active
 
 SUPABASE_OAUTH_CLIENT_ID=your-oauth-app-client-id
@@ -302,26 +301,27 @@ MAVLY_FULLSTACK_HOSTING_PROJECTS=
 ```
 
 Only the two `NEXT_PUBLIC_SUPABASE_*` values and `NEXT_PUBLIC_APP_URL` are public.
-`GROQ_API_KEY`, `OPENROUTER_API_KEY` (used by images; preserved chat client only if
-explicitly reactivated), the OAuth client secrets,
+`FREEMODEL_API_KEY` (plus the legacy `GROQ_API_KEY` compatibility fallback),
+`OPENROUTER_API_KEY` (used by images; preserved chat client only if explicitly
+reactivated), the OAuth client secrets,
 `MAVLY_INTEGRATION_ENCRYPTION_KEY`, `MAVLY_PROJECT_SECRETS_ENCRYPTION_KEY`,
 `VERCEL_API_TOKEN`, `VERCEL_OIDC_TOKEN`, `VERCEL_TOKEN`, `VERCEL_PROJECT_ID`,
 `MAVLY_GENERATION_WORKER_SECRET` and
 `SUPABASE_SERVICE_ROLE_KEY` are server-only: never prefix them with `NEXT_PUBLIC_`, never
-commit them, and configure provider usage/spend limits in Groq and OpenRouter as
+commit them, and configure provider usage/spend limits in FreeModel and OpenRouter as
 appropriate. The service-role key is required only when the opt-in durable worker is
 enabled, and is confined to `src/lib/supabase/worker.ts`, the worker orchestrator,
 `/api/generation/worker` and the verification tick it invokes. Sandbox provider credentials
-are used only by the server-side adapter and are never uploaded into a sandbox. Groq's
-selected model is metered, not free; confirm the current
-price and organization limits in Groq's account console. The
-project-secrets key must not be stored in the database: losing it makes existing saved
-values unrecoverable.
+are used only by the server-side adapter and are never uploaded into a sandbox. FreeModel's
+selected model is metered, not free; confirm the current price and organization limits in
+the FreeModel dashboard. The project-secrets key must not be stored in the database:
+losing it makes existing saved values unrecoverable.
 
 Generation runs in the Next.js `nodejs` runtime (including its `after()` run scheduling),
-not in Supabase Edge Functions. Add `GROQ_API_KEY` to Vercel Project → Settings →
-Environment Variables for each required Vercel environment, then redeploy so the runtime
-receives it. Do not add this key to Supabase secrets for the current implementation.
+not in Supabase Edge Functions. Add `FREEMODEL_API_KEY` (or the legacy `GROQ_API_KEY` while
+migrating) to Vercel Project → Settings → Environment Variables for each required Vercel
+environment, then redeploy so the runtime receives it. Do not add this key to Supabase
+secrets for the current implementation.
 
 Apply the schema in `supabase/migrations/` with the Supabase CLI (`supabase db push`) or by
 pasting the migrations into the Supabase SQL editor. `03_ai_builder.sql` creates the file,
@@ -402,7 +402,7 @@ npm run dev     # http://localhost:3000
 ```
 
 Without Supabase configuration, the marketing page still loads and the builder explains
-that authentication is not configured. Without `GROQ_API_KEY`, the workspace refuses to
+that authentication is not configured. Without `FREEMODEL_API_KEY`, the workspace refuses to
 start a website-generation run instead of pretending it did. Missing `OPENROUTER_API_KEY`
 only disables image generation.
 
@@ -418,12 +418,12 @@ npm run build && npm start
 ```
 
 Unit tests cover the pure auth/redirect/ownership/scope modules, static route invariants,
-Groq request/response classification, generation validator/batching/truncation rules,
+FreeModel request/response classification, generation validator/batching/truncation rules,
 provider retry classification, checkpoint verification, deployment host/state rules, the
 verification runtime/health/preview/config/state/result modules, the bounded repair policy
 and parsers, and static invariants of migration `19` (including the build+runtime+health
 `passed` rule). They do not exercise a real
-Supabase session, a live Groq or OpenRouter image call, the Supabase OAuth connection, a
+Supabase session, a live FreeModel or OpenRouter image call, the Supabase OAuth connection, a
 real Vercel Sandbox or any other verification provider, a generated app, a repair model
 call, or the migrations against a database. A manual OAuth check needs a real Supabase
 OAuth app: connect, verify organization/project discovery, save a selection, refresh the

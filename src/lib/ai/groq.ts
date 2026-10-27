@@ -1,15 +1,23 @@
 /**
- * Groq chat-completions client for server-side website/code generation.
+ * FreeModel chat-completions client for server-side website/code generation.
  *
- * GROQ_API_KEY is read only here and must never be exposed to browser code,
- * API responses, or logs.
+ * FREEMODEL_API_KEY (with legacy GROQ_API_KEY fallback) is read only here and
+ * must never be exposed to browser code, API responses, or logs.
  */
 
 import type { AiModel } from "./models";
 import { AI_MODEL_CATALOG } from "./models";
 import { parseRetryAfterMs } from "./retry";
 
-const GROQ_CHAT_COMPLETIONS_URL = "https://api.groq.com/openai/v1/chat/completions";
+const DEFAULT_FREEMODEL_BASE_URL = "https://freemodel.in/v1";
+
+function freemodelBaseUrl(): string {
+  return (process.env.FREEMODEL_BASE_URL?.trim() || DEFAULT_FREEMODEL_BASE_URL).replace(/\/+$/, "");
+}
+
+function freemodelApiKey(): string | undefined {
+  return process.env.FREEMODEL_API_KEY?.trim() || process.env.GROQ_API_KEY?.trim() || undefined;
+}
 
 export interface ChatMessage {
   role: "system" | "user" | "assistant";
@@ -94,7 +102,7 @@ export function isChatCompletionFailure(
 }
 
 export function isAiConfigured(): boolean {
-  return !!process.env.GROQ_API_KEY?.trim();
+  return !!freemodelApiKey();
 }
 
 /**
@@ -109,13 +117,13 @@ export async function chatCompletion(
   const opts: ChatCompletionOptions =
     typeof options === "number" ? { timeoutMs: options } : options;
   const timeoutMs = opts.timeoutMs ?? 240_000;
-  const apiKey = process.env.GROQ_API_KEY?.trim();
+  const apiKey = freemodelApiKey();
 
   if (!apiKey) {
     return failureResult({
       code: "CONFIGURATION",
       retryable: false,
-      error: "GROQ_API_KEY is not configured.",
+      error: "FREEMODEL_API_KEY is not configured.",
       metadata: baseMetadata(model, null),
     });
   }
@@ -124,7 +132,7 @@ export async function chatCompletion(
     return failureResult({
       code: "INVALID_REQUEST",
       retryable: false,
-      error: `The requested Groq model "${model.id}" is not in Mavly's supported model catalog.`,
+      error: `The requested FreeModel model "${model.id}" is not in Mavly's supported model catalog.`,
       metadata: baseMetadata(model, null),
     });
   }
@@ -136,7 +144,7 @@ export async function chatCompletion(
       : model.maxOutputTokens;
 
   try {
-    const response = await fetch(GROQ_CHAT_COMPLETIONS_URL, {
+    const response = await fetch(`${freemodelBaseUrl()}/chat/completions`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${apiKey}`,
@@ -172,7 +180,7 @@ export async function chatCompletion(
         retryable: classified.retryable,
         status: response.status,
         retryAfterMs,
-        error: `Groq request failed (${response.status})${detail ? `: ${detail}` : ""}`,
+        error: `FreeModel request failed (${response.status})${detail ? `: ${detail}` : ""}`,
         metadata,
       });
     }
@@ -184,7 +192,7 @@ export async function chatCompletion(
         retryable: false,
         status: response.status,
         retryAfterMs,
-        error: `Groq reported an error: ${redactSecret(providerError, apiKey)}`,
+        error: `FreeModel reported an error: ${redactSecret(providerError, apiKey)}`,
         metadata,
       });
     }
@@ -198,7 +206,7 @@ export async function chatCompletion(
         retryable: false,
         status: response.status,
         retryAfterMs,
-        error: "Groq stopped at the model's output limit before returning a complete answer. The incomplete response was discarded.",
+        error: "FreeModel stopped at the model's output limit before returning a complete answer. The incomplete response was discarded.",
         metadata,
       });
     }
@@ -208,7 +216,7 @@ export async function chatCompletion(
         retryable: false,
         status: response.status,
         retryAfterMs,
-        error: "Groq blocked the response with its content filter. Nothing was saved.",
+        error: "FreeModel blocked the response with its content filter. Nothing was saved.",
         metadata,
       });
     }
@@ -218,7 +226,7 @@ export async function chatCompletion(
         retryable: false,
         status: response.status,
         retryAfterMs,
-        error: `Groq reported an error${providerError ? `: ${providerError}` : "."}`,
+        error: `FreeModel reported an error${providerError ? `: ${providerError}` : "."}`,
         metadata,
       });
     }
@@ -230,7 +238,7 @@ export async function chatCompletion(
         retryable: false,
         status: response.status,
         retryAfterMs,
-        error: "Groq returned an empty completion.",
+        error: "FreeModel returned an empty completion.",
         metadata,
       });
     }
@@ -258,8 +266,8 @@ export async function chatCompletion(
       code: timedOut ? "TIMEOUT" : "NETWORK",
       retryable: true,
       error: timedOut
-        ? "Groq did not answer before the request deadline."
-        : `Groq request failed: ${redactSecret(message, apiKey)}`,
+        ? "FreeModel did not answer before the request deadline."
+        : `FreeModel request failed: ${redactSecret(message, apiKey)}`,
       metadata: baseMetadata(model, null),
     });
   }

@@ -656,7 +656,7 @@ async function launchProjectResponse(userId: string, body: unknown): Promise<Nex
     return fail(400, "VALIDATION", "A valid clientRequestId is required to launch an Android project.");
   }
   if (!isAiConfigured()) {
-    return fail(503, "BACKEND_NOT_CONFIGURED", "Groq is not configured. Add GROQ_API_KEY to the server runtime.");
+    return fail(503, "BACKEND_NOT_CONFIGURED", "FreeModel is not configured. Add FREEMODEL_API_KEY (or the legacy GROQ_API_KEY) to the server runtime.");
   }
 
   const prompt = (stringOf(record.prompt)?.trim() ?? "").slice(0, 32_000);
@@ -1651,7 +1651,7 @@ async function previewRotateUrlResponse(
 
 async function startAgentResponse(userId: string, projectId: string, body: unknown): Promise<NextResponse> {
   if (!isAiConfigured()) {
-    return fail(503, "BACKEND_NOT_CONFIGURED", "Groq is not configured. Add GROQ_API_KEY to the server runtime.");
+    return fail(503, "BACKEND_NOT_CONFIGURED", "FreeModel is not configured. Add FREEMODEL_API_KEY (or the legacy GROQ_API_KEY) to the server runtime.");
   }
 
   const record = recordOf(body);
@@ -1748,7 +1748,7 @@ async function startAgentResponse(userId: string, projectId: string, body: unkno
 
 async function resumeAgentResponse(userId: string, projectId: string): Promise<NextResponse> {
   if (!isAiConfigured()) {
-    return fail(503, "BACKEND_NOT_CONFIGURED", "Groq is not configured. Add GROQ_API_KEY to the server runtime.");
+    return fail(503, "BACKEND_NOT_CONFIGURED", "FreeModel is not configured. Add FREEMODEL_API_KEY (or the legacy GROQ_API_KEY) to the server runtime.");
   }
 
   const current = await latestRun(projectId);

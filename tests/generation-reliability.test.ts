@@ -228,7 +228,7 @@ test("follow-up edits keep preview.html in its planned batch", async () => {
   await assertPreviewStaysInItsOwnBatch("update");
 });
 
-test("follow-up edits resolve legacy model IDs to the Groq catalog", async () => {
+test("follow-up edits resolve legacy model IDs to the FreeModel catalog", async () => {
   const calledModels: string[] = [];
   const outcome = await generateApp(
     {
@@ -251,7 +251,7 @@ test("follow-up edits resolve legacy model IDs to the Groq catalog", async () =>
   );
 
   assert.equal(isGenerationFailure(outcome), false);
-  assert.deepEqual(calledModels, ["openai/gpt-oss-120b", "openai/gpt-oss-120b"]);
+  assert.deepEqual(calledModels, ["claude-opus-4.8", "claude-opus-4.8"]);
 });
 
 test("a truncated single file gets exactly one compact retry", async () => {

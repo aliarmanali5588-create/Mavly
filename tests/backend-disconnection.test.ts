@@ -8,7 +8,7 @@ import { isVcaasErrorCode } from "../src/lib/vcaas-errors";
 /**
  * ═══ THE BACKEND BOUNDARY ══════════════════════════════════════════════════
  *
- * Mavly now has one local builder backend (Groq + Supabase) plus the
+ * Mavly now has one local builder backend (FreeModel + Supabase) plus the
  * unchanged explicit 503 for everything else. These tests pin the boundary:
  *
  *  · Totalum stays removed, and no runtime reads its key or host;
@@ -105,7 +105,7 @@ test("the proxy no longer trusts any Totalum host for CORS", () => {
 
 // ── The local builder boundary ─────────────────────────────────────────────
 
-test("Groq is the only active website-generation provider and its key stays server-only", () => {
+test("FreeModel is the active website-generation provider and its key stays server-only", () => {
   const files = [
     ...(readdirSync(new URL("src", root), { recursive: true }) as string[])
       .filter((entry) => entry.endsWith(".ts") || entry.endsWith(".tsx"))
@@ -117,13 +117,13 @@ test("Groq is the only active website-generation provider and its key stays serv
     assert.equal(
       source.includes("NEXT_PUBLIC_GROQ"),
       false,
-      `${file} must not make the Groq key public`,
+      `${file} must not make the FreeModel key public`,
     );
     if (file.endsWith(".tsx")) {
       assert.equal(
         source.includes("GROQ_API_KEY"),
         false,
-        `${file} is a component and must not read the Groq server key`,
+        `${file} is a component and must not read the FreeModel server key`,
       );
     }
   }

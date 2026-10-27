@@ -4,8 +4,8 @@
  * ⚠️ SERVER-ONLY. This module reads `process.env`; never import it from a client
  * component. The browser only sees model ids the server chooses to expose.
  *
- * Website generation uses the Groq-hosted model catalog below. Keep model IDs
- * limited to models verified for the Groq chat-completions API.
+ * Website generation uses the FreeModel-hosted catalog below. Keep model IDs
+ * limited to models verified for the OpenAI-compatible FreeModel API.
  */
 
 export type AiTask = "app-generation" | "repair" | "review" | "fast" | "reasoning";
@@ -20,12 +20,12 @@ export interface AiModel {
   maxOutputTokens: number;
 }
 
-const DEFAULT_MODEL_ID = "openai/gpt-oss-120b";
+const DEFAULT_MODEL_ID = "claude-opus-4.8";
 
 export const AI_MODEL_CATALOG: readonly AiModel[] = [
   {
     id: DEFAULT_MODEL_ID,
-    label: "GPT-OSS 120B (Groq)",
+    label: "Claude Opus 4.8 (FreeModel)",
     tasks: ["app-generation", "repair", "review", "fast", "reasoning"],
     maxOutputTokens: 24_000,
   },
@@ -36,7 +36,7 @@ const OPENROUTER_DEFAULT_MODEL_ID = "deepseek/deepseek-v4.1-flash";
 /**
  * Preserve the previous OpenRouter model catalog for explicitly reactivated
  * OpenRouter workflows. The active website-generation resolver below uses only
- * the Groq catalog; these entries are never sent by the current run-agent path.
+ * the FreeModel catalog; these entries are never sent by the current run-agent path.
  * Revalidate these historical model IDs against OpenRouter before reactivation.
  */
 export const OPENROUTER_MODEL_CATALOG: readonly AiModel[] = [
