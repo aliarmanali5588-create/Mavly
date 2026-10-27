@@ -54,6 +54,7 @@ const DESTROY_TIMEOUT_MS = 30_000;
 
 /** One small app on one vCPU; the session lifetime bounds the cost. */
 const VERIFICATION_VCPUS = 1;
+const READ_FILE_TIMEOUT_MS = 60_000;
 
 function mapProviderError(error: unknown): SandboxError {
   if (error instanceof APIError) {
@@ -72,6 +73,9 @@ function mapProviderError(error: unknown): SandboxError {
 }
 
 function networkPolicyFor(options: SandboxCreateOptions): NetworkPolicy {
+  if (options.network.mode === "deny-all" || options.network.allowedHosts.length === 0) {
+    return "deny-all";
+  }
   const allow: Record<string, []> = {};
   for (const host of options.network.allowedHosts) {
     allow[host] = [];
@@ -125,16 +129,22 @@ export function createVercelSandboxAdapter(
         };
       }
 
-      const name = `mavly-verify-${randomUUID().replace(/-/g, "")}`;
+      const purpose = options.purpose ?? "verification";
+      const prefix = purpose === "android-build" ? "mavly-android-" : "mavly-verify-";
+      const name = `${prefix}${randomUUID().replace(/-/g, "")}`;
+      const vcpus =
+        typeof options.vcpus === "number" && Number.isFinite(options.vcpus)
+          ? Math.max(1, Math.min(4, Math.trunc(options.vcpus)))
+          : VERIFICATION_VCPUS;
       const base = {
         name,
         image: options.image,
         timeout: options.timeoutMs,
-        resources: { vcpus: VERIFICATION_VCPUS },
+        resources: { vcpus },
         networkPolicy: networkPolicyFor(options),
         env: { ...options.env },
         persistent: false,
-        tags: { "mavly-purpose": "verification" },
+        tags: { "mavly-purpose": purpose },
       };
 
       const result = await withTimeout(
@@ -236,6 +246,33 @@ export function createVercelSandboxAdapter(
         EXEC_TIMEOUT_MS + 5_000,
         mapProviderError,
       );
+    },
+
+    async readFile(session, path, maxBytes) {
+      if (!path || path.startsWith("/") || path.includes("..") || path.includes("\\")) {
+        return {
+          ok: false,
+          error: sandboxError("invalid_input", "The sandbox file reference is not valid."),
+        };
+      }
+      const limit = Math.max(1, Math.min(Math.floor(maxBytes), 256 * 1024 * 1024));
+      const sandbox = await ensure(session);
+      if (!isSandboxOk(sandbox)) return sandbox;
+
+      const result = await withTimeout<Buffer | null>(
+        (signal) => sandbox.value.readFileToBuffer({ path }, { signal }),
+        READ_FILE_TIMEOUT_MS,
+        mapProviderError,
+      );
+      if (!isSandboxOk(result)) return result;
+      if (result.value === null) return { ok: true, value: null };
+      if (result.value.length > limit) {
+        return {
+          ok: false,
+          error: sandboxError("invalid_input", "The sandbox file exceeds the configured read limit."),
+        };
+      }
+      return { ok: true, value: result.value };
     },
 
     async destroy(session) {

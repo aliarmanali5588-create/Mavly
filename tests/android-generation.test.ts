@@ -304,7 +304,7 @@ test("the run path uses the native profile and skips website verification for An
   assert.doesNotMatch(RUN_AGENT, /No website code was generated/);
 });
 
-test("Android builds are reported as not configured, never enqueued or fabricated", () => {
+test("Android builds are off by default and report an honest capability", () => {
   const capability = androidCapability();
   assert.equal(capability.sourceGeneration.available, true);
   assert.equal(capability.build.available, false);

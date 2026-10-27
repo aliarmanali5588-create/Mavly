@@ -2,12 +2,25 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Code2, Download, FileCode2, Loader2, RefreshCw, Send, Smartphone } from "lucide-react";
+import {
+  AlertCircle, ArrowLeft, Bot, Check, Code2, Download, Eye, Loader2, MessageSquare,
+  RefreshCw, Send, Smartphone, User,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { vcaasApi } from "@/lib/vcaas";
-import type { AgentStatus, FileContent, FileTreeEntry, VcaasProject } from "@/lib/vcaas-types";
+import type {
+  AgentStatus, ConversationMessage, FileContent, FileTreeEntry, MobileBuild, VcaasProject,
+} from "@/lib/vcaas-types";
+import type { AndroidCapability } from "@/lib/android/capability";
+
+const CONVERSATION_PAGE_SIZE = 80;
 
 export function AndroidWorkspace({ project }: { project: VcaasProject }) {
+  const [messages, setMessages] = useState<ConversationMessage[]>([]);
+  const [conversationLoading, setConversationLoading] = useState(true);
+  const [conversationError, setConversationError] = useState<string | null>(null);
+  const [hasOlderMessages, setHasOlderMessages] = useState(false);
   const [files, setFiles] = useState<FileTreeEntry[] | null>(null);
   const [filesError, setFilesError] = useState<string | null>(null);
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
@@ -20,13 +33,29 @@ export function AndroidWorkspace({ project }: { project: VcaasProject }) {
   const [generationError, setGenerationError] = useState<string | null>(null);
   const [status, setStatus] = useState<AgentStatus | null>(null);
   const [statusError, setStatusError] = useState<string | null>(null);
+  const [filesOpen, setFilesOpen] = useState(false);
+  const [buildsOpen, setBuildsOpen] = useState(false);
+  const [mobileView, setMobileView] = useState<"chat" | "preview">("chat");
   const [downloading, setDownloading] = useState(false);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [builds, setBuilds] = useState<MobileBuild[] | null>(null);
+  const [buildCapability, setBuildCapability] = useState<AndroidCapability | undefined>(
+    project.android,
+  );
+  const [buildError, setBuildError] = useState<string | null>(null);
+  const [buildStarting, setBuildStarting] = useState(false);
+  const [buildLogs, setBuildLogs] = useState<Record<string, { text: string; truncated: boolean }>>({});
   const contentRequest = useRef(0);
   const completedRun = useRef<string | null>(null);
+  const conversationOffset = useRef(0);
+  const noOlderMessages = useRef(false);
+  const preserveChatScroll = useRef<{ height: number; top: number } | null>(null);
+  const startingRef = useRef(false);
+  const chatScrollRef = useRef<HTMLDivElement>(null);
+  const promptRef = useRef<HTMLTextAreaElement>(null);
 
   const loadFiles = useCallback(async () => {
     setRefreshing(true);
@@ -58,19 +87,84 @@ export function AndroidWorkspace({ project }: { project: VcaasProject }) {
     void loadFiles();
   }, [loadFiles]);
 
+  const loadConversation = useCallback(async (older = false) => {
+    setConversationLoading(true);
+    try {
+      const offsetFromEnd = older
+        ? conversationOffset.current + CONVERSATION_PAGE_SIZE
+        : 0;
+      const response = await vcaasApi.agent.fullConversation(project.projectId, {
+        limit: CONVERSATION_PAGE_SIZE,
+        ...(offsetFromEnd > 0 ? { offsetFromEnd } : {}),
+      });
+      if (!response.ok || !response.data) {
+        setConversationError(response.error || "Could not load this project's conversation.");
+        return;
+      }
+
+      const page = response.data.conversation;
+      setConversationError(null);
+      if (older) {
+        if (page.length > 0) {
+          if (chatScrollRef.current) {
+            preserveChatScroll.current = {
+              height: chatScrollRef.current.scrollHeight,
+              top: chatScrollRef.current.scrollTop,
+            };
+          }
+          setMessages((current) => [...page, ...current]);
+          conversationOffset.current = offsetFromEnd;
+        }
+        if (page.length < CONVERSATION_PAGE_SIZE) noOlderMessages.current = true;
+        setHasOlderMessages(page.length === CONVERSATION_PAGE_SIZE);
+      } else {
+        setMessages((current) => {
+          const previouslyLoaded = current.slice(0, Math.max(0, current.length - CONVERSATION_PAGE_SIZE));
+          return [...previouslyLoaded, ...page];
+        });
+        setHasOlderMessages(page.length === CONVERSATION_PAGE_SIZE && !noOlderMessages.current);
+      }
+    } catch (error) {
+      setConversationError(error instanceof Error ? error.message : "Could not load this project's conversation.");
+    } finally {
+      setConversationLoading(false);
+    }
+  }, [project.projectId]);
+
+  useEffect(() => {
+    const key = `mavly:android-generation:${project.projectId}`;
+    try {
+      const saved = window.sessionStorage.getItem(key);
+      if (!saved) return;
+      window.sessionStorage.removeItem(key);
+
+      const parsed: unknown = JSON.parse(saved);
+      if (typeof parsed !== "object" || parsed === null) return;
+      if ("prompt" in parsed && typeof parsed.prompt === "string") setPrompt(parsed.prompt);
+      if ("error" in parsed && typeof parsed.error === "string") setGenerationError(parsed.error);
+    } catch (error) {
+      setGenerationError(error instanceof Error ? error.message : "Could not restore the Android generation request.");
+    }
+  }, [project.projectId]);
+
   const refreshStatus = useCallback(async () => {
-    const response = await vcaasApi.agent.status(project.projectId);
-    if (!response.ok || !response.data) {
-      setStatusError(response.error || "Could not load the generation status.");
-      return;
+    void loadConversation();
+    try {
+      const response = await vcaasApi.agent.status(project.projectId);
+      if (!response.ok || !response.data) {
+        setStatusError(response.error || "Could not load the generation status.");
+        return;
+      }
+      setStatusError(null);
+      setStatus(response.data);
+      if (response.data.status === "done" && completedRun.current !== response.data.runId) {
+        completedRun.current = response.data.runId ?? null;
+        void loadFiles();
+      }
+    } catch (error) {
+      setStatusError(error instanceof Error ? error.message : "Could not load the generation status.");
     }
-    setStatusError(null);
-    setStatus(response.data);
-    if (response.data.status === "done" && completedRun.current !== response.data.runId) {
-      completedRun.current = response.data.runId ?? null;
-      void loadFiles();
-    }
-  }, [loadFiles, project.projectId]);
+  }, [loadConversation, loadFiles, project.projectId]);
 
   useEffect(() => {
     void refreshStatus();
@@ -85,34 +179,68 @@ export function AndroidWorkspace({ project }: { project: VcaasProject }) {
 
   const startGeneration = async () => {
     const text = prompt.trim();
-    if (!text || starting || inFlight) return;
+    if (!text || startingRef.current || inFlight) return;
+    startingRef.current = true;
     setStarting(true);
     setGenerationError(null);
-    const response = await vcaasApi.agent.start(project.projectId, {
-      prompt: text,
-      inputFiles: [],
-    });
-    setStarting(false);
-    if (!response.ok) {
-      setGenerationError(response.error || "Could not start Android source generation.");
+    try {
+      const response = await vcaasApi.agent.start(project.projectId, {
+        prompt: text,
+        inputFiles: [],
+      });
+      if (!response.ok) {
+        setGenerationError(response.error || "Could not start Android source generation.");
+        return;
+      }
+      setPrompt("");
+      await refreshStatus();
+    } catch (error) {
+      setGenerationError(error instanceof Error ? error.message : "Could not start Android source generation.");
+    } finally {
+      startingRef.current = false;
+      setStarting(false);
+    }
+  };
+
+  useEffect(() => {
+    const scroll = chatScrollRef.current;
+    if (!scroll) return;
+    const previous = preserveChatScroll.current;
+    if (previous) {
+      preserveChatScroll.current = null;
+      requestAnimationFrame(() => {
+        scroll.scrollTop = previous.top + scroll.scrollHeight - previous.height;
+      });
       return;
     }
-    setPrompt("");
-    await refreshStatus();
-  };
+    scroll.scrollTop = scroll.scrollHeight;
+  }, [messages, inFlight]);
+
+  useEffect(() => {
+    const textarea = promptRef.current;
+    if (!textarea) return;
+    textarea.style.height = "auto";
+    textarea.style.height = `${Math.min(textarea.scrollHeight, 160)}px`;
+  }, [prompt]);
 
   const saveFile = async () => {
     if (!selectedPath || saving) return;
     setSaving(true);
     setSaveError(null);
-    const response = await vcaasApi.files.write(project.projectId, selectedPath, draft);
-    setSaving(false);
-    if (!response.ok) {
-      setSaveError(response.error || "Could not save this source file.");
-      return;
+    try {
+      const response = await vcaasApi.files.write(project.projectId, selectedPath, draft);
+      if (!response.ok) {
+        setSaveError(response.error || "Could not save this source file.");
+        return;
+      }
+      setEditing(false);
+      setFileContent((current) => (current ? { ...current, content: draft } : current));
+      await loadFiles();
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : "Could not save this source file.");
+    } finally {
+      setSaving(false);
     }
-    setEditing(false);
-    setFileContent((current) => (current ? { ...current, content: draft } : current));
   };
 
   const downloadSource = async () => {
@@ -138,6 +266,104 @@ export function AndroidWorkspace({ project }: { project: VcaasProject }) {
     } finally {
       setDownloading(false);
     }
+  };
+
+  const loadBuilds = useCallback(async () => {
+    try {
+      const response = await vcaasApi.v2.mobileBuilds(project.projectId);
+      if (!response.ok || !response.data) {
+        setBuildError(response.error || "Could not load Android builds.");
+        setBuilds([]);
+        return;
+      }
+      setBuildError(null);
+      setBuilds(response.data.builds ?? []);
+      if (response.data.capability) setBuildCapability(response.data.capability);
+    } catch (error) {
+      setBuildError(error instanceof Error ? error.message : "Could not load Android builds.");
+      setBuilds([]);
+    }
+  }, [project.projectId]);
+
+  useEffect(() => {
+    void loadBuilds();
+  }, [loadBuilds]);
+
+  const activeBuild = builds?.find(
+    (build) =>
+      build.state === "queued" ||
+      build.state === "running" ||
+      build.status === "queued" ||
+      build.status === "running",
+  );
+  /**
+   * Poll on the id, not the object: `activeBuild` is recomputed every render,
+   * and depending on it would restart the interval on each state change. An id
+   * of `null` (terminal/no build) still cleans up the interval.
+   */
+  const activeBuildId = activeBuild?.id ?? null;
+  useEffect(() => {
+    if (!activeBuildId) return;
+    const timer = window.setInterval(() => void loadBuilds(), 5_000);
+    return () => window.clearInterval(timer);
+  }, [activeBuildId, loadBuilds]);
+
+  const startBuild = async () => {
+    if (buildStarting || activeBuild) return;
+    setBuildStarting(true);
+    setBuildError(null);
+    try {
+      const response = await vcaasApi.v2.startMobileBuild(
+        project.projectId,
+        "android",
+        crypto.randomUUID(),
+      );
+      if (!response.ok) {
+        setBuildError(response.error || "Could not start the Android build.");
+        return;
+      }
+      await loadBuilds();
+    } catch (error) {
+      setBuildError(error instanceof Error ? error.message : "Could not start the Android build.");
+    } finally {
+      setBuildStarting(false);
+    }
+  };
+
+  const cancelBuild = async (buildId: string) => {
+    setBuildError(null);
+    const response = await vcaasApi.v2.cancelMobileBuild(project.projectId, buildId);
+    if (!response.ok) {
+      setBuildError(response.error || "Could not cancel the Android build.");
+      return;
+    }
+    await loadBuilds();
+  };
+
+  const downloadArtifact = async (buildId: string) => {
+    setBuildError(null);
+    const response = await vcaasApi.v2.mobileBuildDownload(project.projectId, buildId);
+    if (!response.ok || !response.data?.url) {
+      setBuildError(response.error || "The Android artifact is not available.");
+      return;
+    }
+    window.open(response.data.url, "_blank", "noopener,noreferrer");
+  };
+
+  const loadBuildLog = async (buildId: string) => {
+    setBuildError(null);
+    const response = await vcaasApi.v2.mobileBuildLog(project.projectId, buildId);
+    if (!response.ok) {
+      setBuildError(response.error || "Could not load the Android build log.");
+      return;
+    }
+    setBuildLogs((current) => ({
+      ...current,
+      [buildId]: {
+        text: response.data?.log ?? "",
+        truncated: Boolean(response.data?.truncated),
+      },
+    }));
   };
 
   useEffect(() => {
@@ -183,233 +409,445 @@ export function AndroidWorkspace({ project }: { project: VcaasProject }) {
   }, [project.projectId, selectedPath]);
 
   const projectName = project.label?.trim() || project.projectId;
+  const generationFailed = status?.stage === "failed";
+  const runStatus = status?.status === "init"
+    ? `Generating${status.stage ? ` · ${status.stage.replaceAll("_", " ")}` : "..."}`
+    : generationFailed
+      ? "Generation failed"
+      : status?.stage === "cancelled"
+        ? "Generation cancelled"
+        : status?.stage === "interrupted"
+          ? "Generation interrupted"
+          : status?.stage === "completed" || status?.status === "done"
+            ? "Generation complete"
+            : "Ready";
+  const latestBuild = builds?.[0];
+  const latestBuildFailed = Boolean(
+    buildError ||
+    latestBuild?.status === "failed" ||
+    latestBuild?.state === "failed" ||
+    latestBuild?.state === "timed_out" ||
+    latestBuild?.state === "configuration_error" ||
+    latestBuild?.state === "infrastructure_error",
+  );
+  const latestBuildSucceeded = latestBuild?.state === "succeeded" || latestBuild?.status === "success";
+  const buildStatus = activeBuild
+    ? `APK ${activeBuild.state ?? activeBuild.status}`
+    : latestBuildFailed
+      ? "Build error"
+      : latestBuildSucceeded
+        ? "APK ready"
+        : buildCapability?.build.available
+          ? "Debug APK enabled"
+          : "Kotlin source only";
 
   return (
-    <main className="min-h-screen bg-[#fcfbf8] text-gray-900">
-      <header className="sticky top-0 z-10 border-b border-black/[0.06] bg-[#fcfbf8]/90 backdrop-blur-md">
-        <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-4 sm:px-6">
-          <Link href="/dashboard" className="inline-flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900">
-            <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-            My projects
-          </Link>
-          <span className="flex items-center gap-2 text-sm font-medium text-gray-800">
-            <Smartphone className="h-4 w-4" aria-hidden="true" />
-            Android Workspace
-          </span>
-          <div className="flex items-center gap-2">
-            {files && files.length > 0 && (
-              <Button variant="outline" size="sm" onClick={() => void downloadSource()} disabled={downloading}>
-                {downloading ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" aria-hidden="true" /> : <Download className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />}
-                <span className="hidden sm:inline">Download source</span>
-              </Button>
-            )}
-            <Button variant="outline" size="sm" onClick={() => void loadFiles()} disabled={refreshing}>
-              <RefreshCw className={`mr-1.5 h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`} aria-hidden="true" />
-              <span className="hidden sm:inline">Refresh files</span>
+    <main className="flex h-dvh flex-col overflow-hidden bg-background text-foreground">
+      <header className="z-10 shrink-0 border-b border-border bg-background">
+        <div className="flex h-14 items-center justify-between gap-3 px-3 sm:px-5">
+          <div className="flex min-w-0 items-center gap-3">
+            <Link href="/dashboard" className="inline-flex shrink-0 items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground">
+              <ArrowLeft className="size-4" aria-hidden="true" />
+              <span className="hidden sm:inline">Projects</span>
+            </Link>
+            <span className="h-5 w-px bg-border" aria-hidden="true" />
+            <div className="flex min-w-0 items-center gap-2">
+              <h1 className="truncate text-sm font-semibold">{projectName}</h1>
+              <span className="hidden shrink-0 items-center gap-1 rounded-full bg-muted px-2 py-1 text-[10px] font-medium text-muted-foreground sm:inline-flex">
+                <Smartphone className="size-3" aria-hidden="true" />
+                Android
+              </span>
+              <span className={`hidden max-w-48 truncate text-xs sm:inline ${generationFailed ? "text-destructive" : "text-muted-foreground"}`}>
+                {runStatus}
+              </span>
+            </div>
+          </div>
+          <div className="flex shrink-0 items-center gap-1.5">
+            <span className={`mr-1 hidden max-w-36 truncate text-xs md:inline ${buildError || latestBuildFailed ? "text-destructive" : "text-muted-foreground"}`}>
+              {buildStatus}
+            </span>
+            <Button type="button" variant="outline" size="sm" onClick={() => setBuildsOpen(true)} className="h-8 gap-1.5 px-2.5" aria-label="Android build status">
+              <Smartphone className="size-3.5" aria-hidden="true" />
+              <span className="hidden sm:inline">Builds</span>
             </Button>
+            <Button type="button" variant="outline" size="sm" onClick={() => setFilesOpen(true)} className="h-8 gap-1.5 px-2.5" aria-label="View Android source files">
+              <Code2 className="size-3.5" aria-hidden="true" />
+              <span className="hidden sm:inline">Code</span>
+              {files?.length ? <span className="text-muted-foreground">{files.length}</span> : null}
+            </Button>
+            <Button type="button" variant="outline" size="icon" onClick={() => void loadFiles()} disabled={refreshing} className="size-8" aria-label="Refresh source files">
+              <RefreshCw className={`size-3.5 ${refreshing ? "animate-spin" : ""}`} aria-hidden="true" />
+            </Button>
+            {files && files.length > 0 ? (
+              <Button type="button" variant="outline" size="icon" onClick={() => void downloadSource()} disabled={downloading} className="size-8" aria-label="Download Android source">
+                {downloading ? <Loader2 className="size-3.5 animate-spin" aria-hidden="true" /> : <Download className="size-3.5" aria-hidden="true" />}
+              </Button>
+            ) : null}
           </div>
         </div>
+        <nav className="grid grid-cols-2 gap-1 border-t border-border p-1.5 md:hidden" aria-label="Workspace view">
+          <button type="button" onClick={() => setMobileView("chat")} aria-pressed={mobileView === "chat"} className={`inline-flex h-9 items-center justify-center gap-2 rounded-md text-sm font-medium ${mobileView === "chat" ? "bg-muted text-foreground" : "text-muted-foreground"}`}>
+            <MessageSquare className="size-4" aria-hidden="true" /> Chat
+          </button>
+          <button type="button" onClick={() => setMobileView("preview")} aria-pressed={mobileView === "preview"} className={`inline-flex h-9 items-center justify-center gap-2 rounded-md text-sm font-medium ${mobileView === "preview" ? "bg-muted text-foreground" : "text-muted-foreground"}`}>
+            <Eye className="size-4" aria-hidden="true" /> Preview
+          </button>
+        </nav>
       </header>
 
-      <div className="mx-auto max-w-6xl space-y-5 px-4 py-6 sm:px-6 sm:py-8">
-        <section className="rounded-2xl border border-black/[0.06] bg-white p-5 shadow-[0_4px_20px_-2px_rgba(0,0,0,0.03)] sm:p-6">
-          <div className="flex flex-wrap items-start gap-3">
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-black/[0.06] bg-[#f7f6f3]">
-              <Smartphone className="h-5 w-5 text-gray-600" aria-hidden="true" />
+      <div className="flex min-h-0 flex-1">
+        <section aria-label="AI chat" className={`${mobileView === "chat" ? "flex" : "hidden"} min-h-0 w-full flex-col border-r border-border bg-background md:flex md:w-[40%] lg:w-[38%]`}>
+          <div className="flex h-12 shrink-0 items-center justify-between border-b border-border px-4">
+            <div className="flex items-center gap-2">
+              <Bot className="size-4 text-muted-foreground" aria-hidden="true" />
+              <h2 className="text-sm font-medium">Build your Android app</h2>
             </div>
-            <div className="min-w-0 flex-1">
-              <div className="flex flex-wrap items-center gap-2">
-                <h1 className="truncate text-xl font-semibold tracking-tight">{projectName}</h1>
-                <span className="rounded-full bg-gray-100 px-2.5 py-1 text-[11px] font-medium text-gray-600">Android app</span>
+            <span className={`inline-flex items-center gap-1.5 text-[11px] ${generationFailed ? "text-destructive" : "text-muted-foreground"}`}>
+              {inFlight ? <Loader2 className="size-3 animate-spin" aria-hidden="true" /> : status?.stage === "completed" ? <Check className="size-3" aria-hidden="true" /> : null}
+              {runStatus}
+            </span>
+          </div>
+
+          <div ref={chatScrollRef} className="min-h-0 flex-1 overflow-y-auto px-3 py-4 sm:px-5">
+            {hasOlderMessages ? (
+              <div className="mb-4 flex justify-center">
+                <button type="button" onClick={() => void loadConversation(true)} disabled={conversationLoading} className="rounded-full border border-border px-3 py-1.5 text-xs text-muted-foreground hover:bg-muted disabled:opacity-50">
+                  {conversationLoading ? "Loading..." : "Load earlier messages"}
+                </button>
               </div>
-              <p className="mt-1 text-xs text-gray-400">{project.projectId}</p>
-              {project.description && (
-                <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-gray-600">{project.description}</p>
+            ) : null}
+            {conversationLoading && messages.length === 0 ? (
+              <div className="flex h-full items-center justify-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="size-4 animate-spin" aria-hidden="true" /> Loading conversation...
+              </div>
+            ) : messages.length === 0 && !conversationError ? (
+              <div className="flex h-full flex-col items-center justify-center px-6 text-center">
+                <div className="mb-3 flex size-11 items-center justify-center rounded-full bg-muted">
+                  <MessageSquare className="size-5 text-muted-foreground" aria-hidden="true" />
+                </div>
+                <p className="text-sm font-medium">Start building your Android app</p>
+                <p className="mt-1 text-xs text-muted-foreground">Your prompts and Mavly's actual responses will appear here.</p>
+              </div>
+            ) : (
+              <ol className="space-y-5">
+                {messages.map((message, index) => (
+                  <li key={`${message.createdAt}-${message.author}-${message.messageType}-${index}`} className={`flex gap-2.5 ${message.author === "user" ? "flex-row-reverse" : ""}`}>
+                    <span className={`mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full ${message.author === "user" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}>
+                      {message.author === "user" ? <User className="size-3.5" aria-hidden="true" /> : <Bot className="size-3.5" aria-hidden="true" />}
+                    </span>
+                    <div className={`min-w-0 max-w-[88%] rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed ${message.author === "user" ? "bg-muted text-foreground" : message.messageType === "error" || message.messageType === "limit-reached" ? "border border-destructive/25 bg-destructive/5 text-foreground" : "bg-transparent text-foreground"}`}>
+                      <p className="whitespace-pre-wrap break-words">{message.message}</p>
+                    </div>
+                  </li>
+                ))}
+                {inFlight ? (
+                  <li className="flex items-center gap-2.5 text-sm text-muted-foreground" aria-live="polite">
+                    <span className="flex size-7 items-center justify-center rounded-full bg-muted"><Bot className="size-3.5" aria-hidden="true" /></span>
+                    <span className="inline-flex items-center gap-2">
+                      <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
+                      {status?.stage ? `Working · ${status.stage.replaceAll("_", " ")}` : "Generating Android source..."}
+                    </span>
+                  </li>
+                ) : null}
+                <li aria-hidden="true" className="h-px list-none" />
+              </ol>
+            )}
+            {conversationError ? (
+              <p role="alert" className="mt-4 flex items-start gap-2 rounded-lg border border-destructive/25 bg-destructive/5 p-3 text-xs text-destructive">
+                <AlertCircle className="mt-0.5 size-4 shrink-0" aria-hidden="true" /> {conversationError}
+              </p>
+            ) : null}
+            {statusError ? <p role="alert" className="mt-3 text-xs text-destructive">{statusError}</p> : null}
+            {generationError ? (
+              <p role="alert" className="mt-3 flex items-start gap-2 rounded-lg border border-destructive/25 bg-destructive/5 p-3 text-xs text-destructive">
+                <AlertCircle className="size-4 shrink-0" aria-hidden="true" /> {generationError}
+              </p>
+            ) : null}
+            {status?.lastErrorClass ? <p className="mt-3 text-xs text-muted-foreground">Latest run error: {status.lastErrorClass}</p> : null}
+          </div>
+
+          <form
+            className="shrink-0 border-t border-border bg-background p-3 sm:p-4"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void startGeneration();
+            }}
+          >
+            <div className="rounded-2xl border border-input bg-background shadow-sm focus-within:ring-2 focus-within:ring-ring/20">
+              <label htmlFor="android-chat-prompt" className="sr-only">Message Mavly about your Android app</label>
+              <textarea
+                id="android-chat-prompt"
+                ref={promptRef}
+                value={prompt}
+                onChange={(event) => setPrompt(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" && !event.shiftKey) {
+                    event.preventDefault();
+                    void startGeneration();
+                  }
+                }}
+                rows={2}
+                placeholder={inFlight ? "Mavly is generating..." : "Describe a screen, flow, or change..."}
+                className="block max-h-40 min-h-16 w-full resize-none bg-transparent px-4 pt-3 text-sm leading-relaxed outline-none placeholder:text-muted-foreground"
+                disabled={starting || inFlight}
+              />
+              <div className="flex items-center justify-between px-2 pb-2">
+                <span className="px-2 text-[11px] text-muted-foreground">Enter to send · Shift+Enter for a new line</span>
+                <Button type="submit" size="icon" className="size-8 rounded-xl" disabled={!prompt.trim() || starting || inFlight} aria-label="Send prompt">
+                  {starting || inFlight ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : <Send className="size-4" aria-hidden="true" />}
+                </Button>
+              </div>
+            </div>
+          </form>
+        </section>
+
+        <section aria-label="Android app preview" className={`${mobileView === "preview" ? "flex" : "hidden"} min-h-0 w-full flex-col bg-muted/40 md:flex md:flex-1`}>
+          <div className="flex h-12 shrink-0 items-center justify-between border-b border-border bg-background/70 px-4 sm:px-6">
+            <div className="flex items-center gap-2">
+              <Eye className="size-4 text-muted-foreground" aria-hidden="true" />
+              <h2 className="text-sm font-medium">App preview</h2>
+            </div>
+            <span className="rounded-full border border-border bg-background px-2.5 py-1 text-[10px] font-medium text-muted-foreground">
+              Emulator unavailable
+            </span>
+          </div>
+          <div className="flex min-h-0 flex-1 flex-col items-center justify-center overflow-hidden px-4 py-5 sm:px-8">
+            <div className="relative flex h-[min(68dvh,680px)] min-h-[360px] max-h-full aspect-[9/19.5] max-w-full flex-col overflow-hidden rounded-[2.8rem] border-[7px] border-neutral-800 bg-neutral-900 p-1.5 shadow-2xl ring-1 ring-black/10">
+              <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-[2.2rem] bg-background">
+                <div className="flex h-8 shrink-0 items-center justify-center bg-background">
+                  <span className="h-1.5 w-16 rounded-full bg-neutral-800" aria-hidden="true" />
+                </div>
+                <div className="flex min-h-0 flex-1 flex-col items-center justify-center border-y border-border bg-muted/30 px-5 text-center">
+                  <div className="mb-4 flex size-14 items-center justify-center rounded-2xl border border-border bg-background text-muted-foreground shadow-sm">
+                    <Smartphone className="size-7" aria-hidden="true" />
+                  </div>
+                  <p className="text-sm font-semibold">Native preview unavailable</p>
+                  <p className="mt-2 max-w-[220px] text-xs leading-relaxed text-muted-foreground">
+                    This workspace has no Android emulator runtime. Mavly will not display a website preview as a native app.
+                  </p>
+                  {files?.length ? (
+                    <Button type="button" variant="outline" size="sm" className="mt-4" onClick={() => setFilesOpen(true)}>
+                      <Code2 className="mr-1.5 size-3.5" aria-hidden="true" /> View generated source
+                    </Button>
+                  ) : null}
+                </div>
+                <div className="flex h-7 shrink-0 items-center justify-center bg-background">
+                  <span className="h-1 w-20 rounded-full bg-neutral-800" aria-hidden="true" />
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <Dialog open={buildsOpen} onOpenChange={setBuildsOpen}>
+        <DialogContent className="flex h-[min(86dvh,760px)] w-[calc(100%-1rem)] max-w-3xl flex-col gap-0 overflow-hidden p-0">
+          <DialogHeader className="shrink-0 border-b border-border px-5 py-4 pr-12">
+            <DialogTitle className="flex items-center gap-2 text-sm">
+              <Smartphone className="size-4" aria-hidden="true" /> Android build status
+            </DialogTitle>
+            <p className="text-xs text-muted-foreground">
+              {buildCapability?.build.reason ?? "Android build capability is unavailable."}
+            </p>
+            {buildCapability?.profile.applicationId ? (
+              <p className="text-xs text-muted-foreground">
+                Package <code className="font-mono">{buildCapability.profile.applicationId}</code>
+                {" · "}{buildCapability.profile.toolchain}
+              </p>
+            ) : null}
+            {buildCapability?.build.requirements.length ? (
+              <ul className="list-inside list-disc text-xs text-muted-foreground">
+                {buildCapability.build.requirements.map((requirement) => <li key={requirement}>{requirement}</li>)}
+              </ul>
+            ) : null}
+          </DialogHeader>
+          <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-5">
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-muted/30 p-4">
+              <div className="min-w-0">
+                <p className="text-sm font-medium">Debug APK</p>
+                <p className="text-xs text-muted-foreground">
+                  {buildCapability?.build.available
+                    ? "Debug variant only. No release signing, AAB or store publishing."
+                    : buildCapability?.build.reason ?? "Build capability is unavailable."}
+                </p>
+              </div>
+              {buildCapability?.build.available ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() => void startBuild()}
+                  disabled={buildStarting || Boolean(activeBuild)}
+                >
+                  {buildStarting || activeBuild ? <Loader2 className="mr-1.5 size-3.5 animate-spin" aria-hidden="true" /> : null}
+                  {activeBuild ? "Build in progress" : "Build debug APK"}
+                </Button>
+              ) : null}
+            </div>
+            {buildError ? <p role="alert" className="mt-3 text-xs text-destructive">{buildError}</p> : null}
+            <div className="mt-5">
+              <h3 className="text-sm font-medium">Build history</h3>
+              {builds === null ? (
+                <p className="mt-3 text-xs text-muted-foreground">Loading build history...</p>
+              ) : builds.length === 0 ? (
+                <p className="mt-3 text-xs text-muted-foreground">No Android build has been started.</p>
+              ) : (
+                <ul className="mt-3 space-y-2">
+                  {builds.slice(0, 5).map((build) => {
+                    const active = build.state === "queued" || build.state === "running";
+                    const succeeded = build.state === "succeeded";
+                    const failed = build.state === "failed" ||
+                      build.state === "timed_out" ||
+                      build.state === "configuration_error" ||
+                      build.state === "infrastructure_error";
+                    const log = buildLogs[build.id];
+                    return (
+                      <li key={build.id} className="rounded-lg border border-border px-3 py-2 text-xs">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className={`min-w-0 flex-1 font-medium ${failed ? "text-destructive" : succeeded ? "text-emerald-700" : "text-foreground"}`}>
+                            {build.state ?? build.status}
+                            {build.stage ? ` · ${build.stage.replaceAll("_", " ")}` : ""}
+                          </span>
+                          <span className="text-muted-foreground">
+                            attempt {build.attempt ?? 0}/{build.maxAttempts ?? 0}
+                          </span>
+                          {active ? (
+                            <Button type="button" size="sm" variant="outline" onClick={() => void cancelBuild(build.id)}>
+                              Cancel
+                            </Button>
+                          ) : null}
+                          {succeeded && build.artifact ? (
+                            <Button type="button" size="sm" onClick={() => void downloadArtifact(build.id)}>
+                              <Download className="mr-1 size-3.5" aria-hidden="true" /> APK
+                            </Button>
+                          ) : null}
+                          {build.hasLog ? (
+                            <Button type="button" size="sm" variant="outline" onClick={() => void loadBuildLog(build.id)}>
+                              Log
+                            </Button>
+                          ) : null}
+                        </div>
+                        {build.artifact ? (
+                          <p className="mt-1 break-all text-muted-foreground">
+                            {build.artifact.sizeBytes} bytes · sha256 {build.artifact.sha256?.slice(0, 16)}… · expires {build.artifact.expiresAt}
+                          </p>
+                        ) : null}
+                        {build.error ? <p className="mt-1 text-destructive">{build.error.code}: {build.error.message}</p> : null}
+                        {log ? (
+                          <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap rounded bg-muted p-2 font-mono text-[10px] leading-relaxed">
+                            {log.text || "No log output."}
+                            {log.truncated ? "\n[log truncated]" : ""}
+                          </pre>
+                        ) : build.logExcerpt ? (
+                          <pre className="mt-2 max-h-32 overflow-auto whitespace-pre-wrap rounded bg-muted p-2 font-mono text-[10px] leading-relaxed">
+                            {build.logExcerpt}
+                          </pre>
+                        ) : null}
+                      </li>
+                    );
+                  })}
+                </ul>
               )}
             </div>
           </div>
-        </section>
+        </DialogContent>
+      </Dialog>
 
-        <section
-          aria-labelledby="android-capability-title"
-          className="rounded-2xl border border-amber-200 bg-amber-50/80 p-5 sm:p-6"
-        >
-          <div className="flex items-start gap-3">
-            <Smartphone className="mt-0.5 h-5 w-5 shrink-0 text-amber-700" aria-hidden="true" />
-            <div>
-              <h2 id="android-capability-title" className="font-semibold text-amber-950">
-                Kotlin/Compose source only — no APK/AAB build
-              </h2>
-              <p className="mt-1.5 text-sm leading-relaxed text-amber-900/80">
-                Mavly generates and validates native Kotlin and Jetpack Compose source. This deployment has no isolated Android build executor, so no APK or AAB is built, signed or installed, and there is no emulator preview.
-              </p>
-              <p className="mt-2 text-xs text-amber-900/70">
-                {project.android?.build.reason ??
-                  "No isolated Android build executor or artifact storage is configured in this deployment."}
-              </p>
-              {project.android?.profile.applicationId ? (
-                <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-[11px] text-amber-900/80">
-                  <dt className="font-medium">Package</dt>
-                  <dd className="truncate font-mono">{project.android.profile.applicationId}</dd>
-                  <dt className="font-medium">API</dt>
-                  <dd>min {project.android.profile.minSdk} / target {project.android.profile.targetSdk}</dd>
-                  <dt className="font-medium">Toolchain</dt>
-                  <dd>{project.android.profile.toolchain}</dd>
-                </dl>
+      <Dialog open={filesOpen} onOpenChange={setFilesOpen}>
+        <DialogContent className="flex h-[min(90dvh,900px)] w-[calc(100%-1rem)] max-w-5xl flex-col gap-0 overflow-hidden p-0">
+          <DialogHeader className="flex shrink-0 flex-row items-center justify-between border-b border-border px-5 py-4 pr-12">
+            <div className="min-w-0">
+              <DialogTitle className="flex items-center gap-2 text-sm">
+                <Code2 className="size-4" aria-hidden="true" /> Android source files
+                <span className="font-normal text-muted-foreground">{files ? `· ${files.length}` : ""}</span>
+              </DialogTitle>
+              <p className="mt-1 text-xs text-muted-foreground">Persisted Kotlin/Compose project source</p>
+            </div>
+            <div className="mr-1 flex shrink-0 items-center gap-1.5">
+              <Button type="button" variant="outline" size="sm" onClick={() => void loadFiles()} disabled={refreshing}>
+                <RefreshCw className={`mr-1.5 size-3.5 ${refreshing ? "animate-spin" : ""}`} aria-hidden="true" /> Refresh
+              </Button>
+              {files && files.length > 0 ? (
+                <Button type="button" variant="outline" size="sm" onClick={() => void downloadSource()} disabled={downloading}>
+                  {downloading ? <Loader2 className="mr-1.5 size-3.5 animate-spin" aria-hidden="true" /> : <Download className="mr-1.5 size-3.5" aria-hidden="true" />}
+                  Download
+                </Button>
+              ) : null}
+            </div>
+          </DialogHeader>
+          <div className="flex min-h-0 flex-1 flex-col md:flex-row">
+            <nav aria-label="Saved source files" className="max-h-32 shrink-0 overflow-y-auto border-b border-border p-2 md:max-h-none md:w-64 md:border-b-0 md:border-r">
+              {filesError ? (
+                <div className="p-3">
+                  <p role="alert" className="text-xs text-destructive">{filesError}</p>
+                  <Button type="button" variant="outline" size="sm" className="mt-2" onClick={() => void loadFiles()} disabled={refreshing}>Try again</Button>
+                </div>
+              ) : files === null ? (
+                <p className="p-3 text-xs text-muted-foreground">Loading saved files...</p>
+              ) : files.length === 0 ? (
+                <p className="p-3 text-xs text-muted-foreground">No Android source files have been saved yet.</p>
+              ) : files.map((file) => (
+                <button
+                  key={file.path}
+                  type="button"
+                  onClick={() => setSelectedPath(file.path)}
+                  aria-current={selectedPath === file.path ? "page" : undefined}
+                  className={`block w-full truncate rounded-lg px-3 py-2 text-left font-mono text-xs ${selectedPath === file.path ? "bg-muted text-foreground" : "text-muted-foreground hover:bg-muted/70 hover:text-foreground"}`}
+                  title={file.path}
+                >
+                  {file.path}
+                </button>
+              ))}
+            </nav>
+            <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+              <div className="flex shrink-0 items-center gap-2 border-b border-border px-4 py-2">
+                <span className="min-w-0 flex-1 truncate font-mono text-xs text-muted-foreground">{selectedPath || "Select a source file"}</span>
+                {fileContent?.encoding === "utf8" && !contentLoading ? (
+                  editing ? (
+                    <>
+                      <Button type="button" size="sm" onClick={() => void saveFile()} disabled={saving}>
+                        {saving ? <Loader2 className="mr-1 size-3 animate-spin" aria-hidden="true" /> : null} Save
+                      </Button>
+                      <Button type="button" size="sm" variant="outline" onClick={() => {
+                        setDraft(fileContent.content);
+                        setSaveError(null);
+                        setEditing(false);
+                      }} disabled={saving}>Cancel</Button>
+                    </>
+                  ) : (
+                    <Button type="button" size="sm" variant="outline" onClick={() => {
+                      setDraft(fileContent.content);
+                      setSaveError(null);
+                      setEditing(true);
+                    }}>Edit</Button>
+                  )
+                ) : null}
+              </div>
+              {saveError ? <p role="alert" className="shrink-0 px-4 pt-3 text-sm text-destructive">{saveError}</p> : null}
+              {contentLoading ? (
+                <p className="p-4 text-sm text-muted-foreground">Loading file...</p>
+              ) : contentError ? (
+                <p role="alert" className="p-4 text-sm text-destructive">{contentError}</p>
+              ) : fileContent?.encoding === "base64" ? (
+                <p className="p-4 text-sm text-muted-foreground">This binary file is saved but cannot be displayed as source text.</p>
+              ) : editing ? (
+                <textarea
+                  value={draft}
+                  onChange={(event) => setDraft(event.target.value)}
+                  spellCheck={false}
+                  className="block min-h-0 flex-1 resize-none bg-background p-4 font-mono text-xs leading-relaxed text-foreground outline-none"
+                  aria-label={`Edit ${selectedPath ?? "source file"}`}
+                />
+              ) : fileContent ? (
+                <pre className="min-h-0 flex-1 overflow-auto p-4 text-xs leading-relaxed text-foreground">
+                  <code>{fileContent.content}</code>
+                </pre>
+              ) : !filesError && files?.length ? (
+                <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">Select a file to view its contents.</div>
               ) : null}
             </div>
           </div>
-        </section>
-
-        <section className="rounded-2xl border border-black/[0.06] bg-white p-5 shadow-[0_4px_20px_-2px_rgba(0,0,0,0.03)] sm:p-6">
-          <h2 className="text-sm font-semibold text-gray-800">Generate or update the Android app</h2>
-          <p className="mt-1 text-xs text-gray-400">
-            Describe the screen, flow or change. Mavly updates the saved Kotlin/Compose source; it does not build an APK.
-          </p>
-          <label className="mt-3 block">
-            <span className="sr-only">Android prompt</span>
-            <textarea
-              value={prompt}
-              onChange={(event) => setPrompt(event.target.value)}
-              rows={3}
-              placeholder="Describe the Android app or the change you want..."
-              className="w-full resize-y rounded-xl border border-black/[0.08] bg-[#fcfbf8] px-3 py-2 text-sm text-gray-800 outline-none focus:border-gray-300 focus:ring-2 focus:ring-gray-200"
-              disabled={starting || inFlight}
-            />
-          </label>
-          <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
-            <span className="text-xs text-gray-400">
-              {inFlight
-                ? `Generating${status?.stage ? ` · ${status.stage}` : ""}...`
-                : status?.status === "done"
-                  ? "Last generation finished."
-                  : "Ready."}
-            </span>
-            <Button onClick={() => void startGeneration()} disabled={!prompt.trim() || starting || inFlight}>
-              {starting || inFlight ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" aria-hidden="true" /> : <Send className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />}
-              {inFlight ? "Generating" : "Generate"}
-            </Button>
-          </div>
-          {statusError ? <p role="alert" className="mt-2 text-xs text-red-600">{statusError}</p> : null}
-          {generationError ? <p role="alert" className="mt-2 text-xs text-red-600">{generationError}</p> : null}
-          {status?.lastErrorClass ? <p className="mt-2 text-xs text-amber-700">Last error: {status.lastErrorClass}</p> : null}
-          {status?.realtimeConversation && status.realtimeConversation.length > 0 ? (
-            <ul className="mt-4 space-y-2">
-              {status.realtimeConversation.map((message, index) => (
-                <li key={`${message.createdAt}-${index}`} className="rounded-xl bg-[#f7f6f3] px-3 py-2 text-xs text-gray-600">
-                  <span className="mr-2 font-medium text-gray-500">{message.author === "user" ? "You" : "Mavly"}</span>
-                  <span className="whitespace-pre-wrap">{message.message}</span>
-                </li>
-              ))}
-            </ul>
-          ) : null}
-        </section>
-
-        <section className="overflow-hidden rounded-2xl border border-black/[0.06] bg-white shadow-[0_4px_20px_-2px_rgba(0,0,0,0.03)]">
-          <div className="flex items-center gap-2 border-b border-black/[0.06] px-4 py-3 sm:px-5">
-            <Code2 className="h-4 w-4 text-gray-500" aria-hidden="true" />
-            <h2 className="text-sm font-semibold text-gray-800">Saved source files</h2>
-            <span className="text-xs text-gray-400">{files ? `${files.length}` : ""}</span>
-          </div>
-
-          {filesError ? (
-            <div className="p-5">
-              <p role="alert" className="text-sm text-red-600">{filesError}</p>
-              <Button variant="outline" size="sm" className="mt-3" onClick={() => void loadFiles()} disabled={refreshing}>
-                Try again
-              </Button>
-            </div>
-          ) : files === null ? (
-            <p className="p-5 text-sm text-gray-500">Loading saved files...</p>
-          ) : files.length === 0 ? (
-            <div className="p-8 text-center">
-              <FileCode2 className="mx-auto h-7 w-7 text-gray-300" aria-hidden="true" />
-              <p className="mt-2 text-sm font-medium text-gray-600">No Android source files are saved yet.</p>
-              <p className="mt-1 text-xs text-gray-400">Describe the app above and Mavly will generate the Kotlin/Compose source.</p>
-            </div>
-          ) : (
-            <div className="grid min-h-[360px] md:grid-cols-[minmax(190px,0.35fr)_1fr]">
-              <nav aria-label="Saved source files" className="max-h-[420px] overflow-y-auto border-b border-black/[0.06] p-2 md:border-b-0 md:border-r">
-                {files.map((file) => (
-                  <button
-                    key={file.path}
-                    type="button"
-                    onClick={() => setSelectedPath(file.path)}
-                    aria-current={selectedPath === file.path ? "page" : undefined}
-                    className={`block w-full truncate rounded-lg px-3 py-2 text-left font-mono text-xs ${
-                      selectedPath === file.path ? "bg-gray-100 text-gray-900" : "text-gray-500 hover:bg-gray-50 hover:text-gray-800"
-                    }`}
-                    title={file.path}
-                  >
-                    {file.path}
-                  </button>
-                ))}
-              </nav>
-              <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-2 border-b border-black/[0.04] px-4 py-2">
-                  <span className="min-w-0 flex-1 truncate font-mono text-xs text-gray-500">
-                    {selectedPath || "Select a file"}
-                  </span>
-                  {fileContent?.encoding === "utf8" && !contentLoading ? (
-                    editing ? (
-                      <>
-                        <Button size="sm" onClick={() => void saveFile()} disabled={saving}>
-                          {saving ? <Loader2 className="mr-1 h-3 w-3 animate-spin" aria-hidden="true" /> : null}
-                          Save
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => {
-                            if (fileContent) setDraft(fileContent.content);
-                            setSaveError(null);
-                            setEditing(false);
-                          }}
-                          disabled={saving}
-                        >
-                          Cancel
-                        </Button>
-                      </>
-                    ) : (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => {
-                          if (fileContent) setDraft(fileContent.content);
-                          setSaveError(null);
-                          setEditing(true);
-                        }}
-                      >
-                        Edit
-                      </Button>
-                    )
-                  ) : null}
-                </div>
-                {saveError ? <p role="alert" className="px-4 pt-3 text-sm text-red-600">{saveError}</p> : null}
-                {contentLoading ? (
-                  <p className="p-4 text-sm text-gray-500">Loading file...</p>
-                ) : contentError ? (
-                  <p role="alert" className="p-4 text-sm text-red-600">{contentError}</p>
-                ) : fileContent?.encoding === "base64" ? (
-                  <p className="p-4 text-sm text-gray-500">This binary file is saved but cannot be displayed as source text.</p>
-                ) : editing ? (
-                  <textarea
-                    value={draft}
-                    onChange={(event) => setDraft(event.target.value)}
-                    spellCheck={false}
-                    className="block h-[600px] w-full resize-none bg-white p-4 font-mono text-xs leading-relaxed text-gray-700 outline-none"
-                    aria-label={`Edit ${selectedPath ?? "source file"}`}
-                  />
-                ) : fileContent ? (
-                  <pre className="max-h-[600px] overflow-auto p-4 text-xs leading-relaxed text-gray-700">
-                    <code>{fileContent.content}</code>
-                  </pre>
-                ) : null}
-              </div>
-            </div>
-          )}
-        </section>
-      </div>
+        </DialogContent>
+      </Dialog>
     </main>
   );
 }

@@ -32,6 +32,7 @@ export function createE2bSandboxAdapter(): SandboxAdapter {
     upload: () => notImplemented(),
     startDetached: () => notImplemented(),
     exec: () => notImplemented(),
+    readFile: () => notImplemented(),
     destroy: () => notImplemented(),
   };
 }

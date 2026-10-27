@@ -48,11 +48,31 @@ import {
   type ImageGenerationFailure,
 } from "@/lib/ai/openrouter-images";
 import { sanitizeProjectPath } from "@/lib/ai/agent";
+import { androidCapability } from "@/lib/android/capability";
 import {
-  ANDROID_BUILD_REASON,
-  androidCapability,
-} from "@/lib/android/capability";
-import { androidPathRejection } from "@/lib/android/contract";
+  androidPackageForProject,
+  androidPathRejection,
+  validateAndroidProject,
+} from "@/lib/android/contract";
+import {
+  ANDROID_BUILD_TOOLCHAIN,
+  androidBuildConfig,
+  androidBuildProblemMessage,
+  isProjectInAndroidBuildCohort,
+} from "@/lib/android/build-config";
+import {
+  androidBuildSchemaVersion,
+  cancelAndroidBuild,
+  createAndroidBuild,
+  getAndroidBuildForOwner,
+  getAndroidBuildFull,
+  isAndroidBuildStoreFailure,
+  listAndroidBuilds,
+} from "@/lib/android/build-store";
+import { generationWorkerConfig } from "@/lib/generation/worker-config";
+import { toAndroidBuildView, type AndroidBuildView } from "@/lib/android/build-state";
+import { createAndroidArtifactStore } from "@/lib/android/artifact-store";
+import { createSupabaseWorkerClient } from "@/lib/supabase/worker";
 import { validateProjectSlug } from "@/lib/project-slug";
 import { resolveStaticPreview } from "@/lib/static-site";
 import { projectGenerationProgressStage } from "@/lib/run-progress";
@@ -113,6 +133,7 @@ import {
   saveDatabaseConfig,
 } from "@/lib/hosting/fullstack-database";
 import {
+  createSnapshot,
   getSnapshot,
   hashSource,
   isSnapshotFailure,
@@ -333,10 +354,12 @@ export async function handleMavlyVcaasRequest(input: MavlyRequest): Promise<Next
   /**
    * ═══ ANDROID BUILDS ════════════════════════════════════════════════════════
    *
-   * Source generation is real; build execution is not configured. These routes
-   * never enqueue a job or fabricate a build row: the GET reports the truthful
-   * capability, POST refuses with the exact blocker, and artifact/log URLs are
-   * 404 because no artifact exists.
+   * Source generation is real. Isolated debug builds are real too, but OFF by
+   * default: they need migration 26, the generation worker, a digest-pinned
+   * sandbox image, a private artifact bucket and an explicit project cohort.
+   * These routes never fabricate a build row or artifact. When a prerequisite
+   * is missing, GET reports the truthful capability and POST refuses with the
+   * exact blocker.
    */
   if (action === "mobile/builds" && method === "GET") {
     return androidBuildsResponse(userId, projectId);
@@ -918,7 +941,7 @@ async function rejectAndroidWebsiteDeployment(
   return fail(
     503,
     "ANDROID_HOSTING_NOT_CONFIGURED",
-    "Static website publishing does not apply to Android projects. No APK/AAB build executor or Android hosting is configured in this deployment.",
+    "Static website publishing does not apply to Android projects. Debug APK builds use the Android build queue, and no Android hosting or store publishing is implemented.",
   );
 }
 
@@ -939,6 +962,124 @@ async function requireAndroidProject(
   return null;
 }
 
+const ANDROID_BUILD_ID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function androidBuildWire(build: AndroidBuildView) {
+  const status =
+    build.status === "succeeded"
+      ? ("success" as const)
+      : build.status === "failed" ||
+          build.status === "timed_out" ||
+          build.status === "configuration_error" ||
+          build.status === "infrastructure_error"
+        ? ("failed" as const)
+        : build.status;
+  return {
+    id: build.id,
+    platform: "android" as const,
+    status,
+    state: build.status,
+    stage: build.stage,
+    attempt: build.attempt,
+    maxAttempts: build.maxAttempts,
+    toolchain: build.toolchain,
+    variant: build.variant,
+    createdAt: build.createdAt,
+    startedAt: build.startedAt,
+    finishedAt: build.finishedAt,
+    cancelRequestedAt: build.cancelRequestedAt,
+    artifactState: build.artifactState,
+    artifact: build.artifact
+      ? {
+          type: "apk" as const,
+          fileName: build.artifact.fileName,
+          sizeBytes: build.artifact.sizeBytes,
+          sha256: build.artifact.sha256,
+          applicationId: build.artifact.applicationId,
+          expiresAt: build.artifact.expiresAt,
+        }
+      : null,
+    signed: false as const,
+    error: build.error,
+    logExcerpt: build.logExcerpt,
+    logTruncated: build.logTruncated,
+    hasLog: build.hasLog,
+  };
+}
+
+function androidBuildFailureResponse(failure: {
+  code: string;
+  error: string;
+}): NextResponse {
+  if (failure.code === "MIGRATION_REQUIRED") return fail(503, "MIGRATION_REQUIRED", failure.error);
+  if (failure.code === "UNAUTHENTICATED") return fail(401, "UNAUTHENTICATED", failure.error);
+  if (failure.code === "FORBIDDEN") return fail(403, "FORBIDDEN", failure.error);
+  if (failure.code === "NOT_FOUND") return fail(404, "ANDROID_BUILD_NOT_FOUND", failure.error);
+  if (failure.code === "CONFLICT") return fail(400, "ANDROID_BUILD_INVALID", failure.error);
+  return fail(500, "UNKNOWN", "The Android build request could not be completed.");
+}
+
+type AndroidBuildSnapshotOutcome =
+  | { ok: true; snapshotId: string; sourceHash: string }
+  | { ok: false; response: NextResponse };
+
+async function androidBuildSnapshot(
+  userId: string,
+  projectId: string,
+): Promise<AndroidBuildSnapshotOutcome> {
+  const files = await listFiles(projectId);
+  if (isStoreFailure(files)) {
+    return { ok: false, response: fail(500, "UNKNOWN", "Could not read the project source.") };
+  }
+  const sourceFiles = files.data.map((file) => ({ path: file.path, content: file.content }));
+  if (sourceFiles.length === 0) {
+    return {
+      ok: false,
+      response: fail(409, "ANDROID_SOURCE_MISSING", "Generate Android source before starting a build."),
+    };
+  }
+
+  const contract = validateAndroidProject(sourceFiles, androidPackageForProject(projectId));
+  if (contract.ok === false) {
+    const detail = contract.violations.slice(0, 5).join("; ");
+    return {
+      ok: false,
+      response: fail(
+        409,
+        "ANDROID_CONTRACT_INVALID",
+        `${contract.error}${detail ? ` ${detail}` : ""}`,
+      ),
+    };
+  }
+
+  const sourceHash = hashSource(sourceFiles);
+  const existing = await listSnapshots(projectId, { limit: 50 });
+  if (!isSnapshotFailure(existing)) {
+    const reusable = existing.data.find(
+      (snapshot) => snapshot.status === "ready" && snapshot.sourceHash === sourceHash,
+    );
+    if (reusable) {
+      return { ok: true, snapshotId: reusable.id, sourceHash };
+    }
+  }
+
+  const created = await createSnapshot({
+    userId,
+    projectId,
+    kind: "manual",
+    description: "Android build input",
+    files: sourceFiles,
+  });
+  if (isSnapshotFailure(created)) {
+    return {
+      ok: false,
+      response: fail(500, "UNKNOWN", "Could not save the immutable Android build snapshot."),
+    };
+  }
+  return { ok: true, snapshotId: created.data.id, sourceHash: created.data.sourceHash };
+}
+
 async function androidBuildsResponse(
   userId: string,
   projectId: string,
@@ -946,12 +1087,24 @@ async function androidBuildsResponse(
   const unsupported = await requireAndroidProject(userId, projectId);
   if (unsupported) return unsupported;
 
-  /**
-   * There is no build table and no build executor. An empty history with an
-   * explicit capability is the truthful answer; a fabricated `queued` row would
-   * be a lie the UI would poll for ever.
-   */
-  return ok({ builds: [], capability: androidCapability(projectId) });
+  const config = androidBuildConfig();
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) return fail(503, "BACKEND_NOT_CONFIGURED", "Supabase is not configured.");
+  const schema = await androidBuildSchemaVersion(supabase);
+  if (schema === null) {
+    return fail(
+      503,
+      "MIGRATION_REQUIRED",
+      "Android builds need migration 26_android_builds.sql.",
+    );
+  }
+
+  const builds = await listAndroidBuilds(supabase, projectId, 20);
+  if (isAndroidBuildStoreFailure(builds)) return androidBuildFailureResponse(builds);
+  return ok({
+    builds: builds.data.map(androidBuildWire),
+    capability: androidCapability(projectId, config),
+  });
 }
 
 async function androidBuildStartResponse(
@@ -962,16 +1115,89 @@ async function androidBuildStartResponse(
   const unsupported = await requireAndroidProject(userId, projectId);
   if (unsupported) return unsupported;
 
-  const platform = stringOf(recordOf(body).platform)?.trim().toLowerCase() || "android";
+  const record = recordOf(body);
+  const platform = stringOf(record.platform)?.trim().toLowerCase() || "android";
   if (platform !== "android") {
     return fail(
       400,
       "PLATFORM_NOT_CONFIGURED",
-      "Only Android source generation is available; iOS builds are not configured.",
+      "Only Android debug builds are available; iOS builds are not configured.",
     );
   }
 
-  return fail(503, "ANDROID_BUILD_NOT_CONFIGURED", ANDROID_BUILD_REASON);
+  const config = androidBuildConfig();
+  if (!config.ready) {
+    return fail(
+      503,
+      "ANDROID_BUILD_NOT_CONFIGURED",
+      androidBuildProblemMessage(config.problems[0] ?? "disabled"),
+    );
+  }
+  if (!isProjectInAndroidBuildCohort(projectId, config)) {
+    return fail(
+      503,
+      "ANDROID_BUILD_NOT_CONFIGURED",
+      "This project is outside the Android build cohort.",
+    );
+  }
+  if (!generationWorkerConfig().ready) {
+    return fail(
+      503,
+      "ANDROID_BUILD_NOT_CONFIGURED",
+      "The durable generation worker is not enabled, so Android builds cannot be claimed.",
+    );
+  }
+  if (config.provider !== "vercel") {
+    return fail(503, "ANDROID_BUILD_NOT_CONFIGURED", "No supported Android build provider is configured.");
+  }
+
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) return fail(503, "BACKEND_NOT_CONFIGURED", "Supabase is not configured.");
+  const schema = await androidBuildSchemaVersion(supabase);
+  if (schema === null) {
+    return fail(503, "MIGRATION_REQUIRED", "Android builds need migration 26_android_builds.sql.");
+  }
+
+  const rawKey = stringOf(record.clientRequestId) ?? stringOf(record.idempotencyKey);
+  const idempotencyKey = rawKey?.trim().slice(0, 200) || null;
+
+  // Avoid creating a snapshot for a request the active-project rule will fold
+  // into an existing build. The RPC still enforces this atomically.
+  const active = await listAndroidBuilds(supabase, projectId, 5);
+  if (isAndroidBuildStoreFailure(active)) return androidBuildFailureResponse(active);
+  const existing = active.data.find(
+    (build) => build.status === "queued" || build.status === "running",
+  );
+  if (existing) {
+    return ok({
+      status: "existing",
+      build: androidBuildWire(existing),
+      capability: androidCapability(projectId, config),
+    });
+  }
+
+  const snapshot = await androidBuildSnapshot(userId, projectId);
+  if (snapshot.ok === false) return snapshot.response;
+
+  const created = await createAndroidBuild(supabase, {
+    projectId,
+    snapshotId: snapshot.snapshotId,
+    sourceHash: snapshot.sourceHash,
+    toolchain: config.toolchain || ANDROID_BUILD_TOOLCHAIN,
+    idempotencyKey,
+  });
+  if (isAndroidBuildStoreFailure(created)) return androidBuildFailureResponse(created);
+  if (created.data.status === "rate_limited") {
+    return fail(429, "RATE_LIMITED", "An Android build is already queued or running.", {
+      "retry-after": String(created.data.retryAfterSeconds),
+    });
+  }
+
+  return ok({
+    status: created.data.status,
+    build: androidBuildWire(created.data.build),
+    capability: androidCapability(projectId, config),
+  });
 }
 
 async function androidBuildArtifactResponse(
@@ -986,16 +1212,70 @@ async function androidBuildArtifactResponse(
   const buildId = rest[0];
   if (
     !buildId ||
+    !ANDROID_BUILD_ID_PATTERN.test(buildId) ||
     rest.length !== 2 ||
     (rest[1] !== "download" && rest[1] !== "log")
   ) {
     return fail(404, "NOT_FOUND", "Not found");
   }
-  return fail(
-    404,
-    "ANDROID_BUILD_NOT_FOUND",
-    "No Android build exists for this project, and no artifact or log is available.",
-  );
+
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) return fail(503, "BACKEND_NOT_CONFIGURED", "Supabase is not configured.");
+  const owned = await getAndroidBuildForOwner(supabase, projectId, buildId);
+  if (isAndroidBuildStoreFailure(owned)) return androidBuildFailureResponse(owned);
+  if (!owned.data) return fail(404, "ANDROID_BUILD_NOT_FOUND", "No such Android build exists for this project.");
+
+  const view = toAndroidBuildView(owned.data);
+  if (rest[1] === "log") {
+    return ok({ log: view.logExcerpt, truncated: view.logTruncated, hasLog: view.hasLog });
+  }
+
+  if (view.status !== "succeeded") {
+    return fail(409, "ANDROID_BUILD_NOT_READY", "This Android build has not produced a verified artifact.");
+  }
+  if (!view.artifact) {
+    if (view.artifactState === "expiring" || view.artifactState === "expired") {
+      return fail(410, "ANDROID_ARTIFACT_EXPIRED", "This Android artifact has expired.");
+    }
+    if (view.artifactState === "delete_failed" || view.artifactState === "failed") {
+      return fail(410, "ANDROID_ARTIFACT_UNAVAILABLE", "This Android artifact is no longer available.");
+    }
+    return fail(404, "ANDROID_ARTIFACT_NOT_FOUND", "No verified Android artifact exists.");
+  }
+
+  const service = createSupabaseWorkerClient();
+  if (!service) {
+    return fail(503, "ANDROID_ARTIFACT_NOT_CONFIGURED", "Private artifact storage is not configured.");
+  }
+  const full = await getAndroidBuildFull(service, projectId, buildId);
+  if (isAndroidBuildStoreFailure(full)) return androidBuildFailureResponse(full);
+  if (
+    !full.data ||
+    full.data.artifact_state !== "available" ||
+    !full.data.artifact_bucket ||
+    !full.data.artifact_path ||
+    !full.data.artifact_expires_at ||
+    Date.parse(full.data.artifact_expires_at) <= Date.now()
+  ) {
+    return fail(410, "ANDROID_ARTIFACT_UNAVAILABLE", "This Android artifact is no longer available.");
+  }
+
+  const store = createAndroidArtifactStore(service, full.data.artifact_bucket);
+  const signed = await store.sign(full.data.artifact_path, 300);
+  if (signed.ok === false) {
+    return fail(503, "ANDROID_ARTIFACT_UNAVAILABLE", "The private artifact could not be authorized.");
+  }
+
+  return ok({
+    url: signed.data.url,
+    urlExpiresAt: signed.data.expiresAt,
+    artifactType: "apk",
+    buildId,
+    fileName: view.artifact.fileName,
+    sizeBytes: view.artifact.sizeBytes,
+    sha256: view.artifact.sha256,
+    applicationId: view.artifact.applicationId,
+  });
 }
 
 async function androidBuildActionResponse(
@@ -1008,22 +1288,28 @@ async function androidBuildActionResponse(
 
   const rest = action.slice("mobile/builds/".length).split("/");
   const buildId = rest[0];
-  if (!buildId || rest.length !== 2) {
+  if (!buildId || !ANDROID_BUILD_ID_PATTERN.test(buildId) || rest.length !== 2) {
     return fail(404, "NOT_FOUND", "Not found");
   }
   if (rest[1] === "store-upload") {
     return fail(
       503,
       "ANDROID_BUILD_NOT_CONFIGURED",
-      "A store upload needs a signed Android build, and no build executor or release signing is configured.",
+      "A store upload needs a release-signed build, and release signing/publishing is not configured.",
     );
   }
   if (rest[1] === "cancel") {
-    return fail(
-      404,
-      "ANDROID_BUILD_NOT_FOUND",
-      "No Android build exists for this project, so there is nothing to cancel.",
-    );
+    const supabase = await createSupabaseServerClient();
+    if (!supabase) return fail(503, "BACKEND_NOT_CONFIGURED", "Supabase is not configured.");
+    const cancelled = await cancelAndroidBuild(supabase, projectId, buildId);
+    if (isAndroidBuildStoreFailure(cancelled)) return androidBuildFailureResponse(cancelled);
+    if (cancelled.data.status === "not_found") {
+      return fail(404, "ANDROID_BUILD_NOT_FOUND", "No such Android build exists for this project.");
+    }
+    return ok({
+      status: cancelled.data.status,
+      build: cancelled.data.build ? androidBuildWire(cancelled.data.build) : null,
+    });
   }
   return fail(404, "NOT_FOUND", "Not found");
 }

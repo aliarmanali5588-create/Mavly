@@ -381,7 +381,7 @@ export const VERIFICATION_ALLOWED_HOSTS: readonly string[] = [
 ];
 
 export interface VerificationNetworkPolicy {
-  mode: "allowlist";
+  mode: "deny-all" | "allowlist";
   allowedHosts: readonly string[];
 }
 

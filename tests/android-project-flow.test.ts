@@ -16,13 +16,17 @@ const apiRoute = read("src/app/api/vcaas/[...path]/route.ts");
 const typeMigration = read("supabase/migrations/22_project_type.sql");
 const idempotencyMigration = read("supabase/migrations/25_project_creation_idempotency.sql");
 
-test("Android Build creates a persisted Android project and starts native generation", () => {
-  const start = dashboard.indexOf('if (promptMode === "android") {');
+test("Android prompt submissions create a persisted Android project and start native generation without a naming modal", () => {
+  const start = dashboard.indexOf('if (promptMode === "android") {', dashboard.indexOf("const submitBuild"));
   const end = dashboard.indexOf("ONE CALL: CREATE THE PROJECT AND START BUILDING", start);
   assert.notEqual(start, -1);
   assert.notEqual(end, -1);
   const androidCreate = dashboard.slice(start, end);
 
+  assert.match(dashboard, /const submitBuild = async \(\) =>/);
+  assert.doesNotMatch(dashboard, /nameModalOpen|openBuildModal|Name your project/);
+  assert.match(dashboard, /shouldSubmitPrompt\(e\.key, e\.shiftKey\)[\s\S]*?void submitBuild\(\)/);
+  assert.match(dashboard, /onClick=\{\(\) => void submitBuild\(\)\}/);
   assert.match(androidCreate, /vcaasApi\.projects\.create\(/);
   assert.match(androidCreate, /projectType:\s*"android"/);
   assert.match(androidCreate, /clientRequestId:\s*requestId/);
@@ -34,6 +38,21 @@ test("Website Build continues through the existing launch and generation flow", 
   assert.match(dashboard, /vcaasApi\.projects\.launch\(/);
   assert.match(dashboard, /projectType:\s*promptMode/);
   assert.match(api, /runAgent\(\{/);
+  assert.match(dashboard, /router\.push\(`\/project\/\$\{created\}`\)/);
+  assert.match(dashboard, /setItem\(`vibebuild:pendingPrompt:\$\{created\}`, prompt\)/);
+});
+
+test("prompt naming uses the validated slug utility and a safe deterministic fallback", () => {
+  assert.match(dashboard, /suggestProjectSlug\(prompt, "my-app"\)/);
+  assert.match(dashboard, /validateProjectSlug\(proposedId\) === null \? proposedId : "my-app"/);
+  assert.match(dashboard, /PROJECT_SLUG_MAX_LENGTH/);
+});
+
+test("failed creation keeps the prompt, shows an actionable error, and blocks duplicate submissions", () => {
+  assert.match(dashboard, /if \(buildCreatingRef\.current\) return/);
+  assert.match(dashboard, /disabled=\{!firstPrompt\.trim\(\) \|\| buildCreating\}/);
+  assert.match(dashboard, /role="alert"[\s\S]*?Your prompt is still here; you can correct it and retry/);
+  assert.match(dashboard, /finally \{[\s\S]*?buildCreatingRef\.current = false;\s*setBuildCreating\(false\);/);
 });
 
 test("Android project types persist and legacy rows default to website", () => {
@@ -68,16 +87,23 @@ test("dashboard cards identify Android projects and avoid website previews for t
   assert.match(dashboard, /<ProjectPreview project=\{p\} variant="row" \/>/);
 });
 
-test("Android workspace generates source, polls status, and withholds fake builds/artifacts", () => {
+test("Android workspace generates source, edits files and drives real build controls", () => {
   assert.match(androidWorkspace, /vcaasApi\.files\.tree/);
   assert.match(androidWorkspace, /vcaasApi\.files\.content/);
   assert.match(androidWorkspace, /vcaasApi\.files\.write/);
   assert.match(androidWorkspace, /vcaasApi\.agent\.start\(/);
   assert.match(androidWorkspace, /vcaasApi\.agent\.status\(/);
-  assert.match(androidWorkspace, /Kotlin\/Compose source only — no APK\/AAB build/);
-  assert.match(androidWorkspace, /no APK or AAB is built, signed or installed/);
-  assert.match(androidWorkspace, /No Android source files are saved yet/);
-  assert.doesNotMatch(androidWorkspace, /PreviewPanel|APK download|AAB download/);
+  assert.match(androidWorkspace, /mavly:android-generation:\$\{project\.projectId\}/);
+  assert.match(androidWorkspace, /setGenerationError\(parsed\.error\)/);
+  assert.match(androidWorkspace, /vcaasApi\.v2\.mobileBuilds/);
+  assert.match(androidWorkspace, /vcaasApi\.v2\.startMobileBuild/);
+  assert.match(androidWorkspace, /vcaasApi\.v2\.cancelMobileBuild/);
+  assert.match(androidWorkspace, /vcaasApi\.v2\.mobileBuildDownload/);
+  assert.match(androidWorkspace, /vcaasApi\.v2\.mobileBuildLog/);
+  assert.match(androidWorkspace, /Debug APK/);
+  assert.match(androidWorkspace, /Native preview unavailable/);
+  assert.match(androidWorkspace, /Emulator unavailable/);
+  assert.doesNotMatch(androidWorkspace, /PreviewPanel|fake APK|placeholder APK/);
 });
 
 test("Android projects use the native generation profile instead of the website profile", () => {

@@ -1202,16 +1202,43 @@ export interface MobileBuild {
   id: string;
   platform: "android" | "ios";
   status: "queued" | "running" | "success" | "failed" | "cancelled";
+  /** The exact durable Android status, including timed_out/configuration/infrastructure. */
+  state?:
+    | "queued"
+    | "running"
+    | "succeeded"
+    | "failed"
+    | "cancelled"
+    | "timed_out"
+    | "configuration_error"
+    | "infrastructure_error";
+  stage?: string;
+  attempt?: number;
+  maxAttempts?: number;
+  toolchain?: string;
+  variant?: "debug";
+  createdAt?: string;
   /** A7.10b: waiting for a Codemagic slot (one build at a time for everyone): its place in the queue. */
   queuePosition?: number;
   startedAt?: string | null;
   finishedAt?: string | null;
-  artifact?: { type: string; sizeBytes: number; expiresAt: string } | null;
+  cancelRequestedAt?: string | null;
+  artifactState?: "none" | "available" | "expiring" | "expired" | "delete_failed" | "failed";
+  artifact?: {
+    type: string;
+    sizeBytes: number;
+    expiresAt: string;
+    fileName?: string;
+    sha256?: string;
+    applicationId?: string;
+  } | null;
   signed?: boolean;
   /** `publish`: started by "send to stores on publish" (A7.10 amendment 2026-09-28). */
   trigger?: "user" | "publish";
   /** A failed build keeps its log's last lines; the full log is behind `mobileBuildLog`. */
   error?: { code: string; message: string; logExcerpt?: string };
+  logExcerpt?: string | null;
+  logTruncated?: boolean;
   hasLog?: boolean;
 }
 

@@ -38,6 +38,11 @@ import { createSupabaseWorkerClient } from "@/lib/supabase/worker";
 import { emitGenerationEvent, emitVerificationEvent } from "@/lib/observability/events";
 import { runVerificationTick } from "@/lib/sandbox/verification";
 import {
+  runAndroidBuildTick,
+  type AndroidBuildTickSummary,
+} from "@/lib/android/build-worker";
+import { androidBuildConfig } from "@/lib/android/build-config";
+import {
   LEASE_RENEW_INTERVAL_MS,
   WORKER_LEASE_SECONDS,
 } from "./leases";
@@ -72,6 +77,8 @@ export interface WorkerTickResult {
   recovered?: number;
   /** Present only when this tick advanced the verification queue instead. */
   verification?: WorkerVerificationSummary;
+  /** Present only when this tick advanced the Android build queue instead. */
+  androidBuild?: AndroidBuildTickSummary;
 }
 
 export interface WorkerVerificationSummary {
@@ -153,10 +160,22 @@ export async function runGenerationWorkerOnce(
      * a busy generation queue delays verification, it never preempts it.
      */
     const verification = await runVerificationSafely(client, config.workerId);
+    /**
+     * Only one durable side queue is advanced per tick. Generation claims stay
+     * first; verification and Android builds share the otherwise-empty tick.
+     */
+    const verificationAdvanced =
+      verification !== null &&
+      verification.status !== "empty" &&
+      verification.status !== "unavailable";
+    const androidBuild = verificationAdvanced
+      ? null
+      : await runAndroidBuildSafely(client, config.workerId);
     return {
       status: "empty",
       recovered,
       ...(verification ? { verification } : {}),
+      ...(androidBuild ? { androidBuild } : {}),
     };
   }
   if (parsed.status === "dead_letter") {
@@ -279,6 +298,35 @@ async function runVerificationSafely(
     };
   } catch {
     emitVerificationEvent("verification.error", { workerId, reason: "unhandled_tick" });
+    return { status: "error", reason: "unhandled" };
+  }
+}
+
+/**
+ * Advance at most one Android build. A build failure never changes the
+ * generation tick's status; a disabled/not-ready build config stays quiet.
+ *
+ * The tick is always invoked (when the worker runs) because its DB-only
+ * recovery and artifact-retention sweep must still settle builds left
+ * `running` after an operator disables the engine. The adapter is only created
+ * when the config is ready, so a disabled deployment performs no provider call.
+ */
+async function runAndroidBuildSafely(
+  client: SupabaseClient,
+  workerId: string,
+): Promise<AndroidBuildTickSummary | null> {
+  try {
+    const config = androidBuildConfig();
+    const tick = await runAndroidBuildTick({ client, workerId, config });
+    if (tick.status === "unavailable" && tick.reason === "disabled") {
+      return (tick.recovered ?? 0) > 0 || (tick.cleaned ?? 0) > 0 ? tick : null;
+    }
+    return tick;
+  } catch {
+    emitGenerationEvent("generation.worker_error", {
+      workerId,
+      reason: "android_build_tick_failed",
+    });
     return { status: "error", reason: "unhandled" };
   }
 }

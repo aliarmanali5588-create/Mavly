@@ -11,9 +11,10 @@
  *   · no cleartext traffic, dangerous permissions, dynamic versions, custom
  *     build-script process execution or non-allowlisted Maven repositories.
  *
- * ⚠️ THIS IS NOT A BUILD. These checks make the source *eligible* for an
- * isolated build; they do not prove it compiles. No Android build executor is
- * configured in this deployment, so `passed` build states cannot be produced.
+ * ⚠️ THIS IS NOT A BUILD. These checks make the source *eligible* for the
+ * optional, off-by-default isolated debug build; they do not prove it compiles.
+ * When builds are disabled or fail, no APK is produced and no `passed` build
+ * state exists.
  *
  * The module is pure: it reads no environment and imports no provider client.
  */
@@ -129,6 +130,7 @@ const FORBIDDEN_DIRECTORIES = new Set([
   "build",
   ".next",
   ".vercel",
+  ".mavly",
 ]);
 
 const PACKAGE_PATTERN = /^[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z][A-Za-z0-9_]*)+$/;

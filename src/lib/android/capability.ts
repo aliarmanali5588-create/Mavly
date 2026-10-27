@@ -2,9 +2,11 @@
  * ═══ ANDROID CAPABILITY ═════════════════════════════════════════════════════
  *
  * What this deployment can and cannot do with an Android project. It is a
- * static, truthful answer, not a feature flag: there is no build queue, no
- * pinned Android toolchain image and no artifact bucket in this build, so an
- * APK/AAB cannot be produced or downloaded.
+ * truthful answer, not a feature flag: isolated debug builds are OFF until the
+ * operator enables the cohort, supplies a digest-pinned Vercel Container
+ * Registry image, applies migration 26 and configures a private artifact
+ * bucket. When any prerequisite is missing, no APK can be produced or downloaded
+ * and the exact blocker is reported.
  *
  * Native Kotlin/Compose SOURCE generation is available through the existing
  * Groq pipeline. A saved source tree is not a build, an installable app, a
@@ -12,8 +14,16 @@
  */
 
 import { androidMainActivityPath, androidPackageForProject } from "./contract";
+import { generationWorkerConfig } from "@/lib/generation/worker-config";
 
-export type AndroidBuildStatus = "not_configured";
+import {
+  androidBuildConfig,
+  androidBuildProblemMessage,
+  isProjectInAndroidBuildCohort,
+  type AndroidBuildConfig,
+} from "./build-config";
+
+export type AndroidBuildCapabilityStatus = "available" | "not_configured";
 
 export interface AndroidCapability {
   sourceGeneration: {
@@ -32,17 +42,17 @@ export interface AndroidCapability {
     toolchain: "Kotlin 2.0.21 / Jetpack Compose / Gradle 8.9 / JDK 17";
   };
   build: {
-    available: false;
-    status: AndroidBuildStatus;
+    available: boolean;
+    status: AndroidBuildCapabilityStatus;
     reason: string;
     requirements: readonly string[];
   };
   artifact: {
-    available: false;
+    available: boolean;
     reason: string;
   };
   limits: {
-    debugApk: false;
+    debugApk: boolean;
     releaseApk: false;
     aab: false;
     releaseSigning: false;
@@ -51,11 +61,33 @@ export interface AndroidCapability {
   };
 }
 
-export const ANDROID_BUILD_REASON =
-  "No isolated Android build executor is configured: this deployment has no pinned Android toolchain image and no artifact storage. Source can be generated and downloaded, but no APK/AAB is built or served.";
+export const ANDROID_BUILD_REQUIREMENTS: readonly string[] = [
+  "An operator-pinned Vercel Container Registry image digest containing JDK 17, Gradle 8.9, Android SDK 35 and aapt.",
+  "Migration 26_android_builds.sql.",
+  "A private artifact bucket with short-lived, owner-authorized downloads and retention cleanup.",
+  "The generation worker enabled and scheduled; only its cohort projects may build.",
+];
 
-export function androidCapability(projectId?: string): AndroidCapability {
+export function androidCapability(
+  projectId?: string,
+  config: AndroidBuildConfig = androidBuildConfig(),
+): AndroidCapability {
   const applicationId = projectId ? androidPackageForProject(projectId) : null;
+  const workerReady = generationWorkerConfig().ready;
+  const buildAvailable = Boolean(
+    projectId &&
+      config.ready &&
+      workerReady &&
+      isProjectInAndroidBuildCohort(projectId, config),
+  );
+  const notConfiguredReason = !config.ready
+    ? androidBuildProblemMessage(config.problems[0] ?? "disabled")
+    : !workerReady
+      ? "The durable generation worker is not enabled, so Android builds cannot be claimed."
+      : projectId
+        ? "This project is outside the Android build cohort."
+        : "Android builds are cohort-scoped.";
+
   return {
     sourceGeneration: {
       available: true,
@@ -72,21 +104,21 @@ export function androidCapability(projectId?: string): AndroidCapability {
       toolchain: "Kotlin 2.0.21 / Jetpack Compose / Gradle 8.9 / JDK 17",
     },
     build: {
-      available: false,
-      status: "not_configured",
-      reason: ANDROID_BUILD_REASON,
-      requirements: [
-        "An operator-pinned Vercel Sandbox image digest containing JDK 17, Gradle 8.9 and Android SDK 35.",
-        "A durable, fenced Android build queue advanced by the existing generation worker.",
-        "A private artifact bucket with short-lived, owner-authorized downloads and retention cleanup.",
-      ],
+      available: buildAvailable,
+      status: buildAvailable ? "available" : "not_configured",
+      reason: buildAvailable
+        ? "Isolated Android debug builds are enabled for this project."
+        : notConfiguredReason,
+      requirements: buildAvailable ? [] : ANDROID_BUILD_REQUIREMENTS,
     },
     artifact: {
-      available: false,
-      reason: "No build runs, so no APK/AAB artifact exists to store, sign or serve.",
+      available: buildAvailable,
+      reason: buildAvailable
+        ? "A verified debug APK can be stored privately and downloaded through a short-lived signed URL."
+        : "No build can run until the Android build image, migration and private bucket are configured.",
     },
     limits: {
-      debugApk: false,
+      debugApk: buildAvailable,
       releaseApk: false,
       aab: false,
       releaseSigning: false,

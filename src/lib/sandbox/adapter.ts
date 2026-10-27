@@ -68,6 +68,10 @@ export interface SandboxCreateOptions {
   /** Non-secret environment only. */
   env: Record<string, string>;
   network: VerificationNetworkPolicy;
+  /** Tags and name the sandbox; never affects project isolation. */
+  purpose?: "verification" | "android-build";
+  /** 2048 MB of provider memory is allocated per vCPU. */
+  vcpus?: number;
 }
 
 export interface UploadFile {
@@ -95,6 +99,12 @@ export interface SandboxAdapter {
     cmd: string,
     args: readonly string[],
   ): Promise<SandboxResult<SandboxExecution>>;
+  /** Read a bounded file (artifact/log). A missing file is `null`, not an error. */
+  readFile(
+    session: SandboxSession,
+    path: string,
+    maxBytes: number,
+  ): Promise<SandboxResult<Buffer | null>>;
   /** Delete the sandbox. `absent` is a confirmed cleanup. */
   destroy(session: SandboxSession): Promise<SandboxResult<"deleted" | "absent">>;
 }

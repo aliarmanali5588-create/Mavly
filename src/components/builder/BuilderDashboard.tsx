@@ -19,6 +19,7 @@ import { GithubPromptButton } from "@/components/prompt/GithubPromptButton";
 import { AuthNav } from "@/components/auth/AuthNav";
 import { AnimatedPlaceholder } from "@/components/builder/AnimatedPlaceholder";
 import { shouldAnimatePlaceholder, shouldSubmitPrompt } from "@/lib/animated-placeholder";
+import { PROJECT_SLUG_MAX_LENGTH, suggestProjectSlug, validateProjectSlug } from "@/lib/project-slug";
 import { AttachmentPreviews } from "@/components/workspace/AttachmentPreview";
 import { filesFromClipboard } from "@/lib/attachments";
 import { t } from "@/i18n";
@@ -332,11 +333,8 @@ export default function DashboardPage({ profile }: { profile: ProfileSummary }) 
   /**
    * ═══⭐ "NEW PROJECT" FOCUSES THE BOX — IT DOES NOT OPEN A FORM ═══════════════
    *
-   * The hero composer IS the create form: what you type there becomes the project's
-   * first prompt, and the name is asked for on submit. A second "Create project" dialog
-   * with an id and a description field made an empty project that then sat there with
-   * nothing happening inside it. So the button does what the platform's "New project"
-   * tile does: puts the caret in the textarea and scrolls it into view.
+   * The hero composer is the create form: the prompt supplies both the first task
+   * and a validated project slug, so there is no separate naming step.
    */
   const focusComposer = useCallback(() => {
     const el = heroTextareaRef.current;
@@ -396,9 +394,7 @@ export default function DashboardPage({ profile }: { profile: ProfileSummary }) 
     });
   }, []);
 
-  // Name modal (opened after clicking Build)
-  const [nameModalOpen, setNameModalOpen] = useState(false);
-  const [buildName, setBuildName] = useState("");
+  // First-prompt project creation
   const [buildError, setBuildError] = useState<string | null>(null);
   const [buildCreating, setBuildCreating] = useState(false);
   const buildCreatingRef = useRef(false);
@@ -522,7 +518,7 @@ export default function DashboardPage({ profile }: { profile: ProfileSummary }) 
 
   // --- Create helpers ---
   const normalizeId = (raw: string) =>
-    raw.trim().toLowerCase().replace(/[^a-z0-9\s-]/g, "").replace(/\s+/g, "-").replace(/-+/g, "-").replace(/^-+|-+$/g, "").replace(/^[^a-z]/, "a").slice(0, 35);
+    raw.trim().toLowerCase().replace(/[^a-z0-9\s-]/g, "").replace(/\s+/g, "-").replace(/-+/g, "-").replace(/^-+|-+$/g, "").replace(/^[^a-z]/, "a").slice(0, PROJECT_SLUG_MAX_LENGTH);
 
   const suggestName = (prompt: string) => {
     const words = prompt.trim().toLowerCase().replace(/[^a-z0-9\s]/g, "").split(/\s+/).filter(Boolean).slice(0, 4).join("-");
@@ -586,119 +582,120 @@ export default function DashboardPage({ profile }: { profile: ProfileSummary }) 
     }
   }, []);
 
-  // Step 1 of the Build flow: open the name modal so the user picks a project name.
-  const openBuildModal = () => {
-    if (!firstPrompt.trim() && attachedFiles.length === 0) return;
-    setBuildName(suggestName(firstPrompt));
-    setBuildError(null);
-    setNameModalOpen(true);
-  };
-
-  // Step 2: create the project with the chosen name, then carry the prompt over
-  // to the workspace where it is auto-submitted to the chat.
-  const confirmBuild = async () => {
+  const submitBuild = async () => {
     if (buildCreatingRef.current) return;
-    const id = normalizeId(buildName);
-    if (id.length < 3) { setBuildError("Project name must be at least 3 characters (lowercase, hyphens allowed)."); return; }
+    const prompt = firstPrompt.trim();
+    if (!prompt) {
+      setBuildError("Describe what you want to build before submitting.");
+      return;
+    }
+
+    const proposedId = suggestProjectSlug(prompt, "my-app");
+    const id = validateProjectSlug(proposedId) === null ? proposedId : "my-app";
     buildCreatingRef.current = true;
     setBuildCreating(true);
     setBuildError(null);
+    let navigating = false;
 
-    if (promptMode === "android") {
-      const prompt = firstPrompt.trim();
-      if (!prompt) {
-        setBuildError("Describe the Android app you want to generate.");
-        buildCreatingRef.current = false;
-        setBuildCreating(false);
-        return;
-      }
-      const description = prompt.slice(0, 2_000);
-      const fingerprint = `${id}\n${description}`;
-      let requestId =
-        androidCreateRequestRef.current?.fingerprint === fingerprint
-          ? androidCreateRequestRef.current.requestId
-          : null;
+    try {
+      if (promptMode === "android") {
+        const description = prompt.slice(0, 2_000);
+        const fingerprint = `${id}\n${description}`;
+        let requestId =
+          androidCreateRequestRef.current?.fingerprint === fingerprint
+            ? androidCreateRequestRef.current.requestId
+            : null;
 
-      if (!requestId) {
-        try {
-          const stored = window.sessionStorage.getItem("mavly:android-project-create");
-          if (stored) {
-            const parsed: unknown = JSON.parse(stored);
-            if (
-              typeof parsed === "object" &&
-              parsed !== null &&
-              "fingerprint" in parsed &&
-              "requestId" in parsed &&
-              parsed.fingerprint === fingerprint &&
-              typeof parsed.requestId === "string" &&
-              /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(parsed.requestId)
-            ) {
-              requestId = parsed.requestId;
+        if (!requestId) {
+          try {
+            const stored = window.sessionStorage.getItem("mavly:android-project-create");
+            if (stored) {
+              const parsed: unknown = JSON.parse(stored);
+              if (
+                typeof parsed === "object" &&
+                parsed !== null &&
+                "fingerprint" in parsed &&
+                "requestId" in parsed &&
+                parsed.fingerprint === fingerprint &&
+                typeof parsed.requestId === "string" &&
+                /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(parsed.requestId)
+              ) {
+                requestId = parsed.requestId;
+              }
             }
+          } catch {
+            // Session storage is optional; the in-memory lock still prevents double clicks.
           }
-        } catch {
-          // Session storage is optional; the in-memory lock still prevents double clicks.
         }
-      }
 
-      requestId ??= crypto.randomUUID();
-      androidCreateRequestRef.current = { fingerprint, requestId };
-      try {
-        window.sessionStorage.setItem(
-          "mavly:android-project-create",
-          JSON.stringify({ fingerprint, requestId }),
-        );
-      } catch {
-        // The server-side request id remains valid even when session storage is unavailable.
-      }
+        requestId ??= crypto.randomUUID();
+        androidCreateRequestRef.current = { fingerprint, requestId };
+        try {
+          window.sessionStorage.setItem(
+            "mavly:android-project-create",
+            JSON.stringify({ fingerprint, requestId }),
+          );
+        } catch {
+          // The server-side request id remains valid even when session storage is unavailable.
+        }
 
-      let created: Awaited<ReturnType<typeof vcaasApi.projects.create>>;
-      try {
-        created = await vcaasApi.projects.create({
-          projectId: id,
-          description,
-          projectType: "android",
-          clientRequestId: requestId,
-          engineVersion: "v2",
-        });
-      } catch (error) {
-        setBuildError(error instanceof Error ? error.message : "Could not create the Android project.");
-        buildCreatingRef.current = false;
-        setBuildCreating(false);
+        let created: Awaited<ReturnType<typeof vcaasApi.projects.create>>;
+        try {
+          created = await vcaasApi.projects.create({
+            projectId: id,
+            description,
+            projectType: "android",
+            clientRequestId: requestId,
+            engineVersion: "v2",
+          });
+        } catch (error) {
+          setBuildError(error instanceof Error ? error.message : "Could not create the Android project.");
+          return;
+        }
+
+        if (!created.ok || !created.data) {
+          setBuildError(created.error || `Could not create "${id}".`);
+          return;
+        }
+
+        const projectId = created.data.projectId;
+        let generationError: string | null = null;
+        try {
+          const started = await vcaasApi.agent.start(projectId, {
+            prompt,
+            inputFiles: [],
+          });
+          if (!started.ok) generationError = started.error || "Could not start Android source generation.";
+        } catch (error) {
+          generationError = error instanceof Error ? error.message : "Could not start Android source generation.";
+        }
+
+        if (generationError) {
+          try {
+            window.sessionStorage.setItem(
+              `mavly:android-generation:${projectId}`,
+              JSON.stringify({ prompt, error: generationError }),
+            );
+          } catch {
+            toast.error(generationError, { description: "The project was saved. You can retry generation in its Android workspace." });
+          }
+        } else {
+          try {
+            window.sessionStorage.removeItem("mavly:android-project-create");
+          } catch {
+            // The next request fingerprint prevents this key from being reused for another project.
+          }
+          androidCreateRequestRef.current = null;
+        }
+
+        if (attachedFiles.length > 0) {
+          toast.warning("Local attachments were not transferred to the Android project.");
+        }
+        clearDraftPrompt();
+        router.push(`/project/${encodeURIComponent(projectId)}`);
+        navigating = true;
         return;
       }
-
-      if (!created.ok || !created.data) {
-        setBuildError(created.error || `Could not create "${id}".`);
-        buildCreatingRef.current = false;
-        setBuildCreating(false);
-        return;
-      }
-
-      const started = await vcaasApi.agent.start(created.data.projectId, {
-        prompt,
-        inputFiles: [],
-      });
-      if (!started.ok) {
-        setBuildError(started.error || "The Android project was saved, but source generation could not be started.");
-        buildCreatingRef.current = false;
-        setBuildCreating(false);
-        return;
-      }
-
-      try {
-        window.sessionStorage.removeItem("mavly:android-project-create");
-      } catch {
-        // The next request fingerprint prevents this key from being reused for another project.
-      }
-      androidCreateRequestRef.current = null;
-      if (attachedFiles.length > 0) {
-        toast.warning("The Android project was saved and source generation started. Local attachments were not transferred.");
-      }
-      clearDraftPrompt();
-      router.push(`/project/${encodeURIComponent(created.data.projectId)}`);
-      return;
-    }
 
     /**
      * ═══⭐⭐⭐ ONE CALL: CREATE THE PROJECT AND START BUILDING ═════════════════
@@ -726,8 +723,8 @@ export default function DashboardPage({ profile }: { profile: ProfileSummary }) 
       const launched = await vcaasApi.projects.launch({
         engineVersion: "v2", // always the v2 workspace engine
         projectId: id,
-        prompt: firstPrompt.trim(),
-        description: firstPrompt.trim().slice(0, 200),
+        prompt,
+        description: prompt.slice(0, 200),
         projectType: promptMode,
         ...(figmaToken ? { figma: { token: figmaToken } } : {}),
       });
@@ -736,8 +733,6 @@ export default function DashboardPage({ profile }: { profile: ProfileSummary }) 
 
       if (!launched.ok || !launched.data) {
         setBuildError(launched.error || `Could not create "${id}". Please try a different name.`);
-        buildCreatingRef.current = false;
-        setBuildCreating(false);
         return;
       }
 
@@ -757,7 +752,7 @@ export default function DashboardPage({ profile }: { profile: ProfileSummary }) 
           if (w?.step !== "figma" && message) toast.warning(message);
         });
         try {
-          sessionStorage.setItem(`vibebuild:pendingPrompt:${created}`, firstPrompt.trim());
+          sessionStorage.setItem(`vibebuild:pendingPrompt:${created}`, prompt);
         } catch { /* ignore */ }
       }
       if (launched.data.warnings?.some(w => w?.step === "figma")) {
@@ -765,19 +760,18 @@ export default function DashboardPage({ profile }: { profile: ProfileSummary }) 
       }
       clearDraftPrompt();
       router.push(`/project/${created}`);
+      navigating = true;
       return;
     }
 
     const res = await vcaasApi.projects.create({
       projectId: id,
-      description: firstPrompt.trim().slice(0, 200),
+      description: prompt.slice(0, 200),
       projectType: promptMode,
       engineVersion: "v2",
     });
-    if (!res.ok) {
+    if (!res.ok || !res.data) {
       setBuildError(res.error || `Could not create "${id}".`);
-      buildCreatingRef.current = false;
-      setBuildCreating(false);
       return;
     }
     /**
@@ -815,16 +809,25 @@ export default function DashboardPage({ profile }: { profile: ProfileSummary }) 
     }
     // Stash the first prompt (and uploaded files, with real URLs) so the workspace auto-submits it.
     try {
-      sessionStorage.setItem(`vibebuild:pendingPrompt:${id2}`, firstPrompt.trim());
+      sessionStorage.setItem(`vibebuild:pendingPrompt:${id2}`, prompt);
       if (uploadedFiles.length > 0) sessionStorage.setItem(`vibebuild:pendingFiles:${id2}`, JSON.stringify(uploadedFiles));
     } catch { /* ignore */ }
     clearDraftPrompt();
     router.push(`/project/${id2}`);
+    navigating = true;
+    } catch (error) {
+      setBuildError(error instanceof Error ? error.message : "Could not create the project. Please try again.");
+    } finally {
+      if (!navigating) {
+        buildCreatingRef.current = false;
+        setBuildCreating(false);
+      }
+    }
   };
 
   // Keep the raw File objects around — we can't upload here because the project
   // doesn't exist yet, and blob URLs die on navigation. The real upload happens in
-  // confirmBuild once the project is created (see uploadFilesToProject).
+  // submitBuild once the project is created (see uploadFilesToProject).
   /**
    * ⭐ THE SIZE IS CHECKED AT ATTACH TIME, NOT AT BUILD TIME. Nothing is uploaded from
    * this screen — the project does not exist yet — so an oversized file would otherwise
@@ -925,7 +928,7 @@ export default function DashboardPage({ profile }: { profile: ProfileSummary }) 
               </h1>
               {promptMode === "android" ? (
                 <p className="text-gray-500 max-w-md mx-auto mt-2 text-sm">
-                  Mavly generates native Kotlin and Jetpack Compose source. Emulator previews, APK/AAB builds and store publishing are not configured. Local attachments are not transferred.
+                  Mavly generates native Kotlin and Jetpack Compose source. Debug APK builds are available only where an operator enables them for this project; emulator previews, release signing, AAB and store publishing are not configured. Local attachments are not transferred.
                 </p>
               ) : (
                 !hasProjects && <p className="text-gray-500 max-w-md mx-auto mt-2 text-sm">Describe your app and AI will build it in minutes.</p>
@@ -937,6 +940,7 @@ export default function DashboardPage({ profile }: { profile: ProfileSummary }) 
                   type="button"
                   aria-pressed={promptMode === "website"}
                   onClick={() => setPromptMode("website")}
+                  disabled={buildCreating}
                   className={`inline-flex h-10 min-w-[100px] items-center justify-center gap-1.5 rounded-lg border px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:min-w-[116px] ${
                     promptMode === "website"
                       ? "border-black/[0.06] bg-white text-gray-900 shadow-sm"
@@ -950,6 +954,7 @@ export default function DashboardPage({ profile }: { profile: ProfileSummary }) 
                   type="button"
                   aria-pressed={promptMode === "android"}
                   onClick={() => setPromptMode("android")}
+                  disabled={buildCreating}
                   className={`inline-flex h-10 min-w-[100px] items-center justify-center gap-1.5 rounded-lg border px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:min-w-[116px] ${
                     promptMode === "android"
                       ? "border-black/[0.06] bg-white text-gray-900 shadow-sm"
@@ -966,7 +971,11 @@ export default function DashboardPage({ profile }: { profile: ProfileSummary }) 
                 <textarea
                   ref={heroTextareaRef}
                   value={firstPrompt}
-                  onChange={(e) => setFirstPrompt(e.target.value)}
+                  onChange={(e) => {
+                    setFirstPrompt(e.target.value);
+                    if (buildError) setBuildError(null);
+                  }}
+                  disabled={buildCreating}
                   onFocus={() => setHeroFocused(true)}
                   onBlur={() => setHeroFocused(false)}
                   placeholder={
@@ -979,7 +988,7 @@ export default function DashboardPage({ profile }: { profile: ProfileSummary }) 
                     // Enter submits, Shift+Enter is a newline (the box is a textarea).
                     if (shouldSubmitPrompt(e.key, e.shiftKey)) {
                       e.preventDefault();
-                      openBuildModal();
+                      void submitBuild();
                     }
                   }}
                   onPaste={handleHeroPaste}
@@ -1023,14 +1032,21 @@ export default function DashboardPage({ profile }: { profile: ProfileSummary }) 
                   <GithubPromptButton onOpenModal={openGithubImport} />
                 </div>
                 <button
-                  onClick={openBuildModal}
-                  disabled={!firstPrompt.trim() && attachedFiles.length === 0}
+                  onClick={() => void submitBuild()}
+                  disabled={!firstPrompt.trim() || buildCreating}
                   className="mavly-btn-primary px-4 h-8 text-xs font-semibold disabled:opacity-40 disabled:pointer-events-none"
                 >
-                  <Send className="w-3.5 h-3.5" /><span>Build</span>
+                  {buildCreating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+                  <span>{buildCreating ? "Creating..." : "Build"}</span>
                 </button>
               </div>
             </div>
+            {buildError && (
+              <div role="alert" className="mt-3 flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+                <span>{buildError} Your prompt is still here; you can correct it and retry.</span>
+              </div>
+            )}
           </div>
         </div>
 
@@ -1313,41 +1329,6 @@ export default function DashboardPage({ profile }: { profile: ProfileSummary }) 
         )}
       </div>
 
-      {/* Name modal for the Build flow */}
-      <Dialog open={nameModalOpen} onOpenChange={(o) => { if (!buildCreating) setNameModalOpen(o); }}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>Name your project</DialogTitle></DialogHeader>
-          <div className="space-y-4 mt-4">
-            <p className="text-sm text-gray-500">
-              {promptMode === "android"
-                ? "Choose a name for your Android project. Mavly will generate Kotlin/Compose source; APK/AAB builds are not configured."
-                : "Choose a unique name for your project. It will be used in the URL."}
-            </p>
-            <div>
-              <Label>Project name</Label>
-              <Input
-                autoFocus
-                placeholder="my-awesome-app"
-                value={buildName}
-                onChange={(e) => { setBuildName(e.target.value); if (buildError) setBuildError(null); }}
-                onKeyDown={(e) => { if (e.key === "Enter" && !buildCreating) confirmBuild(); }}
-                className="mt-1.5"
-              />
-              <p className="text-xs text-gray-400 mt-1">3-35 chars, lowercase, hyphens allowed. Final id: <span className="font-mono text-gray-500">{normalizeId(buildName) || "…"}</span></p>
-            </div>
-            {buildError && (
-              <div className="flex items-start gap-2 text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg p-2.5">
-                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-                <span>{buildError}</span>
-              </div>
-            )}
-            <Button className="w-full" onClick={confirmBuild} disabled={buildCreating || normalizeId(buildName).length < 3}>
-              {buildCreating ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Creating...</> : <><ArrowRight className="w-4 h-4 mr-2" /> {promptMode === "android" ? "Create Android Project" : "Create & Build"}</>}
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-
       {/* ⭐ The empty project the existing GitHub import dialog will target. */}
       <Dialog
         open={githubNameModalOpen}
@@ -1451,7 +1432,7 @@ export default function DashboardPage({ profile }: { profile: ProfileSummary }) 
 
       {/*
         ⭐ FIGMA, PENDING MODE — no `projectId`. The modal validates the token against Figma
-        and hands it back; nothing is stored until `confirmBuild` connects it to the project
+        and hands it back; nothing is stored until `submitBuild` connects it to the project
         it just made. Reusing the modal is deliberate: the how-to steps, the scopes and the
         security note are the reason people trust pasting a token.
       */}

@@ -25,6 +25,7 @@ import type {
   ProjectMemoryItem,
   ProjectMemoryList,
 } from "@/lib/memory/types";
+import type { AndroidCapability } from "@/lib/android/capability";
 import type { DbRestorePoint } from "@/lib/undo-db-change";
 import type {
   ProjectGroup,
@@ -1001,8 +1002,10 @@ export const vcaasApi = {
   },
 
   // ─────────────────────── Rebuild (not available) ───────────────────────────
-  // Kept for the copied catalog. Mavly has no build/run sandbox and serves a static
-  // preview, so both routes answer an explicit 503 instead of pretending to build.
+  // Kept for the copied catalog. Mavly has no general-purpose website rebuild
+  // sandbox and serves a static preview, so both routes answer an explicit 503
+  // instead of pretending to build. The opt-in verification sandbox is not a
+  // rebuild service, and Android debug builds use their own queue.
   rebuild: {
     /** POST …/rebuild — unavailable; see `rebuildUnavailable` in `lib/mavly/api.ts`. */
     start: (projectId: string): Promise<VcaasResponse<{ status: string; startedAt: string }>> =>
@@ -1234,11 +1237,24 @@ export const vcaasApi = {
     setWebhook: (projectId: string, url: string | null) => proxy.put<ProjectWebhook>(`${project(projectId)}/webhook`, { url }),
     rotateWebhookSecret: (projectId: string) => proxy.post<{ secret: string }>(`${project(projectId)}/webhook/rotate-secret`, {}),
 
-    mobileBuilds: (projectId: string) => proxy.get<{ builds: MobileBuild[] }>(`${project(projectId)}/mobile/builds`),
-    startMobileBuild: (projectId: string, platform: "android" | "ios" = "android") =>
-      proxy.post<{ buildId: string }>(
+    mobileBuilds: (projectId: string) =>
+      proxy.get<{ builds: MobileBuild[]; capability?: AndroidCapability }>(
         `${project(projectId)}/mobile/builds`,
-        platform === "ios" ? { platform, artifact: "simulator-app" } : { platform, artifact: "debug-apk" },
+      ),
+    startMobileBuild: (
+      projectId: string,
+      platform: "android" | "ios" = "android",
+      clientRequestId?: string,
+    ) =>
+      proxy.post<{ status: string; build: MobileBuild; capability?: AndroidCapability }>(
+        `${project(projectId)}/mobile/builds`,
+        platform === "ios"
+          ? { platform, artifact: "simulator-app" }
+          : {
+              platform,
+              artifact: "debug-apk",
+              ...(clientRequestId ? { clientRequestId } : {}),
+            },
       ),
     mobileStores: (projectId: string) => proxy.get<MobileStores>(`${project(projectId)}/mobile/stores`),
     storeUploads: (projectId: string) => proxy.get<{ uploads: StoreUpload[] }>(`${project(projectId)}/mobile/store-uploads`),
@@ -1246,11 +1262,25 @@ export const vcaasApi = {
       proxy.post<StoreUpload>(`${project(projectId)}/mobile/builds/${encodeURIComponent(buildId)}/store-upload`, {}),
     /** A7.10b: a build still waiting in the Codemagic queue; its reserved credits are given back. */
     cancelMobileBuild: (projectId: string, buildId: string) =>
-      proxy.post<MobileBuild>(`${project(projectId)}/mobile/builds/${encodeURIComponent(buildId)}/cancel`, {}),
+      proxy.post<{ status: string; build: MobileBuild | null }>(
+        `${project(projectId)}/mobile/builds/${encodeURIComponent(buildId)}/cancel`,
+        {},
+      ),
     mobileBuildDownload: (projectId: string, buildId: string) =>
-      proxy.get<{ url: string }>(`${project(projectId)}/mobile/builds/${encodeURIComponent(buildId)}/download`),
+      proxy.get<{
+        url: string;
+        urlExpiresAt?: string;
+        artifactType?: "apk";
+        buildId?: string;
+        fileName?: string;
+        sizeBytes?: number;
+        sha256?: string;
+        applicationId?: string;
+      }>(`${project(projectId)}/mobile/builds/${encodeURIComponent(buildId)}/download`),
     mobileBuildLog: (projectId: string, buildId: string) =>
-      proxy.get<{ url: string }>(`${project(projectId)}/mobile/builds/${encodeURIComponent(buildId)}/log`),
+      proxy.get<{ log: string | null; truncated?: boolean; hasLog?: boolean }>(
+        `${project(projectId)}/mobile/builds/${encodeURIComponent(buildId)}/log`,
+      ),
     /** Owner-only: connect a store. Google Play takes the Play Console service-account JSON; the App Store reuses the iOS key. */
     connectGooglePlay: (projectId: string, body: { serviceAccountJson: string; packageName: string }) =>
       proxy.put<MobileStores>(`${project(projectId)}/mobile/stores/google-play`, body),

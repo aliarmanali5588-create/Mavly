@@ -817,7 +817,7 @@ async function complete(
     await insertMessage(
       input.projectId,
       "agent",
-      "The Kotlin/Compose source is saved. No APK or AAB was built, and no Android build executor is configured in this deployment; use Download source to review the project.",
+      "The Kotlin/Compose source is saved. This run did not build an APK or AAB; an isolated Android debug build can be requested from the workspace only when it is enabled for this project. Release signing, store publishing and Android hosting are not implemented.",
       "regular",
       null,
       guard.client,

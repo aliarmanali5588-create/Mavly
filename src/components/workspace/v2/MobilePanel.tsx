@@ -124,10 +124,24 @@ export function MobilePanel({ projectId }: { projectId: string }) {
         else toast.error(codeOf(response) === "STORE_NOT_CONFIGURED" ? t("engineV2.mobile.storeNeedsAccount") : response.error || t("engineV2.common.failed"));
     };
 
-    const openUrl = async (call: Promise<{ ok: boolean; error?: string; data?: { url: string } | null }>) => {
+    const openUrl = async (call: Promise<{ ok: boolean; error?: string; data?: { url?: string } | null }>) => {
         const response = await call;
         if (response.ok && response.data?.url) window.open(response.data.url, "_blank", "noopener,noreferrer");
         else toast.error(response.error || t("engineV2.common.failed"));
+    };
+
+    /**
+     * The log endpoint returns bounded text, not a URL: the artifact download is
+     * the only response that carries a (short-lived) link. Show the text in a new
+     * tab instead of passing it to `openUrl`.
+     */
+    const showLog = async (build: MobileBuild) => {
+        const response = await vcaasApi.v2.mobileBuildLog(projectId, build.id);
+        if (!response.ok) return toast.error(response.error || t("engineV2.common.failed"));
+        const text = response.data?.log?.trim() || "No log output.";
+        const url = URL.createObjectURL(new Blob([text], { type: "text/plain;charset=utf-8" }));
+        window.open(url, "_blank", "noopener,noreferrer");
+        window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
     };
 
     const cancel = async (build: MobileBuild) => {
@@ -238,7 +252,7 @@ export function MobilePanel({ projectId }: { projectId: string }) {
                                             </pre>
                                         ) : null}
                                         {build.hasLog ? (
-                                            <Button size="sm" variant="outline" onClick={() => void openUrl(vcaasApi.v2.mobileBuildLog(projectId, build.id))}>
+                                            <Button size="sm" variant="outline" onClick={() => void showLog(build)}>
                                                 <ExternalLinkIcon className="size-3.5" aria-hidden />
                                                 {t("engineV2.mobile.fullLog")}
                                             </Button>

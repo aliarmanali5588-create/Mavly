@@ -91,10 +91,11 @@ before enabling `MAVLY_AGENT_MEMORY_ENABLED`; the memory API fails closed withou
 generation keeps its prior context behavior. Both migrations are additive and safe to
 apply while the previous application version is still deployed. Apply
 `25_project_creation_idempotency.sql` after 24 before enabling Android project creation;
-it adds an owner-scoped creation request key so retries return the same project. Phase 9
-Android source generation needs no further migration; Android builds/artifacts remain
-disabled until a new, additive build queue and artifact-storage migration are designed and
-verified. Project-secret encryption also
+it adds an owner-scoped creation request key so retries return the same project. Apply
+`26_android_builds.sql` after 25 (and after 20) before enabling isolated Android debug
+builds: it adds the durable build table, fenced claim/lease/complete/recovery RPCs,
+artifact-retention state, owner-safe column grants, schema marker 26 and a private
+`android-artifacts` Storage bucket. It never stores an APK/AAB in Postgres. Project-secret encryption also
 requires the server-only `MAVLY_PROJECT_SECRETS_ENCRYPTION_KEY` (32 random bytes,
 base64-encoded); without it create/update fail closed. `npm test` covers the pure
 auth/redirect/ownership/scope modules, the generation state/lease/claim/observability
@@ -104,12 +105,13 @@ rules, the business-integration registry/config/validation, Razorpay signature a
 provider-error mapping, the payment state machine, the gateway session exemptions, the
 Phase 7 durable rate-limit migration contracts, payment-event metadata/redaction, the
 admin surface gate, Phase 8 memory validation/retrieval/prompt framing/migration
-contracts, the Phase 9 Android source contract/profile/capability rules, and static
-route/migration invariants. It does not
+contracts, the Phase 9 Android source contract/profile/capability rules, the Android build
+config/policy/archive/artifact/migration contracts, and static route/migration invariants.
+It does not
 exercise a
 real Supabase session, Groq, a live worker/queue, the Supabase OAuth connection, Vercel
-publishing, a real Vercel Sandbox, a generated Android or website app, an Android build,
-an APK/AAB artifact, a repair model call, a real Vercel
+publishing, a real Vercel Sandbox, a generated Android or website app, a real Gradle build,
+an APK/AAB artifact, a signed download, a repair model call, a real Vercel
 full-stack deployment, a real application database connection, a live Razorpay account,
 a delivered webhook, or the migrations against a database.
 
@@ -135,14 +137,23 @@ a delivered webhook, or the migrations against a database.
   dependency versions, allowlisted Maven repositories, no cleartext, dangerous permissions,
   binary/keystore/signing files or build-script process execution). Invalid source fails
   the run; completed batches remain recoverable from the baseline snapshot.
-  **Android BUILDS ARE NOT CONFIGURED.** This deployment has no isolated Android toolchain
-  image, durable build queue or private artifact bucket, so no APK/AAB is built, signed,
-  downloaded, installed or published, and there is no emulator preview. `mobile/builds`
-  returns an empty history plus the explicit `not_configured` capability; a build start is
-  a truthful `503 ANDROID_BUILD_NOT_CONFIGURED` and never creates a row. Do not claim an
-  Android build or artifact exists until a real executor and storage path are implemented
-  and verified. See `docs/architecture/phase-9-android.md` and
-  `docs/runbooks/android.md`.
+  **Isolated Android DEBUG builds are implemented but OFF BY DEFAULT.** They require
+  `MAVLY_ANDROID_BUILD_ENABLED`, an explicit `MAVLY_ANDROID_BUILD_PROJECTS` cohort,
+  `MAVLY_ANDROID_BUILD_IMAGE` (a Vercel Container Registry image) pinned by `@sha256:`
+  digest, a private artifact bucket,
+  Vercel Sandbox credentials, migration 26, the service-role key and the Supabase URL.
+  The pinned image must contain JDK 17, Gradle 8.9, Android SDK/build-tools 35 and `aapt`,
+  with a pre-populated Gradle cache; builds run `:app:assembleDebug --no-daemon --offline`
+  inside a Vercel microVM with **deny-all network**, never on a Mavly host. Each build is
+  bound to an immutable source snapshot and re-verifies the snapshot hash, contract,
+  artifact ZIP, package id, size and SHA-256 before a fenced `succeeded` write. APKs live
+  in private Storage; download requires an owner check and returns a 5-minute signed URL.
+  Debug only: no release signing, AAB, store publishing, emulator/device test or public
+  artifact URL. If any prerequisite is missing the API fails closed with
+  `ANDROID_BUILD_NOT_CONFIGURED`; before migration 26 is applied,
+  `GET …/mobile/builds` returns `503 MIGRATION_REQUIRED`, and afterwards the same
+  request reports the exact capability. No build row, log or artifact is fabricated. See
+  `docs/architecture/phase-9-android.md` and `docs/runbooks/android.md`.
 - **Vercel publishing is an optional, off-by-default hosting path**, not a builder backend.
   It is enabled only by `MAVLY_VERCEL_DEPLOYMENTS_ENABLED` (accepted: `1`, `true`, `yes`,
   `on`) plus `VERCEL_API_TOKEN`, and uploads only static files. It prefers the generated
@@ -430,7 +441,7 @@ a delivered webhook, or the migrations against a database.
   claim generated apps can read saved secrets until a real server-side injection path and
   tests exist.
 - Anything not implemented (uploads, rebuild, dynamic hosting, domains,
-  versions, usage, visual-edit apply, Android builds/artifacts and store publishing, …)
+  versions, usage, visual-edit apply, Android release signing/AAB/store publishing, …)
   still authenticates and authorizes, then returns:
 
   ```json
@@ -558,8 +569,15 @@ paths with `src/lib/vcaas-scope.ts`, so unknown shapes are refused before any wo
 | `src/lib/github-client.ts` | The browser's GitHub catalog. It never carries a credential. |
 | `src/lib/ai/agent.ts` | Profile-aware prompt, JSON parsing/repair, path and size validation, and final Android contract validation. |
 | `src/lib/android/contract.ts` | Pure Kotlin/Compose project contract: required files, package/applicationId consistency, manifest/Gradle policy, forbidden binary/signing/secret paths, Compose entry point and size bounds. |
-| `src/lib/android/capability.ts` | The truthful Android capability contract: source generation is available; build, artifacts, signing, store publishing and emulator preview are not configured, with the exact blocker. |
-| `docs/architecture/phase-9-android.md`, `docs/runbooks/android.md` | Phase 9 Android source profile, validation, capability matrix, build/artifact blockers, security boundaries and rollout. |
+| `src/lib/android/capability.ts` | Dynamic Android capability: source generation plus cohort/config-gated debug build and artifact availability with the exact blocker. |
+| `src/lib/android/build-config.ts` | Off-by-default build prerequisites: cohort, digest-pinned image, bucket, vCPUs, provider credentials, service role and Supabase URL. |
+| `src/lib/android/build-policy.ts` | Pure build policy: snapshot re-validation, fixed offline Gradle command, bounded/redacted logs, APK ZIP/zip-bomb validation and checksum. |
+| `src/lib/android/build-worker.ts` | One bounded build tick: recover → clean → claim → create/upload/build → validate APK → private upload → fenced completion; never runs on a Mavly host. |
+| `src/lib/android/build-store.ts`, `build-state.ts` | Typed migration-26 RPC wrappers and the shared status/artifact view model. |
+| `src/lib/android/artifact-store.ts` | Private Supabase Storage upload, delete and short-lived signed URL; object keys are server-derived. |
+| `src/lib/sandbox/vercel-sandbox.ts` | Adds custom image/vCPU purpose tags and bounded sandbox file reads for the Android artifact path. |
+| `supabase/migrations/26_android_builds.sql` | Durable Android build table, fenced lifecycle/recovery/cleanup RPCs, retention state, owner column grants, schema marker 26 and the private artifact bucket. |
+| `docs/architecture/phase-9-android.md`, `docs/runbooks/android.md` | Phase 9 Android profile, validation, isolation, artifact lifecycle, capability matrix, security boundaries and rollout. |
 | `src/lib/ai/image-models.ts` | Image-model catalog and image-request validation, kept apart from the text catalog. |
 | `src/lib/ai/openrouter-images.ts` | The separate OpenRouter image API client: response validation, size cap, bounded retry, server-only key. |
 | `src/lib/ai/openrouter.ts` | Preserved OpenRouter chat client; not imported by active website-generation paths. |
@@ -635,6 +653,8 @@ paths with `src/lib/vcaas-scope.ts`, so unknown shapes are refused before any wo
    `VERCEL_OIDC_TOKEN`, `VERCEL_TOKEN`, `VERCEL_TEAM_ID`, `VERCEL_PROJECT_ID`,
    `SUPABASE_SERVICE_ROLE_KEY`, `MAVLY_GENERATION_WORKER_SECRET`,
    `MAVLY_VERIFICATION_SANDBOX_ENABLED`, `MAVLY_VERIFICATION_REPAIR_ENABLED`,
+   `MAVLY_ANDROID_BUILD_ENABLED`, `MAVLY_ANDROID_BUILD_PROJECTS`,
+   `MAVLY_ANDROID_BUILD_IMAGE`, `MAVLY_ANDROID_ARTIFACT_BUCKET`,
    `MAVLY_BUSINESS_INTEGRATIONS_ENABLED`,
    `MAVLY_BUSINESS_INTEGRATIONS_RPC_SECRET` and the
    worker's server-only configuration are server-only
@@ -642,11 +662,14 @@ paths with `src/lib/vcaas-scope.ts`, so unknown shapes are refused before any wo
    prefix. Razorpay credentials are **never** environment variables on Mavly: they are
    entered per project, encrypted as project secrets, and decrypted only inside the
    owner test or gateway request. Never commit `.env*` files. The service-role client is confined to
-   `src/lib/supabase/worker.ts`, the worker orchestrator, `/api/generation/worker` and the
-   verification sandbox tick that receives it from the worker;
-   nothing under `components/` or the browser catalog may import it. Sandbox provider
-   credentials are used only by the server-side adapter and are never uploaded into the
-   sandbox or returned in a verification result.
+   `src/lib/supabase/worker.ts`, the worker orchestrator, `/api/generation/worker`, the
+   verification sandbox tick and the Android build worker that receive it from the worker,
+   and the owner-checked Android artifact-download handler that mints a short-lived signed
+   URL (it re-reads the build row scoped by project); nothing under `components/` or the
+   browser catalog may import it. Sandbox provider credentials are used only by the
+   server-side adapter and are never uploaded into a sandbox or returned in a build or
+   verification result. Android artifact bucket/object keys are service-role only; the
+   browser receives only the signed URL and safe metadata.
 4. **Any future server route that fetches a client-supplied URL is an SSRF hole until it
    calls `publicUrlRejectionReason` (async, resolves DNS) from `src/lib/safe-url.ts`, with
    `redirect: "error"` and a timeout.** The synchronous `urlRejectionReason` is for IP
@@ -667,8 +690,9 @@ paths with `src/lib/vcaas-scope.ts`, so unknown shapes are refused before any wo
    repair may produce a new immutable `repair` snapshot, but it never executes on a Mavly
    host and never edits `project_files` directly.
    Android source is likewise data: it is text-validated by
-   `src/lib/android/contract.ts` and never built or run on a Mavly host. No Android build
-   executor exists in this deployment, so no APK/AAB artifact is produced or served.
+   `src/lib/android/contract.ts` and never built or run on a Mavly host. The only Android
+   execution is the opt-in debug build inside the provider microVM (deny-all network, no
+   credentials); there is no local fallback and no release-signing or AAB artifact.
    The preview is static HTML served with a CSP `sandbox` and no same-origin privileges.
 7. **OAuth has two traps.** Do not send a custom `state` to Supabase (PKCE owns it), and
    the Mavly sign-in callback URL must be a bare `/auth/callback` with no query string. The
@@ -722,6 +746,15 @@ paths with `src/lib/vcaas-scope.ts`, so unknown shapes are refused before any wo
     deployment. A client cannot create or promote an observed failure into a decision, and
     memory cannot authorize deployment, payment, database or credential operations. With
     the feature flag/cohort off, generation behavior is unchanged.
+13. **Android builds are isolated, snapshot-bound and off by default.** Only a fully
+    configured cohort may build. The worker re-verifies the immutable snapshot hash and
+    Android contract, runs one fixed offline Gradle task in a provider microVM with
+    deny-all network and no credentials, validates the APK archive/package id/size/SHA-256,
+    and writes `succeeded` only through a fenced RPC. APKs live in private Storage; a
+    browser receives a short-lived signed URL only after an ownership check. No release
+    signing, AAB, store publishing, emulator/device verification or public artifact URL is
+    implemented. A missing prerequisite fails closed; no build row, log or artifact is
+    fabricated.
 
 ## UI conventions
 

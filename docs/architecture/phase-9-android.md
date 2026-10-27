@@ -1,6 +1,8 @@
-# Phase 9 — Native Android source generation
+# Phase 9 — Native Android source generation and isolated debug builds
 
-Status: **source generation implemented; isolated builds and artifacts are not configured.**
+Status: **implemented — external build verification pending.** Source generation is active;
+isolated debug builds and private artifacts are implemented but OFF by default until the
+operator pins a toolchain image, applies migration 26 and configures the private bucket.
 
 This phase adds a real, bounded native Android path to the existing Mavly generation
 system. It does not add a second queue, model, billing system or mobile builder backend.
@@ -22,8 +24,12 @@ system. It does not add a second queue, model, billing system or mobile builder 
   completed. A failure preserves completed batches and the run baseline, exactly like a
   website contract failure.
 - No Gradle wrapper JAR or vendored distribution is generated: both are binaries and the
-  contract refuses them. A future build must use Gradle 8.9 from its pinned image; a
-  downloaded source tree needs an external Gradle 8.9 + JDK 17 installation.
+  contract refuses them. The build uses Gradle 8.9 from its pinned image; a downloaded
+  source tree needs an external Gradle 8.9 + JDK 17 installation.
+- Durable debug builds (`26_android_builds.sql`) run only for an explicit project cohort,
+  compile an immutable snapshot in a Vercel Sandbox with **deny-all network**, validate the
+  APK, and store it privately with a short-lived owner-authorized download. Release
+  signing, AABs, store publishing and emulator/device verification are not implemented.
 
 ## Source contract
 
@@ -44,97 +50,131 @@ system. It does not add a second queue, model, billing system or mobile builder 
 The allowed Maven prefixes are `dl.google.com/dl/android/maven2`,
 `repo.maven.apache.org/maven2` and `plugins.gradle.org/m2`, all over HTTPS.
 
+## Isolated debug build engine
+
+`26_android_builds.sql` and `src/lib/android/build-worker.ts` implement:
+
+1. **Snapshot binding.** A build request validates the current source, computes a SHA-256,
+   reuses a ready snapshot with the same hash or creates one, and passes its id/hash to
+   `create_android_build`. The worker re-hashes the snapshot files and fails on any
+   mismatch. Later project edits cannot change the queued input.
+2. **Durable lifecycle.** One active build per project, 2 per user, 4 global. A 22-minute
+   deadline, a 300-second fenced lease, attempt budget 2, crash recovery, deliberate
+   cancellation and orphan-sandbox cleanup are all enforced by migration-26 RPCs. Builds
+   share the existing generation-worker tick and are advanced only when the generation
+   queue is empty; a busy generation queue delays builds but never competes for a run.
+3. **Isolation.** `MAVLY_ANDROID_BUILD_IMAGE` must be a **Vercel Container Registry
+   (VCR)** image pinned by `@sha256:`; the provider's Sandbox `image` field accepts only
+   its own registry, not an arbitrary external one. The image must
+   contain JDK 17, Gradle 8.9, Android SDK/build-tools 35 and `aapt`, with the pinned
+   dependency cache pre-populated. The build runs exactly
+   `gradle :app:assembleDebug --no-daemon --offline --stacktrace --console=plain` with
+   **deny-all network**, 2 vCPUs (configurable 1–4; 2048 MB per vCPU), no secrets and no
+   host mounts. There is no local fallback.
+4. **Artifact verification.** Gradle must exit `0`, `aapt dump badging` must report the
+   expected application id, the APK must exist within 100 MB, and `fflate` must accept it
+   without traversal, duplicate/oversized entries, unsupported compression or a
+   zip-bomb-sized expansion. The APK must contain `AndroidManifest.xml` and `classes.dex`.
+   SHA-256, size, package id and toolchain are recorded.
+5. **Private publication.** The APK is uploaded to the private `android-artifacts` bucket
+   at `<project>/<build>/<sha256>.apk` using the confined service client. The owner-facing
+   API returns only a 5-minute signed URL and safe metadata. Artifacts expire after 7 days
+   and are deleted by the worker; expired/deleted states are reported truthfully.
+6. **Fenced terminal write.** `succeeded` is possible only with complete artifact metadata;
+   a stale worker cannot publish after losing its lease. A failed cleanup never overwrites
+   the build result and is retried by the cleanup sweep.
+
 ## What is deliberately not implemented
 
-### Isolated Android build
+- **Release signing / AAB.** No keystore, signing password, Play credential or release AAB
+  exists. The source contract refuses signing material and the API has no release endpoint.
+- **Google Play / App Store publishing.** No store credential management or upload.
+- **Emulator/device verification.** No emulator, device farm, install or runtime check.
+  A successful Gradle build is not evidence that the app renders or behaves correctly.
+- **Bounded AI repair for Gradle.** The Phase 4 repair flow is Next.js-specific. Android
+  has no repair path; do not reuse Next.js diagnostics or silently edit the project. A
+  future repair must consume bounded, redacted Gradle diagnostics and create an immutable
+  snapshot.
+- **Public artifact URLs.** None. A signed URL is short-lived and owner-authorized.
 
-No Android build executor exists. The verification sandbox adapter can accept a custom
-Vercel Sandbox image, but this deployment has **no operator-pinned Android toolchain image
-digest**, and the existing Phase 3/4 verification state machine is Next.js-specific
-(`next build`, loopback `next start`, HTTP health check). Reusing it for Gradle would
-report a Next.js result for an Android project.
+## Enforcing the build configuration
 
-Therefore:
+The engine is off unless every prerequisite is present:
 
-- no APK or AAB is built, signed, installed or run;
-- no emulator, device farm or preview is available;
-- no build log or build row is fabricated;
-- `GET …/mobile/builds` returns an empty history plus an explicit
-  `build.status = "not_configured"` capability;
-- `POST …/mobile/builds` returns `503 ANDROID_BUILD_NOT_CONFIGURED`;
-- artifact/log URLs return `404 ANDROID_BUILD_NOT_FOUND`.
+```
+MAVLY_ANDROID_BUILD_ENABLED=1
+MAVLY_ANDROID_BUILD_PROJECTS=<explicit cohort>
+MAVLY_ANDROID_BUILD_IMAGE=<vcr-image>@sha256:...
+MAVLY_ANDROID_ARTIFACT_BUCKET=android-artifacts
+MAVLY_ANDROID_BUILD_VCPUS=2
+# Vercel Sandbox credentials + SUPABASE_SERVICE_ROLE_KEY + NEXT_PUBLIC_SUPABASE_URL
+# The generation worker must be enabled and scheduled.
+```
 
-### Artifact storage and release signing
+A tag-only image, missing bucket, missing credentials, empty cohort or missing worker is
+reported as not ready; `POST …/mobile/builds` fails closed and no row/log/artifact is
+fabricated. Before migration 26 is applied, `GET …/mobile/builds` returns
+`503 MIGRATION_REQUIRED`; once it is applied, that request returns the persisted builds
+plus the exact capability, including the reason builds are unavailable. The private bucket
+is created by migration 26; a non-default bucket must be created by the operator with the
+same private policy.
 
-There is no private artifact bucket, retention job, short-lived download URL or release
-keystore. Generated projects contain no keystore and no signing configuration; the
-contract refuses them. No Google Play or App Store publishing exists.
+### Enforced bounds
 
-### Bounded AI repair
-
-The Phase 4 bounded repair is tied to build/runtime/health failures. There is no Android
-build stage, so an Android run has no repairable build failure and no repair path is
-invoked. Do not reuse the Next.js repair flow for Gradle output; a future Android repair
-must consume only bounded, redacted Gradle diagnostics and produce an immutable snapshot,
-never edit the user's project.
-
-## Required work before enabling a build
-
-1. **Pinned toolchain image.** Publish a Vercel Sandbox-compatible image by digest with
-   JDK 17, Gradle 8.9, Android SDK 35, accepted licenses and no secrets baked in. Treat the
-   image digest as configuration, never a tag.
-2. **Durable build queue.** Add an additive migration with fenced leases, bounded attempts,
-   recovery and cancellation, following the Phase 3/4 pattern. The existing generation
-   worker may advance it, but it must not block generation claims.
-3. **Build policy.** Upload only the validated snapshot, run only fixed Gradle tasks
-   (`assembleDebug` first), restrict egress to the Gradle/Google/Maven hosts, bound logs
-   and time, and destroy the microVM on every terminal path. Debug output only; release
-   signing is a separate product and security decision.
-4. **Artifact storage.** A private bucket, checksum verification, retention deletion, and
-   an owner-authorized short-lived download route. The provider sandbox must be destroyed
-   after upload.
-5. **Verification evidence.** A build exit `0` is evidence that Gradle succeeded, not that
-   the app rendered correctly. Device/emulator testing, store publishing and release
-   signing need separate claims and controls.
-
-Until all five exist and are verified, the capability must remain `not_configured`.
-
-### Required bounds (design only, not active)
-
-These are the minimum limits a future executor must enforce; they are deliberately not
-configurable without review:
-
-| Bound | Proposed value |
+| Bound | Value |
 |---|---|
 | Concurrent builds | 1 per project, 2 per user, 4 global |
-| Build deadline | 20 minutes, with a fenced lease and retry |
-| Source upload | The existing 80 files / 256 KiB each / 1.5 MB total |
-| Artifact size | 200 MB per debug APK |
-| Build log | 256 KiB persisted, tail-only, redacted |
-| Retry attempts | 1 provider retry for infrastructure only; no blind source retry |
-| Artifact retention | 7 days, then deleted with the sandbox |
-| Repair attempts | 0 until a debug build executor exists, then at most 1 |
+| Build deadline | 22 minutes |
+| Lease | 300 seconds, fenced |
+| Source upload | 80 files / 256 KiB each / 1.5 MB total |
+| Artifact | 100 MB max, APK debug only |
+| Build log | 32 KiB excerpt, tail-only, sanitized |
+| Retry | 2 attempts for provider/storage failures; source/build failures are terminal |
+| Artifact retention | 7 days, then deleted by the worker |
+| Repair | Not implemented for Android |
 
-No build is enabled by these numbers; they are the acceptance contract for the future
-migration and worker.
+## Rejected execution risks
+
+- The build image is operator-controlled and digest-pinned. Generated source cannot choose
+  an image, command, repository or toolchain version.
+- `--offline` plus deny-all network means a cache miss fails; the build never downloads an
+  unapproved dependency. Supply-chain risk shifts to the operator's pinned image/cache.
+- Generated Gradle scripts are untrusted code. They execute only inside the microVM;
+  process/environment execution patterns and non-allowlisted repositories are rejected by
+  the contract, but sandbox isolation is the final boundary.
+- APK bytes are untrusted data. They are never installed or opened on Mavly; only ZIP
+  metadata and SHA-256 are inspected before private storage.
 
 ## Security boundaries
 
 - Android source remains untrusted data. It is validated and stored as text; it is never
   imported or executed on a Mavly host.
-- No project secret, Mavly credential or provider token is injected into generated source.
+- No project secret, Mavly credential or provider token is injected into generated source
+  or the build environment.
 - The build contract refuses credential-shaped, binary, signing and environment files.
 - The generated app has no backend credential and no release signing material.
 - The Next.js verification sandbox is **not** enqueued for Android runs, so a project is
   never “verified” by the wrong runtime.
+- Build rows are owner SELECT only; all writes are service-role RPCs. Authenticated
+  readers never receive the bucket, object path, sandbox id or lease.
+- The artifact download first proves project ownership through RLS, then uses the
+  service-role client only to sign the server-recorded object key. There is no
+  client-supplied path/URL and no permanent public link.
 - Existing session, ownership, RLS and project-scope checks are unchanged.
 
 ## Rollout
 
-No migration is required for this source-generation slice; migration 22 and 25 already
-exist. The path is active for persisted Android projects. Because it uses the same Groq
-configuration as websites, it is unavailable when `GROQ_API_KEY` is absent, and the API
-answers truthfully rather than creating unbuildable source.
+1. Apply migrations 22, 25 and 26 (additive). Do not apply to production without explicit
+   authorization.
+2. Publish and test the pinned toolchain image in a disposable Vercel account, including
+   an offline Gradle cache hit and `aapt`.
+3. Create/confirm the private artifact bucket and lifecycle policy.
+4. Enable the generation worker with a small cohort.
+5. Set `MAVLY_ANDROID_BUILD_ENABLED` and the same small `MAVLY_ANDROID_BUILD_PROJECTS`
+   cohort.
+6. Run the human acceptance checklist in `docs/runbooks/android.md`.
+7. Only then expand the cohort.
 
-Builds/artifacts remain disabled until the work above is implemented and verified. See
-`docs/runbooks/android.md`.
+Disabling the flag/cohort stops new claims and hides build availability; it does not delete
+existing builds, snapshots or artifacts. Existing artifacts remain downloadable by their
+owner while unexpired. See `docs/runbooks/android.md`.
