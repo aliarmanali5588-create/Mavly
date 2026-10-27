@@ -51,9 +51,21 @@ export const TOKEN_HARBOR_DEFAULT_BASE_URL = "https://tokenharbor.ai/v1";
 const CHAT_COMPLETIONS_PATH = "chat/completions";
 const TOKEN_HARBOR_REQUEST_ID_HEADERS = ["x-request-id", "x-tokenharbor-request-id"] as const;
 
-export type TokenHarborBaseUrlResolution =
-  | { ok: true; baseUrl: string }
-  | { ok: false; reason: string };
+/**
+ * ⚠️ A plain field object, deliberately NOT a discriminated union: `strict` is
+ * off in this repository, so `if (!resolution.ok)` does not narrow a union
+ * member away (`src/lib/mavly/store.ts` documents the same constraint and
+ * answers it with a predicate). Every field keeps a usable type in both states,
+ * so the guard below and the request URL after it never depend on narrowing.
+ */
+export interface TokenHarborBaseUrlResolution {
+  /** True when `baseUrl` may be used. */
+  ok: boolean;
+  /** The base URL to call; empty when `ok` is false. */
+  baseUrl: string;
+  /** The configuration problem to report; null when `ok` is true. */
+  reason: string | null;
+}
 
 /**
  * The base URL is operator configuration, never client input. It is validated
@@ -65,26 +77,34 @@ export function resolveTokenHarborBaseUrl(
   raw: string | undefined = process.env.TOKEN_HARBOR_BASE_URL,
 ): TokenHarborBaseUrlResolution {
   const trimmed = (raw ?? "").trim();
-  if (!trimmed) return { ok: true, baseUrl: TOKEN_HARBOR_DEFAULT_BASE_URL };
+  if (!trimmed) return usableBaseUrl(TOKEN_HARBOR_DEFAULT_BASE_URL);
 
   let parsed: URL;
   try {
     parsed = new URL(trimmed);
   } catch {
-    return { ok: false, reason: "TOKEN_HARBOR_BASE_URL is not a valid absolute URL." };
+    return unusableBaseUrl("TOKEN_HARBOR_BASE_URL is not a valid absolute URL.");
   }
   if (parsed.protocol !== "https:") {
-    return { ok: false, reason: "TOKEN_HARBOR_BASE_URL must use https." };
+    return unusableBaseUrl("TOKEN_HARBOR_BASE_URL must use https.");
   }
   if (parsed.username || parsed.password) {
-    return { ok: false, reason: "TOKEN_HARBOR_BASE_URL must not embed credentials." };
+    return unusableBaseUrl("TOKEN_HARBOR_BASE_URL must not embed credentials.");
   }
   if (parsed.search || parsed.hash) {
-    return { ok: false, reason: "TOKEN_HARBOR_BASE_URL must not contain a query string or fragment." };
+    return unusableBaseUrl("TOKEN_HARBOR_BASE_URL must not contain a query string or fragment.");
   }
 
   const path = parsed.pathname.replace(/\/+$/, "");
-  return { ok: true, baseUrl: `${parsed.origin}${path}` };
+  return usableBaseUrl(`${parsed.origin}${path}`);
+}
+
+function usableBaseUrl(baseUrl: string): TokenHarborBaseUrlResolution {
+  return { ok: true, baseUrl, reason: null };
+}
+
+function unusableBaseUrl(reason: string): TokenHarborBaseUrlResolution {
+  return { ok: false, baseUrl: "", reason };
 }
 
 /**

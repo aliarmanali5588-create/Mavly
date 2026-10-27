@@ -32,6 +32,7 @@ import {
   textProviderLabel,
 } from "../src/lib/ai/provider";
 import {
+  isChatCompletionFailure,
   completionUsage,
   type ChatCompletionFailure,
   type ChatCompletionResult,
@@ -100,6 +101,15 @@ function setEnv(values: Partial<Record<EnvKey, string | undefined>>) {
   }
 }
 
+/**
+ * A stand-in environment, passed explicitly to the pure selection functions and
+ * never merged into `process.env`: a value set on the machine running the tests
+ * must not be able to change an assertion. `ProcessEnv` requires `NODE_ENV` in
+ * this project, so the literal needs one cast.
+ */
+const env = (values: Record<string, string | undefined> = {}): NodeJS.ProcessEnv =>
+  values as unknown as NodeJS.ProcessEnv;
+
 function restore() {
   globalThis.fetch = originalFetch;
   for (const key of TOUCHED_ENV) {
@@ -109,15 +119,22 @@ function restore() {
   }
 }
 
-/** Type-safe result access: the repository's assertion style narrows explicitly. */
+/**
+ * ⚠️ `strict` is off in this repository, so truthiness narrowing on `result.ok`
+ * is not reliable — `src/lib/mavly/store.ts` documents the same constraint and
+ * answers it with a predicate. These helpers do the same, and the success case
+ * states the cast it needs rather than relying on the negative branch.
+ */
 function expectSuccess(result: ChatCompletionResult): ChatCompletionSuccess {
-  if (!result.ok) throw new Error(`expected a success, got ${result.code}: ${result.error}`);
-  return result;
+  if (isChatCompletionFailure(result)) {
+    throw new Error(`expected a success, got ${result.code}: ${result.error}`);
+  }
+  return result as ChatCompletionSuccess;
 }
 
 function expectFailure(result: ChatCompletionResult): ChatCompletionFailure {
-  if (result.ok) throw new Error("expected a failure, got a success");
-  return result;
+  if (isChatCompletionFailure(result)) return result;
+  throw new Error("expected a failure, got a success");
 }
 
 function stubFetch(
@@ -182,27 +199,27 @@ test("the default provider stays OpenRouter for every unset or unrecognized valu
 
   for (const value of [undefined, "", "   ", "anthropic", "token-harbor-2", "groq", "1"]) {
     assert.equal(
-      activeAiProvider({ MAVLY_AI_PROVIDER: value } as NodeJS.ProcessEnv),
+      activeAiProvider(env({ MAVLY_AI_PROVIDER: value })),
       "openrouter",
       `${String(value)} must not select another provider`,
     );
   }
-  assert.equal(activeAiProvider({} as NodeJS.ProcessEnv), "openrouter");
+  assert.equal(activeAiProvider(env()), "openrouter");
 
   // Accepted spellings select Token Harbor, case-insensitively.
   for (const value of ["tokenharbor", "TokenHarbor", "TOKEN_HARBOR", "token-harbor", " Token Harbor "]) {
     assert.equal(
-      activeAiProvider({ MAVLY_AI_PROVIDER: value } as NodeJS.ProcessEnv),
+      activeAiProvider(env({ MAVLY_AI_PROVIDER: value })),
       "tokenharbor",
       `${value} should select Token Harbor`,
     );
   }
-  assert.equal(activeAiProvider({ MAVLY_AI_PROVIDER: "openrouter" } as NodeJS.ProcessEnv), "openrouter");
+  assert.equal(activeAiProvider(env({ MAVLY_AI_PROVIDER: "openrouter" })), "openrouter");
 });
 
 test("the active catalog and model follow the selected provider", () => {
-  const thEnv = { MAVLY_AI_PROVIDER: "tokenharbor" } as NodeJS.ProcessEnv;
-  const orEnv = {} as NodeJS.ProcessEnv;
+  const thEnv = env({ MAVLY_AI_PROVIDER: "tokenharbor" });
+  const orEnv = env();
 
   assert.deepEqual(activeModelCatalog(thEnv).map((m) => m.id), [TH_MODEL_ID]);
   assert.deepEqual(activeModelCatalog(orEnv).map((m) => m.id), [OR_MODEL_ID]);
@@ -210,16 +227,16 @@ test("the active catalog and model follow the selected provider", () => {
   assert.equal(resolveModel(null, "app-generation", orEnv).id, OR_MODEL_ID);
 
   // MAVLY_DEFAULT_MODEL may only name a model in the SELECTED provider catalog.
-  const crossProvider = {
+  const crossProvider = env({
     MAVLY_AI_PROVIDER: "tokenharbor",
     MAVLY_DEFAULT_MODEL: OR_MODEL_ID,
-  } as NodeJS.ProcessEnv;
+  });
   assert.equal(resolveModel(null, "app-generation", crossProvider).id, TH_MODEL_ID);
 
-  const thOverride = {
+  const thOverride = env({
     MAVLY_AI_PROVIDER: "tokenharbor",
     MAVLY_DEFAULT_MODEL: TH_MODEL_ID,
-  } as NodeJS.ProcessEnv;
+  });
   assert.equal(resolveModel(null, "app-generation", thOverride).id, TH_MODEL_ID);
 });
 
@@ -295,18 +312,17 @@ test("a Token Harbor generation hits the documented endpoint with the allowliste
 });
 
 test("the default base URL is used and only a valid override is accepted", async () => {
-  assert.deepEqual(resolveTokenHarborBaseUrl(undefined), {
-    ok: true,
-    baseUrl: TOKEN_HARBOR_DEFAULT_BASE_URL,
-  });
-  assert.deepEqual(resolveTokenHarborBaseUrl("   "), {
-    ok: true,
-    baseUrl: TOKEN_HARBOR_DEFAULT_BASE_URL,
-  });
-  assert.deepEqual(resolveTokenHarborBaseUrl("https://th.example/v1///"), {
-    ok: true,
-    baseUrl: "https://th.example/v1",
-  });
+  const fallback = resolveTokenHarborBaseUrl(undefined);
+  assert.equal(fallback.ok, true);
+  assert.equal(fallback.baseUrl, TOKEN_HARBOR_DEFAULT_BASE_URL);
+  assert.equal(fallback.reason, null);
+
+  assert.equal(resolveTokenHarborBaseUrl("   ").baseUrl, TOKEN_HARBOR_DEFAULT_BASE_URL);
+
+  const trailingSlashes = resolveTokenHarborBaseUrl("https://th.example/v1///");
+  assert.equal(trailingSlashes.ok, true);
+  assert.equal(trailingSlashes.baseUrl, "https://th.example/v1");
+
   for (const invalid of [
     "not a url",
     "http://th.example/v1",
@@ -314,7 +330,10 @@ test("the default base URL is used and only a valid override is accepted", async
     "https://th.example/v1?key=1",
     "https://th.example/v1#frag",
   ]) {
-    assert.equal(resolveTokenHarborBaseUrl(invalid).ok, false, `${invalid} must be refused`);
+    const refusedUrl = resolveTokenHarborBaseUrl(invalid);
+    assert.equal(refusedUrl.ok, false, `${invalid} must be refused`);
+    assert.equal(refusedUrl.baseUrl, "", `${invalid} must not yield a callable base URL`);
+    assert.match(String(refusedUrl.reason), /TOKEN_HARBOR_BASE_URL/);
   }
 
   try {
