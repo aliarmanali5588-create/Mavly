@@ -207,16 +207,19 @@ export async function chatCompletion(
           metadata,
         });
       }
-      if (
-        classified.code === "INVALID_REQUEST" &&
-        (looksLikeUnsupportedModel(detail) || response.status === 404)
-      ) {
+      // Only claim the model is unserved when the provider body actually says
+      // so. A bare 404 (for example a wrong base URL) keeps the same code but a
+      // neutral message, so the copy never asserts a cause we cannot see.
+      const unsupported = looksLikeUnsupportedModel(detail);
+      if (classified.code === "INVALID_REQUEST" && (unsupported || response.status === 404)) {
         return failureResult({
           code: "INVALID_REQUEST",
           retryable: false,
           status: response.status,
           retryAfterMs,
-          error: `Token Harbor does not serve the requested model "${model.id}"${detail ? `: ${detail}` : "."}`,
+          error: unsupported
+            ? `Token Harbor does not serve the requested model "${model.id}"${detail ? `: ${detail}` : "."}`
+            : `Token Harbor rejected the request (${response.status}) for "${model.id}"${detail ? `: ${detail}` : "."}`,
           metadata,
         });
       }

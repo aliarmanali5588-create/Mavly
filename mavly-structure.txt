@@ -361,7 +361,8 @@
 │   │   ├── resolve.ts
 │   │   └── types.ts
 │   ├── lib
-│   │   ├── ai│   │   │   ├── agent.ts
+│   │   ├── ai
+│   │   │   ├── agent.ts
 │   │   │   ├── chat-contract.ts
 │   │   │   ├── image-models.ts
 │   │   │   ├── models.ts
@@ -543,7 +544,8 @@
 │   ├── deployments-unpublish.test.ts
 │   ├── generation-checkpoints.test.ts
 │   ├── generation-migration.test.ts
-│   ├── generation-reliability.test.ts│   ├── github-installation.test.ts
+│   ├── generation-reliability.test.ts
+│   ├── github-installation.test.ts
 │   ├── image-generation-limits.test.ts
 │   ├── image-generation.test.ts
 │   ├── openrouter-metadata.test.ts
@@ -559,7 +561,8 @@
 │   ├── run-progress.test.ts
 │   ├── shared-hosting-migration.test.ts
 │   ├── shared-hosting.test.ts
-│   ├── static-site.test.ts│   ├── tenant-host.test.ts
+│   ├── static-site.test.ts
+│   ├── tenant-host.test.ts
 │   ├── tokenharbor-provider.test.ts
 │   ├── ts-resolver.mjs
 │   ├── vcaas-scope.test.ts

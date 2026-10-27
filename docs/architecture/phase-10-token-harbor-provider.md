@@ -71,6 +71,13 @@ makes.
   `deepseek-v4.1-flash:free`. This is a **provider-local** id; the OpenRouter
   form `deepseek/deepseek-v4.1-flash` is never valid here, and each adapter
   refuses the other's ids before any network call.
+  The id is confirmed by Token Harbor's own documentation (post updated
+  2026-10-26), which lists `deepseek-v4.1-flash:free` — alongside
+  `mimo-v2.6-flash:free` — as a currently available free route, and records that
+  the earlier `claude-haiku-5.5:free` route has ended. A live
+  `GET https://tokenharbor.ai/v1/models` with the operator's key is still the
+  authoritative check before enabling, and no inference success is claimed by
+  the documentation or by this design.
 * The base URL is validated rather than trusted: it must be an absolute HTTPS URL
   with no embedded credentials, query string or fragment, or the call fails
   closed with `CONFIGURATION`.
@@ -83,8 +90,11 @@ makes.
   keeps `costKnown: false`.
 * Failures: `401`/`403` → `AUTHENTICATION` (not retryable); `402` → a
   quota/credit message (not retryable); `404`, `400`, `422` and a
-  model-mentioning error envelope → `INVALID_REQUEST` ("does not serve the
-  requested model"); `429` → `RATE_LIMITED` (retryable, with `Retry-After`);
+  model-mentioning error envelope → `INVALID_REQUEST` (the copy says "does not
+  serve the requested model" **only when the provider body says so**; a bare
+  `404` — for example a wrong base URL — keeps the code but gets a neutral
+  "rejected the request" message); `429` → `RATE_LIMITED` (retryable, with
+  `Retry-After`);
   `408`/`5xx` → `TRANSIENT` (retryable); a timeout/abort → `TIMEOUT`
   (retryable); other transport errors → `NETWORK` (retryable); a green HTTP
   status carrying an error envelope is never a completion; `finish_reason:
@@ -153,8 +163,9 @@ unsupported-model, transient and timeout classification, `Retry-After` capping,
 one-call-per-invocation, secret redaction, `RESERVED_ENV_KEYS`, server-only key
 handling, pipeline neutrality, and the OpenRouter/image regressions.
 
-**Not verified by this phase:** a real Token Harbor account, a real free-route
-response, a live rate-limit response, real end-to-end website or Android
-generation through Token Harbor, and the migration-free deployment path in a
-real Vercel environment. No automated check was executed during implementation
+**Not verified by this phase:** a real Token Harbor account, the live
+`/v1/models` listing, a real free-route response, a live rate-limit response,
+real end-to-end website or Android generation through Token Harbor, and the
+migration-free deployment path in a real Vercel environment. The model id itself
+is confirmed by the provider's own documentation (see §4). No automated check was executed during implementation
 (see `AGENTS.md`); the human developer runs the suite before merge.

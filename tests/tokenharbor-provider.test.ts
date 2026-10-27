@@ -524,6 +524,14 @@ test("authentication, quota, unsupported-model and transport failures are classi
     assert.equal(missing.code, "INVALID_REQUEST");
     assert.match(missing.error, /does not serve the requested model/);
 
+    // A bare 404 (for example a wrong base path) keeps the code but must NOT
+    // claim the model is unserved. The copy asserts only what the body showed.
+    stubFetch(404, {}, { raw: "Not Found" });
+    const bareNotFound = expectFailure(await tokenHarborChatCompletion(resolveTokenHarborModel(), USER));
+    assert.equal(bareNotFound.code, "INVALID_REQUEST");
+    assert.equal(bareNotFound.error.includes("does not serve the requested model"), false);
+    assert.match(bareNotFound.error, /rejected the request \(404\)/);
+
     stubFetch(200, { error: { message: `model ${TH_MODEL_ID} is not available` } });
     const envelopeModel = expectFailure(await tokenHarborChatCompletion(resolveTokenHarborModel(), USER));
     assert.equal(envelopeModel.code, "INVALID_REQUEST");
