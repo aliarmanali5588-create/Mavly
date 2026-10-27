@@ -34,7 +34,11 @@ import {
   type ChatCompletionResult,
   type ChatMessage,
 } from "./provider";
-import { resolveModel, type AiModel } from "./models";
+import {
+  COHERE_NORTH_MINI_CODE_MODEL_ID,
+  resolveModel,
+  type AiModel,
+} from "./models";
 import { retryWithBackoff, type RetryDecision, type RetryPolicy } from "./retry";
 import {
   ANDROID_REQUIRED_PATHS,
@@ -111,6 +115,7 @@ export type AgentProgressEvent =
     };
 
 export interface AgentGenerationInput {
+  projectId?: string;
   prompt: string;
   mode: "create" | "update";
   /** Selects the source profile. Website remains the default. */
@@ -198,7 +203,8 @@ export type AgentGenerationFailureCode =
   | "GENERATION_CONTENT_FILTER"
   | "GENERATION_PERSIST_FAILED"
   | "GENERATION_CONTRACT_INVALID"
-  | "GENERATION_NO_FILES";
+  | "GENERATION_NO_FILES"
+  | "GENERATION_MODEL_NOT_ALLOWED";
 
 export interface AgentGenerationFailure {
   ok: false;
@@ -487,7 +493,13 @@ export async function generateApp(
   deps: AgentDependencies = {},
 ): Promise<AgentGenerationOutcome> {
   const profile: AgentProjectType = input.projectType === "android" ? "android" : "website";
-  const model = resolveModel(input.requestedModel, "app-generation");
+  const requestedModel = input.requestedModel?.trim();
+  const model = resolveModel(
+    requestedModel,
+    "app-generation",
+    process.env,
+    input.projectId,
+  );
   const now = deps.now ?? (() => Date.now());
   const deadlineAt = now() + Math.max(30_000, input.budgetMs ?? GENERATION_BUDGET_MS);
 
@@ -524,6 +536,16 @@ export async function generateApp(
       batchesCompleted: state.batchesCompleted,
     },
   });
+
+  if (
+    requestedModel === COHERE_NORTH_MINI_CODE_MODEL_ID &&
+    model.id !== COHERE_NORTH_MINI_CODE_MODEL_ID
+  ) {
+    return fail(
+      "GENERATION_MODEL_NOT_ALLOWED",
+      "The Cohere testing model is not enabled for this project.",
+    );
+  }
 
   // ── 1. Manifest ───────────────────────────────────────────────────────────
   let manifest: AgentManifest | null = input.resume?.manifest ?? null;

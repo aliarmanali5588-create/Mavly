@@ -259,6 +259,13 @@ Website and native Android source generation use OpenRouter only. Set the server
 OpenRouter model catalog. There is no provider-selection setting or automatic fallback.
 Image generation continues to use OpenRouter's separate image API.
 
+For controlled evaluation, `cohere/north-mini-code:free` is available only when the
+server environment sets `MAVLY_NORTH_MINI_CODE_PROJECTS` to an explicit comma- or
+semicolon-separated list of project IDs (never `*`). An eligible authenticated
+generation request must explicitly set its existing `model` field to that exact ID.
+Requests outside the cohort are refused; the Cohere model is not a default and is not
+exposed through a new public selector. The existing `OPENROUTER_API_KEY` is reused.
+
 If an older deployment still has `MAVLY_AI_PROVIDER`, `TOKEN_HARBOR_API_KEY`, or
 `TOKEN_HARBOR_BASE_URL` configured, remove those variables manually from its environment.
 The application no longer reads or uses them.
@@ -275,6 +282,7 @@ NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your-publishable-key
 NEXT_PUBLIC_APP_URL=http://localhost:3000
 MAVLY_DEFAULT_MODEL=          # optional; must be in the OpenRouter model catalog
+MAVLY_NORTH_MINI_CODE_PROJECTS=  # optional test cohort; explicit project ids only
 OPENROUTER_API_KEY=your-openrouter-api-key  # text generation + image generation
 
 SUPABASE_OAUTH_CLIENT_ID=your-oauth-app-client-id

@@ -4,7 +4,10 @@ import assert from "node:assert/strict";
 import {
   AI_PROVIDER_IDS,
   AI_MODEL_CATALOG,
+  COHERE_NORTH_MINI_CODE_MODEL_ID,
+  COHERE_NORTH_MINI_CODE_PROJECTS_ENV,
   OPENROUTER_MODEL_CATALOG,
+  isCohereNorthMiniCodeEnabledForProject,
   resolveModel,
   resolveOpenRouterModel,
 } from "../src/lib/ai/models";
@@ -21,10 +24,12 @@ import { isAiConfigured } from "../src/lib/ai/provider";
  */
 
 const MODEL_ID = "deepseek/deepseek-v4.1-flash";
+const NORTH_MINI_CODE_ID = "cohere/north-mini-code:free";
 const model = resolveModel();
 const originalFetch = globalThis.fetch;
 const originalApiKey = process.env.OPENROUTER_API_KEY;
 const originalDefaultModel = process.env.MAVLY_DEFAULT_MODEL;
+const originalTestModelProjects = process.env[COHERE_NORTH_MINI_CODE_PROJECTS_ENV];
 const TEST_API_KEY = "or_test_secret";
 
 function useApiKey(value = TEST_API_KEY) {
@@ -54,24 +59,58 @@ function restoreEnvironment() {
   else process.env.OPENROUTER_API_KEY = originalApiKey;
   if (originalDefaultModel === undefined) delete process.env.MAVLY_DEFAULT_MODEL;
   else process.env.MAVLY_DEFAULT_MODEL = originalDefaultModel;
+  if (originalTestModelProjects === undefined) {
+    delete process.env[COHERE_NORTH_MINI_CODE_PROJECTS_ENV];
+  } else {
+    process.env[COHERE_NORTH_MINI_CODE_PROJECTS_ENV] = originalTestModelProjects;
+  }
 }
 
 const USER: ChatMessage[] = [{ role: "user", content: "build a landing page" }];
 
 // ── catalog and selection ───────────────────────────────────────────────────
 
-test("the catalog contains exactly the verified OpenRouter model", () => {
+test("the catalog contains the production default and cohort-gated testing model", () => {
   assert.deepEqual(AI_PROVIDER_IDS, ["openrouter"]);
   assert.deepEqual(
     AI_MODEL_CATALOG.map((entry) => entry.id),
-    [MODEL_ID],
-    "only a verified OpenRouter ID may reach the wire",
+    [MODEL_ID, NORTH_MINI_CODE_ID],
+    "only explicitly registered OpenRouter IDs may reach the wire",
   );
-  assert.deepEqual(OPENROUTER_MODEL_CATALOG.map((entry) => entry.id), [MODEL_ID]);
+  assert.deepEqual(
+    OPENROUTER_MODEL_CATALOG.map((entry) => entry.id),
+    [MODEL_ID, NORTH_MINI_CODE_ID],
+  );
   assert.equal(resolveModel().id, MODEL_ID);
   assert.equal(resolveOpenRouterModel().id, MODEL_ID);
   assert.equal(model.label, "DeepSeek V4.1 Flash (OpenRouter)");
   assert.equal(model.maxOutputTokens, 24_000);
+  assert.equal(OPENROUTER_MODEL_CATALOG[1].label, "Cohere: North Mini Code (free)");
+  assert.equal(OPENROUTER_MODEL_CATALOG[1].id, COHERE_NORTH_MINI_CODE_MODEL_ID);
+});
+
+test("the Cohere model requires an explicit project cohort and cannot become the default", () => {
+  const env: NodeJS.ProcessEnv = {
+    [COHERE_NORTH_MINI_CODE_PROJECTS_ENV]: "test-project",
+    MAVLY_DEFAULT_MODEL: NORTH_MINI_CODE_ID,
+  };
+  assert.equal(isCohereNorthMiniCodeEnabledForProject("test-project", env), true);
+  assert.equal(isCohereNorthMiniCodeEnabledForProject("other-project", env), false);
+  assert.equal(
+    isCohereNorthMiniCodeEnabledForProject("test-project", {
+      [COHERE_NORTH_MINI_CODE_PROJECTS_ENV]: "*",
+    }),
+    false,
+  );
+  assert.equal(
+    resolveModel(NORTH_MINI_CODE_ID, "app-generation", env, "test-project").id,
+    NORTH_MINI_CODE_ID,
+  );
+  assert.equal(
+    resolveModel(NORTH_MINI_CODE_ID, "app-generation", env, "other-project").id,
+    MODEL_ID,
+  );
+  assert.equal(resolveModel(null, "app-generation", env, "test-project").id, MODEL_ID);
 });
 
 test("retired FreeModel model IDs never resolve to themselves", () => {
@@ -172,12 +211,44 @@ test("a generation uses OpenRouter auth, the catalog model and supported paramet
       temperature: 0.1,
       max_tokens: 12_000,
     });
+
     assert.equal(result.content, '{"files":[]}');
     assert.equal(result.model, MODEL_ID);
     assert.equal(result.finishReason, "stop");
     assert.equal(result.metadata.providerRequestId, "gen-or-1");
     assert.equal(result.metadata.usage.totalTokens, 18);
     assert.equal(result.metadata.usage.costUsd, 0.0012);
+  } finally {
+    restoreEnvironment();
+  }
+});
+
+test("an eligible Cohere test request sends the exact model ID through OpenRouter", async () => {
+  useApiKey();
+  const testModel = resolveModel(
+    NORTH_MINI_CODE_ID,
+    "app-generation",
+    { [COHERE_NORTH_MINI_CODE_PROJECTS_ENV]: "test-project" },
+    "test-project",
+  );
+  let body: Record<string, unknown> | null = null;
+  stubFetch(
+    200,
+    {
+      id: "gen-or-cohere-1",
+      model: NORTH_MINI_CODE_ID,
+      choices: [{ message: { content: '{"files":[]}' }, finish_reason: "stop" }],
+    },
+    {},
+    (init) => {
+      body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+    },
+  );
+
+  try {
+    const result = await chatCompletion(testModel, USER);
+    assert.equal(result.ok, true);
+    assert.equal(body?.model, NORTH_MINI_CODE_ID);
   } finally {
     restoreEnvironment();
   }

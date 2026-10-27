@@ -34,6 +34,8 @@ export const AI_PROVIDER_IDS: readonly AiProviderId[] = ["openrouter"];
 export const DEFAULT_AI_PROVIDER: AiProviderId = "openrouter";
 
 const OPENROUTER_DEFAULT_MODEL_ID = "deepseek/deepseek-v4.1-flash";
+export const COHERE_NORTH_MINI_CODE_MODEL_ID = "cohere/north-mini-code:free";
+export const COHERE_NORTH_MINI_CODE_PROJECTS_ENV = "MAVLY_NORTH_MINI_CODE_PROJECTS";
 
 /**
  * The verified OpenRouter model ID. It is an OpenRouter ID (`vendor/model`);
@@ -48,6 +50,13 @@ export const OPENROUTER_MODEL_CATALOG: readonly AiModel[] = [
     tasks: ["app-generation", "repair", "review", "fast", "reasoning"],
     maxOutputTokens: 24_000,
   },
+  {
+    id: COHERE_NORTH_MINI_CODE_MODEL_ID,
+    label: "Cohere: North Mini Code (free)",
+    provider: "openrouter",
+    tasks: ["app-generation", "repair", "review", "fast", "reasoning"],
+    maxOutputTokens: 24_000,
+  },
 ];
 
 /**
@@ -56,9 +65,45 @@ export const OPENROUTER_MODEL_CATALOG: readonly AiModel[] = [
  */
 export const AI_MODEL_CATALOG: readonly AiModel[] = OPENROUTER_MODEL_CATALOG;
 
+/**
+ * The experimental model is available only to projects named by the operator.
+ * Empty and wildcard cohorts are refused; this is intentionally not a client
+ * controlled feature flag.
+ */
+export function isCohereNorthMiniCodeEnabledForProject(
+  projectId: string | null | undefined,
+  env: NodeJS.ProcessEnv = process.env,
+): boolean {
+  const project = projectId?.trim().toLowerCase();
+  const configured = (env[COHERE_NORTH_MINI_CODE_PROJECTS_ENV] ?? "").trim();
+  if (!project || !configured || configured === "*") return false;
+
+  const projects = configured
+    .split(/[,;]/)
+    .map((entry) => entry.trim().toLowerCase())
+    .filter(Boolean);
+
+  return !projects.includes("*") &&
+    !projects.some((entry) => /\s/.test(entry)) &&
+    projects.includes(project);
+}
+
+export function isModelEnabledForProject(
+  modelId: string,
+  projectId: string | null | undefined,
+  env: NodeJS.ProcessEnv = process.env,
+): boolean {
+  if (!OPENROUTER_MODEL_CATALOG.some((model) => model.id === modelId)) return false;
+  return modelId !== COHERE_NORTH_MINI_CODE_MODEL_ID ||
+    isCohereNorthMiniCodeEnabledForProject(projectId, env);
+}
+
 /** `MAVLY_DEFAULT_MODEL` is an unvalidated override; resolution validates it. */
 export function configuredDefaultModelId(env: NodeJS.ProcessEnv = process.env): string {
-  return env.MAVLY_DEFAULT_MODEL?.trim() || OPENROUTER_DEFAULT_MODEL_ID;
+  const configured = env.MAVLY_DEFAULT_MODEL?.trim();
+  return configured && configured !== COHERE_NORTH_MINI_CODE_MODEL_ID
+    ? configured
+    : OPENROUTER_DEFAULT_MODEL_ID;
 }
 
 /**
@@ -71,11 +116,12 @@ export function resolveModel(
   requestedModel?: string | null,
   task: AiTask = "app-generation",
   env: NodeJS.ProcessEnv = process.env,
+  projectId?: string | null,
 ): AiModel {
   const requested = requestedModel?.trim();
   if (requested) {
     const exact = OPENROUTER_MODEL_CATALOG.find((model) => model.id === requested);
-    if (exact) return exact;
+    if (exact && isModelEnabledForProject(exact.id, projectId, env)) return exact;
   }
 
   const defaultId = configuredDefaultModelId(env);

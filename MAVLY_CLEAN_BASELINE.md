@@ -6,9 +6,9 @@ isolated verification sandbox implemented; the
 rest of the platform backend remains unavailable.
 **Scope:** the Totalum VCaaS integration stays removed. Supabase authentication, OAuth,
 sessions, project ownership and RLS are preserved. OpenRouter is the active server-only
-website/code-generation provider, and the same server-only key serves the image path. Token
-Harbor is an approved additional text provider that stays off unless an operator explicitly
-selects it.
+website/code-generation provider, and the same server-only key serves the image path.
+`cohere/north-mini-code:free` is an opt-in model for explicit project cohorts configured
+with `MAVLY_NORTH_MINI_CODE_PROJECTS`; it does not replace the default model.
 Vercel is used only when an operator explicitly
 enables publishing.
 
@@ -33,7 +33,7 @@ revocation or database mutation was performed while preparing this document.
 | Durable generation worker (opt-in) | Off unless `MAVLY_GENERATION_WORKER_ENABLED`, a ≥32-char `MAVLY_GENERATION_WORKER_SECRET`, an explicit `MAVLY_GENERATION_WORKER_PROJECTS` cohort, `SUPABASE_SERVICE_ROLE_KEY` and the Supabase URL are all configured. Admission records `dispatch_mode`; only worker-dispatched runs are claimed. An operator-supplied scheduler calls `/api/generation/worker`, which executes one job per tick under a fenced lease, renews it, recovers expired leases into bounded retries or dead letters, and never deletes accepted work. Uncohort projects remain inline. See `docs/runbooks/generation-worker.md`. |
 | Verification sandbox (opt-in) | Off unless `MAVLY_VERIFICATION_SANDBOX_ENABLED`, an explicit `MAVLY_VERIFICATION_SANDBOX_PROJECTS` cohort, a Vercel provider credential, `SUPABASE_SERVICE_ROLE_KEY` and the Supabase URL are all configured, and migrations 17 then 19 are applied. Only worker-dispatched runs enqueue one verification per completed run and ready snapshot. Later worker ticks re-validate the snapshot, build it in an isolated Vercel Sandbox microVM, start the validated production server on loopback and run a sandbox-local health check. `passed` requires the build, the runtime start and a `2xx`/`3xx` health response; build-only success is never `passed`. Stages run detached and are polled across ticks; every terminal path destroys the sandbox. Unsupported formats return `unsupported_runtime`. A separately opt-in bounded AI repair (default 1, hard cap 2) may create a new immutable snapshot for a source-level failure and rerun the checks. Preview stays unavailable because there is no authenticated proxy. Status appears only in the existing authorized `agent/status` / `agent/stop` responses. See `docs/architecture/phase-4-runtime-verification.md`. |
 | Generation preview | New-project plans always include `preview.html`; it is generated in its own batch. Batch parsing accepts only requested paths. Progress stages use durable run state, manifest/checkpoints, and the static-preview resolver; the UI uses an indeterminate bar rather than estimated completion percentages. |
-| Text generation | `src/lib/ai/provider.ts` serves every website/Android generation request through OpenRouter (`src/lib/ai/openrouter.ts`, `deepseek/deepseek-v4.1-flash`). The model must pass the OpenRouter catalog allowlist before a request leaves the server; the shared chat contract lives in `src/lib/ai/chat-contract.ts`. |
+| Text generation | `src/lib/ai/provider.ts` serves every website/Android generation request through OpenRouter (`src/lib/ai/openrouter.ts`). The production default is `deepseek/deepseek-v4.1-flash`; `cohere/north-mini-code:free` is selectable only when the project is in the server-configured `MAVLY_NORTH_MINI_CODE_PROJECTS` cohort. Models must pass the catalog and project-cohort checks before a request leaves the server; the shared chat contract lives in `src/lib/ai/chat-contract.ts`. |
 | Conversation and runs | Persisted in `project_messages` and `project_runs`, polled by the workspace. |
 | Project settings | Owner-editable name/description through `PATCH /projects/{id}`; the derived Mavly address is read-only. |
 | Project secrets | Write-only AES-256-GCM ciphertext per project/environment; API responses carry metadata only. Values are not injected into the static output. |
@@ -348,8 +348,10 @@ and the stored token never reaches the model or a log.
 
 - Website and native Android source generation use OpenRouter only. `MAVLY_DEFAULT_MODEL`
   may override the default only with an entry in the OpenRouter catalog;
-  `deepseek/deepseek-v4.1-flash` is the built-in default. Unsupported requested or
-  configured models never reach the wire.
+  `deepseek/deepseek-v4.1-flash` remains the built-in default. The Cohere North Mini Code
+  testing model is admitted only for explicit project IDs in
+  `MAVLY_NORTH_MINI_CODE_PROJECTS` and only when requested by its exact model ID.
+  Unsupported, unconfigured or out-of-cohort model requests never reach the wire.
 - The run plans a manifest, then requests bounded file batches. The model must return JSON
   with full file contents; one focused repair is made per malformed/empty response.
 - `finish_reason: "length"` is always a failure. The truncated response is discarded, the

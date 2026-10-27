@@ -39,7 +39,11 @@ import type {
   VcaasSecret,
 } from "@/lib/vcaas-types";
 import { generationConfigurationError, isAiConfigured } from "@/lib/ai/provider";
-import { resolveModel } from "@/lib/ai/models";
+import {
+  COHERE_NORTH_MINI_CODE_MODEL_ID,
+  isCohereNorthMiniCodeEnabledForProject,
+  resolveModel,
+} from "@/lib/ai/models";
 import { parseImageGenerationRequest, resolveImageModel } from "@/lib/ai/image-models";
 import {
   generateImage,
@@ -676,6 +680,13 @@ async function launchProjectResponse(userId: string, body: unknown): Promise<Nex
   const requestedId = stringOf(record.projectId)?.trim() ?? "";
   const problem = validateProjectSlug(requestedId);
   if (problem) return fail(400, "VALIDATION", "Invalid project name.");
+  const requestedModel = stringOf(record.model)?.trim() ?? null;
+  if (
+    requestedModel === COHERE_NORTH_MINI_CODE_MODEL_ID &&
+    !isCohereNorthMiniCodeEnabledForProject(requestedId)
+  ) {
+    return fail(403, "FORBIDDEN", "The Cohere testing model is not enabled for this project.");
+  }
 
   const description = stringOf(record.description)?.slice(0, 2_000) || prompt.slice(0, 200);
   const label = stringOf(record.label)?.slice(0, 120) || requestedId;
@@ -690,6 +701,14 @@ async function launchProjectResponse(userId: string, body: unknown): Promise<Nex
   );
   if (isStoreFailure(created)) return fail(created.code === "CONFLICT" ? 409 : 500, created.code ?? "UNKNOWN", created.error);
 
+  if (
+    requestedModel === COHERE_NORTH_MINI_CODE_MODEL_ID &&
+    !isCohereNorthMiniCodeEnabledForProject(created.data.project_id)
+  ) {
+    if (projectType === "website") await deleteProject(userId, created.data.project_id);
+    return fail(403, "FORBIDDEN", "The Cohere testing model is not enabled for this project.");
+  }
+  const model = resolveModel(requestedModel, "app-generation", process.env, created.data.project_id);
   const warnings: NonNullable<ProjectLaunchResult["warnings"]> = [];
   if (record.figma !== undefined && record.figma !== null) {
     const figma = recordOf(record.figma);
@@ -703,8 +722,6 @@ async function launchProjectResponse(userId: string, body: unknown): Promise<Nex
       });
     }
   }
-
-  const model = resolveModel(stringOf(record.model), "app-generation");
   const dispatchMode = dispatchModeForProject(created.data.project_id);
   const admission = await createGenerationJob({
     projectId: created.data.project_id,
@@ -785,7 +802,7 @@ async function launchProjectResponse(userId: string, body: unknown): Promise<Nex
         projectId: created.data.project_id,
         runId: run.id,
         prompt,
-        requestedModel: stringOf(record.model),
+        requestedModel: run.model,
       }),
     );
   }
@@ -1669,7 +1686,14 @@ async function startAgentResponse(userId: string, projectId: string, body: unkno
   const prompt = (stringOf(record.prompt)?.trim() ?? "").slice(0, 32_000);
   if (!prompt) return fail(400, "VALIDATION", "A prompt is required.");
 
-  const model = resolveModel(stringOf(record.model), "app-generation");
+  const requestedModel = stringOf(record.model)?.trim() ?? null;
+  if (
+    requestedModel === COHERE_NORTH_MINI_CODE_MODEL_ID &&
+    !isCohereNorthMiniCodeEnabledForProject(projectId)
+  ) {
+    return fail(403, "FORBIDDEN", "The Cohere testing model is not enabled for this project.");
+  }
+  const model = resolveModel(requestedModel, "app-generation", process.env, projectId);
   const dispatchMode = dispatchModeForProject(projectId);
   const admission = await createGenerationJob({
     projectId,
@@ -1749,7 +1773,7 @@ async function startAgentResponse(userId: string, projectId: string, body: unkno
         projectId,
         runId: run.id,
         prompt,
-        requestedModel: stringOf(record.model),
+        requestedModel: run.model,
       }),
     );
   }

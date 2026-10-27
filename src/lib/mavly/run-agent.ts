@@ -653,6 +653,7 @@ async function execute(
 
   const generated = await generateApp(
     {
+      projectId: input.projectId,
       prompt: input.prompt,
       mode,
       projectType,

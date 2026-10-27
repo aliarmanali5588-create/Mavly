@@ -125,9 +125,11 @@ a delivered webhook, a container image build/publish, or the migrations against 
 
 - Website and native Android code generation use OpenRouter server-side through
   `src/lib/ai/provider.ts` and `src/lib/ai/openrouter.ts`, with the verified catalog entry
-  `deepseek/deepseek-v4.1-flash` and server-only `OPENROUTER_API_KEY`. The same key serves
-  the image API; the shared chat contract is `src/lib/ai/chat-contract.ts`. Do not add
-  another model provider or hosted builder backend without approval.
+  `deepseek/deepseek-v4.1-flash` as the default and server-only `OPENROUTER_API_KEY`. The
+  optional `cohere/north-mini-code:free` model is restricted to the explicit
+  `MAVLY_NORTH_MINI_CODE_PROJECTS` cohort. The same key serves the image API; the shared
+  chat contract is `src/lib/ai/chat-contract.ts`. Do not add another model provider or
+  hosted builder backend without approval.
 - **Native Android source generation is implemented (Phase 9).** Project types persist in
   `public.projects.project_type` (migration 22) and Android creation is idempotent through
   migration 25. An Android prompt flows through the same durable run, OpenRouter provider, batch
