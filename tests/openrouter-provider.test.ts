@@ -91,6 +91,7 @@ test("the catalog contains the production default and cohort-gated testing model
 
 test("the Cohere model requires an explicit project cohort and cannot become the default", () => {
   const env: NodeJS.ProcessEnv = {
+    ...process.env,
     [COHERE_NORTH_MINI_CODE_PROJECTS_ENV]: "test-project",
     MAVLY_DEFAULT_MODEL: NORTH_MINI_CODE_ID,
   };
@@ -98,6 +99,7 @@ test("the Cohere model requires an explicit project cohort and cannot become the
   assert.equal(isCohereNorthMiniCodeEnabledForProject("other-project", env), false);
   assert.equal(
     isCohereNorthMiniCodeEnabledForProject("test-project", {
+      ...process.env,
       [COHERE_NORTH_MINI_CODE_PROJECTS_ENV]: "*",
     }),
     false,
@@ -228,7 +230,10 @@ test("an eligible Cohere test request sends the exact model ID through OpenRoute
   const testModel = resolveModel(
     NORTH_MINI_CODE_ID,
     "app-generation",
-    { [COHERE_NORTH_MINI_CODE_PROJECTS_ENV]: "test-project" },
+    {
+      ...process.env,
+      [COHERE_NORTH_MINI_CODE_PROJECTS_ENV]: "test-project",
+    },
     "test-project",
   );
   let body: Record<string, unknown> | null = null;
