@@ -308,7 +308,7 @@ export async function handleMavlyVcaasRequest(input: MavlyRequest): Promise<Next
   const { method, segments, scope, userId, body, query } = input;
 
   if (scope.kind === "account" && scope.resource === "project-list" && method === "GET") {
-    return listProjectResponse(userId);
+    return listProjectResponse(userId, query);
   }
 
   if (scope.kind === "account" && scope.resource === "credit-costs" && method === "GET") {
@@ -598,8 +598,17 @@ export async function handleMavlyVcaasRequest(input: MavlyRequest): Promise<Next
   return null;
 }
 
-async function listProjectResponse(userId: string): Promise<NextResponse> {
-  const result = await listProjects(userId);
+async function listProjectResponse(userId: string, query: URLSearchParams): Promise<NextResponse> {
+  const requestedTypes = query.getAll("projectType");
+  if (requestedTypes.length > 1) {
+    return fail(400, "VALIDATION", "Project type must be website or android.");
+  }
+  const requestedType = requestedTypes[0];
+  if (requestedType !== undefined && requestedType !== "website" && requestedType !== "android") {
+    return fail(400, "VALIDATION", "Project type must be website or android.");
+  }
+
+  const result = await listProjects(userId, requestedType);
   if (isStoreFailure(result)) return fail(500, "UNKNOWN", "Could not load projects.");
 
   const data: VcaasProjectSummary[] = result.data.map((row) => ({

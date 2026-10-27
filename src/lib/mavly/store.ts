@@ -239,15 +239,20 @@ export async function createOwnedProject(
   return { ok: false, error: "Could not allocate a project id", code: "CONFLICT" };
 }
 
-export async function listProjects(userId: string): Promise<StoreResult<ProjectRow[]>> {
+export async function listProjects(
+  userId: string,
+  projectType?: ProjectType,
+): Promise<StoreResult<ProjectRow[]>> {
   const supabase = await client();
   if (!supabase) return { ok: false, error: "Supabase is not configured", code: "UNAVAILABLE" };
 
-  const { data, error } = await supabase
+  let query = supabase
     .from("projects")
     .select("project_id,user_id,project_type,label,description,created_at,updated_at")
-    .eq("user_id", userId)
-    .order("updated_at", { ascending: false });
+    .eq("user_id", userId);
+  if (projectType) query = query.eq("project_type", projectType);
+
+  const { data, error } = await query.order("updated_at", { ascending: false });
 
   if (error) return dbError("list projects", error.message, error.code);
   return { ok: true, data: (data ?? []) as ProjectRow[] };

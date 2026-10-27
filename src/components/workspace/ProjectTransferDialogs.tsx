@@ -21,6 +21,7 @@ import { Switch } from "@/components/ui/switch";
 import { useT } from "@/i18n";
 import type { TranslationKey } from "@/i18n";
 import { vcaasApi } from "@/lib/vcaas";
+import type { ProjectType } from "@/lib/vcaas-types";
 import { writeOperation } from "@/lib/project-operation";
 import {
     CLONE_COST,
@@ -369,6 +370,7 @@ export function ExportProjectDialog({ open, onOpenChange, projectId }: ExportPro
 export interface ImportProjectDialogProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
+    projectType: ProjectType;
     /** The caller's own project slugs — the availability check, as in creation. */
     takenNames: ReadonlySet<string>;
     onImported: () => void;
@@ -377,6 +379,7 @@ export interface ImportProjectDialogProps {
 export function ImportProjectDialog({
     open,
     onOpenChange,
+    projectType,
     takenNames,
     onImported,
 }: ImportProjectDialogProps) {
@@ -400,7 +403,12 @@ export function ImportProjectDialog({
     const canStart = codeLooksRight && !!name && !slugProblem && !isMine && !transfer.busy;
 
     async function run() {
-        await transfer.runImport({ importCode: code.trim(), targetName: name, create: true });
+        await transfer.runImport({
+            importCode: code.trim(),
+            targetName: name,
+            create: true,
+            projectType,
+        });
         onImported();
     }
 
@@ -486,6 +494,7 @@ export interface CloneProjectDialogProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
     projectId: string;
+    projectType: ProjectType;
     takenNames: ReadonlySet<string>;
     onCloned: () => void;
 }
@@ -494,6 +503,7 @@ export function CloneProjectDialog({
     open,
     onOpenChange,
     projectId,
+    projectType,
     takenNames,
     onCloned,
 }: CloneProjectDialogProps) {
@@ -515,7 +525,12 @@ export function CloneProjectDialog({
     const canStart = !!name && !slugProblem && !isMine && !transfer.busy;
 
     async function run() {
-        await transfer.runClone({ sourceProjectId: projectId, targetName: name, includeRecords });
+        await transfer.runClone({
+            sourceProjectId: projectId,
+            targetName: name,
+            includeRecords,
+            projectType,
+        });
         onCloned();
     }
 
@@ -657,11 +672,13 @@ function useTransferRun() {
     const [phase, setPhase] = React.useState<TransferPhase>("idle");
     const [createdSlug, setCreatedSlug] = React.useState<string | null>(null);
     const [failure, setFailure] = React.useState<{ code: string | null; message: string | null } | null>(null);
+    const creationRequestRef = React.useRef<{ fingerprint: string; requestId: string } | null>(null);
 
     function reset() {
         setPhase("idle");
         setCreatedSlug(null);
         setFailure(null);
+        creationRequestRef.current = null;
     }
 
     /**
@@ -697,19 +714,30 @@ function useTransferRun() {
         importCode,
         targetName,
         create,
+        projectType = "website",
     }: {
         importCode: string;
         targetName: string;
         create: boolean;
+        projectType?: ProjectType;
     }) {
         setFailure(null);
         let slug = targetName;
 
         if (create) {
             setPhase("creating");
+            const fingerprint = `${targetName}\n${projectType}`;
+            const requestId = projectType === "android"
+                ? creationRequestRef.current?.fingerprint === fingerprint
+                    ? creationRequestRef.current.requestId
+                    : crypto.randomUUID()
+                : undefined;
+            if (requestId) creationRequestRef.current = { fingerprint, requestId };
             const created = await vcaasApi.projects.create({
                 projectId: targetName,
                 description: t("transfer.createdDescription"),
+                projectType,
+                ...(requestId ? { clientRequestId: requestId } : {}),
                 // The copy is created on the engine of the code it is about to receive (a code imports only into its own engine).
                 sourceImportCode: importCode,
             });
@@ -743,10 +771,12 @@ function useTransferRun() {
         sourceProjectId,
         targetName,
         includeRecords,
+        projectType = "website",
     }: {
         sourceProjectId: string;
         targetName: string;
         includeRecords: boolean;
+        projectType?: ProjectType;
     }) {
         setFailure(null);
 
@@ -758,7 +788,12 @@ function useTransferRun() {
             return;
         }
 
-        await runImport({ importCode: exported.data.importCode, targetName, create: true });
+        await runImport({
+            importCode: exported.data.importCode,
+            targetName,
+            create: true,
+            projectType,
+        });
     }
 
     return {

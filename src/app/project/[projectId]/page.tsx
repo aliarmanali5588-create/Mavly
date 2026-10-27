@@ -1961,6 +1961,7 @@ export default function WorkspacePage() {
         open={cloneOpen}
         onOpenChange={setCloneOpen}
         projectId={projectId}
+        projectType={project.projectType ?? "website"}
         takenNames={takenNames}
         onCloned={() => {}}
       />

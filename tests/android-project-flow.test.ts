@@ -15,6 +15,8 @@ const previewRoute = read("src/app/api/preview/[projectId]/[[...path]]/route.ts"
 const apiRoute = read("src/app/api/vcaas/[...path]/route.ts");
 const typeMigration = read("supabase/migrations/22_project_type.sql");
 const idempotencyMigration = read("supabase/migrations/25_project_creation_idempotency.sql");
+const projectTransferDialogs = read("src/components/workspace/ProjectTransferDialogs.tsx");
+const vcaasClient = read("src/lib/vcaas.ts");
 
 test("Android prompt submissions create a persisted Android project and start native generation without a naming modal", () => {
   const start = dashboard.indexOf('if (promptMode === "android") {', dashboard.indexOf("const submitBuild"));
@@ -137,4 +139,25 @@ test("failed Android project creation does not navigate to a workspace", () => {
   const androidCreate = dashboard.slice(start, end);
   assert.match(androidCreate, /if \(!created\.ok \|\| !created\.data\)[\s\S]*?return;/);
   assert.match(androidCreate, /router\.push\(`\/project\/\$\{encodeURIComponent\(created\.data\.projectId\)\}`\)/);
+});
+
+test("dashboard project mode persists, filters by stored type, and governs creation", () => {
+  assert.match(dashboard, /localStorage\.getItem\(PROJECT_TYPE_MODE_KEY\)/);
+  assert.match(dashboard, /localStorage\.setItem\(PROJECT_TYPE_MODE_KEY, projectType\)/);
+  assert.match(dashboard, /vcaasApi\.projects\.list\(\{ projectType \}\)/);
+  assert.match(dashboard, /requestId !== projectListRequestRef\.current/);
+  assert.match(vcaasClient, /projectType\?: "website" \| "android"/);
+  assert.match(vcaasClient, /query\.set\("projectType", params\.projectType\)/);
+  assert.match(api, /query\.getAll\("projectType"\)/);
+  assert.match(store, /\.eq\("project_type", projectType\)/);
+  assert.match(dashboard, /projectType: promptMode/);
+  assert.match(dashboard, /No \{promptMode === "website" \? "websites" : "Android apps"\} yet/);
+});
+
+test("dashboard imports use the selected type and duplicates preserve their source type", () => {
+  assert.match(dashboard, /<ImportProjectDialog[\s\S]*?projectType=\{promptMode\}/);
+  assert.match(dashboard, /<CloneProjectDialog[\s\S]*?projectType=\{projects\.find/);
+  assert.match(projectTransferDialogs, /projectType === "android"[\s\S]*?crypto\.randomUUID\(\)/);
+  assert.match(projectTransferDialogs, /\.\.\.\(requestId \? \{ clientRequestId: requestId \} : \{\}\)/);
+  assert.match(projectTransferDialogs, /await runImport\(\{[\s\S]*?projectType,\s*\}\);/);
 });

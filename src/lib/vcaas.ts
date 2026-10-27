@@ -297,6 +297,8 @@ export const vcaasApi = {
       limit?: number;
       skip?: number;
       search?: string;
+      /** Filter by the persisted project type; omitted lists every owned project. */
+      projectType?: "website" | "android";
       sortDirection?: "asc" | "desc";
       /**
        * ⭐ `"lastModified"` orders by when the project last CHANGED (a prompt, a
@@ -335,6 +337,7 @@ export const vcaasApi = {
       if (params?.limit != null) query.set("limit", String(params.limit));
       if (params?.skip) query.set("skip", String(params.skip));
       if (params?.search?.trim()) query.set("search", params.search.trim());
+      if (params?.projectType) query.set("projectType", params.projectType);
       if (params?.sortDirection) query.set("sortDirection", params.sortDirection);
       if (params?.sortField) query.set("sortField", params.sortField);
       if (params?.groupId) query.set("groupId", params.groupId);

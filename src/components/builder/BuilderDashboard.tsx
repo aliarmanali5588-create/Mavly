@@ -36,7 +36,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { toast } from "sonner";
 import { uploadFilesToProjectDetailed, splitBySize, MAX_UPLOAD_MB, TOO_LARGE_ADVICE } from "@/lib/upload";
-import type { VcaasProjectSummary } from "@/lib/vcaas-types";
+import type { ProjectType, VcaasProjectSummary } from "@/lib/vcaas-types";
 import type { ProfileSummary } from "@/lib/user-profile";
 
 type ViewMode = "cards" | "table";
@@ -44,6 +44,7 @@ type SortKey = "date-desc" | "date-asc" | "name-asc" | "name-desc";
 
 const PAGE_SIZE = 20;
 const VIEW_MODE_KEY = "vibebuild:dashboard-view";
+const PROJECT_TYPE_MODE_KEY = "mavly:dashboard-project-type";
 
 // --- The project tile: the real preview, or an honest placeholder -------------
 const PREVIEW_BASE_WIDTH = 1280;
@@ -278,7 +279,10 @@ export default function DashboardPage({ profile }: { profile: ProfileSummary }) 
 
   // First-prompt "Build" flow
   const [firstPrompt, setFirstPrompt] = useState("");
-  const [promptMode, setPromptMode] = useState<"website" | "android">("website");
+  const [promptMode, setPromptMode] = useState<ProjectType>("website");
+  const [projectTypeModeReady, setProjectTypeModeReady] = useState(false);
+  const projectListRequestRef = useRef(0);
+  const [projectLoadError, setProjectLoadError] = useState<string | null>(null);
   const [attachedFiles, setAttachedFiles] = useState<{ name: string; imageDescription: string; file: File }[]>([]);
   const [uploading, setUploading] = useState(false);
   const heroTextareaRef = useRef<HTMLTextAreaElement>(null);
@@ -382,6 +386,7 @@ export default function DashboardPage({ profile }: { profile: ProfileSummary }) 
   const [githubName, setGithubName] = useState("github-import");
   const [githubNameError, setGithubNameError] = useState<string | null>(null);
   const [githubNameCreating, setGithubNameCreating] = useState(false);
+  const githubCreateRequestRef = useRef<{ fingerprint: string; requestId: string } | null>(null);
 
   /** A Figma link from the popover lands in the box, appended to whatever is there. */
   const appendToPrompt = useCallback((text: string) => {
@@ -446,23 +451,67 @@ export default function DashboardPage({ profile }: { profile: ProfileSummary }) 
     [projects]
   );
 
-  const fetchData = useCallback(async () => {
+  const fetchData = useCallback(async (projectType: ProjectType) => {
+    const requestId = ++projectListRequestRef.current;
     setLoading(true);
+    setProjects([]);
+    setProjectLoadError(null);
     try {
-      const res = await vcaasApi.projects.list();
+      const res = await vcaasApi.projects.list({ projectType });
+      if (requestId !== projectListRequestRef.current) return;
       if (res.ok && res.data) {
         const list = Array.isArray(res.data) ? res.data : [];
         list.sort((a, b) => projectTimestamp(b) - projectTimestamp(a));
         setProjects(list);
+      } else {
+        setProjectLoadError(res.error || "Could not load projects.");
       }
     } catch (err) {
-      console.error("Failed to load projects:", err);
+      if (requestId === projectListRequestRef.current) {
+        console.error("Failed to load projects:", err);
+        setProjectLoadError(err instanceof Error ? err.message : "Could not load projects.");
+      }
     } finally {
-      setLoading(false);
+      if (requestId === projectListRequestRef.current) setLoading(false);
     }
   }, []);
 
-  useEffect(() => { fetchData(); }, [fetchData]);
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(PROJECT_TYPE_MODE_KEY);
+      if (stored === "website" || stored === "android") setPromptMode(stored);
+    } catch {
+      // The dashboard remains usable when browser storage is unavailable.
+    } finally {
+      setProjectTypeModeReady(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!projectTypeModeReady) return;
+    void fetchData(promptMode);
+    return () => {
+      projectListRequestRef.current += 1;
+    };
+  }, [fetchData, projectTypeModeReady, promptMode]);
+
+  const chooseProjectType = (projectType: ProjectType) => {
+    if (projectType === promptMode) return;
+    setPromptMode(projectType);
+    setProjects([]);
+    setLoading(true);
+    setProjectLoadError(null);
+    try {
+      localStorage.setItem(PROJECT_TYPE_MODE_KEY, projectType);
+    } catch {
+      // Persisting the preference is optional.
+    }
+  };
+
+  const refreshProjects = useCallback(
+    () => fetchData(promptMode),
+    [fetchData, promptMode],
+  );
 
   // Load persisted view mode once on mount.
   useEffect(() => {
@@ -485,7 +534,7 @@ export default function DashboardPage({ profile }: { profile: ProfileSummary }) 
   };
 
   // Reset to first page whenever filters/sort change.
-  useEffect(() => { setPage(1); }, [search, sortKey, viewMode]);
+  useEffect(() => { setPage(1); }, [search, sortKey, viewMode, promptMode]);
 
   // --- Derived: filtered → sorted → paginated ---
   const filtered = useMemo(() => {
@@ -550,12 +599,27 @@ export default function DashboardPage({ profile }: { profile: ProfileSummary }) 
     setGithubNameCreating(true);
     setGithubNameError(null);
 
-    const created = await vcaasApi.projects.create({
-      projectId: id,
-      description: "Imported from GitHub",
-      projectType: "website",
-      engineVersion: "v2",
-    });
+    const fingerprint = `${id}\n${promptMode}`;
+    const requestId =
+      githubCreateRequestRef.current?.fingerprint === fingerprint
+        ? githubCreateRequestRef.current.requestId
+        : crypto.randomUUID();
+    githubCreateRequestRef.current = { fingerprint, requestId };
+
+    let created: Awaited<ReturnType<typeof vcaasApi.projects.create>>;
+    try {
+      created = await vcaasApi.projects.create({
+        projectId: id,
+        description: "Imported from GitHub",
+        projectType: promptMode,
+        ...(promptMode === "android" ? { clientRequestId: requestId } : {}),
+        engineVersion: "v2",
+      });
+    } catch (error) {
+      setGithubNameError(error instanceof Error ? error.message : `Could not create "${id}".`);
+      setGithubNameCreating(false);
+      return;
+    }
     if (!created.ok || !created.data) {
       setGithubNameError(created.error || `Could not create "${id}".`);
       setGithubNameCreating(false);
@@ -567,6 +631,7 @@ export default function DashboardPage({ profile }: { profile: ProfileSummary }) 
       toast.info(`"${id}" was taken — your project is "${actualId}".`);
     }
     setGithubProjectId(actualId);
+    githubCreateRequestRef.current = null;
     setGithubNameModalOpen(false);
     setGithubNameCreating(false);
     setGithubModalOpen(true);
@@ -881,8 +946,6 @@ export default function DashboardPage({ profile }: { profile: ProfileSummary }) 
     setDeleting(false);
   };
 
-  const hasProjects = projects.length > 0;
-
   return (
     <div className="min-h-screen relative overflow-hidden mavly-page-enter">
       <div className="fixed inset-0 -z-10" style={{ background: "#fcfbf8" }} />
@@ -936,11 +999,11 @@ export default function DashboardPage({ profile }: { profile: ProfileSummary }) 
               )}
             </div>
             <div className="mb-2 px-4 sm:px-5">
-              <div role="group" aria-label="Build mode" className="inline-flex max-w-full gap-1 rounded-xl bg-gray-100 p-1">
+              <div role="group" aria-label="Project type" className="inline-flex max-w-full gap-1 rounded-xl bg-gray-100 p-1">
                 <button
                   type="button"
                   aria-pressed={promptMode === "website"}
-                  onClick={() => setPromptMode("website")}
+                  onClick={() => chooseProjectType("website")}
                   disabled={buildCreating}
                   className={`inline-flex h-10 min-w-[100px] items-center justify-center gap-1.5 rounded-lg border px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:min-w-[116px] ${
                     promptMode === "website"
@@ -949,12 +1012,12 @@ export default function DashboardPage({ profile }: { profile: ProfileSummary }) 
                   }`}
                 >
                   <Globe className="h-4 w-4 shrink-0" aria-hidden="true" />
-                  <span className="truncate">Website</span>
+                  <span className="truncate">Websites</span>
                 </button>
                 <button
                   type="button"
                   aria-pressed={promptMode === "android"}
-                  onClick={() => setPromptMode("android")}
+                  onClick={() => chooseProjectType("android")}
                   disabled={buildCreating}
                   className={`inline-flex h-10 min-w-[100px] items-center justify-center gap-1.5 rounded-lg border px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:min-w-[116px] ${
                     promptMode === "android"
@@ -963,7 +1026,7 @@ export default function DashboardPage({ profile }: { profile: ProfileSummary }) 
                   }`}
                 >
                   <Smartphone className="h-4 w-4 shrink-0" aria-hidden="true" />
-                  <span className="truncate">Android App</span>
+                  <span className="truncate">Android Apps</span>
                 </button>
               </div>
             </div>
@@ -1052,13 +1115,16 @@ export default function DashboardPage({ profile }: { profile: ProfileSummary }) 
         </div>
 
         {/* Projects */}
-        {hasProjects && (
-          <>
+        <section aria-labelledby="dashboard-projects-heading">
             {/* Toolbar: search, sort, view toggle */}
             <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-5">
               <div className="flex items-center gap-2">
-                <h2 className="text-base font-semibold text-gray-700">Projects</h2>
-                <span className="text-xs text-gray-400 bg-gray-100 rounded-full px-2 py-0.5">{filtered.length}</span>
+                <h2 id="dashboard-projects-heading" className="text-base font-semibold text-gray-700">
+                  {promptMode === "website" ? "Websites" : "Android Apps"}
+                </h2>
+                <span className="text-xs text-gray-400 bg-gray-100 rounded-full px-2 py-0.5">
+                  {loading ? "…" : filtered.length}
+                </span>
               </div>
 
               <div className="flex-1 flex flex-wrap items-center gap-2 sm:justify-end">
@@ -1135,7 +1201,41 @@ export default function DashboardPage({ profile }: { profile: ProfileSummary }) 
               </div>
             </div>
 
-            {filtered.length === 0 ? (
+            {loading ? (
+              <div aria-live="polite" className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {[1, 2, 3].map((i) => <Skeleton key={i} className="h-48 rounded-xl bg-gray-200/60 dark:bg-gray-800/60" />)}
+              </div>
+            ) : projectLoadError ? (
+              <div role="alert" className="rounded-2xl border border-red-200 bg-red-50 px-5 py-8 text-center">
+                <p className="text-sm text-red-700">{projectLoadError}</p>
+                <button
+                  type="button"
+                  onClick={() => void refreshProjects()}
+                  className="mt-3 text-sm font-medium text-red-800 underline underline-offset-2"
+                >
+                  Retry
+                </button>
+              </div>
+            ) : projects.length === 0 ? (
+              <div className="rounded-2xl border border-black/[0.06] bg-white/70 px-5 py-10 text-center">
+                <p className="font-medium text-gray-700">
+                  No {promptMode === "website" ? "websites" : "Android apps"} yet
+                </p>
+                <p className="mx-auto mt-1 max-w-md text-sm text-gray-500">
+                  {promptMode === "website"
+                    ? "Describe your idea above and Mavly will create your first website."
+                    : "Describe your idea above and Mavly will create your first Android app."}
+                </p>
+                <button
+                  type="button"
+                  onClick={focusComposer}
+                  className="mavly-btn-secondary mt-4 h-9 px-3 text-sm font-semibold"
+                >
+                  <Plus className="mr-1.5 inline h-4 w-4" />
+                  Create {promptMode === "website" ? "a website" : "an Android app"}
+                </button>
+              </div>
+            ) : filtered.length === 0 ? (
               <div className="text-center py-16 text-gray-400">
                 <Search className="w-8 h-8 mx-auto mb-2 text-gray-300" />
                 <p className="text-sm">No projects match &ldquo;{search}&rdquo;</p>
@@ -1301,7 +1401,7 @@ export default function DashboardPage({ profile }: { profile: ProfileSummary }) 
             )}
 
             {/* Pagination */}
-            {filtered.length > PAGE_SIZE && (
+            {!loading && !projectLoadError && filtered.length > PAGE_SIZE && (
               <div className="flex items-center justify-center gap-2 mt-6">
                 <button
                   onClick={() => setPage((p) => Math.max(1, p - 1))}
@@ -1320,14 +1420,7 @@ export default function DashboardPage({ profile }: { profile: ProfileSummary }) 
                 </button>
               </div>
             )}
-          </>
-        )}
-
-        {loading && hasProjects && (
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-6">
-            {[1, 2, 3].map((i) => <Skeleton key={i} className="h-48 rounded-xl bg-gray-200/60 dark:bg-gray-800/60" />)}
-          </div>
-        )}
+        </section>
       </div>
 
       {/* ⭐ The empty project the existing GitHub import dialog will target. */}
@@ -1472,8 +1565,9 @@ export default function DashboardPage({ profile }: { profile: ProfileSummary }) 
       <ImportProjectDialog
         open={importOpen}
         onOpenChange={setImportOpen}
+        projectType={promptMode}
         takenNames={takenNames}
-        onImported={fetchData}
+        onImported={refreshProjects}
       />
       <CloneProjectDialog
         open={cloneTarget !== null}
@@ -1481,8 +1575,9 @@ export default function DashboardPage({ profile }: { profile: ProfileSummary }) 
           if (!open) setCloneTarget(null);
         }}
         projectId={cloneTarget ?? ""}
+        projectType={projects.find((project) => project.projectId === cloneTarget)?.projectType ?? "website"}
         takenNames={takenNames}
-        onCloned={fetchData}
+        onCloned={refreshProjects}
       />
     </div>
   );
