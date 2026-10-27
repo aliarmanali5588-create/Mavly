@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  AI_PROVIDER_IDS,
   AI_MODEL_CATALOG,
   OPENROUTER_MODEL_CATALOG,
   resolveModel,
@@ -60,6 +61,7 @@ const USER: ChatMessage[] = [{ role: "user", content: "build a landing page" }];
 // ── catalog and selection ───────────────────────────────────────────────────
 
 test("the catalog contains exactly the verified OpenRouter model", () => {
+  assert.deepEqual(AI_PROVIDER_IDS, ["openrouter"]);
   assert.deepEqual(
     AI_MODEL_CATALOG.map((entry) => entry.id),
     [MODEL_ID],

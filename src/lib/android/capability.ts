@@ -8,14 +8,13 @@
  * bucket. When any prerequisite is missing, no APK can be produced or downloaded
  * and the exact blocker is reported.
  *
- * Native Kotlin/Compose SOURCE generation is available through the configured
- * text provider (OpenRouter by default; Token Harbor when an operator selects
- * it). A saved source tree is not a build, an installable app, a store
+ * Native Kotlin/Compose SOURCE generation is available through OpenRouter. A
+ * saved source tree is not a build, an installable app, a store
  * submission or a verified device run.
  */
 
 import { androidMainActivityPath, androidPackageForProject } from "./contract";
-import { activeAiProvider, type AiProviderId } from "@/lib/ai/models";
+import { DEFAULT_AI_PROVIDER, type AiProviderId } from "@/lib/ai/models";
 import { generationWorkerConfig } from "@/lib/generation/worker-config";
 
 import {
@@ -97,7 +96,7 @@ export function androidCapability(
   return {
     sourceGeneration: {
       available: true,
-      provider: activeAiProvider(),
+      provider: DEFAULT_AI_PROVIDER,
       languages: ["kotlin"],
       ui: ["jetpack-compose"],
     },

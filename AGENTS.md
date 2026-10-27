@@ -4,11 +4,11 @@ Mavly is an AI app-builder built with Next.js 16, React 19, TypeScript and Tailw
 Supabase Auth (Google + GitHub OAuth) is real and gates the builder pages. The builder has
 a local, server-side AI implementation: OpenRouter generates frontend and backend source
 files through its OpenAI-compatible chat-completions API, and the same server-only key
-serves the separate OpenRouter image-generation API. Token Harbor is an approved
-additional text provider for controlled testing, selected only by explicit server-side
-configuration. Supabase stores projects/files/messages/runs, and the workspace previews a
-generated static `preview.html`. A separate user-owned Supabase connection lets a signed-in user
-authorize read-only organization/project access and select one external project.
+serves the separate OpenRouter image-generation API. OpenRouter is the only supported
+text-generation provider. Supabase stores projects/files/messages/runs, and the workspace
+previews a generated static `preview.html`. A separate user-owned Supabase connection lets
+a signed-in user authorize read-only organization/project access and select one external
+project.
 
 Read `MAVLY_CLEAN_BASELINE.md` before changing anything under `src/app/api/`,
 `src/lib/ai/`, `src/lib/mavly/` or `src/lib/vcaas*`. It records what was removed and what
@@ -16,13 +16,10 @@ the current implementation does.
 
 > **Do not reconnect Totalum or add another hosted builder backend implicitly.** The old
 > Totalum integration stays removed and is documented only for historical context below.
-> OpenRouter is the default website/code-generation provider: `src/lib/ai/provider.ts`
-> dispatches to `src/lib/ai/openrouter.ts` and its server-only key also serves the image
-> path. Token Harbor (`src/lib/ai/tokenharbor.ts`) is the only approved additional text
-> provider and is OFF unless `MAVLY_AI_PROVIDER=tokenharbor`; never make it the default,
-> never add a silent fallback between providers, and never route image generation to it.
-> Any further provider or backend is a product decision that needs explicit approval and a
-> security review. See `docs/architecture/phase-10-token-harbor-provider.md`.
+> OpenRouter is the only website/code-generation provider: `src/lib/ai/provider.ts`
+> dispatches to `src/lib/ai/openrouter.ts`, and its server-only key also serves the image
+> path. Do not add a provider or backend without explicit product approval and a security
+> review.
 
 ---
 
@@ -112,7 +109,7 @@ admin surface gate, Phase 8 memory validation/retrieval/prompt framing/migration
 contracts, the Phase 9 Android source contract/profile/capability rules, the Android build
 config/policy/archive/artifact/migration contracts, the build-image reference/registry and
 offline-verification static contracts in `infra/android-build/`, the operator-doc coverage
-checks, the Token Harbor adapter contract, the provider-selection policy and static
+checks, the OpenRouter adapter contract, the model-catalog policy and static
 route/migration invariants.
 It does not
 exercise a
@@ -126,15 +123,11 @@ a delivered webhook, a container image build/publish, or the migrations against 
 
 ## Current backend status
 
-- Website and native Android code generation use an OpenAI-compatible text provider,
-  called server-side from `src/lib/ai/provider.ts`. **OpenRouter is the default**
-  (`src/lib/ai/openrouter.ts`, verified catalog entry `deepseek/deepseek-v4.1-flash`,
-  `OPENROUTER_API_KEY`) and its server-only key also serves the image API. **Token Harbor is
-  off by default** (`src/lib/ai/tokenharbor.ts`, `deepseek-v4.1-flash:free`,
-  `TOKEN_HARBOR_API_KEY`) and is used only when an operator sets
-  `MAVLY_AI_PROVIDER=tokenharbor`; the shared contract is `src/lib/ai/chat-contract.ts`.
-  There is no automatic provider fallback. Do not add another model provider or hosted
-  builder backend without approval.
+- Website and native Android code generation use OpenRouter server-side through
+  `src/lib/ai/provider.ts` and `src/lib/ai/openrouter.ts`, with the verified catalog entry
+  `deepseek/deepseek-v4.1-flash` and server-only `OPENROUTER_API_KEY`. The same key serves
+  the image API; the shared chat contract is `src/lib/ai/chat-contract.ts`. Do not add
+  another model provider or hosted builder backend without approval.
 - **Native Android source generation is implemented (Phase 9).** Project types persist in
   `public.projects.project_type` (migration 22) and Android creation is idempotent through
   migration 25. An Android prompt flows through the same durable run, OpenRouter provider, batch
@@ -481,15 +474,9 @@ a delivered webhook, a container image build/publish, or the migrations against 
   generated or imported source. A framework entry point that needs a build is reported as
   unsupported, not shown as a blank success.
 - `OPENROUTER_API_KEY` is server-only and is required by the Vercel/Next.js generation
-  runtime when the selected provider is OpenRouter (the default), where it also serves
-  image generation; no Supabase Edge Function or worker reads it. `TOKEN_HARBOR_API_KEY` is
-  server-only and is required only when `MAVLY_AI_PROVIDER=tokenharbor`; it is reserved and
-  is never injected into a generated application. `MAVLY_AI_PROVIDER` is server-only and
-  defaults to `openrouter` for any unset or unrecognized value.
-  `MAVLY_DEFAULT_MODEL` selects the default catalog model **of the selected provider**; the
-  built-in defaults are `deepseek/deepseek-v4.1-flash` (OpenRouter) and
-  `deepseek-v4.1-flash:free` (Token Harbor). An override that is not an entry in the
-  selected provider's catalog is ignored rather than forwarded.
+  runtime for website and Android source generation; it also serves image generation. No
+  Supabase Edge Function or worker reads it. `MAVLY_DEFAULT_MODEL` may select only a model
+  in the OpenRouter catalog; an unsupported override is ignored rather than forwarded.
   `MAVLY_IMAGE_MODEL` selects
   the image model from the separate image catalog and defaults to
   `black-forest-labs/flux.2-klein-4b`; a value that is not a catalog entry is ignored
@@ -601,13 +588,11 @@ paths with `src/lib/vcaas-scope.ts`, so unknown shapes are refused before any wo
 | `docs/architecture/phase-9-android.md`, `docs/runbooks/android.md` | Phase 9 Android profile, validation, isolation, artifact lifecycle, capability matrix, security boundaries and rollout. |
 | `src/lib/ai/image-models.ts` | Image-model catalog and image-request validation, kept apart from the text catalog. |
 | `src/lib/ai/openrouter-images.ts` | The separate OpenRouter image API client: response validation, size cap, bounded retry, server-only key. |
-| `src/lib/ai/chat-contract.ts` | Provider-neutral chat-completions contract: result types, response parsing and failure classification shared by every text adapter. Pure. |
+| `src/lib/ai/chat-contract.ts` | Provider-neutral chat-completions contract used by OpenRouter: result types, response parsing and failure classification. Pure. |
 | `src/lib/ai/openrouter.ts` | The OpenRouter chat-completions call for website/Android generation and its catalog gate; server-only key, redacted failures. |
-| `src/lib/ai/tokenharbor.ts` | The Token Harbor adapter (approved additional provider, off by default): endpoint, credential, provider-local catalog gate, quota/unsupported-model classification, redacted failures. |
 | `src/lib/mavly/image-limits.ts` | Best-effort per-user/per-instance image-generation admission windows. |
-| `src/lib/ai/provider.ts` | The provider boundary: selects the server-configured provider, reports provider-aware configuration errors, and is the only dispatcher of `chatCompletion`. |
-| `src/lib/ai/models.ts` | Per-provider model catalogs, the server-only provider selector, default resolution and the per-provider allowlist. |
-| `docs/architecture/phase-10-token-harbor-provider.md` | Phase 10 Token Harbor provider: selection policy, adapter contract, secrets, enable/restore steps, free-route limits and code-vs-image boundaries. |
+| `src/lib/ai/provider.ts` | The fixed OpenRouter boundary for completion calls and configuration errors. |
+| `src/lib/ai/models.ts` | OpenRouter model catalog and default-model resolution. |
 | `src/lib/mavly-hostname.ts` | Pure derivation of `<project-id>.mavly.xyz` from the immutable, owned project id; refuses reserved labels. |
 | `src/lib/tenant-host.ts` | Pure request-host parser and the only way to identify a public tenant. |
 | `src/lib/reserved-hostnames.ts` | Mavly-owned host labels, shared by slug creation, publishing, routing and migration 14. |
@@ -672,9 +657,7 @@ paths with `src/lib/vcaas-scope.ts`, so unknown shapes are refused before any wo
    the same non-enumerating 403. Lookup errors fail closed with 500.
 3. **No secret reaches the browser.** Only `NEXT_PUBLIC_SUPABASE_URL` and
    `NEXT_PUBLIC_SUPABASE_ANON_KEY` are public. `OPENROUTER_API_KEY`
-   (default generation provider and images), `TOKEN_HARBOR_API_KEY`
-   (additional generation provider; reserved, never synced to a generated app),
-   `VERCEL_API_TOKEN`,
+   (text generation and images), `VERCEL_API_TOKEN`,
    `VERCEL_OIDC_TOKEN`, `VERCEL_TOKEN`, `VERCEL_TEAM_ID`, `VERCEL_PROJECT_ID`,
    `SUPABASE_SERVICE_ROLE_KEY`, `MAVLY_GENERATION_WORKER_SECRET`,
    `MAVLY_VERIFICATION_SANDBOX_ENABLED`, `MAVLY_VERIFICATION_REPAIR_ENABLED`,

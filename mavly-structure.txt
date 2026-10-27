@@ -369,8 +369,7 @@
 │   │   │   ├── openrouter-images.ts
 │   │   │   ├── openrouter.ts
 │   │   │   ├── provider.ts
-│   │   │   ├── retry.ts
-│   │   │   └── tokenharbor.ts
+│   │   │   └── retry.ts
 │   │   ├── auth
 │   │   │   ├── callback.ts
 │   │   │   ├── error-copy.ts
@@ -563,7 +562,6 @@
 │   ├── shared-hosting.test.ts
 │   ├── static-site.test.ts
 │   ├── tenant-host.test.ts
-│   ├── tokenharbor-provider.test.ts
 │   ├── ts-resolver.mjs
 │   ├── vcaas-scope.test.ts
 │   ├── vercel-config.test.ts

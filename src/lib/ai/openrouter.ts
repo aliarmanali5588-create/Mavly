@@ -4,10 +4,9 @@
  * ⚠️ SERVER-ONLY. `OPENROUTER_API_KEY` never leaves this module; it is not a
  * `NEXT_PUBLIC_` variable and must never be returned in an API response or log.
  *
- * This adapter is one of two OpenAI-compatible text providers. The result
- * contract, the response parsing and the failure classification are shared with
- * the Token Harbor adapter and live in `./chat-contract.ts`; everything in this
- * file is OpenRouter-specific (endpoint, credential, attribution headers).
+ * The result contract, response parsing and failure classification live in
+ * `./chat-contract.ts`; this file handles the OpenRouter-specific endpoint,
+ * credential and attribution headers.
  *
  * ═══ WHAT A RESULT CARRIES NOW ══════════════════════════════════════════════
  *

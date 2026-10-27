@@ -1,8 +1,12 @@
-# Phase 10 — Token Harbor as an additional text-generation provider
+# Historical: Phase 10 — Token Harbor as an additional text-generation provider
 
-Status: **implemented, off by default, not yet exercised against a live Token
-Harbor account.** OpenRouter remains the default provider for website and native
-Android source generation. Nothing in this phase changes the generation
+> **This is an archived implementation record, not current operator guidance.**
+> Token Harbor was removed from Mavly. Current website and Android source generation
+> use OpenRouter only; there is no provider-selection setting or Token Harbor adapter.
+> Do not follow the setup, enablement or rollback instructions below.
+
+Historical status: **implemented at the time, then removed.** OpenRouter is now
+the only provider for website and native Android source generation. Nothing in this phase changes the generation
 pipeline, the durable worker, verification, Android builds, image generation,
 billing or the database schema.
 

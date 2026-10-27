@@ -1,13 +1,10 @@
 /**
  * ═══ PROVIDER-NEUTRAL CHAT COMPLETIONS CONTRACT ══════════════════════════════
  *
- * Mavly can serve website/Android source generation from more than one
- * OpenAI-compatible text provider (OpenRouter, and Token Harbor for
- * controlled evaluation). The generation pipeline must not care which one
- * answered, so the result contract, the response parsing and the failure
- * classification live here, and each adapter supplies only what genuinely
- * differs: endpoint, credential, request headers/body and its own error
- * wording.
+ * The generation pipeline uses a provider-neutral result contract, response
+ * parsing and failure classification. This keeps request and recovery logic
+ * separate from OpenRouter-specific response details. The OpenRouter adapter
+ * supplies the endpoint, credential, request headers/body and error wording.
  *
  * ═══ WHAT A RESULT CARRIES ══════════════════════════════════════════════════
  *
