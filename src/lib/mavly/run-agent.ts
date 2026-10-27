@@ -38,16 +38,18 @@ import { chatCompletion } from "@/lib/ai/provider";
 import {
   generateApp,
   isGenerationFailure,
-  REQUIRED_CREATE_PATHS,
+  requiredCreatePathsFor,
   sanitizeProjectPath,
   type AgentBatchCheckpoint,
   type AgentGenerationFailure,
   type AgentGenerationResult,
   type AgentManifest,
+  type AgentProjectType,
   type AgentProgressEvent,
   type AgentProviderAttempt,
   type AgentUsageTotals,
 } from "@/lib/ai/agent";
+import { androidPackageForProject } from "@/lib/android/contract";
 import {
   claimRun,
   finishRun,
@@ -85,6 +87,9 @@ import { retryDelaySeconds, WORKER_LEASE_SECONDS } from "@/lib/generation/leases
 import { reportedCostOf } from "@/lib/observability/cost";
 import { emitGenerationEvent, emitVerificationEvent } from "@/lib/observability/events";
 import { maybeEnqueueVerification } from "@/lib/sandbox/enqueue";
+import { buildAgentMemoryContext } from "@/lib/memory/context";
+import { recordRunFailureMemory } from "@/lib/memory/outcomes";
+import type { MemoryRunOutcome } from "@/lib/memory/types";
 
 /**
  * Present only when the durable worker claimed this run. The worker has no user
@@ -175,8 +180,9 @@ async function runInlineAgent(input: RunAgentInput): Promise<RunAgentOutcome> {
     startedAtMs: Date.now(),
   };
 
+  let outcome: RunAgentOutcome;
   try {
-    return await execute(input, run, guard);
+    outcome = await execute(input, run, guard);
   } catch (error) {
     if (error instanceof RunSupersededError || error instanceof RunLeaseLostError) {
       // A newer attempt owns this run now; write nothing.
@@ -193,13 +199,15 @@ async function runInlineAgent(input: RunAgentInput): Promise<RunAgentOutcome> {
       return { status: "cancelled", runId: input.runId };
     }
     const message = error instanceof Error ? error.message : String(error);
-    return fail(input, guard, {
+    outcome = await fail(input, guard, {
       message: `The agent run failed unexpectedly: ${message}`,
       ...(error instanceof RunStoreError
         ? { signals: { code: "GENERATION_PERSIST_FAILED" } }
         : {}),
     });
   }
+  await recordMemoryForOutcome(input, guard, outcome);
+  return outcome;
 }
 
 // ── Durable worker path ─────────────────────────────────────────────────────
@@ -264,8 +272,9 @@ async function runWorkerAgent(
     startedAtMs: Date.now(),
   };
 
+  let outcome: RunAgentOutcome;
   try {
-    return await execute(input, run, guard);
+    outcome = await execute(input, run, guard);
   } catch (error) {
     if (error instanceof RunSupersededError || error instanceof RunLeaseLostError) {
       emitGenerationEvent("generation.lease_lost", {
@@ -282,12 +291,49 @@ async function runWorkerAgent(
       return { status: "cancelled", runId: input.runId };
     }
     const message = error instanceof Error ? error.message : String(error);
-    return fail(input, guard, {
+    outcome = await fail(input, guard, {
       message: `The agent run failed unexpectedly: ${message}`,
       ...(error instanceof RunStoreError
         ? { signals: { code: "GENERATION_PERSIST_FAILED" } }
         : {}),
     });
+  }
+  await recordMemoryForOutcome(input, guard, outcome);
+  return outcome;
+}
+
+/**
+ * Best-effort Phase 8 failure note. Success/cancellation/retry are deliberately
+ * not recorded; a memory outage never changes the run outcome.
+ */
+async function recordMemoryForOutcome(
+  input: RunAgentInput,
+  guard: RunGuard,
+  outcome: RunAgentOutcome,
+): Promise<void> {
+  if (outcome.status !== "failed" && outcome.status !== "dead_letter") return;
+  const memoryOutcome: MemoryRunOutcome = {
+    runId: input.runId,
+    status: outcome.status,
+    errorClass: outcome.errorClass,
+  };
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    await Promise.race([
+      recordRunFailureMemory({
+        client: guard.client,
+        userId: input.userId,
+        projectId: input.projectId,
+        outcome: memoryOutcome,
+      }),
+      new Promise<void>((resolve) => {
+        timer = setTimeout(resolve, 3_000);
+      }),
+    ]);
+  } catch {
+    // recordRunFailureMemory already swallows/logs; this is a last-resort guard.
+  } finally {
+    if (timer) clearTimeout(timer);
   }
 }
 
@@ -374,6 +420,24 @@ async function execute(
   const runId = input.runId;
   const client = guard.client;
 
+  const project = await getProject(input.userId, input.projectId, client);
+  if (isStoreFailure(project)) {
+    return fail(input, guard, {
+      message: `Could not verify the project type before generation: ${project.error}`,
+      signals: { code: "GENERATION_PERSIST_FAILED" },
+    });
+  }
+  if (!project.data || project.data.user_id !== input.userId) {
+    return fail(input, guard, {
+      message: "The project could not be verified for this generation run.",
+      signals: { code: "GENERATION_PERSIST_FAILED" },
+    });
+  }
+  const projectType: AgentProjectType =
+    project.data.project_type === "android" ? "android" : "website";
+  const androidPackage =
+    projectType === "android" ? androidPackageForProject(input.projectId) : null;
+
   const alive = await heartbeatRun(
     runId,
     {
@@ -420,7 +484,9 @@ async function execute(
     content: file.content,
   }));
   const existingPaths = new Set(before.map((file) => file.path));
-  const isComplete = REQUIRED_CREATE_PATHS.every((path) => existingPaths.has(path));
+  const isComplete = requiredCreatePathsFor(projectType, androidPackage).every((path) =>
+    existingPaths.has(path),
+  );
   const mode = isComplete ? "update" : "create";
 
   /**
@@ -572,11 +638,33 @@ async function execute(
     if (guard.leaseToken && !resumed) throw new RunLeaseLostError();
   }
 
+  /**
+   * Phase 8 context is assembled from the CURRENT files plus persisted decisions
+   * and observed outcomes. It is optional: `used: false` leaves the pre-Phase-8
+   * full-file behavior unchanged, and a memory outage never fails the run.
+   */
+  const memory = await buildAgentMemoryContext({
+    client: guard.client,
+    userId: input.userId,
+    projectId: input.projectId,
+    prompt: input.prompt,
+    files: before,
+  });
+
   const generated = await generateApp(
     {
       prompt: input.prompt,
       mode,
+      projectType,
+      androidPackage,
       existingFiles: before,
+      ...(memory.used
+        ? {
+            contextFiles: memory.contextFiles,
+            memoryContext: memory.memoryText,
+            planning: true,
+          }
+        : {}),
       requestedModel: input.requestedModel,
       designContext: design.data,
       ...(resumeManifest || completedPaths.length > 0 || nextBatchIndex > 0
@@ -647,6 +735,7 @@ async function execute(
     baseline,
     writtenPaths.size,
     latestProviderRequestId,
+    projectType,
   );
 }
 
@@ -668,6 +757,7 @@ async function complete(
   baseline: SnapshotSummary | null,
   filesWritten: number,
   latestProviderRequestId: string | null,
+  projectType: AgentProjectType,
 ): Promise<RunAgentOutcome> {
   await assertRunOwned(input, guard);
 
@@ -723,6 +813,17 @@ async function complete(
     guard.client,
   );
 
+  if (projectType === "android" && changed) {
+    await insertMessage(
+      input.projectId,
+      "agent",
+      "The Kotlin/Compose source is saved. No APK or AAB was built, and no Android build executor is configured in this deployment; use Download source to review the project.",
+      "regular",
+      null,
+      guard.client,
+    );
+  }
+
   emitGenerationEvent("generation.completed", {
     traceId: guard.traceId,
     runId: input.runId,
@@ -739,7 +840,9 @@ async function complete(
     costKnown: cost.known,
   });
 
-  await handOffVerification(input, guard, resultSnapshot ?? baseline);
+  if (projectType === "website") {
+    await handOffVerification(input, guard, resultSnapshot ?? baseline);
+  }
 
   return { status: "completed", runId: input.runId };
 }
@@ -1210,6 +1313,9 @@ function parseManifest(value: unknown): AgentManifest | null {
       typeof record.message === "string"
         ? record.message.slice(0, 8_000)
         : "Updated the project.",
+    ...(typeof record.plan === "string" && record.plan.trim()
+      ? { plan: record.plan.trim().slice(0, 2_000) }
+      : {}),
     files,
     deletedPaths,
   };

@@ -152,6 +152,7 @@ export async function createOwnedProject(
   description: string,
   label?: string | null,
   projectType?: ProjectType,
+  creationRequestId?: string,
 ): Promise<StoreResult<ProjectRow>> {
   if (!isRoutableProjectSlug(requestedId)) {
     return { ok: false, error: "Invalid project id", code: "VALIDATION" };
@@ -161,6 +162,29 @@ export async function createOwnedProject(
   if (!supabase) return { ok: false, error: "Supabase is not configured", code: "UNAVAILABLE" };
 
   const targetType = normalizeProjectType(projectType);
+  const projectColumns = "project_id,user_id,project_type,label,description,created_at,updated_at";
+
+  if (creationRequestId) {
+    const existing = await supabase
+      .from("projects")
+      .select(projectColumns)
+      .eq("user_id", userId)
+      .eq("creation_request_id", creationRequestId)
+      .maybeSingle();
+
+    if (existing.error) {
+      return dbError("find project creation request", existing.error.message, existing.error.code);
+    }
+    if (existing.data) {
+      if (
+        existing.data.project_type !== targetType ||
+        existing.data.description !== description.slice(0, 2_000)
+      ) {
+        return { ok: false, error: "The creation request id was already used", code: "CONFLICT" };
+      }
+      return { ok: true, data: existing.data as ProjectRow };
+    }
+  }
 
   let candidate = requestedId;
   for (let attempt = 0; attempt < 8; attempt++) {
@@ -172,13 +196,36 @@ export async function createOwnedProject(
         project_type: targetType,
         description: description.slice(0, 2_000),
         label: label?.slice(0, 120) || null,
+        ...(creationRequestId ? { creation_request_id: creationRequestId } : {}),
       })
-      .select("project_id,user_id,project_type,label,description,created_at,updated_at")
+      .select(projectColumns)
       .single();
 
     if (!error && data) return { ok: true, data: data as ProjectRow };
     if (error?.code !== "23505") {
       return dbError("create project", error?.message ?? "insert failed", error?.code);
+    }
+
+    if (creationRequestId) {
+      const existing = await supabase
+        .from("projects")
+        .select(projectColumns)
+        .eq("user_id", userId)
+        .eq("creation_request_id", creationRequestId)
+        .maybeSingle();
+
+      if (existing.error) {
+        return dbError("find project creation request", existing.error.message, existing.error.code);
+      }
+      if (existing.data) {
+        if (
+          existing.data.project_type !== targetType ||
+          existing.data.description !== description.slice(0, 2_000)
+        ) {
+          return { ok: false, error: "The creation request id was already used", code: "CONFLICT" };
+        }
+        return { ok: true, data: existing.data as ProjectRow };
+      }
     }
 
     const suffix = crypto.randomUUID().replaceAll("-", "").slice(0, 5);

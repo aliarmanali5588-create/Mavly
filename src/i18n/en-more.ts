@@ -172,6 +172,9 @@ export const enMore = {
     integrations: {
       title: "Business payments"
     },
+    memory: {
+      title: "Project memory"
+    },
     common: {
       failed: "That did not work. Try again in a moment.",
       unavailable: "Not available right now."

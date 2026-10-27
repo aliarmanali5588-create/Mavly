@@ -21,6 +21,10 @@ import type { ApiResponse } from "@/lib/api";
 import type { VcaasErrorCode, VcaasErrorDetails } from "@/lib/vcaas-errors";
 import type { PaymentsMode, PaymentsStatus, ProjectWebhook } from "@/lib/v2-payments";
 import type { PublicIntegrationCatalogEntry } from "@/lib/integrations/contracts";
+import type {
+  ProjectMemoryItem,
+  ProjectMemoryList,
+} from "@/lib/memory/types";
 import type { DbRestorePoint } from "@/lib/undo-db-change";
 import type {
   ProjectGroup,
@@ -356,6 +360,8 @@ export const vcaasApi = {
       label?: string;
       groupId?: string;
       projectType?: "website" | "android";
+      /** Repeated requests with the same id return the same project. */
+      clientRequestId?: string;
       /** `"v2"` requires the current engine (refused, nothing created, when the account cannot get it). Omitted: the account's default. */
       engineVersion?: "v2" | "legacy";
       /** An export code this new project is about to receive: it is created on that code's engine. */
@@ -731,6 +737,41 @@ export const vcaasApi = {
     /** DELETE …/secrets/{secretId} — delete a secret. */
     remove: (projectId: string, secretId: string): Promise<VcaasResponse<unknown>> =>
       proxy.delete(`${project(projectId)}/secrets/${encodeURIComponent(secretId)}`),
+  },
+
+  // ───────────────────────── Project memory ────────────────────────
+  // Phase 8. Decisions are explicit user approvals; observed failure notes are
+  // server-written and read-only here. Facts are derived from current files at
+  // request time, not stored. Disabled/cohort refusal is a real 503.
+  memory: {
+    list: (projectId: string): Promise<VcaasResponse<ProjectMemoryList>> =>
+      proxy.get(`${project(projectId)}/memory`),
+
+    create: (
+      projectId: string,
+      body: { category: "decision"; content: string; dedupeKey?: string }
+    ): Promise<VcaasResponse<ProjectMemoryItem>> =>
+      proxy.post(`${project(projectId)}/memory`, body),
+
+    update: (
+      projectId: string,
+      memoryId: string,
+      body: { revision: number; content?: string; status?: "active" | "archived" }
+    ): Promise<VcaasResponse<ProjectMemoryItem>> =>
+      proxy.patch(`${project(projectId)}/memory/${encodeURIComponent(memoryId)}`, body),
+
+    remove: (projectId: string, memoryId: string): Promise<VcaasResponse<{ deleted: true }>> =>
+      proxy.delete(`${project(projectId)}/memory/${encodeURIComponent(memoryId)}`),
+
+    approve: (projectId: string, memoryId: string, revision: number): Promise<VcaasResponse<ProjectMemoryItem>> =>
+      proxy.post(`${project(projectId)}/memory/${encodeURIComponent(memoryId)}/approve`, { revision }),
+
+    reject: (projectId: string, memoryId: string, revision: number): Promise<VcaasResponse<ProjectMemoryItem>> =>
+      proxy.post(`${project(projectId)}/memory/${encodeURIComponent(memoryId)}/reject`, { revision }),
+
+    /** Clears memory rows only; project files and snapshots are never touched. */
+    clear: (projectId: string): Promise<VcaasResponse<{ deleted: number }>> =>
+      proxy.delete(`${project(projectId)}/memory?confirm=all`),
   },
 
   // ─────────────────────── Business integrations ───────────────────

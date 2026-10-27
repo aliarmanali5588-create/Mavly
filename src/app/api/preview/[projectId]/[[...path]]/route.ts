@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
 import { authorizeProjectRequest } from "../../../vcaas/_shared";
-import { getFile, listFiles } from "@/lib/mavly/store";
+import { getFile, getProject, isStoreFailure, listFiles } from "@/lib/mavly/store";
 import { rewriteCss, rewriteHtml } from "@/lib/preview-proxy";
 import { resolveStaticPreview, staticPreviewPath } from "@/lib/static-site";
 
@@ -96,6 +96,17 @@ async function handle(
   const { projectId, path = [] } = await params;
   const auth = await authorizeProjectRequest(projectId);
   if ("response" in auth) return auth.response;
+
+  const project = await getProject(auth.team.userId, projectId);
+  if (isStoreFailure(project)) {
+    return new NextResponse("Preview unavailable", {
+      status: 500,
+      headers: { ...PREVIEW_HEADERS, "content-type": "text/plain; charset=utf-8" },
+    });
+  }
+  if (!project.data || project.data.project_type === "android") {
+    return notFound("A web preview is not available for this project.");
+  }
 
   const files = await listFiles(projectId);
   if (!files.ok) {

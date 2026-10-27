@@ -11,11 +11,15 @@
  * "Boilerplate mode"), scope that list to the signed-in user yourself.
  */
 
+import type { AndroidCapability } from "@/lib/android/capability";
+
 export type ProjectType = "website" | "android";
 
 export interface VcaasProject {
   projectId: string;
   projectType?: ProjectType;
+  /** Present for Android projects: what this deployment can and cannot do. */
+  android?: AndroidCapability;
   /**
    * The human name, when the owner has set one — the same field
    * `VcaasProjectSummary.label` carries, returned here so a workspace opened from a

@@ -86,8 +86,15 @@ before using Figma, `11_project_secrets.sql` before using project secrets, and
 `18_admin_allowlist.sql` before opening `/adminsh` (the server layout fails closed
 without `current_user_is_admin()`). Apply `23_production_hardening.sql` after 21 and 22
 and before deploying this build to an environment that serves payment orders: the gateway
-fails closed without its durable rate-limit RPC. Migration 23 is additive and safe to
-apply while the previous application version is still deployed. Project-secret encryption also
+fails closed without its durable rate-limit RPC. Apply `24_agent_memory.sql` after 23
+before enabling `MAVLY_AGENT_MEMORY_ENABLED`; the memory API fails closed without it and
+generation keeps its prior context behavior. Both migrations are additive and safe to
+apply while the previous application version is still deployed. Apply
+`25_project_creation_idempotency.sql` after 24 before enabling Android project creation;
+it adds an owner-scoped creation request key so retries return the same project. Phase 9
+Android source generation needs no further migration; Android builds/artifacts remain
+disabled until a new, additive build queue and artifact-storage migration are designed and
+verified. Project-secret encryption also
 requires the server-only `MAVLY_PROJECT_SECRETS_ENCRYPTION_KEY` (32 random bytes,
 base64-encoded); without it create/update fail closed. `npm test` covers the pure
 auth/redirect/ownership/scope modules, the generation state/lease/claim/observability
@@ -96,10 +103,13 @@ bounded repair policy and parsers, the full-stack runtime/config/database/env/ad
 rules, the business-integration registry/config/validation, Razorpay signature and
 provider-error mapping, the payment state machine, the gateway session exemptions, the
 Phase 7 durable rate-limit migration contracts, payment-event metadata/redaction, the
-admin surface gate and static route/migration invariants. It does not
+admin surface gate, Phase 8 memory validation/retrieval/prompt framing/migration
+contracts, the Phase 9 Android source contract/profile/capability rules, and static
+route/migration invariants. It does not
 exercise a
 real Supabase session, Groq, a live worker/queue, the Supabase OAuth connection, Vercel
-publishing, a real Vercel Sandbox, a generated app, a repair model call, a real Vercel
+publishing, a real Vercel Sandbox, a generated Android or website app, an Android build,
+an APK/AAB artifact, a repair model call, a real Vercel
 full-stack deployment, a real application database connection, a live Razorpay account,
 a delivered webhook, or the migrations against a database.
 
@@ -113,6 +123,26 @@ a delivered webhook, or the migrations against a database.
   configuration are preserved but not wired into active generation; its image API
   remains separate and unchanged. Do not add another model provider or hosted builder
   backend without approval.
+- **Native Android source generation is implemented (Phase 9).** Project types persist in
+  `public.projects.project_type` (migration 22) and Android creation is idempotent through
+  migration 25. An Android prompt flows through the same durable run, Groq provider, batch
+  checkpoints, snapshots and memory as a website prompt, but selects a Kotlin 2.0 / Jetpack
+  Compose / Gradle Kotlin DSL profile instead of Next.js. The planner is given a
+  deterministic `com.mavly.<project>` application id; the complete resulting source is
+  re-validated by `src/lib/android/contract.ts` before completion (required
+  settings/root/app Gradle files, manifest, README, matching
+  package/namespace/applicationId, Compose entry point, launcher activity, pinned
+  dependency versions, allowlisted Maven repositories, no cleartext, dangerous permissions,
+  binary/keystore/signing files or build-script process execution). Invalid source fails
+  the run; completed batches remain recoverable from the baseline snapshot.
+  **Android BUILDS ARE NOT CONFIGURED.** This deployment has no isolated Android toolchain
+  image, durable build queue or private artifact bucket, so no APK/AAB is built, signed,
+  downloaded, installed or published, and there is no emulator preview. `mobile/builds`
+  returns an empty history plus the explicit `not_configured` capability; a build start is
+  a truthful `503 ANDROID_BUILD_NOT_CONFIGURED` and never creates a row. Do not claim an
+  Android build or artifact exists until a real executor and storage path are implemented
+  and verified. See `docs/architecture/phase-9-android.md` and
+  `docs/runbooks/android.md`.
 - **Vercel publishing is an optional, off-by-default hosting path**, not a builder backend.
   It is enabled only by `MAVLY_VERCEL_DEPLOYMENTS_ENABLED` (accepted: `1`, `true`, `yes`,
   `on`) plus `VERCEL_API_TOKEN`, and uploads only static files. It prefers the generated
@@ -320,6 +350,33 @@ a delivered webhook, or the migrations against a database.
   snapshots/restores are implemented; Supabase/provider backups are external). See
   `docs/architecture/phase-7-production-hardening.md` and
   `docs/runbooks/production-hardening.md`.
+- **Agent memory is implemented but off by default (Phase 8).** It is enabled only by
+  `MAVLY_AGENT_MEMORY_ENABLED` plus an explicit `MAVLY_AGENT_MEMORY_PROJECTS` cohort and
+  migration 24. There is **no vector database and no extra model call**: retrieval is
+  deterministic over a small relational table. **Repository facts are derived from the
+  current files on every run**, never stored, so they cannot go stale. **Persistent memory
+  has two categories only:** an explicit user-approved `decision` (created through the
+  authenticated workspace API/panel; the authenticated role may not create/update a
+  failure) and an observed terminal `failure` note written by the server after a
+  failed/dead-lettered run, expiring after 30 days. AI inferences are never promoted to
+  decisions automatically. At generation start Mavly selects a bounded relevant-file set
+  (40 files; manifests/entries/API routes/prompt matches/one-hop imports), derives compact
+  facts, ranks active approved memory (12 items / 8,000 chars) and places it in a block
+  explicitly marked as **context, not instructions**; current files, repository rules and
+  the current user request outrank it. The planner also records an optional 2,000-character
+  implementation plan (persisted with the manifest, no second model call). Failure notes
+  are deduplicated per run, contain only a bounded error class, and explicitly do not claim
+  a root cause. Memory is project-scoped through `projects` RLS; secrets, credentials,
+  connection strings and contact data are rejected before storage. Failure notes are
+  written only after a terminal run: the worker writes with its confined service client
+  after re-verifying the owner, and an inline run uses an owner-checked RPC that derives
+  the note from the run row and accepts no content. With the flag off, persistent
+  memory, retrieval selection and plan requests are disabled and generation uses the
+  existing full-file context/provider pipeline; the fixed system prompt still marks
+  repository content as untrusted data. The memory panel provides real list/add/edit/approve/reject/
+  archive/delete/clear controls. **Unverified:** migration 24, RLS, real retrieval and the
+  UI have not been exercised live; no benchmark claims are made. See
+  `docs/architecture/phase-8-agent-memory.md` and `docs/runbooks/agent-memory.md`.
 - **Restore points are implemented.** Every completed AI execution that changes the
   project's source leaves a durable snapshot (`project_snapshots` +
   `project_snapshot_files`). The chat renders a **Restore Code** action on that execution,
@@ -373,8 +430,8 @@ a delivered webhook, or the migrations against a database.
   claim generated apps can read saved secrets until a real server-side injection path and
   tests exist.
 - Anything not implemented (uploads, rebuild, dynamic hosting, domains,
-  versions, usage, visual-edit apply, …) still authenticates and authorizes, then
-  returns:
+  versions, usage, visual-edit apply, Android builds/artifacts and store publishing, …)
+  still authenticates and authorizes, then returns:
 
   ```json
   {
@@ -499,7 +556,10 @@ paths with `src/lib/vcaas-scope.ts`, so unknown shapes are refused before any wo
 | `supabase/migrations/11_project_secrets.sql` | Encrypted project-secret table, ownership RLS and metadata-only column grants. |
 | `src/lib/figma-url.ts` | Pure, host-anchored Figma link parsing shared by the composer and the server. |
 | `src/lib/github-client.ts` | The browser's GitHub catalog. It never carries a credential. |
-| `src/lib/ai/agent.ts` | Prompt, JSON parsing/repair, path and size validation. |
+| `src/lib/ai/agent.ts` | Profile-aware prompt, JSON parsing/repair, path and size validation, and final Android contract validation. |
+| `src/lib/android/contract.ts` | Pure Kotlin/Compose project contract: required files, package/applicationId consistency, manifest/Gradle policy, forbidden binary/signing/secret paths, Compose entry point and size bounds. |
+| `src/lib/android/capability.ts` | The truthful Android capability contract: source generation is available; build, artifacts, signing, store publishing and emulator preview are not configured, with the exact blocker. |
+| `docs/architecture/phase-9-android.md`, `docs/runbooks/android.md` | Phase 9 Android source profile, validation, capability matrix, build/artifact blockers, security boundaries and rollout. |
 | `src/lib/ai/image-models.ts` | Image-model catalog and image-request validation, kept apart from the text catalog. |
 | `src/lib/ai/openrouter-images.ts` | The separate OpenRouter image API client: response validation, size cap, bounded retry, server-only key. |
 | `src/lib/ai/openrouter.ts` | Preserved OpenRouter chat client; not imported by active website-generation paths. |
@@ -541,6 +601,10 @@ paths with `src/lib/vcaas-scope.ts`, so unknown shapes are refused before any wo
 | `src/app/adminsh/layout.tsx` | Server-side session + `current_user_is_admin()` gate for every admin page; 404 for non-admins, fail closed on a missing migration. |
 | `docs/architecture/phase-6-business-integrations.md`, `docs/runbooks/business-integrations.md` | Phase 6 design, provider setup, security boundaries, rollout and manual acceptance. |
 | `docs/architecture/phase-7-production-hardening.md`, `docs/runbooks/production-hardening.md` | Phase 7 threat model, limits, recovery, observability, backup/DR limitations and acceptance. |
+| `src/lib/memory/` | Phase 8 memory: types/limits, secret-shape validation, deterministic fact/file/memory retrieval and prompt framing, RLS-scoped store, owner service, terminal outcome summaries, projections and content-free events. |
+| `supabase/migrations/24_agent_memory.sql` | Project memory table, decision/failure constraints, owner RLS, revision-based updates, column grants, service-role failure writes and schema marker 24. Additive; apply after 23. |
+| `src/components/workspace/v2/ProjectMemoryPanel.tsx` | Real memory controls: derived facts, list, add/edit/approve/reject/archive/delete/clear; disabled and error states are truthful. |
+| `docs/architecture/phase-8-agent-memory.md`, `docs/runbooks/agent-memory.md` | Phase 8 memory authority, storage/retrieval, freshness, security, rollout and acceptance. |
 | `src/app/api/tenant/[[...path]]/route.ts` | The tenant runtime (internal path reached by the validated-host rewrite). |
 | `src/lib/api-origin.ts` | Explicit credentialed-origin allowlist and cross-origin mutation policy. |
 | `supabase/migrations/14_shared_hosting.sql` | Published versions/files, active-version RPCs, published-only public lookup, RLS and grants. |
@@ -602,6 +666,9 @@ paths with `src/lib/vcaas-scope.ts`, so unknown shapes are refused before any wo
    credentials; there is no local fallback, no public port and no preview URL. Bounded
    repair may produce a new immutable `repair` snapshot, but it never executes on a Mavly
    host and never edits `project_files` directly.
+   Android source is likewise data: it is text-validated by
+   `src/lib/android/contract.ts` and never built or run on a Mavly host. No Android build
+   executor exists in this deployment, so no APK/AAB artifact is produced or served.
    The preview is static HTML served with a CSP `sandbox` and no same-origin privileges.
 7. **OAuth has two traps.** Do not send a custom `state` to Supabase (PKCE owns it), and
    the Mavly sign-in callback URL must be a bare `/auth/callback` with no query string. The
@@ -646,6 +713,15 @@ paths with `src/lib/vcaas-scope.ts`, so unknown shapes are refused before any wo
     (migration 23), not caller-supplied, and are shared across instances; the gateway
     fails closed if the counter RPC is missing. Payment diagnostics and webhook-history
     views are metadata only: no amount, order/payment id, raw body, signature or secret.
+12. **Project memory is subordinate context, never authority.** It is project-scoped
+    through `projects` RLS; repository facts are derived from current files on every run;
+    explicit user decisions and observed failure outcomes are the only stored categories;
+    secrets/credentials/connection strings/contact data are rejected before storage; and
+    retrieved text is explicitly framed as untrusted data that cannot override repository
+    instructions, current files, the current user request, authorization, verification or
+    deployment. A client cannot create or promote an observed failure into a decision, and
+    memory cannot authorize deployment, payment, database or credential operations. With
+    the feature flag/cohort off, generation behavior is unchanged.
 
 ## UI conventions
 

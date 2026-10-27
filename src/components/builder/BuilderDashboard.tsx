@@ -107,6 +107,18 @@ function PreviewPlaceholder({ name, text, isRow }: { name: string; text: string;
   );
 }
 
+function AndroidProjectPlaceholder({ isRow }: { isRow: boolean }) {
+  return (
+    <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-1.5 bg-[#f7f6f3] px-3 text-center">
+      <div className={`rounded-lg border border-black/[0.06] bg-white flex items-center justify-center shadow-[0_1px_2px_rgba(0,0,0,0.03)] ${isRow ? "w-5 h-5" : "w-8 h-8"}`}>
+        <Smartphone className={`text-gray-400 ${isRow ? "w-3 h-3" : "w-4 h-4"}`} aria-hidden="true" />
+      </div>
+      <span className={`font-medium text-gray-600 ${isRow ? "text-[8px]" : "text-[11px]"}`}>Android app</span>
+      <span className={`text-gray-400 ${isRow ? "hidden" : "text-[8px]"}`}>Kotlin/Compose source</span>
+    </div>
+  );
+}
+
 /**
  * ═══⭐⭐⭐ THE PROJECT TILE — THE ACTUAL PREVIEW, LAZILY ═════════════════════
  *
@@ -389,6 +401,8 @@ export default function DashboardPage({ profile }: { profile: ProfileSummary }) 
   const [buildName, setBuildName] = useState("");
   const [buildError, setBuildError] = useState<string | null>(null);
   const [buildCreating, setBuildCreating] = useState(false);
+  const buildCreatingRef = useRef(false);
+  const androidCreateRequestRef = useRef<{ fingerprint: string; requestId: string } | null>(null);
 
   // Delete confirmation modal
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
@@ -542,7 +556,7 @@ export default function DashboardPage({ profile }: { profile: ProfileSummary }) 
     const created = await vcaasApi.projects.create({
       projectId: id,
       description: "Imported from GitHub",
-      projectType: promptMode,
+      projectType: "website",
       engineVersion: "v2",
     });
     if (!created.ok || !created.data) {
@@ -583,10 +597,108 @@ export default function DashboardPage({ profile }: { profile: ProfileSummary }) 
   // Step 2: create the project with the chosen name, then carry the prompt over
   // to the workspace where it is auto-submitted to the chat.
   const confirmBuild = async () => {
+    if (buildCreatingRef.current) return;
     const id = normalizeId(buildName);
     if (id.length < 3) { setBuildError("Project name must be at least 3 characters (lowercase, hyphens allowed)."); return; }
+    buildCreatingRef.current = true;
     setBuildCreating(true);
     setBuildError(null);
+
+    if (promptMode === "android") {
+      const prompt = firstPrompt.trim();
+      if (!prompt) {
+        setBuildError("Describe the Android app you want to generate.");
+        buildCreatingRef.current = false;
+        setBuildCreating(false);
+        return;
+      }
+      const description = prompt.slice(0, 2_000);
+      const fingerprint = `${id}\n${description}`;
+      let requestId =
+        androidCreateRequestRef.current?.fingerprint === fingerprint
+          ? androidCreateRequestRef.current.requestId
+          : null;
+
+      if (!requestId) {
+        try {
+          const stored = window.sessionStorage.getItem("mavly:android-project-create");
+          if (stored) {
+            const parsed: unknown = JSON.parse(stored);
+            if (
+              typeof parsed === "object" &&
+              parsed !== null &&
+              "fingerprint" in parsed &&
+              "requestId" in parsed &&
+              parsed.fingerprint === fingerprint &&
+              typeof parsed.requestId === "string" &&
+              /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(parsed.requestId)
+            ) {
+              requestId = parsed.requestId;
+            }
+          }
+        } catch {
+          // Session storage is optional; the in-memory lock still prevents double clicks.
+        }
+      }
+
+      requestId ??= crypto.randomUUID();
+      androidCreateRequestRef.current = { fingerprint, requestId };
+      try {
+        window.sessionStorage.setItem(
+          "mavly:android-project-create",
+          JSON.stringify({ fingerprint, requestId }),
+        );
+      } catch {
+        // The server-side request id remains valid even when session storage is unavailable.
+      }
+
+      let created: Awaited<ReturnType<typeof vcaasApi.projects.create>>;
+      try {
+        created = await vcaasApi.projects.create({
+          projectId: id,
+          description,
+          projectType: "android",
+          clientRequestId: requestId,
+          engineVersion: "v2",
+        });
+      } catch (error) {
+        setBuildError(error instanceof Error ? error.message : "Could not create the Android project.");
+        buildCreatingRef.current = false;
+        setBuildCreating(false);
+        return;
+      }
+
+      if (!created.ok || !created.data) {
+        setBuildError(created.error || `Could not create "${id}".`);
+        buildCreatingRef.current = false;
+        setBuildCreating(false);
+        return;
+      }
+
+      const started = await vcaasApi.agent.start(created.data.projectId, {
+        prompt,
+        inputFiles: [],
+      });
+      if (!started.ok) {
+        setBuildError(started.error || "The Android project was saved, but source generation could not be started.");
+        buildCreatingRef.current = false;
+        setBuildCreating(false);
+        return;
+      }
+
+      try {
+        window.sessionStorage.removeItem("mavly:android-project-create");
+      } catch {
+        // The next request fingerprint prevents this key from being reused for another project.
+      }
+      androidCreateRequestRef.current = null;
+      if (attachedFiles.length > 0) {
+        toast.warning("The Android project was saved and source generation started. Local attachments were not transferred.");
+      }
+      clearDraftPrompt();
+      router.push(`/project/${encodeURIComponent(created.data.projectId)}`);
+      return;
+    }
 
     /**
      * ═══⭐⭐⭐ ONE CALL: CREATE THE PROJECT AND START BUILDING ═════════════════
@@ -624,6 +736,7 @@ export default function DashboardPage({ profile }: { profile: ProfileSummary }) 
 
       if (!launched.ok || !launched.data) {
         setBuildError(launched.error || `Could not create "${id}". Please try a different name.`);
+        buildCreatingRef.current = false;
         setBuildCreating(false);
         return;
       }
@@ -663,6 +776,7 @@ export default function DashboardPage({ profile }: { profile: ProfileSummary }) 
     });
     if (!res.ok) {
       setBuildError(res.error || `Could not create "${id}".`);
+      buildCreatingRef.current = false;
       setBuildCreating(false);
       return;
     }
@@ -795,23 +909,27 @@ export default function DashboardPage({ profile }: { profile: ProfileSummary }) 
         <div className="mb-10">
           <div className="w-full max-w-3xl mx-auto">
             <div className="text-center mb-6">
-              {!hasProjects && (
-                <div className="w-14 h-14 rounded-2xl mx-auto mb-4 shadow-[0_4px_16px_rgba(0,0,0,0.06)] overflow-hidden flex items-center justify-center p-1 bg-white border border-black/[0.06]">
-                  <Image
-                    src="/logo/Mavly.png"
-                    alt="Mavly Logo"
-                    width={56}
-                    height={56}
-                    className="w-full h-full object-contain"
-                    priority
-                    referrerPolicy="no-referrer"
-                  />
-                </div>
-              )}
+              <div className="w-14 h-14 rounded-2xl mx-auto mb-4 shadow-[0_4px_16px_rgba(0,0,0,0.06)] overflow-hidden flex items-center justify-center p-1 bg-white border border-black/[0.06]">
+                <Image
+                  src="/logo/Mavly.png"
+                  alt="Mavly Logo"
+                  width={56}
+                  height={56}
+                  className="w-full h-full object-contain"
+                  priority
+                  referrerPolicy="no-referrer"
+                />
+              </div>
               <h1 className={`font-bold tracking-tight text-gray-900 ${hasProjects ? "text-xl" : "text-3xl sm:text-4xl"}`}>
                 What do you want to build?
               </h1>
-              {!hasProjects && <p className="text-gray-500 max-w-md mx-auto mt-2 text-sm">Describe your app and AI will build it in minutes.</p>}
+              {promptMode === "android" ? (
+                <p className="text-gray-500 max-w-md mx-auto mt-2 text-sm">
+                  Mavly generates native Kotlin and Jetpack Compose source. Emulator previews, APK/AAB builds and store publishing are not configured. Local attachments are not transferred.
+                </p>
+              ) : (
+                !hasProjects && <p className="text-gray-500 max-w-md mx-auto mt-2 text-sm">Describe your app and AI will build it in minutes.</p>
+              )}
             </div>
             <div className="mb-2 px-4 sm:px-5">
               <div role="group" aria-label="Build mode" className="inline-flex max-w-full gap-1 rounded-xl bg-gray-100 p-1">
@@ -1015,7 +1133,11 @@ export default function DashboardPage({ profile }: { profile: ProfileSummary }) 
                     <Link key={p.projectId} href={`/project/${p.projectId}`} className="block h-full">
                       <div className="bg-white rounded-2xl border border-black/[0.06] shadow-[0_4px_20px_-2px_rgba(0,0,0,0.03)] hover:shadow-[0_12px_32px_-4px_rgba(0,0,0,0.08)] hover:border-black/[0.12] hover:-translate-y-1 active:translate-y-0 transition-all duration-300 overflow-hidden cursor-pointer group h-full flex flex-col">
                         <div className="aspect-[16/10] relative overflow-hidden border-b border-black/[0.04]">
-                          <ProjectPreview project={p} />
+                          {p.projectType === "android" ? (
+                            <AndroidProjectPlaceholder isRow={false} />
+                          ) : (
+                            <ProjectPreview project={p} />
+                          )}
                           <div className="absolute inset-0 bg-black/0 group-hover:bg-black/5 transition-colors pointer-events-none" />
                         </div>
                         <div className="p-4 flex-1">
@@ -1023,6 +1145,11 @@ export default function DashboardPage({ profile }: { profile: ProfileSummary }) 
                             <h3 className="font-medium text-sm text-gray-800 group-hover:text-gray-900 truncate flex-1" title={name}>
                               {name}
                             </h3>
+                            {p.projectType === "android" && (
+                              <span className="ml-2 shrink-0 rounded-full bg-gray-100 px-2 py-0.5 text-[9px] font-medium text-gray-500">
+                                Android
+                              </span>
+                            )}
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
                                 <button
@@ -1091,14 +1218,23 @@ export default function DashboardPage({ profile }: { profile: ProfileSummary }) 
                           className="border-b border-gray-100/70 last:border-0 hover:bg-gray-50/60 cursor-pointer transition-colors group"
                         >
                           <td className="px-4 py-2">
-                            <div className="w-14 aspect-[16/10] rounded-md overflow-hidden border border-gray-200/60">
-                              <ProjectPreview project={p} variant="row" />
+                            <div className="relative w-14 aspect-[16/10] rounded-md overflow-hidden border border-gray-200/60">
+                              {p.projectType === "android" ? (
+                                <AndroidProjectPlaceholder isRow />
+                              ) : (
+                                <ProjectPreview project={p} variant="row" />
+                              )}
                             </div>
                           </td>
                           <td className="px-2 py-2">
                             <span className="text-sm font-medium text-gray-800 group-hover:text-gray-900" title={displayProjectName(p)}>
                               {displayProjectName(p)}
                             </span>
+                            {p.projectType === "android" && (
+                              <span className="ml-2 rounded-full bg-gray-100 px-2 py-0.5 text-[9px] font-medium text-gray-500">
+                                Android
+                              </span>
+                            )}
                           </td>
                           <td className="px-2 py-2 hidden md:table-cell">
                             <span className="text-xs text-gray-500 line-clamp-1 max-w-[280px]">{p.description || "No description"}</span>
@@ -1182,7 +1318,11 @@ export default function DashboardPage({ profile }: { profile: ProfileSummary }) 
         <DialogContent>
           <DialogHeader><DialogTitle>Name your project</DialogTitle></DialogHeader>
           <div className="space-y-4 mt-4">
-            <p className="text-sm text-gray-500">Choose a unique name for your project. It will be used in the URL.</p>
+            <p className="text-sm text-gray-500">
+              {promptMode === "android"
+                ? "Choose a name for your Android project. Mavly will generate Kotlin/Compose source; APK/AAB builds are not configured."
+                : "Choose a unique name for your project. It will be used in the URL."}
+            </p>
             <div>
               <Label>Project name</Label>
               <Input
@@ -1202,7 +1342,7 @@ export default function DashboardPage({ profile }: { profile: ProfileSummary }) 
               </div>
             )}
             <Button className="w-full" onClick={confirmBuild} disabled={buildCreating || normalizeId(buildName).length < 3}>
-              {buildCreating ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Creating...</> : <><ArrowRight className="w-4 h-4 mr-2" /> Create & Build</>}
+              {buildCreating ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Creating...</> : <><ArrowRight className="w-4 h-4 mr-2" /> {promptMode === "android" ? "Create Android Project" : "Create & Build"}</>}
             </Button>
           </div>
         </DialogContent>

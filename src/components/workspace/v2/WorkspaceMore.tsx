@@ -17,6 +17,7 @@ import { V2ProjectSettings } from "./V2ProjectSettings";
 import { ProjectApiKeysModal } from "./ProjectApiKeysModal";
 import { ImageGenerationPanel } from "./ImageGenerationPanel";
 import { ProjectPaymentsIntegration } from "./ProjectPaymentsIntegration";
+import { ProjectMemoryPanel } from "./ProjectMemoryPanel";
 
 const noop = () => {};
 
@@ -72,6 +73,8 @@ export function WorkspaceMore({
                 </Modal>
             ) : section === "secrets" ? (
                 <SecretsModal open onOpenChange={noop} projectId={projectId} secrets={project.secrets ?? []} onChanged={onProjectChanged} />
+            ) : section === "memory" ? (
+                <ProjectMemoryPanel open onOpenChange={noop} projectId={projectId} />
             ) : section === "integrations" ? (
                 <ProjectPaymentsIntegration open onOpenChange={noop} projectId={projectId} />
             ) : section === "mobile" ? (

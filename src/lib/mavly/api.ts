@@ -48,6 +48,11 @@ import {
   type ImageGenerationFailure,
 } from "@/lib/ai/openrouter-images";
 import { sanitizeProjectPath } from "@/lib/ai/agent";
+import {
+  ANDROID_BUILD_REASON,
+  androidCapability,
+} from "@/lib/android/capability";
+import { androidPathRejection } from "@/lib/android/contract";
 import { validateProjectSlug } from "@/lib/project-slug";
 import { resolveStaticPreview } from "@/lib/static-site";
 import { projectGenerationProgressStage } from "@/lib/run-progress";
@@ -72,6 +77,7 @@ import {
   writeFiles,
   type MessageRow,
   type ProjectRow,
+  type ProjectType,
   type RunRow,
   type RunStage,
 } from "./store";
@@ -146,6 +152,15 @@ import {
   testPaymentsIntegration,
   type PaymentsServiceFailure,
 } from "@/lib/integrations/payments/service";
+import {
+  clearProjectMemory,
+  createProjectDecision,
+  deleteProjectMemory,
+  isMemoryServiceFailure,
+  listProjectMemory,
+  updateProjectMemory,
+  type MemoryServiceFailure,
+} from "@/lib/memory/service";
 
 import {
   cancelVerification,
@@ -315,6 +330,26 @@ export async function handleMavlyVcaasRequest(input: MavlyRequest): Promise<Next
   if (action === "agent/progress" && method === "GET") {
     return agentProgressResponse(projectId);
   }
+  /**
+   * ═══ ANDROID BUILDS ════════════════════════════════════════════════════════
+   *
+   * Source generation is real; build execution is not configured. These routes
+   * never enqueue a job or fabricate a build row: the GET reports the truthful
+   * capability, POST refuses with the exact blocker, and artifact/log URLs are
+   * 404 because no artifact exists.
+   */
+  if (action === "mobile/builds" && method === "GET") {
+    return androidBuildsResponse(userId, projectId);
+  }
+  if (action === "mobile/builds" && method === "POST") {
+    return androidBuildStartResponse(userId, projectId, body);
+  }
+  if (action.startsWith("mobile/builds/") && method === "GET") {
+    return androidBuildArtifactResponse(userId, projectId, action);
+  }
+  if (action.startsWith("mobile/builds/") && method === "POST") {
+    return androidBuildActionResponse(userId, projectId, action);
+  }
   if (action === "analytics/activity" && method === "GET") {
     return projectActivityResponse(projectId, query);
   }
@@ -322,6 +357,8 @@ export async function handleMavlyVcaasRequest(input: MavlyRequest): Promise<Next
     return conversationResponse(projectId, query);
   }
   if (action === "deployments/deploy" && method === "POST") {
+    const unsupported = await rejectAndroidWebsiteDeployment(userId, projectId);
+    if (unsupported) return unsupported;
     return deployResponse(userId, projectId, body);
   }
   if (action === "deployments/unpublish" && method === "POST") {
@@ -403,6 +440,49 @@ export async function handleMavlyVcaasRequest(input: MavlyRequest): Promise<Next
   }
   if (action === "integrations/payments/test" && method === "POST") {
     return testPaymentsIntegrationResponse(userId, projectId);
+  }
+  /**
+   * ═══ PROJECT MEMORY (PHASE 8) ═══════════════════════════════════════════
+   *
+   *   GET    …/memory                 decisions + observed outcomes + facts
+   *   POST   …/memory                 create an explicit user decision
+   *   DELETE …/memory?confirm=all     clear memory rows (never files/snapshots)
+   *   PATCH  …/memory/{id}            edit content/status with revision
+   *   DELETE …/memory/{id}            delete one memory
+   *   POST   …/memory/{id}/approve    activate a proposed decision
+   *   POST   …/memory/{id}/reject     archive it
+   *
+   * Every operation is project-scoped and authenticated. Memory is context, not
+   * authorization; disabled/cohort refusal is explicit, never a fake list.
+   */
+  if (action === "memory") {
+    if (method === "GET") return projectMemoryResponse(projectId, userId);
+    if (method === "POST") return createProjectMemoryResponse(projectId, userId, body);
+    if (method === "DELETE") return clearProjectMemoryResponse(projectId, userId, query);
+  }
+  if (action.startsWith("memory/")) {
+    const rest = action.slice("memory/".length).split("/");
+    const memoryId = rest[0];
+    if (memoryId && rest.length === 1) {
+      if (method === "PATCH" || method === "PUT") {
+        return updateProjectMemoryResponse(projectId, userId, memoryId, body);
+      }
+      if (method === "DELETE") {
+        return deleteProjectMemoryResponse(projectId, userId, memoryId);
+      }
+    }
+    if (memoryId && rest.length === 2 && method === "POST" && rest[1] === "approve") {
+      return updateProjectMemoryResponse(projectId, userId, memoryId, {
+        ...recordOf(body),
+        status: "active",
+      });
+    }
+    if (memoryId && rest.length === 2 && method === "POST" && rest[1] === "reject") {
+      return updateProjectMemoryResponse(projectId, userId, memoryId, {
+        ...recordOf(body),
+        status: "archived",
+      });
+    }
   }
   if (action === "secrets") {
     if (method === "GET") return projectSecretsResponse(userId, projectId);
@@ -521,23 +601,41 @@ async function createProjectResponse(userId: string, body: unknown): Promise<Nex
   const requestedId = stringOf(record.projectId)?.trim() ?? "";
   const problem = validateProjectSlug(requestedId);
   if (problem) return fail(400, "VALIDATION", "Invalid project name.");
+  const projectType = projectTypeOf(record.projectType);
+  if (!projectType) return fail(400, "VALIDATION", "Project type must be website or android.");
+  const creationRequestId = stringOf(record.clientRequestId)?.trim() ?? "";
+  if (projectType === "android" && !isRequestId(creationRequestId)) {
+    return fail(400, "VALIDATION", "A valid clientRequestId is required to create an Android project.");
+  }
 
   const description = stringOf(record.description)?.slice(0, 2_000) ?? "";
   const label = stringOf(record.label)?.slice(0, 120) ?? requestedId;
-  const projectType = stringOf(record.projectType) === "android" ? "android" : "website";
 
-  const created = await createOwnedProject(userId, requestedId, description, label, projectType);
+  const created = await createOwnedProject(
+    userId,
+    requestedId,
+    description,
+    label,
+    projectType,
+    projectType === "android" ? creationRequestId : undefined,
+  );
   if (isStoreFailure(created)) return fail(created.code === "CONFLICT" ? 409 : 500, created.code ?? "UNKNOWN", created.error);
 
   return ok(projectFromRow(created.data, null, false, null, null));
 }
 
 async function launchProjectResponse(userId: string, body: unknown): Promise<NextResponse> {
+  const record = recordOf(body);
+  const projectType = projectTypeOf(record.projectType);
+  if (!projectType) return fail(400, "VALIDATION", "Project type must be website or android.");
+  const creationRequestId = stringOf(record.clientRequestId)?.trim() ?? "";
+  if (projectType === "android" && !isRequestId(creationRequestId)) {
+    return fail(400, "VALIDATION", "A valid clientRequestId is required to launch an Android project.");
+  }
   if (!isAiConfigured()) {
     return fail(503, "BACKEND_NOT_CONFIGURED", "Groq is not configured. Add GROQ_API_KEY to the server runtime.");
   }
 
-  const record = recordOf(body);
   const prompt = (stringOf(record.prompt)?.trim() ?? "").slice(0, 32_000);
   if (!prompt) return fail(400, "VALIDATION", "A prompt is required.");
 
@@ -547,9 +645,15 @@ async function launchProjectResponse(userId: string, body: unknown): Promise<Nex
 
   const description = stringOf(record.description)?.slice(0, 2_000) || prompt.slice(0, 200);
   const label = stringOf(record.label)?.slice(0, 120) || requestedId;
-  const projectType = stringOf(record.projectType) === "android" ? "android" : "website";
 
-  const created = await createOwnedProject(userId, requestedId, description, label, projectType);
+  const created = await createOwnedProject(
+    userId,
+    requestedId,
+    description,
+    label,
+    projectType,
+    projectType === "android" ? creationRequestId : undefined,
+  );
   if (isStoreFailure(created)) return fail(created.code === "CONFLICT" ? 409 : 500, created.code ?? "UNKNOWN", created.error);
 
   const warnings: NonNullable<ProjectLaunchResult["warnings"]> = [];
@@ -581,7 +685,11 @@ async function launchProjectResponse(userId: string, body: unknown): Promise<Nex
       reason: admission.code ?? "admission_failed",
       dispatchMode,
     });
-    await deleteProject(userId, created.data.project_id);
+    /**
+     * ⚠️ AN ANDROID LAUNCH MAY HAVE RETURNED AN EXISTING IDEMPOTENT PROJECT.
+     * Deleting it here would destroy a project this request did not create.
+     */
+    if (projectType !== "android") await deleteProject(userId, created.data.project_id);
     return admissionFailure(admission);
   }
   if (admission.data.status === "rate_limited") {
@@ -591,8 +699,20 @@ async function launchProjectResponse(userId: string, body: unknown): Promise<Nex
       status: admission.data.scope,
       dispatchMode,
     });
-    await deleteProject(userId, created.data.project_id);
+    if (projectType !== "android") await deleteProject(userId, created.data.project_id);
     return rateLimited(admission.data.scope, admission.data.retryAfterSeconds);
+  }
+  if (admission.data.status === "existing" && projectType === "android") {
+    /**
+     * A retried Android launch with the same clientRequestId is the SAME job.
+     * Return it instead of deleting the project or reporting a conflict.
+     */
+    return ok({
+      projectId: created.data.project_id,
+      ...(created.data.project_id !== requestedId ? { requestedProjectId: requestedId } : {}),
+      agent: { started: true, status: admission.data.run.finished_at ? "done" : "init" },
+      warnings,
+    });
   }
   if (admission.data.status === "conflict" || admission.data.status === "existing") {
     emitGenerationEvent("generation.rejected", {
@@ -600,7 +720,7 @@ async function launchProjectResponse(userId: string, body: unknown): Promise<Nex
       reason: "conflict",
       dispatchMode,
     });
-    await deleteProject(userId, created.data.project_id);
+    if (projectType !== "android") await deleteProject(userId, created.data.project_id);
     return fail(409, "CONFLICT", "A generation is already active for this project.");
   }
 
@@ -608,7 +728,7 @@ async function launchProjectResponse(userId: string, body: unknown): Promise<Nex
   const message = await insertMessage(created.data.project_id, "user", prompt);
   if (isStoreFailure(message)) {
     await finishRun(run.id, "error", "Could not save the prompt.", { stage: "failed", errorCode: "RUN_PROMPT_SAVE_FAILED" });
-    await deleteProject(userId, created.data.project_id);
+    if (projectType !== "android") await deleteProject(userId, created.data.project_id);
     return fail(500, "UNKNOWN", "Could not start the agent.");
   }
 
@@ -643,6 +763,16 @@ async function launchProjectResponse(userId: string, body: unknown): Promise<Nex
     warnings,
   };
   return ok(data);
+}
+
+function projectTypeOf(value: unknown): ProjectType | null {
+  if (value === undefined || value === "website") return "website";
+  if (value === "android") return "android";
+  return null;
+}
+
+function isRequestId(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 }
 
 function idempotencyKeyOf(body: Record<string, unknown>): string | null {
@@ -680,7 +810,10 @@ async function projectResponse(userId: string, projectId: string): Promise<NextR
 
   const run = await latestRun(projectId);
   if (isStoreFailure(run)) return fail(500, "UNKNOWN", "Could not load this project.");
-  const preview = await staticPreviewState(projectId);
+  const preview =
+    project.data.project_type === "android"
+      ? { available: false, reason: "Native Android projects do not have a web preview." }
+      : await staticPreviewState(projectId);
   const deployment = await getDeploymentRow(projectId);
   const secrets = await secretsForProject(projectId, userId);
 
@@ -715,7 +848,10 @@ async function updateProjectResponse(userId: string, projectId: string, body: un
   if (isStoreFailure(updated)) return fail(500, "UNKNOWN", "Could not update this project.");
 
   const run = await latestRun(projectId);
-  const preview = await staticPreviewState(projectId);
+  const preview =
+    updated.data.project_type === "android"
+      ? { available: false, reason: "Native Android projects do not have a web preview." }
+      : await staticPreviewState(projectId);
   const deployment = await getDeploymentRow(projectId);
   const secrets = await secretsForProject(projectId, userId);
   return ok(
@@ -768,6 +904,128 @@ async function deployResponse(
     );
   }
   return ok(result.data);
+}
+
+async function rejectAndroidWebsiteDeployment(
+  userId: string,
+  projectId: string,
+): Promise<NextResponse | null> {
+  const project = await getProject(userId, projectId);
+  if (isStoreFailure(project)) return fail(500, "UNKNOWN", "Could not load this project.");
+  if (!project.data) return fail(404, "PROJECT_NOT_FOUND", "Project not found.");
+  if (project.data.project_type !== "android") return null;
+
+  return fail(
+    503,
+    "ANDROID_HOSTING_NOT_CONFIGURED",
+    "Static website publishing does not apply to Android projects. No APK/AAB build executor or Android hosting is configured in this deployment.",
+  );
+}
+
+async function requireAndroidProject(
+  userId: string,
+  projectId: string,
+): Promise<NextResponse | null> {
+  const project = await getProject(userId, projectId);
+  if (isStoreFailure(project)) return fail(500, "UNKNOWN", "Could not load this project.");
+  if (!project.data) return fail(404, "PROJECT_NOT_FOUND", "Project not found.");
+  if (project.data.project_type !== "android") {
+    return fail(
+      400,
+      "NOT_ANDROID_PROJECT",
+      "This endpoint is only available for Android projects.",
+    );
+  }
+  return null;
+}
+
+async function androidBuildsResponse(
+  userId: string,
+  projectId: string,
+): Promise<NextResponse> {
+  const unsupported = await requireAndroidProject(userId, projectId);
+  if (unsupported) return unsupported;
+
+  /**
+   * There is no build table and no build executor. An empty history with an
+   * explicit capability is the truthful answer; a fabricated `queued` row would
+   * be a lie the UI would poll for ever.
+   */
+  return ok({ builds: [], capability: androidCapability(projectId) });
+}
+
+async function androidBuildStartResponse(
+  userId: string,
+  projectId: string,
+  body: unknown,
+): Promise<NextResponse> {
+  const unsupported = await requireAndroidProject(userId, projectId);
+  if (unsupported) return unsupported;
+
+  const platform = stringOf(recordOf(body).platform)?.trim().toLowerCase() || "android";
+  if (platform !== "android") {
+    return fail(
+      400,
+      "PLATFORM_NOT_CONFIGURED",
+      "Only Android source generation is available; iOS builds are not configured.",
+    );
+  }
+
+  return fail(503, "ANDROID_BUILD_NOT_CONFIGURED", ANDROID_BUILD_REASON);
+}
+
+async function androidBuildArtifactResponse(
+  userId: string,
+  projectId: string,
+  action: string,
+): Promise<NextResponse> {
+  const unsupported = await requireAndroidProject(userId, projectId);
+  if (unsupported) return unsupported;
+
+  const rest = action.slice("mobile/builds/".length).split("/");
+  const buildId = rest[0];
+  if (
+    !buildId ||
+    rest.length !== 2 ||
+    (rest[1] !== "download" && rest[1] !== "log")
+  ) {
+    return fail(404, "NOT_FOUND", "Not found");
+  }
+  return fail(
+    404,
+    "ANDROID_BUILD_NOT_FOUND",
+    "No Android build exists for this project, and no artifact or log is available.",
+  );
+}
+
+async function androidBuildActionResponse(
+  userId: string,
+  projectId: string,
+  action: string,
+): Promise<NextResponse> {
+  const unsupported = await requireAndroidProject(userId, projectId);
+  if (unsupported) return unsupported;
+
+  const rest = action.slice("mobile/builds/".length).split("/");
+  const buildId = rest[0];
+  if (!buildId || rest.length !== 2) {
+    return fail(404, "NOT_FOUND", "Not found");
+  }
+  if (rest[1] === "store-upload") {
+    return fail(
+      503,
+      "ANDROID_BUILD_NOT_CONFIGURED",
+      "A store upload needs a signed Android build, and no build executor or release signing is configured.",
+    );
+  }
+  if (rest[1] === "cancel") {
+    return fail(
+      404,
+      "ANDROID_BUILD_NOT_FOUND",
+      "No Android build exists for this project, so there is nothing to cancel.",
+    );
+  }
+  return fail(404, "NOT_FOUND", "Not found");
 }
 
 async function unpublishResponse(userId: string, projectId: string): Promise<NextResponse> {
@@ -958,6 +1216,60 @@ async function disablePaymentsIntegrationResponse(
 ): Promise<NextResponse> {
   const result = await disablePaymentsIntegration(projectId, userId);
   if (isPaymentsServiceFailure(result)) return paymentsFail(result);
+  return ok(result.data);
+}
+
+function memoryFail(result: MemoryServiceFailure): NextResponse {
+  return fail(result.status, result.code, result.error);
+}
+
+async function projectMemoryResponse(
+  projectId: string,
+  userId: string,
+): Promise<NextResponse> {
+  const result = await listProjectMemory(projectId, userId);
+  if (isMemoryServiceFailure(result)) return memoryFail(result);
+  return ok(result.data);
+}
+
+async function createProjectMemoryResponse(
+  projectId: string,
+  userId: string,
+  body: unknown,
+): Promise<NextResponse> {
+  const result = await createProjectDecision(projectId, userId, body);
+  if (isMemoryServiceFailure(result)) return memoryFail(result);
+  return ok(result.data);
+}
+
+async function updateProjectMemoryResponse(
+  projectId: string,
+  userId: string,
+  memoryId: string,
+  body: unknown,
+): Promise<NextResponse> {
+  const result = await updateProjectMemory(projectId, userId, memoryId, body);
+  if (isMemoryServiceFailure(result)) return memoryFail(result);
+  return ok(result.data);
+}
+
+async function deleteProjectMemoryResponse(
+  projectId: string,
+  userId: string,
+  memoryId: string,
+): Promise<NextResponse> {
+  const result = await deleteProjectMemory(projectId, userId, memoryId);
+  if (isMemoryServiceFailure(result)) return memoryFail(result);
+  return ok(result.data);
+}
+
+async function clearProjectMemoryResponse(
+  projectId: string,
+  userId: string,
+  query: URLSearchParams,
+): Promise<NextResponse> {
+  const result = await clearProjectMemory(projectId, userId, query.get("confirm"));
+  if (isMemoryServiceFailure(result)) return memoryFail(result);
   return ok(result.data);
 }
 
@@ -1736,6 +2048,22 @@ async function fileWriteResponse(userId: string, projectId: string, body: unknow
   if (Buffer.byteLength(content, "utf8") > 256 * 1024) {
     return fail(400, "VALIDATION", "That file is too large.");
   }
+  if (content.includes("\u0000")) {
+    return fail(400, "VALIDATION", "Binary content is not allowed.");
+  }
+
+  /**
+   * An Android project uses the same path profile as generated source. Manual
+   * edits must not introduce a keystore, APK, environment file or build output.
+   */
+  const project = await getProject(userId, projectId);
+  if (isStoreFailure(project)) return fail(500, "UNKNOWN", "Could not load this project.");
+  if (project.data?.project_type === "android") {
+    const rejection = androidPathRejection(path);
+    if (rejection) {
+      return fail(400, "VALIDATION", `That path is not allowed in an Android project: ${rejection}.`);
+    }
+  }
 
   const before = await getFile(projectId, path);
   const written = await writeFiles(userId, projectId, [{ path, content }]);
@@ -2115,6 +2443,7 @@ function projectFromRow(
   return {
     projectId: row.project_id,
     projectType: row.project_type ?? "website",
+    ...(row.project_type === "android" ? { android: androidCapability(row.project_id) } : {}),
     label: row.label ?? undefined,
     description: row.description,
     plan: "free",

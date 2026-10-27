@@ -15,6 +15,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { toast } from "sonner";
 import { ChatPanel } from "@/components/workspace/ChatPanel";
+import { AndroidWorkspace } from "@/components/workspace/AndroidWorkspace";
 import { PreviewPanel } from "@/components/workspace/PreviewPanel";
 import { useRunProgress } from "@/components/workspace/RunActivity";
 import { isRunOver } from "@/lib/run-progress";
@@ -418,7 +419,7 @@ export default function WorkspacePage() {
   /** When the project was last read successfully — the "stale tab" effect's clock. */
   const lastProjectReadAt = useRef(Date.now());
   const sendingRef = useRef(false);
-  const autoSentRef = useRef(false);
+  const autoSentRef = useRef<string | null>(null);
   // Guards the poll loop right after a new run is started: the server may still
   // report the PREVIOUS run's "done"/"idle" for a moment, and concluding on that
   // stale status would wipe the just-sent message and stop polling. We wait to
@@ -1098,12 +1099,22 @@ export default function WorkspacePage() {
   // projectId; once the project is loaded and idle, we send it automatically so
   // the agent starts building right away.
   useEffect(() => {
-    if (loading || !project || autoSentRef.current) return;
+    if (loading || !project || project.projectId !== projectId || autoSentRef.current === projectId) return;
+    if (project.projectType === "android") {
+      autoSentRef.current = projectId;
+      try {
+        sessionStorage.removeItem(`vibebuild:pendingPrompt:${projectId}`);
+        sessionStorage.removeItem(`vibebuild:pendingFiles:${projectId}`);
+      } catch {
+        // A stale website handoff must never start generation for an Android project.
+      }
+      return;
+    }
     if (project.agentProcessStatus === "init") return;
     const promptKey = `vibebuild:pendingPrompt:${projectId}`;
     const pending = typeof window !== "undefined" ? sessionStorage.getItem(promptKey) : null;
     if (!pending) return;
-    autoSentRef.current = true;
+    autoSentRef.current = projectId;
     sessionStorage.removeItem(promptKey);
     const filesKey = `vibebuild:pendingFiles:${projectId}`;
     let files: { name: string; url: string; imageDescription: string }[] | undefined;
@@ -1514,6 +1525,8 @@ export default function WorkspacePage() {
 
   if (loading) return <div className="h-screen flex flex-col items-center justify-center gap-3 dark:text-gray-200" style={{ background: pageBg }}><Loader2 className="w-7 h-7 animate-spin" /><p className="text-sm text-gray-400">{"Loading..."}</p></div>;
   if (!project) return <div className="h-screen flex flex-col items-center justify-center gap-4 dark:text-gray-200" style={{ background: pageBg }}><p className="text-gray-500">Project not found</p><Link href="/dashboard"><Button variant="outline">{"Back"}</Button></Link></div>;
+  if (project.projectId !== projectId) return <div className="h-screen flex items-center justify-center bg-[#fcfbf8] text-sm text-gray-400">Loading project…</div>;
+  if (project.projectType === "android") return <AndroidWorkspace key={project.projectId} project={project} />;
 
   // Popup menu content (shared between desktop and mobile)
   const popupMenu = menuOpen && (
