@@ -717,8 +717,8 @@ export function ChatPanel({
   };
 
   return (
-    <div className="flex flex-col h-full bg-inherit">
-      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
+    <div className="flex flex-col h-full min-h-0 bg-inherit">
+      <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto px-4 py-4 space-y-4">
         {messages.length === 0 && !isBuilding && (
           <div className="flex flex-col items-center justify-center h-full text-center px-4">
             <div className="w-10 h-10 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center mb-3"><Bot className="w-5 h-5 text-gray-400" /></div>

@@ -84,9 +84,9 @@ export function PreviewPanel({ previewUrl, onRefresh, loading, mobilePreview = f
   const canvasMotionActive = Boolean(loading && !previewReady && !previewUrl);
 
   return (
-    <div className="h-full flex flex-col overflow-hidden">
+    <div className="h-full min-h-0 flex flex-col overflow-hidden">
       {/* iframe - no URL bar here, it's in the header now */}
-      <div className="flex-1 flex items-center justify-center overflow-hidden relative" style={{ background: "#fcfbf8" }}>
+      <div className="flex-1 min-h-0 flex items-center justify-center overflow-hidden relative" style={{ background: "#fcfbf8" }}>
         {/* Cached snapshot indicator: shown when the dev server is not active and
             we're displaying the cachedDevelopmentUrl static snapshot */}
         {previewUrl && cached && (

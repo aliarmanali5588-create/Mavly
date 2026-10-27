@@ -1642,7 +1642,7 @@ export default function WorkspacePage() {
       {isResizing && <div className="fixed inset-0 z-50 cursor-col-resize" />}
 
       {/* ═══ DESKTOP LAYOUT ═══ */}
-      <div className="hidden sm:flex flex-col h-full">
+      <div className="hidden sm:flex flex-col h-full min-h-0">
         {/* Desktop header 48px */}
         <header data-workspace-header className="flex items-stretch shrink-0 z-10" style={{ height: 48 }}>
           {/* LEFT: aside width */}
@@ -1729,10 +1729,10 @@ export default function WorkspacePage() {
           </div>
         </header>
         {/* Desktop main */}
-        <div className="flex-1 flex overflow-hidden">
+        <div className="flex-1 flex min-h-0 overflow-hidden">
           <div
             ref={chatColumnRef}
-            className={`flex flex-col shrink-0 ${isResizing ? "" : "transition-[width]"} ${chatCollapsed ? "w-0 overflow-hidden" : ""}`}
+            className={`flex flex-col min-h-0 shrink-0 ${isResizing ? "" : "transition-[width]"} ${chatCollapsed ? "w-0 overflow-hidden" : ""}`}
             style={chatCollapsed ? {} : { width: liveChatWidth, background: cardBg }}
           >
             <ChatPanel
@@ -1765,7 +1765,7 @@ export default function WorkspacePage() {
               <div className="w-0.5 h-8 bg-gray-200 dark:bg-gray-600 rounded-full" />
             </div>
           )}
-          <div className="flex-1 flex flex-col min-w-0">
+          <div className="flex-1 flex flex-col min-h-0 min-w-0">
             {/*
               ⭐ THE OPERATION BANNER, ABOVE EVERYTHING IT AFFECTS. Publish, pull,
               restore and restart all replace or take down the app the panel below is
@@ -1789,7 +1789,7 @@ export default function WorkspacePage() {
                 <ServerWakeNotice wake={serverWake} manualRetry={!serverWake.willRetry} />
               </div>
             )}
-            <div className={`flex-1 overflow-hidden ${activeTab === "preview" ? "rounded-none" : "m-2 sm:m-3 rounded-xl shadow-sm"}`} style={{ background: cardBg }}>
+            <div className={`flex-1 min-h-0 overflow-hidden ${activeTab === "preview" ? "rounded-none" : "m-2 sm:m-3 rounded-xl shadow-sm"}`} style={{ background: cardBg }}>
               {activeTab === "preview" && <PreviewPanel key={previewKey} previewUrl={shownPreviewUrl} cached={previewCached} onRefresh={() => { fetchProject(); setPreviewKey((k) => k + 1); }} loading={showInitialGenerationLoader} buildStage={buildStage} buildRetrying={buildRetrying} previewReady={previewReady} emptyMessage={project?.previewUnavailableReason} mobilePreview={mobilePreview} iframePath={iframePath} frameRef={previewFrameRef} /* ⭐ Same-origin ONLY while the editor is open — and for the length of an apply, which outlives the panel: dropping the proxy mid-apply would reload the frame and throw away the preview-only edits the user is watching. */ proxiedSrc={visualEditorOpen || visualLocked ? `/api/preview/${encodeURIComponent(projectId)}` : null} />}
               {activeTab === "code" && <CodePanel key={`${projectId}:${sourceRevision}`} projectId={projectId} sourceRevision={sourceRevision} darkMode={darkMode} onAskAiEdit={handleAskAiEdit} wake={serverWake} />}
               {activeTab === "more" && <WorkspaceMore project={project} onProjectChanged={() => void fetchProject()} onPublish={() => void handleDeploy()} />}
@@ -1811,7 +1811,7 @@ export default function WorkspacePage() {
             edited, which is the one thing the user is looking at.
           */}
           {visualEditorOpen && (
-            <div className="w-[19rem] shrink-0 xl:w-[21rem] overflow-hidden border-l border-gray-200 dark:border-gray-800">
+            <div className="w-[19rem] min-h-0 shrink-0 xl:w-[21rem] overflow-hidden border-l border-gray-200 dark:border-gray-800">
               <VisualEditorPanel
                 projectId={projectId}
                 selected={visual.selected}
@@ -1847,7 +1847,7 @@ export default function WorkspacePage() {
       </div>
 
       {/* ═══ MOBILE LAYOUT: header → content → fixed switch → fixed textarea ═══ */}
-      <div className="flex sm:hidden flex-col h-full">
+      <div className="flex sm:hidden flex-col h-full min-h-0">
         {/* Mobile header */}
         <header data-workspace-header className="flex items-center gap-1.5 px-2 shrink-0 z-10" style={{ height: 44 }}>
           <button type="button" onClick={() => { setLeaveWorkspaceHref("/"); setLeaveWorkspaceOpen(true); }} title="Back to Mavly" aria-label="Back to Mavly" className="h-7 px-1.5 flex items-center gap-1.5 rounded-lg text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-black/5 dark:hover:bg-white/10 transition-colors shrink-0">
@@ -1879,14 +1879,14 @@ export default function WorkspacePage() {
         <V2Banner project={project} onChanged={() => void fetchProject()} onAskFix={(text) => { setPrompt(text); setMobileTab("chat"); }} onPublishConfirmed={() => void handleDeploy(true)} />
 
         {/* Mobile content area */}
-        <div className="flex-1 overflow-hidden" style={{ background: cardBg }}>
+        <div className="flex-1 min-h-0 overflow-hidden" style={{ background: cardBg }}>
           {mobileTab === "chat" ? (
-            <div className="flex flex-col h-full">
+            <div className="flex flex-col h-full min-h-0">
               {/* ⚠️ No pencil here: the visual editor is a desktop surface (see the frame-ref note). */}
               <ChatPanel messages={messages} isBuilding={isBuilding} prompt={prompt} setPrompt={setPrompt} onSend={handleSendPrompt} onRetryPrompt={(text, files) => { void sendPromptText(text, files); }} onStop={handleStopAgent} sending={sending} projectId={projectId} projectSecrets={project?.secrets} runStartedAt={runStartedAt} expectedMinutes={expectedMinutes} {...composerProps} />
             </div>
           ) : (
-            <div className="h-full overflow-hidden">
+            <div className="h-full min-h-0 overflow-hidden">
               {activeTab === "preview" && <PreviewPanel key={previewKey} previewUrl={shownPreviewUrl} cached={previewCached} onRefresh={() => { fetchProject(); setPreviewKey((k) => k + 1); }} loading={showInitialGenerationLoader} buildStage={buildStage} buildRetrying={buildRetrying} previewReady={previewReady} emptyMessage={project?.previewUnavailableReason} mobilePreview={false} iframePath={iframePath} />}
               {activeTab === "code" && <CodePanel key={`${projectId}:${sourceRevision}`} projectId={projectId} sourceRevision={sourceRevision} darkMode={darkMode} onAskAiEdit={handleAskAiEdit} wake={serverWake} />}
               {activeTab === "more" && <WorkspaceMore project={project} onProjectChanged={() => void fetchProject()} onPublish={() => void handleDeploy()} />}
