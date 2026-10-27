@@ -49,9 +49,7 @@ export function profileFromAuthUser(user: AuthUserLike): ProfileSummary {
   const metadata = user.user_metadata ?? {};
   const name =
     cleanText(metadata.full_name) ??
-    cleanText(metadata.name) ??
-    cleanText(metadata.preferred_username) ??
-    cleanText(metadata.user_name);
+    cleanText(metadata.name);
 
   return {
     id: user.id,

@@ -272,6 +272,7 @@ function ProjectPreview({
 
 export default function DashboardPage({ profile }: { profile: ProfileSummary }) {
   const router = useRouter();
+  const headingName = profile.name?.replace(/[.,!?;:]+$/u, "").trim() || null;
   const [projects, setProjects] = useState<VcaasProjectSummary[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -923,8 +924,8 @@ export default function DashboardPage({ profile }: { profile: ProfileSummary }) 
                   referrerPolicy="no-referrer"
                 />
               </div>
-              <h1 className="text-[2rem] font-bold leading-[1.12] tracking-tight text-gray-900 sm:text-[2.5rem] lg:text-[3.25rem]">
-                What do you want to build?
+              <h1 className="break-words text-center text-[2rem] font-bold leading-[1.12] tracking-tight text-gray-900 sm:text-[2.5rem] lg:text-[3.25rem]">
+                What do you want to build{headingName ? `, ${headingName}` : ""}?
               </h1>
               {promptMode === "android" ? (
                 <p className="text-gray-500 max-w-md mx-auto mt-2 text-sm">
