@@ -19,9 +19,9 @@
 
 /**
  * The approved public exceptions — paths under `/api/` that stay reachable
- * without a session. Matched EXACTLY (no prefix semantics): `/api/configx` or
- * `/api/config/anything` are not on the list, so they are protected like every
- * other API path.
+ * without a session. Exact paths have no prefix semantics (`/api/configx` and
+ * `/api/config/anything` stay protected). Phase 6 adds two deliberate prefixes,
+ * listed separately below; each route under them authenticates itself.
  *
  * `/api/config` answers one boolean with no key, env value, or other secret in
  * the payload (`src/app/api/config/route.ts`). The dashboard no longer calls it,
@@ -38,9 +38,30 @@ export const PUBLIC_API_PATHS: readonly string[] = [
   "/api/generation/worker",
 ];
 
-/** True for the exact paths in `PUBLIC_API_PATHS`. */
+/**
+ * Phase 6 public prefixes. Both are server-to-server only and authenticate
+ * themselves OUTSIDE a Supabase session:
+ *
+ *   · `/api/app/v1/` — the generated application's payment gateway, which
+ *     requires a hashed project API key with the `integrations:*` scope;
+ *   · `/api/integrations/webhooks/` — provider webhooks, which resolve an
+ *     unguessable per-integration token and verify the provider signature over
+ *     the exact raw body before parsing anything.
+ *
+ * ⚠️ A PREFIX IS A WIDER GRANT THAN AN EXACT PATH. Every route added under
+ * either prefix must perform its own authentication before doing any work; the
+ * proxy cannot. The trailing slash is part of the match (`/api/app/v1x` is not
+ * exempt), and the prefix tests below pin that boundary.
+ */
+export const PUBLIC_API_PREFIXES: readonly string[] = [
+  "/api/app/v1/",
+  "/api/integrations/webhooks/",
+];
+
+/** True for an exact public path or a documented public prefix. */
 export function isPublicApiPath(pathname: string): boolean {
-  return PUBLIC_API_PATHS.includes(pathname);
+  if (PUBLIC_API_PATHS.includes(pathname)) return true;
+  return PUBLIC_API_PREFIXES.some((prefix) => pathname.startsWith(prefix));
 }
 
 /**

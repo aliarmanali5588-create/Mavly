@@ -121,7 +121,9 @@
       "Bash(rg -n '\"start\"|next start|\"build\": \"next build\"' src/lib/ai src/lib/mavly src/lib --glob '!*.test.*' | head -50)",
       "Bash(rg -n \"scripts\" src/lib/ai src/lib/mavly --glob '*.ts' | head -20; rg -n \"next dev|next start|\\\\\"dev\\\\\"\" src/lib/ai src/lib/mavly --glob '*.ts' | head -30)",
       "Bash(rg -n \"export interface ChatCompletion|export type ChatCompletion|costUsd|usage|model\" src/lib/ai/groq.ts | head -60; rg -n \"export function resolveModel|task\" src/lib/ai/models.ts | head -30)",
-      "Bash(ls tests | head -60; ls docs/architecture docs/runbooks)"
+      "Bash(ls tests | head -60; ls docs/architecture docs/runbooks)",
+      "Bash(find src/lib/integrations src/lib/project-secrets src/lib/hosting src/lib/deployments src/lib/vercel src/lib/project-api-keys -type f | sort && echo \"---API INTEGRATIONS---\" && find src/app/api/integrations src/app/api/vcaas -type f | sort | head -60)",
+      "Bash(ls src/lib/runtime/ 2>/dev/null; echo \"---components integrations---\"; find src/components -type d | sort | head -50; echo \"---webhook refs---\"; rg -l -i \"webhook\" src --glob '!*.map' | head -40)"
     ]
   }
 }

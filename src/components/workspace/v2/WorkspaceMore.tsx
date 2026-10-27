@@ -16,6 +16,7 @@ import { UsageLimitsModal } from "./UsageLimitsModal";
 import { V2ProjectSettings } from "./V2ProjectSettings";
 import { ProjectApiKeysModal } from "./ProjectApiKeysModal";
 import { ImageGenerationPanel } from "./ImageGenerationPanel";
+import { ProjectPaymentsIntegration } from "./ProjectPaymentsIntegration";
 
 const noop = () => {};
 
@@ -71,6 +72,8 @@ export function WorkspaceMore({
                 </Modal>
             ) : section === "secrets" ? (
                 <SecretsModal open onOpenChange={noop} projectId={projectId} secrets={project.secrets ?? []} onChanged={onProjectChanged} />
+            ) : section === "integrations" ? (
+                <ProjectPaymentsIntegration open onOpenChange={noop} projectId={projectId} />
             ) : section === "mobile" ? (
                 <Modal open onOpenChange={noop} size="lg" title={t("engineV2.mobile.title")} description={t("engineV2.unavailable.lead")}>
                     <UnavailableSection body={t("engineV2.unavailable.mobile")} />

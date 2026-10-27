@@ -169,6 +169,9 @@ export const enMore = {
     }
   },
   engineV2: {
+    integrations: {
+      title: "Business payments"
+    },
     common: {
       failed: "That did not work. Try again in a moment.",
       unavailable: "Not available right now."

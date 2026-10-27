@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   PUBLIC_API_PATHS,
+  PUBLIC_API_PREFIXES,
   apiSessionDecision,
   isPublicApiPath,
 } from "../src/lib/api-access";
@@ -84,6 +85,34 @@ test("the internal worker passes the session gate but authenticates itself", () 
   // worker route requires a server-only bearer secret of its own.
   assert.equal(apiSessionDecision("/api/generation/worker", false), "allow");
   assert.equal(apiSessionDecision("/api/generation/worker/run", false), "unauthenticated");
+});
+
+test("the two Phase 6 prefixes are public and authenticate themselves", () => {
+  // The proxy cannot authenticate these callers; the route MUST. These are the
+  // only prefix grants, and the trailing slash is part of the boundary.
+  assert.deepEqual([...PUBLIC_API_PREFIXES], [
+    "/api/app/v1/",
+    "/api/integrations/webhooks/",
+  ]);
+  assert.equal(
+    apiSessionDecision("/api/app/v1/payments/orders", false),
+    "allow",
+  );
+  assert.equal(
+    apiSessionDecision("/api/integrations/webhooks/razorpay/whk_token", false),
+    "allow",
+  );
+  // Near-miss and adjacent integration paths stay protected.
+  for (const path of [
+    "/api/app/v1",
+    "/api/app/v1x/payments",
+    "/api/app/v2/payments",
+    "/api/integrations/github/start",
+    "/api/integrations/supabase/status",
+    "/api/integrations/webhooksx",
+  ]) {
+    assert.equal(apiSessionDecision(path, false), "unauthenticated", path);
+  }
 });
 
 test("non-API paths are never this gate's business", () => {

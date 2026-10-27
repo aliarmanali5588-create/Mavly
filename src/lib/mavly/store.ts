@@ -23,9 +23,16 @@ import type { GenerationStage } from "@/lib/generation/state-machine";
 import { WORKER_LEASE_SECONDS } from "@/lib/generation/leases";
 import { emitGenerationEvent } from "@/lib/observability/events";
 
+export type ProjectType = "website" | "android";
+
+export const normalizeProjectType = (value: unknown): ProjectType => {
+  return value === "android" ? "android" : "website";
+};
+
 export interface ProjectRow {
   project_id: string;
   user_id: string;
+  project_type: ProjectType;
   label: string | null;
   description: string;
   created_at: string;
@@ -144,6 +151,7 @@ export async function createOwnedProject(
   requestedId: string,
   description: string,
   label?: string | null,
+  projectType?: ProjectType,
 ): Promise<StoreResult<ProjectRow>> {
   if (!isRoutableProjectSlug(requestedId)) {
     return { ok: false, error: "Invalid project id", code: "VALIDATION" };
@@ -152,6 +160,8 @@ export async function createOwnedProject(
   const supabase = await client();
   if (!supabase) return { ok: false, error: "Supabase is not configured", code: "UNAVAILABLE" };
 
+  const targetType = normalizeProjectType(projectType);
+
   let candidate = requestedId;
   for (let attempt = 0; attempt < 8; attempt++) {
     const { data, error } = await supabase
@@ -159,10 +169,11 @@ export async function createOwnedProject(
       .insert({
         project_id: candidate,
         user_id: userId,
+        project_type: targetType,
         description: description.slice(0, 2_000),
         label: label?.slice(0, 120) || null,
       })
-      .select("project_id,user_id,label,description,created_at,updated_at")
+      .select("project_id,user_id,project_type,label,description,created_at,updated_at")
       .single();
 
     if (!error && data) return { ok: true, data: data as ProjectRow };
@@ -187,7 +198,7 @@ export async function listProjects(userId: string): Promise<StoreResult<ProjectR
 
   const { data, error } = await supabase
     .from("projects")
-    .select("project_id,user_id,label,description,created_at,updated_at")
+    .select("project_id,user_id,project_type,label,description,created_at,updated_at")
     .eq("user_id", userId)
     .order("updated_at", { ascending: false });
 
@@ -205,7 +216,7 @@ export async function getProject(
 
   const { data, error } = await dbc
     .from("projects")
-    .select("project_id,user_id,label,description,created_at,updated_at")
+    .select("project_id,user_id,project_type,label,description,created_at,updated_at")
     .eq("project_id", projectId)
     .eq("user_id", userId)
     .maybeSingle();
@@ -217,21 +228,21 @@ export async function getProject(
 export async function updateProject(
   userId: string,
   projectId: string,
-  patch: { label?: string | null; description?: string },
+  patch: { label?: string | null; description?: string; projectType?: ProjectType },
 ): Promise<StoreResult<ProjectRow>> {
   const supabase = await client();
   if (!supabase) return { ok: false, error: "Supabase is not configured", code: "UNAVAILABLE" };
 
   const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
-  if (patch.label !== undefined) updates.label = patch.label?.slice(0, 120) || null;
-  if (patch.description !== undefined) updates.description = patch.description.slice(0, 2_000);
+  if (patch.projectType !== undefined) updates.project_type = normalizeProjectType(patch.projectType);
+  if (patch.label !== undefined) updates.label = patch.label?.slice(0, 120) || null;  if (patch.description !== undefined) updates.description = patch.description.slice(0, 2_000);
 
   const { data, error } = await supabase
     .from("projects")
     .update(updates)
     .eq("project_id", projectId)
     .eq("user_id", userId)
-    .select("project_id,user_id,label,description,created_at,updated_at")
+    .select("project_id,user_id,project_type,label,description,created_at,updated_at")
     .single();
 
   if (error || !data) return dbError("update project", error?.message ?? "update failed", error?.code);

@@ -542,6 +542,7 @@ export default function DashboardPage({ profile }: { profile: ProfileSummary }) 
     const created = await vcaasApi.projects.create({
       projectId: id,
       description: "Imported from GitHub",
+      projectType: promptMode,
       engineVersion: "v2",
     });
     if (!created.ok || !created.data) {
@@ -615,6 +616,7 @@ export default function DashboardPage({ profile }: { profile: ProfileSummary }) 
         projectId: id,
         prompt: firstPrompt.trim(),
         description: firstPrompt.trim().slice(0, 200),
+        projectType: promptMode,
         ...(figmaToken ? { figma: { token: figmaToken } } : {}),
       });
       // Used once, then gone — see the note on the state.
@@ -653,7 +655,12 @@ export default function DashboardPage({ profile }: { profile: ProfileSummary }) 
       return;
     }
 
-    const res = await vcaasApi.projects.create({ projectId: id, description: firstPrompt.trim().slice(0, 200), engineVersion: "v2" });
+    const res = await vcaasApi.projects.create({
+      projectId: id,
+      description: firstPrompt.trim().slice(0, 200),
+      projectType: promptMode,
+      engineVersion: "v2",
+    });
     if (!res.ok) {
       setBuildError(res.error || `Could not create "${id}".`);
       setBuildCreating(false);

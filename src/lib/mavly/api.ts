@@ -137,6 +137,15 @@ import {
   rotateApiKey,
   type ProjectApiKeyServiceFailure,
 } from "@/lib/project-api-keys/service";
+import { publicIntegrationCatalog } from "@/lib/integrations/contracts";
+import {
+  disablePaymentsIntegration,
+  getPaymentsStatus,
+  isPaymentsServiceFailure,
+  savePaymentsIntegration,
+  testPaymentsIntegration,
+  type PaymentsServiceFailure,
+} from "@/lib/integrations/payments/service";
 
 import {
   cancelVerification,
@@ -369,6 +378,32 @@ export async function handleMavlyVcaasRequest(input: MavlyRequest): Promise<Next
     if (method === "POST") return figmaConnectResponse(userId, projectId, body);
     if (method === "DELETE") return figmaDisconnectResponse(userId, projectId);
   }
+  /**
+   * ═══ BUSINESS INTEGRATIONS (PHASE 6) ═════════════════════════════════════
+   *
+   *   GET    …/integrations/catalog               supported providers (static)
+   *   GET    …/integrations/payments              truthful status + history
+   *   PUT    …/integrations/payments              test + save credentials
+   *   POST   …/integrations/payments/test         re-test stored credentials
+   *   DELETE …/integrations/payments              disable (webhook token stays stable)
+   *
+   * The catalogue lists only implemented providers. Credential values are
+   * write-only: every response is metadata. A deployment/project outside the
+   * explicit cohort receives a precise 503, never a half-working screen.
+   */
+  if (action === "integrations/catalog" && method === "GET") {
+    return ok(publicIntegrationCatalog());
+  }
+  if (action === "integrations/payments") {
+    if (method === "GET") return paymentsStatusResponse(userId, projectId);
+    if (method === "PUT" || method === "POST") {
+      return savePaymentsIntegrationResponse(userId, projectId, body);
+    }
+    if (method === "DELETE") return disablePaymentsIntegrationResponse(userId, projectId);
+  }
+  if (action === "integrations/payments/test" && method === "POST") {
+    return testPaymentsIntegrationResponse(userId, projectId);
+  }
   if (action === "secrets") {
     if (method === "GET") return projectSecretsResponse(userId, projectId);
     if (method === "POST") return createProjectSecretResponse(userId, projectId, body);
@@ -466,6 +501,7 @@ async function listProjectResponse(userId: string): Promise<NextResponse> {
 
   const data: VcaasProjectSummary[] = result.data.map((row) => ({
     projectId: row.project_id,
+    projectType: row.project_type ?? "website",
     engineVersion: "v2",
     lifecycleState: "active",
     description: row.description,
@@ -488,8 +524,9 @@ async function createProjectResponse(userId: string, body: unknown): Promise<Nex
 
   const description = stringOf(record.description)?.slice(0, 2_000) ?? "";
   const label = stringOf(record.label)?.slice(0, 120) ?? requestedId;
+  const projectType = stringOf(record.projectType) === "android" ? "android" : "website";
 
-  const created = await createOwnedProject(userId, requestedId, description, label);
+  const created = await createOwnedProject(userId, requestedId, description, label, projectType);
   if (isStoreFailure(created)) return fail(created.code === "CONFLICT" ? 409 : 500, created.code ?? "UNKNOWN", created.error);
 
   return ok(projectFromRow(created.data, null, false, null, null));
@@ -510,8 +547,9 @@ async function launchProjectResponse(userId: string, body: unknown): Promise<Nex
 
   const description = stringOf(record.description)?.slice(0, 2_000) || prompt.slice(0, 200);
   const label = stringOf(record.label)?.slice(0, 120) || requestedId;
+  const projectType = stringOf(record.projectType) === "android" ? "android" : "website";
 
-  const created = await createOwnedProject(userId, requestedId, description, label);
+  const created = await createOwnedProject(userId, requestedId, description, label, projectType);
   if (isStoreFailure(created)) return fail(created.code === "CONFLICT" ? 409 : 500, created.code ?? "UNKNOWN", created.error);
 
   const warnings: NonNullable<ProjectLaunchResult["warnings"]> = [];
@@ -880,6 +918,47 @@ function secretFail(result: ProjectSecretServiceFailure): NextResponse {
 
 function apiKeyFail(result: ProjectApiKeyServiceFailure): NextResponse {
   return fail(result.status, result.code, result.error);
+}
+
+function paymentsFail(result: PaymentsServiceFailure): NextResponse {
+  return fail(result.status, result.code, result.error);
+}
+
+async function paymentsStatusResponse(
+  userId: string,
+  projectId: string,
+): Promise<NextResponse> {
+  const result = await getPaymentsStatus(projectId, userId);
+  if (isPaymentsServiceFailure(result)) return paymentsFail(result);
+  return ok(result.data);
+}
+
+async function savePaymentsIntegrationResponse(
+  userId: string,
+  projectId: string,
+  body: unknown,
+): Promise<NextResponse> {
+  const result = await savePaymentsIntegration(projectId, userId, body);
+  if (isPaymentsServiceFailure(result)) return paymentsFail(result);
+  return ok(result.data);
+}
+
+async function testPaymentsIntegrationResponse(
+  userId: string,
+  projectId: string,
+): Promise<NextResponse> {
+  const result = await testPaymentsIntegration(projectId, userId);
+  if (isPaymentsServiceFailure(result)) return paymentsFail(result);
+  return ok(result.data);
+}
+
+async function disablePaymentsIntegrationResponse(
+  userId: string,
+  projectId: string,
+): Promise<NextResponse> {
+  const result = await disablePaymentsIntegration(projectId, userId);
+  if (isPaymentsServiceFailure(result)) return paymentsFail(result);
+  return ok(result.data);
 }
 
 async function projectSecretsResponse(
@@ -2035,6 +2114,7 @@ function projectFromRow(
 
   return {
     projectId: row.project_id,
+    projectType: row.project_type ?? "website",
     label: row.label ?? undefined,
     description: row.description,
     plan: "free",

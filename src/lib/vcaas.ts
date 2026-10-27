@@ -20,6 +20,7 @@ import { toBase64 } from "@/lib/base64";
 import type { ApiResponse } from "@/lib/api";
 import type { VcaasErrorCode, VcaasErrorDetails } from "@/lib/vcaas-errors";
 import type { PaymentsMode, PaymentsStatus, ProjectWebhook } from "@/lib/v2-payments";
+import type { PublicIntegrationCatalogEntry } from "@/lib/integrations/contracts";
 import type { DbRestorePoint } from "@/lib/undo-db-change";
 import type {
   ProjectGroup,
@@ -54,6 +55,7 @@ import type {
   RestoreResult,
   DeploymentStatus,
   VcaasDeployError,
+  PaymentsIntegrationStatus,
   AccountDomain,
   DomainDnsRecord,
   DomainDnsRecordInput,
@@ -353,6 +355,7 @@ export const vcaasApi = {
       description: string;
       label?: string;
       groupId?: string;
+      projectType?: "website" | "android";
       /** `"v2"` requires the current engine (refused, nothing created, when the account cannot get it). Omitted: the account's default. */
       engineVersion?: "v2" | "legacy";
       /** An export code this new project is about to receive: it is created on that code's engine. */
@@ -391,6 +394,7 @@ export const vcaasApi = {
       description?: string;
       label?: string;
       groupId?: string;
+      projectType?: "website" | "android";
       files?: { name: string; description?: string; url: string }[];
       secrets?: { secretName: string; secretValue: string; environment?: string }[];
       creditLimits?: {
@@ -727,6 +731,49 @@ export const vcaasApi = {
     /** DELETE …/secrets/{secretId} — delete a secret. */
     remove: (projectId: string, secretId: string): Promise<VcaasResponse<unknown>> =>
       proxy.delete(`${project(projectId)}/secrets/${encodeURIComponent(secretId)}`),
+  },
+
+  // ─────────────────────── Business integrations ───────────────────
+  // Phase 6. Only implemented providers are listed. Credential values are
+  // write-only; every response is metadata. The saved key pair is tested
+  // against the provider before anything is stored.
+  paymentsIntegration: {
+    /** GET …/integrations/catalog — implemented providers and capabilities. */
+    catalog: (projectId: string): Promise<VcaasResponse<PublicIntegrationCatalogEntry[]>> =>
+      proxy.get(`${project(projectId)}/integrations/catalog`),
+
+    /** GET …/integrations/payments — status, webhook URL and recent orders. */
+    status: (projectId: string): Promise<VcaasResponse<PaymentsIntegrationStatus>> =>
+      proxy.get(`${project(projectId)}/integrations/payments`),
+
+    /** PUT …/integrations/payments — test the key pair, then save it encrypted. */
+    save: (
+      projectId: string,
+      body: {
+        provider: "razorpay";
+        keyId: string;
+        keySecret: string;
+        webhookSecret: string;
+        enabled?: boolean;
+      }
+    ): Promise<VcaasResponse<PaymentsIntegrationStatus>> =>
+      proxy.put(`${project(projectId)}/integrations/payments`, body),
+
+    /** POST …/integrations/payments/test — re-test the STORED credentials. */
+    test: (
+      projectId: string
+    ): Promise<
+      VcaasResponse<{
+        verified: boolean;
+        mode: "test" | "live" | null;
+        lastError: string | null;
+        checkedAt: string;
+      }>
+    > => proxy.post(`${project(projectId)}/integrations/payments/test`, {}),
+
+    /** DELETE …/integrations/payments — stop new orders; the webhook address stays stable. */
+    disable: (projectId: string): Promise<VcaasResponse<PaymentsIntegrationStatus>> =>
+      proxy.delete(`${project(projectId)}/integrations/payments`),
   },
 
   // ──────────────────────── Custom domain ─────────────────────────

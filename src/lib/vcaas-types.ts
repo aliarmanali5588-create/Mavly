@@ -11,8 +11,11 @@
  * "Boilerplate mode"), scope that list to the signed-in user yourself.
  */
 
+export type ProjectType = "website" | "android";
+
 export interface VcaasProject {
   projectId: string;
+  projectType?: ProjectType;
   /**
    * The human name, when the owner has set one — the same field
    * `VcaasProjectSummary.label` carries, returned here so a workspace opened from a
@@ -208,6 +211,7 @@ export interface ProjectGroup {
 
 export interface VcaasProjectSummary {
   projectId: string;
+  projectType?: ProjectType;
   engineVersion?: "v2" | null;
   lifecycleState?: VcaasLifecycleState;
   description: string;
@@ -254,6 +258,48 @@ export interface VcaasSecret {
   _id: string;
   secretName: string;
   environment: string;
+}
+
+/** One recorded payment order of the Razorpay integration. */
+export interface ProjectPaymentTransaction {
+  orderId: string | null;
+  paymentId: string | null;
+  receipt: string;
+  amountMinor: number;
+  currency: string;
+  status:
+    | "creating"
+    | "created"
+    | "pending"
+    | "authorized"
+    | "paid"
+    | "failed"
+    | "cancelled"
+    | "expired"
+    | "unknown";
+  failureCode: string | null;
+  createdAt: string;
+  paidAt: string | null;
+}
+
+/**
+ * The workspace's truthful view of the payments integration. It never carries a
+ * secret value or ciphertext; `keyId` is Razorpay's publishable key id.
+ */
+export interface PaymentsIntegrationStatus {
+  provider: "razorpay";
+  eligible: boolean;
+  configured: boolean;
+  enabled: boolean;
+  status: "configured" | "verified" | "error" | "disabled" | "not_configured";
+  mode: "test" | "live" | null;
+  keyId: string | null;
+  webhookUrl: string | null;
+  credentialsPresent: boolean;
+  lastCheckedAt: string | null;
+  lastError: string | null;
+  transactions: ProjectPaymentTransaction[];
+  credentialNames: string[];
 }
 
 /** One entry of a message's `secretKeysNeeded` map. */

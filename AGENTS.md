@@ -77,7 +77,10 @@ repair (it adds build/runtime/health/preview/repair state, the 7-argument enqueu
 build+runtime+health `passed` rule and schema marker 19; additive, applied after 17),
 then `20_fullstack_hosting.sql` before enabling full-stack production hosting (it adds the
 deployment lifecycle/attempt/env/database tables, the fenced deployment RPCs and schema
-marker 20; additive, applied after 19 and 11),
+marker 20; additive, applied after 19 and 11), then `21_business_integrations.sql` before
+enabling business integrations (it adds the per-project provider metadata, payment and
+webhook-event tables, the owner/gateway/webhook SECURITY DEFINER RPCs and schema marker
+21; additive, applied after 11 and 12),
 `08_figma_integration.sql`
 before using Figma, and `11_project_secrets.sql` before using project secrets. Project-secret encryption also
 requires the server-only `MAVLY_PROJECT_SECRETS_ENCRYPTION_KEY` (32 random bytes,
@@ -85,12 +88,14 @@ base64-encoded); without it create/update fail closed. `npm test` covers the pur
 auth/redirect/ownership/scope modules, the generation state/lease/claim/observability
 modules, the verification runtime/health/preview/policy/config/state/result modules, the
 bounded repair policy and parsers, the full-stack runtime/config/database/env/address
-rules, and static route/migration invariants. It does not
+rules, the business-integration registry/config/validation, Razorpay signature and
+provider-error mapping, the payment state machine, the gateway session exemptions and
+static route/migration invariants. It does not
 exercise a
 real Supabase session, Groq, a live worker/queue, the Supabase OAuth connection, Vercel
 publishing, a real Vercel Sandbox, a generated app, a repair model call, a real Vercel
-full-stack deployment, a real application database connection, or the migrations
-against a database.
+full-stack deployment, a real application database connection, a live Razorpay account,
+a delivered webhook, or the migrations against a database.
 
 ---
 
@@ -248,6 +253,43 @@ against a database.
   provider READY + domain). See `docs/architecture/phase-5-fullstack-hosting.md` and
   `docs/runbooks/fullstack-hosting.md`. Static tests do not exercise a real Vercel
   build, secret push or database connection.
+- **Business integrations are implemented but off by default (Phase 6).** The first
+  provider is **Razorpay payments for generated applications**, separate from Mavly's
+  own Razorpay-only billing: Mavly plan prices, credit packs and billing rules are
+  untouched. Enabled only when `MAVLY_BUSINESS_INTEGRATIONS_ENABLED` is truthy, an
+  explicit `MAVLY_BUSINESS_INTEGRATIONS_PROJECTS` cohort exists, and
+  `MAVLY_PROJECT_SECRETS_ENCRYPTION_KEY`, `MAVLY_BUSINESS_INTEGRATIONS_RPC_SECRET`
+  (a server-only ≥32-character proof) + Supabase are configured. The three provider
+  values (`RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET`) are saved
+  per project as encrypted `project_secrets`; the owner UI never receives them back, and
+  a save tests the key pair with a side-effect-free `GET /v1/orders?count=1` before
+  writing. Saving is not enabling: the API defaults `enabled` to false, and the workspace
+  requires a separate confirmation before enabling live (`rzp_live_`) keys. A published app's **server code** calls
+  `POST /api/app/v1/payments/orders`, `POST /api/app/v1/payments/verify` and
+  `GET /api/app/v1/payments/{orderId}` with a project API key carrying `integrations:*`;
+  those two path prefixes are the only new public API exemptions, and each route
+  authenticates itself. The app calls the HTTP gateway, never PostgREST directly:
+  every gateway DB RPC also requires the server-only RPC hash, so an API key alone
+  cannot create, fail or mark an order paid. Order creation is idempotent per `(integration, idempotencyKey)`
+  and is never blindly retried; the provider order is read back when a recorded order
+  already exists. `paid` is reachable only after the Checkout signature over
+  `order_id|payment_id` AND an authoritative `GET /v1/payments/{id}` (amount/currency must
+  match), or after a webhook whose HMAC-SHA256 matches the **exact raw body**. Webhooks
+  resolve an unguessable per-integration token, require the SHA-256 of the server-only
+  `MAVLY_BUSINESS_INTEGRATIONS_RPC_SECRET` on every write RPC (so the public anon key
+  alone cannot record or apply an event), are idempotent on the SHA-256 of the signed
+  body (not the unsigned event-id header), and never store the raw body. `paid` never regresses; a late
+  verified capture is accepted from any state. Disable refuses new orders but **does not
+  rotate the webhook token or delete the user's secrets**; signed webhooks for orders
+  already created are still recorded. Refunds, subscriptions,
+  payouts, email and WhatsApp are **not implemented and not listed in the catalog**.
+  The workspace gains a real **Business payments** section; the older copied Stripe
+  Connect "Payments" panel remains pre-existing, unimplemented copy and is not wired to
+  Phase 6. A Mavly-hosted generated app needs Phase 5 full-stack hosting (or another
+  server runtime) to keep the project API key server-side. Static apps must not call the
+  gateway from the browser. No live Razorpay account, webhook delivery or real payment
+  has been verified. See `docs/architecture/phase-6-business-integrations.md` and
+  `docs/runbooks/business-integrations.md`.
 - **Restore points are implemented.** Every completed AI execution that changes the
   project's source leaves a durable snapshot (`project_snapshots` +
   `project_snapshot_files`). The chat renders a **Restore Code** action on that execution,
@@ -358,6 +400,9 @@ browser ── src/lib/vcaas.ts (client catalog, same-origin only)
    ├── /api/generation/worker      Bearer secret → service-role worker tick
    │      ├── src/lib/generation/worker.ts → run-agent (worker mode)
    │      └── src/lib/sandbox/verification.ts → provider microVM (build + runtime)
+   ├── /api/app/v1/payments/*      public, project API key (integrations:*) → Razorpay
+   ├── /api/integrations/webhooks/razorpay/{token}
+   │                               public, token + signed raw body → payment state
    ├── /api/vcaas/source-code/{id} auth + ownership → ZIP from project_files
    ├── /api/preview/{id}/…         auth + ownership → sandboxed static site
    ├── /api/vcaas/upload|env|git-diff
@@ -446,6 +491,21 @@ paths with `src/lib/vcaas-scope.ts`, so unknown shapes are refused before any wo
 | `src/lib/hosting/deployment-env.ts` | Public/server env classification, reserved names, and the production-secret readiness gate. |
 | `supabase/migrations/20_fullstack_hosting.sql` | Deployment lifecycle/attempt/env/database tables, ownership-checked fenced RPCs, column-level grants and schema marker 20. Additive; apply after 19 and 11. |
 | `docs/architecture/phase-5-fullstack-hosting.md`, `docs/runbooks/fullstack-hosting.md` | Phase 5 design, readiness contract, security boundaries, rollout, failure handling and live verification checklist. |
+| `src/lib/integrations/contracts.ts` | Pure Phase 6 provider catalog: only implemented providers, credential schema, capabilities and webhook events. |
+| `src/lib/integrations/config.ts` | Opt-in flag/cohort, the server-only webhook-write RPC hash, and the canonical-origin webhook URL derivation (never from the request Host). |
+| `src/lib/integrations/payments/razorpay.ts` | Server-only Razorpay Order/Payment client: fixed origin, timeout, no blind order retry, HMAC checkout/webhook verification and redacted failures. |
+| `src/lib/integrations/payments/state.ts` | Pure payment state machine (`paid` never regresses; only `paid` may fulfil) and provider-status mapping. |
+| `src/lib/integrations/payments/validation.ts` | Pure order/verify/credential validation; secrets never echoed. |
+| `src/lib/integrations/payments/store.ts` | Owner RLS reads and the public anon-client calls to the fenced gateway/webhook RPCs. |
+| `src/lib/integrations/payments/service.ts` | Owner save/test/disable/status; encrypted credential upsert and provider test-before-save. |
+| `src/lib/integrations/payments/gateway.ts` | Generated-app order/verify/status path: project API key auth, local idempotency, authoritative capture check. |
+| `src/lib/integrations/payments/webhooks.ts` | Raw-body webhook verification, event idempotency and the audit-only event record. |
+| `src/lib/integrations/rate-limit.ts` | Best-effort per-project/per-instance windows for the payment gateway. |
+| `src/app/api/app/v1/payments/` | Public generated-app payments API (self-authenticating; the only `/api/app/v1/` exemption). |
+| `src/app/api/integrations/webhooks/razorpay/[token]/route.ts` | Public Razorpay webhook receiver (signed raw body; token resolves one integration). |
+| `src/components/workspace/v2/ProjectPaymentsIntegration.tsx` | Real Business payments panel: truthful status, test, disable, webhook address and recent orders. |
+| `supabase/migrations/21_business_integrations.sql` | Integration metadata, payment and webhook-event tables, owner/gateway/webhook SECURITY DEFINER RPCs, column grants and schema marker 21. Additive; apply after 11 and 12. |
+| `docs/architecture/phase-6-business-integrations.md`, `docs/runbooks/business-integrations.md` | Phase 6 design, provider setup, security boundaries, rollout and manual acceptance. |
 | `src/app/api/tenant/[[...path]]/route.ts` | The tenant runtime (internal path reached by the validated-host rewrite). |
 | `src/lib/api-origin.ts` | Explicit credentialed-origin allowlist and cross-origin mutation policy. |
 | `supabase/migrations/14_shared_hosting.sql` | Published versions/files, active-version RPCs, published-only public lookup, RLS and grants. |
@@ -475,10 +535,14 @@ paths with `src/lib/vcaas-scope.ts`, so unknown shapes are refused before any wo
    `OPENROUTER_API_KEY` (currently used by images), `VERCEL_API_TOKEN`,
    `VERCEL_OIDC_TOKEN`, `VERCEL_TOKEN`, `VERCEL_TEAM_ID`, `VERCEL_PROJECT_ID`,
    `SUPABASE_SERVICE_ROLE_KEY`, `MAVLY_GENERATION_WORKER_SECRET`,
-   `MAVLY_VERIFICATION_SANDBOX_ENABLED`, `MAVLY_VERIFICATION_REPAIR_ENABLED` and the
+   `MAVLY_VERIFICATION_SANDBOX_ENABLED`, `MAVLY_VERIFICATION_REPAIR_ENABLED`,
+   `MAVLY_BUSINESS_INTEGRATIONS_ENABLED`,
+   `MAVLY_BUSINESS_INTEGRATIONS_RPC_SECRET` and the
    worker's server-only configuration are server-only
    and must never be renamed with a `NEXT_PUBLIC_`
-   prefix. Never commit `.env*` files. The service-role client is confined to
+   prefix. Razorpay credentials are **never** environment variables on Mavly: they are
+   entered per project, encrypted as project secrets, and decrypted only inside the
+   owner test or gateway request. Never commit `.env*` files. The service-role client is confined to
    `src/lib/supabase/worker.ts`, the worker orchestrator, `/api/generation/worker` and the
    verification sandbox tick that receives it from the worker;
    nothing under `components/` or the browser catalog may import it. Sandbox provider
@@ -525,7 +589,20 @@ paths with `src/lib/vcaas-scope.ts`, so unknown shapes are refused before any wo
    `project_verification_repairs` are worker-owned: an authenticated user may only SELECT
    their own rows through `projects` RLS and cancel their own run through
    `cancel_verification`; every other mutation, including repair begin/finish, is a
-   `service_role`-only RPC.
+   `service_role`-only RPC. `project_integrations`, `project_integration_payments` and
+   `project_integration_events` are SELECT-only for their owner; every write goes through
+   an owner or gateway SECURITY DEFINER RPC.
+10. **Two public API prefixes authenticate themselves.** `/api/app/v1/` requires a
+   hashed project API key carrying `integrations:*` AND the server-only RPC hash on the
+   gateway DB RPCs, and every RPC re-checks that the key belongs to the payment order's
+   project; `/api/integrations/webhooks/` resolves an
+   unguessable per-integration token, requires the server-only
+   `MAVLY_BUSINESS_INTEGRATIONS_RPC_SECRET` hash on its write RPCs, and verifies the
+   provider HMAC-SHA256 over the **exact raw body before parsing**. Never add a route under either prefix that trusts
+   the path. A payment is `paid` only from a verified checkout signature plus an
+   authoritative provider read, or from a verified webhook; never from a redirect,
+   client claim or amount the client supplied. Raw webhook bodies, provider secrets and
+   authorization headers are never logged or stored.
 
 ## UI conventions
 
