@@ -74,7 +74,10 @@ import {
   listAndroidBuilds,
 } from "@/lib/android/build-store";
 import { generationWorkerConfig } from "@/lib/generation/worker-config";
-import { creditCostForProject } from "@/lib/credits/config";
+import {
+  creditAdmissionForProject,
+  creditsProblemMessage,
+} from "@/lib/credits/config";
 import {
   createGenerationJobWithCredits,
   finishCreditGenerationRun,
@@ -702,7 +705,8 @@ async function creditsResponse(): Promise<NextResponse> {
     return fail(
       503,
       "MIGRATION_REQUIRED",
-      snapshot.problem ?? "Credit accounting needs migration 31_credit_foundation.sql.",
+      snapshot.problem ??
+        "Credit accounting needs migrations 31_credit_foundation.sql and 32_credit_reliability_hardening.sql.",
     );
   }
   if (snapshot.errorCode === "UNAVAILABLE") {
@@ -818,8 +822,17 @@ async function launchProjectResponse(userId: string, body: unknown): Promise<Nex
     }
   }
   const dispatchMode = dispatchModeForProject(created.data.project_id);
+  const creditPolicy = creditAdmissionForProject(created.data.project_id);
+  if (creditPolicy.kind === "misconfigured") {
+    if (!mayReuseExistingProject) await deleteProject(userId, created.data.project_id);
+    return fail(
+      503,
+      "CREDIT_CONFIGURATION",
+      creditsProblemMessage(creditPolicy.problem),
+    );
+  }
   /** The server decides the cost; the request body cannot name it. */
-  const creditCost = creditCostForProject(created.data.project_id);
+  const creditCost = creditPolicy.kind === "enabled" ? creditPolicy.amount : null;
   const admission = await admitGeneration({
     userId,
     projectId: created.data.project_id,
@@ -971,8 +984,8 @@ function idempotencyKeyOf(body: Record<string, unknown>): string | null {
 /**
  * The launch path's one admission answer, whether credits are enforced or not.
  *
- * ⚠️ THE SERVER DECIDES THE CREDIT COST. `creditCost` comes from
- * `creditCostForProject`, never from the request body.
+ * ⚠️ THE SERVER DECIDES THE CREDIT COST. `creditCost` comes from the
+ * server-side project cohort, never from the request body.
  */
 type LaunchAdmission =
   | { kind: "run"; status: "created" | "existing"; run: RunRow }
@@ -991,6 +1004,13 @@ async function admitGeneration(input: {
   creditCost: number | null;
 }): Promise<LaunchAdmission> {
   if (input.creditCost !== null) {
+    if (!input.idempotencyKey || !isRequestId(input.idempotencyKey)) {
+      return {
+        kind: "failure",
+        error: "A UUID clientRequestId is required for credit-enabled generation.",
+        code: "INVALID",
+      };
+    }
     if (input.dispatchMode !== "worker") {
       return {
         kind: "failure",
@@ -1036,6 +1056,13 @@ async function admitGeneration(input: {
     dispatchMode: input.dispatchMode,
   });
   if (isStoreFailure(admitted)) {
+    if (/CREDIT_(?:POLICY|RESERVATION|RUN_STATE)/i.test(`${admitted.code ?? ""} ${admitted.error}`)) {
+      return {
+        kind: "failure",
+        error: "The database has credit enforcement enabled but this request is not configured for a reserved worker run.",
+        code: "UNAVAILABLE",
+      };
+    }
     return { kind: "failure", error: admitted.error, code: admitted.code };
   }
   if (admitted.data.status === "rate_limited") {
@@ -1060,7 +1087,7 @@ async function finishOwnerRun(input: {
   errorCode: string;
   reason: string;
 }): Promise<boolean> {
-  if (input.dispatchMode === "worker" && creditCostForProject(input.projectId) !== null) {
+  if (input.dispatchMode === "worker") {
     const creditFinish = await finishCreditGenerationRun({
       userId: input.userId,
       projectId: input.projectId,
@@ -1099,6 +1126,7 @@ async function finishOwnerRun(input: {
 }
 
 function admissionFailure(failure: { error: string; code?: string }): NextResponse {
+  if (failure.code === "INVALID") return fail(400, "VALIDATION", failure.error);
   if (failure.code === "MIGRATION_REQUIRED") {
     return fail(503, "MIGRATION_REQUIRED", failure.error);
   }
@@ -2043,7 +2071,15 @@ async function startAgentResponse(userId: string, projectId: string, body: unkno
   }
   const model = resolveModel(requestedModel, "app-generation", process.env, projectId);
   const dispatchMode = dispatchModeForProject(projectId);
-  const creditCost = creditCostForProject(projectId);
+  const creditPolicy = creditAdmissionForProject(projectId);
+  if (creditPolicy.kind === "misconfigured") {
+    return fail(
+      503,
+      "CREDIT_CONFIGURATION",
+      creditsProblemMessage(creditPolicy.problem),
+    );
+  }
+  const creditCost = creditPolicy.kind === "enabled" ? creditPolicy.amount : null;
   const admission = await admitGeneration({
     userId,
     projectId,
@@ -2185,7 +2221,15 @@ async function resumeAgentResponse(userId: string, projectId: string): Promise<N
    * The credit-aware RPC reopens the run and takes a fresh hold only when the
    * previous hold was released; a duplicate resume reuses the live hold.
    */
-  const creditCost = creditCostForProject(projectId);
+  const creditPolicy = creditAdmissionForProject(projectId);
+  if (creditPolicy.kind === "misconfigured") {
+    return fail(
+      503,
+      "CREDIT_CONFIGURATION",
+      creditsProblemMessage(creditPolicy.problem),
+    );
+  }
+  const creditCost = creditPolicy.kind === "enabled" ? creditPolicy.amount : null;
   let reopenedRun: RunRow | null = null;
 
   if (creditCost !== null) {
@@ -2224,6 +2268,13 @@ async function resumeAgentResponse(userId: string, projectId: string): Promise<N
   } else {
     const reopened = await resumeRun(projectId, run.id);
     if (isStoreFailure(reopened)) {
+      if (/CREDIT_(?:POLICY|RESERVATION|RUN_STATE)/i.test(`${reopened.code ?? ""} ${reopened.error}`)) {
+        return fail(
+          503,
+          "CREDIT_CONFIGURATION",
+          "The database has credit enforcement enabled but this resume is not configured for a reserved worker run.",
+        );
+      }
       if (reopened.code === "CONFLICT") {
         return fail(409, "CONFLICT", reopened.error);
       }

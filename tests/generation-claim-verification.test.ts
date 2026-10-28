@@ -165,11 +165,12 @@ test("cohort comparison is case-insensitive and does not prefix-match", () => {
 
 // ── Schema preflight ───────────────────────────────────────────────────────
 
-test("the worker refuses to run before migration 16 is present", () => {
-  assert.equal(isWorkerSchemaReady(16), true);
-  assert.equal(isWorkerSchemaReady(17), true);
-  assert.equal(isWorkerSchemaReady("16"), true);
-  assert.equal(isWorkerSchemaReady(15), false);
+test("the worker refuses to run before migration 32 is present", () => {
+  assert.equal(isWorkerSchemaReady(32), true);
+  assert.equal(isWorkerSchemaReady(33), true);
+  assert.equal(isWorkerSchemaReady("32"), true);
+  assert.equal(isWorkerSchemaReady(31), false);
+  assert.equal(isWorkerSchemaReady(16), false);
   assert.equal(isWorkerSchemaReady(16.5), false);
   assert.equal(isWorkerSchemaReady(null), false);
   assert.equal(isWorkerSchemaReady("abc"), false);

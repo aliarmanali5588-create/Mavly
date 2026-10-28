@@ -4,7 +4,7 @@
  * This module is the durable worker's orchestration boundary. It performs one
  * bounded unit of work per invocation:
  *
- *   1. PREFLIGHT  — the worker must be configured and migration 16 installed.
+ *   1. PREFLIGHT  — the worker must be configured and schema marker 32 installed.
  *   2. RECOVER    — expired leases become bounded retries or dead letters.
  *   3. CLAIM      — one ready job, atomically, with `FOR UPDATE SKIP LOCKED`.
  *   4. VERIFY     — re-read the project and re-check its owner and cohort.
@@ -126,7 +126,7 @@ export async function runGenerationWorkerOnce(
 
   /**
    * ⚠️ PREFLIGHT BEFORE ANY WRITE. A worker against a database without
-   * migration 16 must not claim, execute or fabricate a status.
+   * marker 32 must not claim, execute or fabricate a status.
    */
   const schemaVersion = await generationWorkerSchemaVersion(client);
   if (!isWorkerSchemaReady(schemaVersion)) {

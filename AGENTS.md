@@ -113,9 +113,15 @@ the database run-state guard blocks authenticated legacy create/resume paths and
 service-role insert/resume only through the credit-aware transaction-local markers.
 Synchronize enabled policy rows with `MAVLY_CREDITS_PROJECTS` and
 `MAVLY_CREDITS_GENERATION_COST`. Without migration 31, `MAVLY_CREDITS_ENABLED` fails
-closed with `MIGRATION_REQUIRED`. With the flag off, application credit/usage RPC calls
-are disabled, but an enabled database policy continues to block unreserved legacy run
-writes until drained and explicitly disabled. See `docs/runbooks/credits.md`.
+closed with `MIGRATION_REQUIRED`. Apply
+`32_credit_reliability_hardening.sql` after 31 and before enabling the credit cohort: it
+sets the required worker/credit marker to 32, serializes policy activation and
+credit-aware admission in a consistent lock order, settles or releases reservations in
+the terminal `project_runs` transaction, and records worker provider attempts before
+dispatch with service-role-only RPCs. With the flag off, new app admissions and
+owner-facing credit calls are disabled, but an enabled database policy continues to block
+unreserved legacy run writes until drained and explicitly disabled; existing reservations
+and usage remain recoverable through worker/database paths. See `docs/runbooks/credits.md`.
 Generation-level and per-role usage-metering failures are logged without changing the
 terminal generation outcome and without discarding an already-produced advisory role
 result; the missing usage row stays missing and no cost is claimed for it. Neither path
@@ -456,7 +462,7 @@ a delivered webhook, a container image build/publish, or the migrations against 
   scan. Repair suggestions are passed only as subordinate context to the existing
   coding engine on a durable retry and never write source directly. Deployment
   remains deterministic and can only record a proposal. Specialist attempts record
-  provider tokens, request ids and reported cost through migration 31; unknown cost
+  provider tokens, request ids and reported cost through migrations 31/32; unknown cost
   stays unknown and no credit-price or settlement rules change. Role failures are
   reflected in workflow/task state and never turn into fabricated passes. The workflow
   projection is owner-readable through the existing authorized `agent/workflow`
@@ -486,9 +492,9 @@ a delivered webhook, a container image build/publish, or the migrations against 
   and takes the hold in the SAME transaction, so an insufficient balance raises and rolls
   the job back. An enabled database policy blocks authenticated legacy create/resume calls
   and permits service-role insert/resume only through the transaction-local markers set
-  by the credit-aware RPCs. A completed run settles; a terminal failed/cancelled run
-  releases only through a trusted worker/server path; owner reconciliation settles
-  successes only. A resume re-holds only after a release, and a duplicate resume of an
+  by the credit-aware RPCs. Migration 32's trigger settles completed runs and releases
+  terminal failed/cancelled runs atomically with the terminal run update; owner
+  reconciliation settles successes only. A resume re-holds only after a release, and a duplicate resume of an
   active run is refused instead of starting or charging a second execution. A hold whose
   run row was deleted (a deleted project cascades its runs) is released by the worker
   sweep's bounded orphan pass, and the launch path releases the hold before deleting a
@@ -501,9 +507,9 @@ a delivered webhook, a container image build/publish, or the migrations against 
   Mavly credit-funding flow** — credits exist only
   through the service-role `grant_credits` RPC, so enabling enforcement before funding
   refuses generation with `402 INSUFFICIENT_CREDITS`. Per-attempt usage is derived from
-  the server-written run row; actual cost is provider-reported only, and estimated cost
+  the   server-written run row or durable provider-attempt RPC; actual cost is provider-reported only, and estimated cost
   is NULL unless an operator installs a row in `ai_cost_rates`. A timeout/network
-  failure stays `uncertain`, never zero. **Unverified:** migration 31, its RLS/RPCs,
+  failure stays `uncertain`, never zero. **Unverified:** migrations 31/32, their RLS/RPCs,
   live settlement and the workspace balance indicator. See
   `docs/architecture/phase-11-credit-foundation.md` and `docs/runbooks/credits.md`.
 - **Restore points are implemented.** Every completed AI execution that changes the
@@ -713,8 +719,9 @@ paths with `src/lib/vcaas-scope.ts`, so unknown shapes are refused before any wo
 | `src/lib/credits/config.ts` | Opt-in flag/cohort/fixed whole-credit cost; a half-configured deployment charges nothing and reports the exact problem. |
 | `src/lib/credits/state.ts` | Pure balance, settle/release eligibility, resume and insufficient-credits rules. |
 | `src/lib/credits/store.ts` | Typed wrappers for the credit RPCs; fail-closed error mapping; no fabricated balance. |
-| `src/lib/credits/service.ts` | Post-terminal settlement/release/usage recording, owner snapshot and worker sweep. |
+| `src/lib/credits/service.ts` | Credit snapshot, owner reconciliation and worker recovery sweep; terminal accounting is database-atomic. |
 | `supabase/migrations/31_credit_foundation.sql` | Accounts, append-only ledger, reservations, service-managed cohort/cost policies, per-attempt usage, service-role credit admission/resume/release/terminal RPCs, successful owner reconciliation and worker sweep. Additive; apply after 30. |
+| `supabase/migrations/32_credit_reliability_hardening.sql` | Consistent admission/policy lock order, atomic terminal reservation settlement/release, service-only durable provider-attempt tracking, tightened usage RPC grants and schema marker 32. Additive; apply after 31. |
 | `src/lib/ai/model-roles.ts` | Per-role model resolution over the verified catalog; deployment is deterministic; unverified overrides are ignored. |
 | `docs/architecture/phase-11-credit-foundation.md`, `docs/runbooks/credits.md` | Phase 11 design, invariants, rollout, funding gap and acceptance checklist. |
 | `src/lib/mavly-hostname.ts` | Pure derivation of `<project-id>.mavly.xyz` from the immutable, owned project id; refuses reserved labels. |
@@ -759,7 +766,7 @@ paths with `src/lib/vcaas-scope.ts`, so unknown shapes are refused before any wo
 | `src/lib/ai/model-roles.ts` | Fixed role-to-OpenRouter model mapping with no fallback for missing or disabled model entries. |
 | `src/lib/orchestration/config.ts`, `roles.ts`, `tools.ts`, `security.ts` | Opt-in cohort/approval configuration, specialist prompts and source-line-validated parsers, the scoped tool registry, and the deterministic static security scan. |
 | `src/lib/orchestration/engine.ts` | Worker-only workflow start, pinned specialist calls, per-attempt usage recording, bounded QA/security review, coding markers, repair diagnosis and the truthful workflow projection. |
-| `src/lib/credits/store.ts` | Typed wrappers for migration 31 credit and per-role AI usage RPCs; specialist calls use its service-role-only attempt recorder. |
+| `src/lib/credits/store.ts` | Typed wrappers for migrations 31/32 credit and durable provider-attempt RPCs; service-role-only mutation boundary. |
 | `src/lib/orchestration/store.ts` | Worker-owned workflow/task/event persistence with compare-and-set transitions, run cancellation/failure helpers and owner cancellation; missing migration is reported, never faked. |
 | `src/lib/orchestration/approval.ts`, `approval-store.ts`, `approval-service.ts`, `approval-gate.ts` | Artifact-bound deployment proposals: pure validity rules, owner-scoped SECURITY DEFINER RPC wrappers, service-layer proposal derivation, and the deploy-time atomic consume gate. |
 | `src/components/workspace/v2/ProjectWorkflowPanel.tsx` | Agents & approvals panel: truthful workflow/check/finding state, reported cost, proposal create/approve/revoke and deploy-with-approval. |

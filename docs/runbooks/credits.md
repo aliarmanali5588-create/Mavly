@@ -5,13 +5,14 @@ database. Treat every step below as unverified until you run it in staging.
 
 ## Enable
 
-1. Apply `supabase/migrations/31_credit_foundation.sql` (after migration 30). It is
-   additive: new tables, policies, functions and a guarded generation-run trigger; no
-   existing column is altered.
+1. Apply `supabase/migrations/31_credit_foundation.sql` (after migration 30), then
+   `supabase/migrations/32_credit_reliability_hardening.sql`. Both are forward-only; 32
+   adds consistent lock ordering, atomic terminal accounting, durable provider-attempt
+   tracking and the schema marker required by the worker.
 2. Verify the marker:
 
    ```sql
-   select public.credit_schema_version();  -- 31
+   select public.credit_schema_version();  -- 32
    ```
 
 3. Configure and verify the durable generation worker for the same project cohort.
@@ -98,15 +99,22 @@ Do these in a staging database with a disposable account and project.
       created; the other receives `402`, and no negative balance exists.
 - [ ] Two concurrent workers cannot both consume the same reservation (only one
       `generation_consumed` row per reservation id).
+- [ ] A terminal run update and its `generation_consumed` or `generation_released`
+      ledger write commit or roll back together.
+- [ ] Repeating the same provider-attempt start UUID returns `existing` and does not
+      dispatch a second request; a crash/timeout without a result leaves that attempt
+      marked uncertain rather than assigning a zero cost.
 
 ## Reconciliation
 
 The owner read (`GET /api/vcaas/credits`) runs `reconcile_owner_credits()` first: up to 25
-successful terminal-run reservations are settled and up to 10 usage batches are recorded.
-It never releases failed/cancelled holds. The durable worker runs
+successful terminal-run reservations are settled. It never releases failed/cancelled
+holds or records provider usage. Migration 32's terminal trigger normally settles/releases
+the hold in the same transaction as the terminal run update. The durable worker runs
 `maintain_credit_reservations(100)` once per tick; that tick first calls
 `release_orphaned_credit_reservations`, which returns holds whose run row was deleted (a
-deleted project cascades its runs) and reports `orphansReleased`.
+deleted project cascades its runs) and reports `orphansReleased`. The worker sweep remains
+enabled for recovery even if the current `MAVLY_CREDITS_ENABLED` flag is off.
 
 Manual checks:
 
@@ -166,9 +174,9 @@ no automatic customer refund policy in this build; a refund is an explicit opera
   pre-credit behavior.
 - To disable all credit accounting, drain all credited projects, verify they have no live
   reservations, disable their database policies, remove the application cohort, and only
-  then set `MAVLY_CREDITS_ENABLED=0`. With the flag off, the application deliberately makes
-  no credit or usage RPCs; outstanding holds remain untouched until the feature is
-  re-enabled.
+  then set `MAVLY_CREDITS_ENABLED=0`. With the flag off, admission and owner-facing credit
+  reads make no credit/usage RPC calls; the durable worker still runs its recovery sweep
+  while enabled. Do not rely on that sweep if the worker itself is disabled.
 - Never turn off the flag while policy rows are still enabled unless intentionally
   blocking generation. The database policy is independent of the application flag and
   continues to reject legacy unreserved run writes. Disabling or changing a policy with a

@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 
 import {
   creditsConfig,
+  creditAdmissionForProject,
   creditCostForProject,
   creditsProblemMessage,
 } from "../src/lib/credits/config";
@@ -23,6 +24,10 @@ const CREDIT_SQL = readFileSync(
   new URL("../supabase/migrations/31_credit_foundation.sql", import.meta.url),
   "utf8",
 );
+const CREDIT_RELIABILITY_SQL = readFileSync(
+  new URL("../supabase/migrations/32_credit_reliability_hardening.sql", import.meta.url),
+  "utf8",
+);
 const GENERATION_SQL = readFileSync(
   new URL("../supabase/migrations/16_durable_generation_worker.sql", import.meta.url),
   "utf8",
@@ -31,7 +36,7 @@ const API = readFileSync(new URL("../src/lib/mavly/api.ts", import.meta.url), "u
 const RUN_AGENT = readFileSync(new URL("../src/lib/mavly/run-agent.ts", import.meta.url), "utf8");
 const WORKER = readFileSync(new URL("../src/lib/generation/worker.ts", import.meta.url), "utf8");
 const ENGINE = readFileSync(new URL("../src/lib/orchestration/engine.ts", import.meta.url), "utf8");
-const STORE = readFileSync(new URL("../src/lib/credits/store.ts", import.meta.url), "utf8");
+const CREDIT_SERVICE = readFileSync(new URL("../src/lib/credits/service.ts", import.meta.url), "utf8");
 const WORKSPACE = readFileSync(
   new URL("../src/app/project/[projectId]/page.tsx", import.meta.url),
   "utf8",
@@ -66,7 +71,7 @@ test("credits are off unless every prerequisite is valid", () => {
   });
   assert.equal(wildcard.ready, false);
   assert.ok(wildcard.problems.includes("invalid_cohort"));
-  assert.deepEqual(wildcard.cohort, []);
+  assert.deepEqual(wildcard.cohort, ["*"]);
 
   for (const cost of ["0", "-1", "1.5", "abc", "100001"]) {
     const invalid = creditsConfig({
@@ -94,6 +99,16 @@ test("the generation charge is server-derived and cohort-scoped", () => {
     creditCostForProject("my-app", { ...VALID_ENV, MAVLY_CREDITS_GENERATION_COST: "0" }),
     null,
   );
+  assert.deepEqual(
+    creditAdmissionForProject("my-app", {
+      ...VALID_ENV,
+      MAVLY_CREDITS_GENERATION_COST: "0",
+    }),
+    { kind: "misconfigured", problem: "invalid_cost" },
+  );
+  assert.deepEqual(creditAdmissionForProject("outside", VALID_ENV), {
+    kind: "outside_cohort",
+  });
 });
 
 // ── Pure balance / lifecycle rules ──────────────────────────────────────────
@@ -168,6 +183,10 @@ test("credit RPC failures are mapped, never guessed", () => {
   );
   assert.equal(mapCreditsError({ message: "UNAUTHENTICATED", code: "28000" }).code, "UNAUTHENTICATED");
   assert.equal(mapCreditsError({ message: "FORBIDDEN", code: "42501" }).code, "FORBIDDEN");
+  assert.equal(
+    mapCreditsError({ message: "PROVIDER_ATTEMPT_ID_CONFLICT", code: "22000" }).code,
+    "CONFLICT",
+  );
 
   const insufficient = mapCreditsError({
     message: "INSUFFICIENT_CREDITS",
@@ -229,6 +248,30 @@ test("migration 31 is additive and introduces no destructive statement", () => {
     "ai_usage_attempts",
   ]) {
     assert.match(CREDIT_SQL, new RegExp(`create table if not exists public\\.${table}`));
+  }
+});
+
+test("migration 32 is additive and every SECURITY DEFINER function pins its search path", () => {
+  assert.equal(/drop table/i.test(CREDIT_RELIABILITY_SQL), false);
+  assert.equal(/delete from/i.test(CREDIT_RELIABILITY_SQL), false);
+  assert.equal(/truncate/i.test(CREDIT_RELIABILITY_SQL), false);
+  assert.match(CREDIT_RELIABILITY_SQL, /select 32;/);
+
+  const functions = Array.from(
+    CREDIT_RELIABILITY_SQL.matchAll(
+      /create or replace function public\.([^(]+)\([\s\S]*?\n\$\$;/g,
+    ),
+  );
+  const securityDefiners = functions.filter((match) =>
+    /\bsecurity definer\b/i.test(match[0]),
+  );
+  assert.ok(securityDefiners.length > 0, "migration should define privileged functions");
+  for (const match of securityDefiners) {
+    assert.match(
+      match[0],
+      /set search_path = public, pg_temp/i,
+      `${match[1]} must pin its search_path`,
+    );
   }
 });
 
@@ -526,24 +569,49 @@ test("settlement follows the terminal run write, not the reverse", () => {
   assert.match(RUN_AGENT, /await recordRunUsage\(/);
   assert.match(API, /releaseRunCredits\(/);
   assert.match(WORKER, /maintainCreditsForWorker\(/);
+  assert.match(CREDIT_RELIABILITY_SQL, /create trigger project_runs_credit_terminal_settlement/);
+  assert.match(CREDIT_RELIABILITY_SQL, /settle_generation_reservation\(new\.id\)/);
+  assert.match(CREDIT_RELIABILITY_SQL, /release_generation_reservation\(/);
 });
 
-test("orchestration metering is per attempt and never fabricates a usage row", () => {
-  assert.match(ENGINE, /recordRoleUsageAttempt/);
-  assert.match(ENGINE, /const attemptKey = `orchestration:/);
-  assert.ok(
-    ENGINE.indexOf("usage metering failed") < ENGINE.indexOf("role_model_mismatch"),
-    "a metering failure is handled before any model-mismatch decision",
+test("provider attempts are durably marked before dispatch and updated by stable ID", () => {
+  assert.match(RUN_AGENT, /isProjectInCreditsCohort\(input\.projectId, creditConfig\)/);
+  assert.match(RUN_AGENT, /!!liveReservation\.data/);
+  assert.match(CREDIT_SERVICE, /isProjectInCreditsCohort\(context\.projectId, config\)/);
+  assert.match(ENGINE, /beginProviderAttempt\(startInput, handle\.client\)/);
+  assert.match(ENGINE, /completeProviderAttempt\(usageInput, handle\.client\)/);
+  assert.match(RUN_AGENT, /beginProviderAttempt\(inputForStart, guard\.client\)/);
+  assert.match(RUN_AGENT, /started\.data !== "started"/);
+  assert.match(ENGINE, /started\.data !== "started"/);
+  assert.match(RUN_AGENT, /completeProviderAttempt\(/);
+  assert.match(CREDIT_RELIABILITY_SQL, /create or replace function public\.begin_ai_provider_attempt/);
+  assert.match(CREDIT_RELIABILITY_SQL, /'dispatchState', 'dispatching'/);
+  assert.match(CREDIT_RELIABILITY_SQL, /create or replace function public\.complete_ai_provider_attempt/);
+  assert.match(CREDIT_RELIABILITY_SQL, /'dispatchState', 'result_received'/);
+  assert.match(CREDIT_RELIABILITY_SQL, /GENERATION_LEASE_LOST/);
+  assert.match(CREDIT_RELIABILITY_SQL, /PROVIDER_ATTEMPT_ID_CONFLICT/);
+  assert.match(CREDIT_RELIABILITY_SQL, /get diagnostics v_inserted = row_count/);
+  assert.match(CREDIT_RELIABILITY_SQL, /where p\.project_id = p_project_id/);
+  assert.match(CREDIT_RELIABILITY_SQL, /v_run\.lease_token is distinct from p_lease_token/);
+  assert.match(CREDIT_RELIABILITY_SQL, /v_run\.lease_expires_at <= now\(\)/);
+  assert.match(
+    CREDIT_RELIABILITY_SQL,
+    /create or replace function public\.maintain_credit_reservations\([\s\S]*?policy\.enabled/,
   );
-  // A missing usage row is logged, never invented, and never discards the result.
-  assert.equal(/errorClass: "usage_recording_failed"/.test(ENGINE), false);
-  assert.equal(/usage accounting and was discarded/.test(ENGINE), false);
-  assert.match(ENGINE, /creditsConfig\(\)\.requested/);
-  assert.match(STORE, /rpc\("record_ai_usage_attempt"/);
+  assert.match(CREDIT_RELIABILITY_SQL, /usage\.metadata ->> 'dispatchState' = 'dispatching'/);
 });
 
-test("role usage rows are keyed per workflow role attempt", () => {
-  assert.match(ENGINE, /orchestration:\$\{createHash\("sha256"\)/);
+test("usage writes and credit-aware admission wrappers are service-role-only", () => {
+  assert.match(CREDIT_RELIABILITY_SQL, /revoke all on function public\.record_ai_usage_attempts\(uuid\) from public, anon, authenticated/);
+  assert.match(CREDIT_RELIABILITY_SQL, /grant execute on function public\.record_ai_usage_attempts\(uuid\) to service_role/);
+  assert.match(CREDIT_RELIABILITY_SQL, /create_generation_job_with_credits_ordered/);
+  assert.match(CREDIT_RELIABILITY_SQL, /resume_generation_job_with_credits_ordered/);
+  assert.match(CREDIT_RELIABILITY_SQL, /pg_advisory_xact_lock\(hashtext\('mavly:create_generation_job'\)\)/);
+  assert.match(CREDIT_RELIABILITY_SQL, /revoke execute on function public\.create_generation_job_with_credits/);
+  assert.match(CREDIT_RELIABILITY_SQL, /revoke execute on function public\.resume_generation_job_with_credits/);
+  assert.match(CREDIT_RELIABILITY_SQL, /revoke all on function public\.begin_ai_provider_attempt\([\s\S]*?\) from public, anon, authenticated/);
+  assert.match(CREDIT_RELIABILITY_SQL, /revoke all on function public\.complete_ai_provider_attempt\([\s\S]*?\) from public, anon, authenticated/);
+  assert.match(CREDIT_RELIABILITY_SQL, /set search_path = public, pg_temp/);
   assert.match(CREDIT_SQL, /p_attempt_key text/);
   assert.match(CREDIT_SQL, /constraint ai_usage_attempts_key_unique unique \(attempt_key\)/);
   assert.match(CREDIT_SQL, /on conflict \(attempt_key\) do nothing/);

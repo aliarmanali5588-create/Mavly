@@ -54,9 +54,15 @@ agent/start
   └─ durable worker claim only
 
 run reaches a terminal state
-  ├─ completed  → settle_generation_reservation  (worker or owner reconciliation)
-  └─ failed/cancelled → release_generation_reservation (trusted worker/server only)
+  ├─ completed  → terminal run write + settle_generation_reservation (one DB transaction)
+  └─ failed/cancelled → terminal run write + release_generation_reservation (one DB transaction)
 ```
+
+Migration 32 installs the terminal trigger that performs the reservation transition in
+the same transaction as the fenced `project_runs` terminal update. Worker follow-up
+settlement/reconciliation calls are harmless no-ops when the trigger has already applied
+the ledger entry. Owner reconciliation remains a recovery path for successful terminal
+holds; it cannot release failures.
 
 `credit_project_policies` is the database-owned mirror of the explicit application cohort
 and fixed generation cost. The service-role admission RPC checks project ownership, policy
@@ -103,9 +109,14 @@ created.
 | Concurrent spend | `SELECT … FOR UPDATE` on the account row (created with `INSERT … ON CONFLICT`) inside the admission transaction |
 | Duplicate worker delivery | existing lease token + `claimed_at` fencing; credit settlement reads the terminal run row |
 | Usage rows | unique `attempt_key`; `ON CONFLICT DO NOTHING` |
+| Duplicate provider-attempt start | only the transaction that inserts the UUID marker receives `started`; a repeated start returns `existing` and the caller refuses to dispatch it again |
+| Provider result write lost | migration 32's pre-dispatch row remains uncertain; a later run-row reconciliation can update that same row when the response was durably persisted |
 
-Admission itself is serialized by `create_generation_job`'s transaction advisory lock, so two
-requests with the same key cannot both observe "no run" or take two holds.
+Admission and policy activation share the global generation advisory lock, acquired before
+the policy/account/run work by migration 32's ordered wrappers. This preserves
+`create_generation_job` idempotency while preventing the migration 31 policy/account lock
+order from deadlocking with concurrent admissions. Database uniqueness and the account
+row lock remain the final duplicate/overspend protections.
 
 ## 5. AI usage and cost metering
 
@@ -120,10 +131,14 @@ requests with the same key cannot both observe "no run" or take two holds.
   `reconciliation_status` (`reconciled` | `unreconciled` | `uncertain` | `unavailable`),
   and `uncertain` for a timeout/network failure that may have reached the provider.
 
-Rows for a generation run are derived **server-side** from
-`project_runs.provider_attempts` (`record_ai_usage_attempts(run_id)`), so a browser cannot
-invent usage. Orchestration role calls are written by the worker through
-`record_ai_usage_attempt` (service role).
+Migration 32 inserts one uncertain attempt row before each worker provider dispatch and
+updates that row by stable attempt UUID when a result arrives. A crash or ambiguous timeout
+therefore remains unknown rather than being recorded as zero; this does not make external
+provider execution exactly-once. If result metadata is later persisted on the run,
+`record_ai_usage_attempts(run_id)` reconciles that same row instead of inserting a
+duplicate. Both provider-attempt RPCs and the run-derived usage recorder are service-role
+only; owner reconciliation cannot submit usage. Orchestration specialist calls use the
+same durable attempt lifecycle.
 
 `ai_cost_rates` is empty by default. Without an operator-installed rate row an estimate is
 explicitly unavailable — it is never zero. Provider-reported cost is never converted into
@@ -151,8 +166,8 @@ DeepSeek V4.1 Flash entry until each replacement is verified:
 The originally requested `deepseek/deepseek-v4-pro`, `anthropic/claude-sonnet-5`, and
 `openai/gpt-5.6-sol` IDs are intentionally not allowlisted until verified. A role whose
 explicitly pinned model is absent or disabled fails rather than falling back to a requested
-or global model. Specialist usage is recorded per provider attempt by migration 31; unknown
-provider cost stays `NULL`, and actual USD is never converted into credits here.
+or global model. Specialist usage is recorded per provider attempt by migrations 31/32;
+unknown provider cost stays `NULL`, and actual USD is never converted into credits here.
 
 Model output never authorizes a deployment, a charge, a refund or an approval.
 
@@ -162,16 +177,19 @@ Model output never authorizes a deployment, a charge, a refund or an approval.
 - They have no INSERT/UPDATE/DELETE grant on any credit table.
 - Owner-checked RPCs: successful settlement, balance, owner reconciliation.
 - Service-role-only RPCs: `grant_credits`, `refund_generation_reservation`,
-  `record_ai_usage_attempt`, `maintain_credit_reservations`,
+  `begin_ai_provider_attempt`, `complete_ai_provider_attempt`,
+  `record_ai_usage_attempt(s)`, `maintain_credit_reservations`,
   `release_orphaned_credit_reservations`, credit admission/resume/release and terminal
   failure/cancellation.
 - An enabled `credit_project_policies` row blocks authenticated writes to generation runs,
   including direct use of the legacy admission/resume RPCs. The only exception for
   service-role creation/resume is the transaction-local marker set inside the credit-aware
   RPC; those RPCs independently re-check ownership, policy and the fixed price.
-- A credit/usage RPC is never called when the feature was never enabled
-  (`MAVLY_CREDITS_ENABLED` off), so a deployment without migration 31 makes no
-  credit RPC calls at all.
+- Migration 32's provider-attempt start RPC checks project ownership and the live worker
+  lease before inserting a durable uncertain marker.
+- New admission and owner-facing credit RPCs are disabled when
+  `MAVLY_CREDITS_ENABLED` is off. Existing held runs still settle atomically, and the
+  enabled worker continues recovery/usage reconciliation for already-admitted work.
 - The database policy continues to block unreserved legacy runs even if the application
   flag is accidentally turned off. Disable the cohort/policy only after draining active
   runs and holds; see the runbook.
@@ -186,10 +204,10 @@ Model output never authorizes a deployment, a charge, a refund or an approval.
    generation by design.
 2. **No automatic refund policy.** Refunds are service-role-only operator actions; the
    automatic path returns an unused hold, it never reverses a charge.
-3. **Worker settlement is eventual, not in the run transaction.** A crash between the
-   worker's fenced terminal write and settlement/release is repaired by the service-role
-   sweep. The owner balance read can reconcile only successful runs. The effect is still
-   once-only.
+3. **Terminal accounting depends on migration 32.** The trigger settles/releases a live
+   reservation in the same transaction as the terminal run update. The worker sweep and
+   owner balance read remain recovery paths for stranded successful holds, but cannot
+   prove whether a provider call that crashed before returning was billed.
 4. **No live database test.** The migration, RLS, RPCs and concurrency behaviour have not
    been run against Postgres in this repository; the tests are unit/static contracts.
 5. **External provider exactly-once is impossible.** A timed-out call is recorded as

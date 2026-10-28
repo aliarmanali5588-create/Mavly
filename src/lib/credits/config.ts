@@ -50,6 +50,11 @@ export interface CreditsConfig {
   problems: CreditsProblem[];
 }
 
+export type CreditProjectAdmission =
+  | { kind: "outside_cohort" }
+  | { kind: "enabled"; amount: number }
+  | { kind: "misconfigured"; problem: CreditsProblem };
+
 export type CreditsEnvironment = Record<string, string | undefined>;
 
 function isOn(value: string | undefined): boolean {
@@ -107,7 +112,7 @@ export function creditsConfig(env: CreditsEnvironment = process.env): CreditsCon
   return {
     requested: true,
     ready: uniqueProblems.length === 0,
-    cohort: uniqueProblems.includes("invalid_cohort") ? [] : cohort,
+    cohort,
     generationCost: cost.value,
     problems: uniqueProblems,
   };
@@ -129,9 +134,27 @@ export function creditCostForProject(
   projectId: string | null | undefined,
   env: CreditsEnvironment = process.env,
 ): number | null {
+  const admission = creditAdmissionForProject(projectId, env);
+  return admission.kind === "enabled" ? admission.amount : null;
+}
+
+/**
+ * Separate a project outside the opt-in cohort from a project in the cohort
+ * whose credit configuration is incomplete. Only the former may use legacy
+ * admission; the latter must not silently start an unreserved run.
+ */
+export function creditAdmissionForProject(
+  projectId: string | null | undefined,
+  env: CreditsEnvironment = process.env,
+): CreditProjectAdmission {
   const config = creditsConfig(env);
-  if (!config.ready || config.generationCost === null) return null;
-  return isProjectInCreditsCohort(projectId, config) ? config.generationCost : null;
+  if (!config.requested || !isProjectInCreditsCohort(projectId, config)) {
+    return { kind: "outside_cohort" };
+  }
+  if (!config.ready || config.generationCost === null) {
+    return { kind: "misconfigured", problem: config.problems[0] ?? "missing_cost" };
+  }
+  return { kind: "enabled", amount: config.generationCost };
 }
 
 /** A truthful, secret-free reason for a disabled/unready configuration. */

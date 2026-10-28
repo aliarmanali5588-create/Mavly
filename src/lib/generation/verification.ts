@@ -159,8 +159,8 @@ export function isProjectInCohort(projectId: string, cohort: readonly string[]):
   return cohort.some((entry) => entry.toLowerCase() === target);
 }
 
-/** Migration 16 or newer is required before a worker may claim anything. */
+/** Migration 32 or newer is required before a worker may claim anything. */
 export function isWorkerSchemaReady(version: unknown): boolean {
   const parsed = typeof version === "number" ? version : Number(version);
-  return Number.isInteger(parsed) && parsed >= 16;
+  return Number.isInteger(parsed) && parsed >= 32;
 }

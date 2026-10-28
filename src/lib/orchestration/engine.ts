@@ -20,13 +20,15 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { createHash, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 
 import { chatCompletion } from "@/lib/ai/provider";
 import { isChatCompletionFailure } from "@/lib/ai/chat-contract";
 import { resolveRoleModel, type AgentModelRole } from "@/lib/ai/model-roles";
-import { creditsConfig } from "@/lib/credits/config";
-import { recordRoleUsageAttempt } from "@/lib/credits/store";
+import {
+  beginProviderAttempt,
+  completeProviderAttempt,
+} from "@/lib/credits/store";
 import { redactSensitiveText } from "@/lib/observability/correlation";
 
 import type {
@@ -95,6 +97,8 @@ export interface OrchestrationHandle {
   userId: string;
   projectId: string;
   runId: string;
+  leaseToken: string;
+  trackProviderUsage: boolean;
   prompt: string;
   projectType: "website" | "android";
   mode: "create" | "update";
@@ -110,6 +114,8 @@ interface BeginInput {
   userId: string;
   projectId: string;
   runId: string;
+  leaseToken: string;
+  trackProviderUsage: boolean;
   prompt: string;
   projectType: "website" | "android";
   mode: "create" | "update";
@@ -213,6 +219,8 @@ export async function beginOrchestration(
     userId: input.userId,
     projectId: input.projectId,
     runId: input.runId,
+    leaseToken: input.leaseToken,
+    trackProviderUsage: input.trackProviderUsage,
     prompt: input.prompt,
     projectType: input.projectType,
     mode: input.mode,
@@ -412,6 +420,43 @@ async function callRoleModel(
     };
   }
 
+  const attemptIndex = Math.max(
+    1,
+    taskOf(handle, input.taskKey)?.attempt ?? handle.budget.providerCalls,
+  );
+  const attemptId = randomUUID();
+  if (handle.trackProviderUsage) {
+    const startInput = {
+      attemptId,
+      runId: handle.runId,
+      leaseToken: handle.leaseToken,
+      userId: handle.userId,
+      projectId: handle.projectId,
+      workflowId: handle.workflow.id,
+      role: input.role,
+      taskKey: input.taskKey,
+      attemptIndex,
+      phase: input.role,
+      model: model.id,
+    };
+    let started = await beginProviderAttempt(startInput, handle.client);
+    if (started.ok === false) {
+      started = await beginProviderAttempt(startInput, handle.client);
+    }
+    if (started.ok === false || started.data !== "started") {
+      return {
+        ok: false,
+        errorClass: started.ok === false
+          ? "usage_attempt_unavailable"
+          : "usage_attempt_already_started",
+        message: started.ok === false
+          ? "The provider attempt could not be durably recorded, so the specialist call was not sent."
+          : "The provider attempt already exists, so the specialist call was not sent again.",
+        costUsd: null,
+      };
+    }
+  }
+
   const result = await chatCompletion(
     model,
     [
@@ -422,60 +467,47 @@ async function callRoleModel(
   );
 
   const costUsd = result.metadata.usage.costUsd;
-  const attemptIndex = Math.max(
-    1,
-    taskOf(handle, input.taskKey)?.attempt ?? handle.budget.providerCalls,
-  );
-  const attemptIdentity = result.metadata.providerRequestId ?? randomUUID();
-  const attemptKey = `orchestration:${createHash("sha256")
-    .update(`${handle.workflow.id}:${input.taskKey}:${attemptIndex}:${attemptIdentity}`)
-    .digest("hex")}`;
   /**
    * ⚠️ METERING IS RECORDED WHEN IT IS INSTALLED, AND IT IS NEVER FABRICATED.
    * A failed write is logged and leaves the usage row absent; it does not
    * discard an advisory result the provider already produced and billed, and it
    * never claims a cost was recorded when it was not.
    */
-  const usage = creditsConfig().requested
-    ? await recordRoleUsageAttempt(
-    {
-      attemptKey,
-      userId: handle.userId,
-      projectId: handle.projectId,
-      workflowId: handle.workflow.id,
-      role: input.role,
-      taskKey: input.taskKey,
-      attemptIndex,
+  let usageFailure: string | null = null;
+  if (handle.trackProviderUsage) {
+    const usageInput = {
+      attemptId,
+      runId: handle.runId,
       model: result.metadata.model ?? model.id,
-      provider: model.provider,
-      requestedModel: model.id,
       providerRequestId: result.metadata.providerRequestId,
+      status: result.metadata.status,
+      finishReason: result.metadata.finishReason,
       promptTokens: result.metadata.usage.promptTokens,
       completionTokens: result.metadata.usage.completionTokens,
       cachedReadTokens: result.metadata.usage.cachedReadTokens,
       cachedWriteTokens: result.metadata.usage.cachedWriteTokens,
       reasoningTokens: result.metadata.usage.reasoningTokens,
       totalTokens: result.metadata.usage.totalTokens,
+      errorCode: result.metadata.errorCode,
+      retryAfterMs: result.metadata.retryAfterMs,
       actualCostUsd: costUsd,
       uncertain:
         result.metadata.status === null ||
         result.metadata.errorCode === "TIMEOUT" ||
         result.metadata.errorCode === "NETWORK" ||
         result.metadata.errorCode === "UNKNOWN",
-      metadata: {
-        status: result.metadata.status,
-        finishReason: result.metadata.finishReason,
-        errorCode: result.metadata.errorCode,
-      },
-    },
-    handle.client,
-  )
-    : null;
+    };
+    let usage = await completeProviderAttempt(usageInput, handle.client);
+    if (usage.ok === false) {
+      usage = await completeProviderAttempt(usageInput, handle.client);
+    }
+    if (usage.ok === false) usageFailure = usage.code;
+  }
   addCost(handle, costUsd);
   await persistUsage(handle);
 
-  if (usage && usage.ok === false) {
-    console.error(`[orchestration] usage metering failed for ${input.role} (${usage.code}).`);
+  if (usageFailure) {
+    console.error(`[orchestration] usage metering failed for ${input.role} (${usageFailure}).`);
   }
 
   if (result.metadata.model && result.metadata.model !== model.id) {

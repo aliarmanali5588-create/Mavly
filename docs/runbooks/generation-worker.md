@@ -25,7 +25,7 @@ durable queue = public.project_runs rows
   stage: completed | failed | cancelled | interrupted → terminal
 
 scheduler ──POST/GET /api/generation/worker (Bearer secret)──▶ one tick:
-  1. preflight   generation_worker_schema_version() >= 16
+  1. preflight   generation_worker_schema_version() >= 32
   2. recover     recover_expired_generation_leases(5)
   3. claim       claim_generation_job(worker_id, lease, cohort)  FOR UPDATE SKIP LOCKED
   4. verify      re-read public.projects, re-check owner + cohort
@@ -126,6 +126,10 @@ authorize production DDL.
 3. `14_shared_hosting.sql`, then `15_shared_hosting_attempt_state.sql` — only if shared
    tenant hosting is enabled.
 4. `16_durable_generation_worker.sql` — after 10 (and after 14/15 when those are used).
+5. Apply `29_multi_agent_orchestration.sql` after 28 and 16, then
+   `30_managed_backends.sql` after 29, `31_credit_foundation.sql` after 30, and
+   `32_credit_reliability_hardening.sql` after 31. The worker preflight now requires
+   schema marker 32, including when credit enforcement is currently off.
 
 Migration 16 is additive and idempotent: columns are added with `if not exists`, indexes
 with `if not exists`, constraints are dropped/re-added by name, and RPCs use
@@ -139,7 +143,7 @@ It does not delete rows or tables.
 Verify:
 
 ```sql
-select public.generation_worker_schema_version();  -- must return 16
+select public.generation_worker_schema_version();  -- must return 32
 ```
 
 If the marker is missing or lower, the worker refuses to claim (`503`, reason
@@ -429,7 +433,8 @@ project before enabling the worker for real users.
 
 - [ ] Migrations `03`, `10` and `16` are applied in order, then
       `notify pgrst, 'reload schema';`.
-- [ ] `select public.generation_worker_schema_version();` returns `16`.
+- [ ] Migrations 31 and 32 are applied after their prerequisites.
+- [ ] `select public.generation_worker_schema_version();` returns `32`.
 - [ ] `select proname from pg_proc where proname in
       ('claim_generation_job','renew_generation_lease','schedule_generation_retry',
       'recover_expired_generation_leases');` returns all four.

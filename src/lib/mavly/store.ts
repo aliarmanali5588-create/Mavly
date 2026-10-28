@@ -531,6 +531,7 @@ function boundedAttempts(attempts: readonly unknown[]): unknown[] {
     const record = attempt as Record<string, unknown>;
     const safe: Record<string, unknown> = {};
     for (const key of [
+      "providerAttemptId",
       "phase",
       "attempt",
       "status",
@@ -1191,7 +1192,7 @@ function isMissingFunction(error: { message?: string; code?: string } | null): b
   );
 }
 
-/** The migration-16 install marker. `null` means this database cannot run the worker. */
+/** The current worker-schema marker (32). `null` means this database cannot run the worker. */
 export async function generationWorkerSchemaVersion(
   supabase: SupabaseClient,
 ): Promise<number | null> {

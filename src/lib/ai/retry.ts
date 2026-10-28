@@ -55,7 +55,7 @@ export interface RetryOptions {
   sleep?: (ms: number) => Promise<void>;
   random?: () => number;
   /** Called after every attempt, including the last one. */
-  onAttempt?: (attempt: number, result: unknown) => void;
+  onAttempt?: (attempt: number, result: unknown) => void | Promise<void>;
   /** Called before a retry is attempted. */
   onRetry?: (retry: { attempt: number; nextAttempt: number; delayMs: number; retryAfterMs: number | null }) => void;
 }
@@ -107,7 +107,7 @@ export async function retryWithBackoff<T>(
   let last: T;
   for (let attempt = 1; ; attempt += 1) {
     last = await operation(attempt);
-    options.onAttempt?.(attempt, last);
+    await options.onAttempt?.(attempt, last);
 
     const decision = classify(last);
     if (!decision.retryable || attempt >= policy.maxAttempts) return last;

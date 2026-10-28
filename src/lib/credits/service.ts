@@ -1,20 +1,19 @@
 /**
  * ═══ CREDIT SERVICE ═════════════════════════════════════════════════════════
  *
- * The run pipeline calls these AFTER the terminal run row is committed. Each
- * one is best effort in the sense that a credit failure must not rewrite a
- * generation's outcome — but it is never silently discarded:
+ * The run pipeline calls these after terminal writes as recovery/observability
+ * helpers. Migration 32's trigger is authoritative and applies the reservation
+ * transition in the same transaction as the terminal run update. A follow-up
+ * failure must not rewrite the generation outcome — but it is never silently discarded:
  *
  *   · a failed settlement emits `credits.settlement_deferred`;
  *   · the durable worker's service-role sweep retries terminal failures;
  *   · the owner's balance read retries successful settlements;
  *   · nothing is charged unless the run row proves success.
  *
- * Embedding the ledger write in the terminal run transaction is not possible
- * without editing migration 16's fenced RPCs, so this module plus the
- * reconciliation RPCs is the recovery path. The accounting effect is still
- * exactly once: settlement only consumes a `reserved` row, and every write is
- * keyed by the reservation id.
+ * The trigger avoids modifying migration 16's fenced RPCs. The worker and owner
+ * reconciliation RPCs remain recovery paths; settlement only consumes a
+ * `reserved` row, and every write is keyed by the reservation id.
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -54,9 +53,9 @@ export interface CreditRunContext {
 export async function settleRunCredits(context: CreditRunContext): Promise<CreditSettlementOutcome> {
   /**
    * ⚠️ NO FLAG, NO RPC. Credits are opt-in, so a deployment that never asked for
-   * them cannot hold a reservation and must not call a function that migration 31
-   * may not have created. Setting the flag (even if not yet ready) enables the
-   * repair path, because a hold may exist from an earlier, ready configuration.
+   * them cannot hold a reservation and must not call a function that migration
+   * 31 may not have created. Setting the flag (even if not yet ready) enables
+   * the repair path, because a hold may exist from an earlier, ready configuration.
    */
   const config = creditsConfig();
   if (
@@ -134,8 +133,14 @@ export async function releaseRunCredits(
 
 /** Record the run's per-attempt usage. Safe to repeat. */
 export async function recordRunUsage(context: CreditRunContext): Promise<number> {
-  // Usage metering is part of the same opt-in install (migration 31).
-  if (!creditsConfig().requested) return 0;
+  const config = creditsConfig();
+  if (
+    !config.requested ||
+    !context.projectId ||
+    !isProjectInCreditsCohort(context.projectId, config)
+  ) {
+    return 0;
+  }
 
   const result = await recordAiUsageAttempts(context.runId, context.client);
   if (isCreditsFailure(result)) {
@@ -158,13 +163,12 @@ export async function recordRunUsage(context: CreditRunContext): Promise<number>
   return result.data;
 }
 
-/** One durable-worker tick: settle/release terminal holds and backfill usage. */
+/** One durable-worker tick: repair holds and reconcile durable usage attempts. */
 export async function maintainCreditsForWorker(
   client: SupabaseClient,
 ): Promise<CreditReconciliation | null> {
-  // Nothing can be held when credits were never enabled (migration 31 is opt-in).
-  if (!creditsConfig().requested) return null;
-
+  // A run may hold credits even if the operator disabled the flag after
+  // admission. Recovery is therefore independent of the current env flag.
   const result = await maintainCreditReservations(100, client);
   if (isCreditsFailure(result)) {
     // A missing migration is a configuration fact, not a worker crash.

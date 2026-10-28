@@ -26,6 +26,7 @@
  * Nothing generated here is executed on the Mavly server. Files are data.
  */
 
+import { randomUUID } from "node:crypto";
 import {
   chatCompletion,
   isChatCompletionFailure,
@@ -183,6 +184,8 @@ export interface AgentUsageTotals {
 }
 
 export interface AgentProviderAttempt {
+  /** Stable database identity created before the provider request is sent. */
+  providerAttemptId: string | null;
   phase: "manifest" | "batch" | "repair";
   attempt: number;
   status: number | null;
@@ -256,6 +259,18 @@ export function isGenerationFailure(
 export interface AgentDependencies {
   /** Injectable for deterministic tests; defaults to the real client. */
   complete?: typeof chatCompletion;
+  /** Worker persistence hook. A dispatch event is awaited before sending. */
+  onProviderAttempt?: (
+    event:
+      | {
+          type: "dispatching";
+          attemptId: string;
+          phase: AgentProviderAttempt["phase"];
+          attempt: number;
+          model: string;
+        }
+      | { type: "result"; attempt: AgentProviderAttempt },
+  ) => Promise<void> | void;
   now?: () => number;
   sleep?: (ms: number) => Promise<void>;
   random?: () => number;
@@ -1605,9 +1620,10 @@ async function callModel(
    * visible as `GENERATION_TIMEOUT` on the run and in its message.
    */
   let refusedBeforeSending = false;
+  let providerAttemptId: string | null = null;
 
   return retryWithBackoff(
-    async () => {
+    async (attemptNumber) => {
       /**
        * ⚠️ THE TIMEOUT IS DERIVED, NOT ASSUMED. `retryWithBackoff` re-runs this
        * closure for every attempt, so each retry is separately measured against
@@ -1627,6 +1643,14 @@ async function callModel(
         return deadlineFailure(model);
       }
       refusedBeforeSending = false;
+      providerAttemptId = randomUUID();
+      await deps.onProviderAttempt?.({
+        type: "dispatching",
+        attemptId: providerAttemptId,
+        phase,
+        attempt: attemptNumber,
+        model: model.id,
+      });
 
       const result = await complete(model, messages, {
         timeoutMs: plan.timeoutMs,
@@ -1654,9 +1678,18 @@ async function callModel(
       now,
       sleep: deps.sleep,
       random: deps.random,
-      onAttempt: (attemptNumber, result) => {
+      onAttempt: async (attemptNumber, result) => {
         if (refusedBeforeSending) return;
-        recordAttempt(state, phase, result as ChatCompletionResult, attemptNumber);
+        const attempt = recordAttempt(
+          state,
+          phase,
+          result as ChatCompletionResult,
+          attemptNumber,
+          providerAttemptId,
+        );
+        if (attempt) {
+          await deps.onProviderAttempt?.({ type: "result", attempt });
+        }
       },
       onRetry: (retry) => {
         state.retries += 1;
@@ -1705,18 +1738,23 @@ function recordAttempt(
   phase: "manifest" | "batch" | "repair",
   result: ChatCompletionResult,
   attemptNumber: number,
-): void {
-  if (state.attempts.length >= MAX_ATTEMPTS_RECORDED) return;
+  providerAttemptId: string | null,
+): AgentProviderAttempt | null {
+  if (!providerAttemptId) return null;
   const metadata = result.metadata;
-  state.attempts.push(attemptFromMetadata(phase, metadata, attemptNumber));
+  const attempt = attemptFromMetadata(phase, metadata, attemptNumber, providerAttemptId);
+  if (state.attempts.length < MAX_ATTEMPTS_RECORDED) state.attempts.push(attempt);
+  return attempt;
 }
 
 function attemptFromMetadata(
   phase: "manifest" | "batch" | "repair",
   metadata: ChatCompletionMetadata,
   attemptNumber: number,
+  providerAttemptId: string,
 ): AgentProviderAttempt {
   return {
+    providerAttemptId,
     phase,
     attempt: attemptNumber,
     status: metadata.status,

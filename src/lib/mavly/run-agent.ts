@@ -119,6 +119,14 @@ import {
 import { retryDelaySeconds, WORKER_LEASE_SECONDS } from "@/lib/generation/leases";
 import { reportedCostOf } from "@/lib/observability/cost";
 import {
+  creditsConfig,
+  isProjectInCreditsCohort,
+} from "@/lib/credits/config";
+import {
+  beginProviderAttempt,
+  completeProviderAttempt,
+} from "@/lib/credits/store";
+import {
   recordRunUsage,
   releaseRunCredits,
   settleRunCredits,
@@ -201,6 +209,8 @@ interface RunGuard {
   budget: RunBudget;
   /** Automatic inline continuations already used (never more than the cap). */
   recoveryAttempts: number;
+  /** Persist per-call usage for credit-enabled runs or runs with a live hold. */
+  trackProviderUsage: boolean;
   /**
    * ⚠️ PROVIDER USAGE IS CUMULATIVE FOR THE RUN. Migration 16 is explicit: a
    * manual resume resets the job-attempt budget, never the provider counters.
@@ -316,6 +326,7 @@ async function runInlineAgent(input: RunAgentInput): Promise<RunAgentOutcome> {
     startedAtMs: budget.startedAtMs,
     budget,
     recoveryAttempts: 0,
+    trackProviderUsage: false,
     ...carriedUsage(run),
   };
 
@@ -511,6 +522,22 @@ async function runWorkerAgent(
     return { status: "skipped", runId: input.runId, reason: "owner_mismatch" };
   }
 
+  const liveReservation = await worker.client
+    .from("credit_reservations")
+    .select("id")
+    .eq("run_id", input.runId)
+    .eq("status", "reserved")
+    .maybeSingle();
+  if (liveReservation.error) {
+    emitWorkerError(input, worker, "credit_reservation_check_failed");
+    return {
+      status: "skipped",
+      runId: input.runId,
+      reason: "credit_reservation_check_failed",
+    };
+  }
+
+  const creditConfig = creditsConfig();
   const guard: RunGuard = {
     claimedAt: run.claimed_at,
     leaseToken: worker.leaseToken,
@@ -529,6 +556,10 @@ async function runWorkerAgent(
       Math.max(30_000, input.budgetMs ?? GENERATION_BUDGET_MS),
     ),
     recoveryAttempts: MAX_INLINE_RECOVERY_ATTEMPTS,
+    trackProviderUsage:
+      !!liveReservation.data ||
+      (creditConfig.requested &&
+        isProjectInCreditsCohort(input.projectId, creditConfig)),
     ...carriedUsage(run),
   };
 
@@ -810,6 +841,8 @@ async function execute(
           mode,
           existingFiles: before,
           requestedModel: input.requestedModel,
+          leaseToken: input.worker.leaseToken,
+          trackProviderUsage: guard.trackProviderUsage,
         })
       : null;
   } catch (error) {
@@ -1129,6 +1162,82 @@ async function execute(
         const result = await chatCompletion(model, messages, options);
         latestProviderRequestId = result.metadata.providerRequestId;
         return result;
+      },
+      onProviderAttempt: async (event) => {
+        if (!guard.trackProviderUsage || !guard.client || !guard.leaseToken) return;
+        if (event.type === "dispatching") {
+          const inputForStart = {
+            attemptId: event.attemptId,
+            runId,
+            leaseToken: guard.leaseToken,
+            userId: input.userId,
+            projectId: input.projectId,
+            workflowId: null,
+            role: "coding",
+            taskKey: `generation:${event.phase}`,
+            attemptIndex: event.attempt,
+            phase: event.phase,
+            model: event.model,
+          };
+          let started = await beginProviderAttempt(inputForStart, guard.client);
+          if (started.ok === false) {
+            started = await beginProviderAttempt(inputForStart, guard.client);
+          }
+          if (started.ok === false || started.data !== "started") {
+            throw new RunStoreError(
+              started.ok === false
+                ? `Provider attempt could not be recorded: ${started.code}`
+                : "Provider attempt already exists; refusing duplicate dispatch.",
+            );
+          }
+          return;
+        }
+
+        const attempt = event.attempt;
+        if (!attempt.providerAttemptId) {
+          emitGenerationEvent("credits.usage_recorded", {
+            traceId: guard.traceId,
+            runId,
+            projectId: input.projectId,
+            reason: "provider_attempt_id_missing",
+            status: "deferred",
+          });
+          return;
+        }
+        const completed = await completeProviderAttempt(
+          {
+            attemptId: attempt.providerAttemptId,
+            runId,
+            model: attempt.model,
+            providerRequestId: attempt.providerRequestId,
+            status: attempt.status,
+            finishReason: attempt.finishReason,
+            promptTokens: attempt.promptTokens,
+            completionTokens: attempt.completionTokens,
+            cachedReadTokens: attempt.cachedReadTokens,
+            cachedWriteTokens: attempt.cachedWriteTokens,
+            reasoningTokens: attempt.reasoningTokens,
+            totalTokens: attempt.totalTokens,
+            errorCode: attempt.errorCode,
+            retryAfterMs: attempt.retryAfterMs,
+            actualCostUsd: attempt.costUsd,
+            uncertain:
+              attempt.status === null ||
+              attempt.errorCode === "TIMEOUT" ||
+              attempt.errorCode === "NETWORK" ||
+              attempt.errorCode === "UNKNOWN",
+          },
+          guard.client,
+        );
+        if (completed.ok === false) {
+          emitGenerationEvent("credits.usage_recorded", {
+            traceId: guard.traceId,
+            runId,
+            projectId: input.projectId,
+            reason: completed.code,
+            status: "deferred",
+          });
+        }
       },
     },
   );

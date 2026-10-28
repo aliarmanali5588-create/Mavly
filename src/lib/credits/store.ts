@@ -1,9 +1,9 @@
 /**
  * ═══ CREDIT RPC BOUNDARY ════════════════════════════════════════════════════
  *
- * Every credit mutation is a SECURITY DEFINER function in migration 31. This
- * module is the only place TypeScript calls them, and it maps their structured
- * failures into codes the rest of the app can act on.
+ * Credit mutations and durable provider-attempt writes are SECURITY DEFINER
+ * functions in migrations 31/32. This module is the typed RPC boundary and maps
+ * structured failures into codes the rest of the app can act on.
  *
  * ⚠️ NOTHING HERE FABRICATES A BALANCE. An unknown value stays `null`; an
  * RPC that did not answer is an error, not zero credits.
@@ -159,7 +159,7 @@ export function mapCreditsError(
   if (isMissingFunction(combined, error?.code)) {
     return {
       ok: false,
-      error: "Credit accounting needs migration 31_credit_foundation.sql.",
+      error: "Credit accounting needs migrations 31_credit_foundation.sql and 32_credit_reliability_hardening.sql.",
       code: "MIGRATION_REQUIRED",
     };
   }
@@ -178,10 +178,10 @@ export function mapCreditsError(
       ...parsed,
     };
   }
-  if (/IDEMPOTENCY_CONFLICT/i.test(combined)) {
+  if (/IDEMPOTENCY_CONFLICT|PROVIDER_ATTEMPT_ID_CONFLICT/i.test(combined)) {
     return {
       ok: false,
-      error: "That idempotency key already names a different credit operation.",
+      error: "That idempotency identity was reused with conflicting operation data.",
       code: "CONFLICT",
     };
   }
@@ -245,7 +245,7 @@ export async function createGenerationJobWithCredits(
     return { ok: false, error: "Credit admission is not configured.", code: "UNAVAILABLE" };
   }
 
-  const { data, error } = await supabase.rpc("create_generation_job_with_credits", {
+  const { data, error } = await supabase.rpc("create_generation_job_with_credits_ordered", {
     p_user_id: input.userId,
     p_project_id: input.projectId,
     p_model: input.model,
@@ -327,7 +327,7 @@ export async function resumeGenerationJobWithCredits(
     return { ok: false, error: "Credit resume is not configured.", code: "UNAVAILABLE" };
   }
 
-  const { data, error } = await supabase.rpc("resume_generation_job_with_credits", {
+  const { data, error } = await supabase.rpc("resume_generation_job_with_credits_ordered", {
     p_user_id: userId,
     p_project_id: projectId,
     p_run_id: runId,
@@ -570,6 +570,94 @@ export async function recordAiUsageAttempts(
   const { data, error } = await dbc.rpc("record_ai_usage_attempts", { p_run_id: runId });
   if (error) return mapCreditsError(error);
   return { ok: true, data: creditNumber(data) ?? 0 };
+}
+
+export interface ProviderAttemptStartInput {
+  attemptId: string;
+  runId: string;
+  leaseToken: string;
+  userId: string;
+  projectId: string;
+  workflowId?: string | null;
+  role: string;
+  taskKey: string;
+  attemptIndex: number;
+  phase: string;
+  model: string;
+}
+
+export async function beginProviderAttempt(
+  input: ProviderAttemptStartInput,
+  supabase: SupabaseClient,
+): Promise<CreditsResult<"started" | "existing">> {
+  const { data, error } = await supabase.rpc("begin_ai_provider_attempt", {
+    p_attempt_id: input.attemptId,
+    p_run_id: input.runId,
+    p_lease_token: input.leaseToken,
+    p_user_id: input.userId,
+    p_project_id: input.projectId,
+    p_workflow_id: input.workflowId ?? null,
+    p_role: input.role,
+    p_task_key: input.taskKey,
+    p_attempt_index: input.attemptIndex,
+    p_phase: input.phase,
+    p_model: input.model,
+  });
+  if (error) return mapCreditsError(error);
+  const status = recordOf(data)?.status;
+  if (status === "started" || status === "existing") {
+    return { ok: true, data: status };
+  }
+  return { ok: false, error: "Unexpected provider-attempt start response.", code: "UNKNOWN" };
+}
+
+export interface ProviderAttemptResultInput {
+  attemptId: string;
+  runId: string;
+  model: string | null;
+  providerRequestId: string | null;
+  status: number | null;
+  finishReason: string | null;
+  promptTokens: number | null;
+  completionTokens: number | null;
+  cachedReadTokens: number | null;
+  cachedWriteTokens: number | null;
+  reasoningTokens: number | null;
+  totalTokens: number | null;
+  errorCode: string | null;
+  retryAfterMs: number | null;
+  actualCostUsd: number | null;
+  uncertain: boolean;
+}
+
+export async function completeProviderAttempt(
+  input: ProviderAttemptResultInput,
+  supabase: SupabaseClient,
+): Promise<CreditsResult<"completed" | "existing" | "not_found">> {
+  const { data, error } = await supabase.rpc("complete_ai_provider_attempt", {
+    p_attempt_id: input.attemptId,
+    p_run_id: input.runId,
+    p_model: input.model,
+    p_provider_request_id: input.providerRequestId,
+    p_status: input.status,
+    p_finish_reason: input.finishReason,
+    p_prompt_tokens: input.promptTokens,
+    p_completion_tokens: input.completionTokens,
+    p_cached_read_tokens: input.cachedReadTokens,
+    p_cached_write_tokens: input.cachedWriteTokens,
+    p_reasoning_tokens: input.reasoningTokens,
+    p_total_tokens: input.totalTokens,
+    p_error_code: input.errorCode,
+    p_retry_after_ms: input.retryAfterMs,
+    p_actual_cost_usd: input.actualCostUsd,
+    p_uncertain: input.uncertain,
+  });
+  if (error) return mapCreditsError(error);
+  const status = recordOf(data)?.status;
+  if (status === "completed" || status === "existing" || status === "not_found") {
+    return { ok: true, data: status };
+  }
+  return { ok: false, error: "Unexpected provider-attempt result response.", code: "UNKNOWN" };
 }
 
 export interface RoleUsageInput {

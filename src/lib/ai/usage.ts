@@ -94,7 +94,10 @@ function isProviderAttempt(value: unknown): value is AgentProviderAttempt {
     (record.phase === "manifest" || record.phase === "batch" || record.phase === "repair") &&
     typeof record.attempt === "number" &&
     Number.isFinite(record.attempt) &&
-    typeof record.at === "string"
+    typeof record.at === "string" &&
+    (record.providerAttemptId === undefined ||
+      record.providerAttemptId === null ||
+      typeof record.providerAttemptId === "string")
   );
 }
 
@@ -108,5 +111,9 @@ function isProviderAttempt(value: unknown): value is AgentProviderAttempt {
  */
 export function persistedAttempts(value: unknown): AgentProviderAttempt[] {
   if (!Array.isArray(value)) return [];
-  return value.filter(isProviderAttempt);
+  return value.filter(isProviderAttempt).map((attempt) => ({
+    ...attempt,
+    providerAttemptId:
+      typeof attempt.providerAttemptId === "string" ? attempt.providerAttemptId : null,
+  }));
 }
