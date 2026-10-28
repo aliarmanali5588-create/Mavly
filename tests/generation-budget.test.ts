@@ -43,7 +43,7 @@ test("a call never receives less than the minimum useful attempt", () => {
     reserveForOthersMs: 500_000,
   });
   assert.equal(plan.ok, true);
-  if (plan.ok === false) return;
+  if (!plan.ok) return;
   assert.equal(plan.timeoutMs, MIN_USEFUL_ATTEMPT_MS);
   assert.equal(plan.reservedMs, 100_000 - MIN_USEFUL_ATTEMPT_MS);
   assert.ok(plan.callDeadlineAt <= START + 100_000);
@@ -56,7 +56,7 @@ test("no call is started below the minimum useful attempt", () => {
     configuredTimeoutMs: 90_000,
   });
   assert.equal(plan.ok, false);
-  if (plan.ok === true) return;
+  if (plan.ok) return;
   assert.equal(plan.reason, "deadline");
   assert.equal(plan.minAttemptMs, MIN_USEFUL_ATTEMPT_MS);
 });
@@ -70,7 +70,7 @@ test("two long attempts cannot starve the next one into an unusable timeout", ()
     configuredTimeoutMs: 90_000,
   });
   assert.equal(first.ok, true);
-  if (first.ok === false) return;
+  if (!first.ok) return;
   assert.equal(first.timeoutMs, 90_000);
   assert.ok(first.timeoutMs >= MIN_USEFUL_ATTEMPT_MS);
 
@@ -80,7 +80,7 @@ test("two long attempts cannot starve the next one into an unusable timeout", ()
     configuredTimeoutMs: 90_000,
   });
   assert.equal(afterFirst.ok, true);
-  if (afterFirst.ok === false) return;
+  if (!afterFirst.ok) return;
   assert.equal(afterFirst.timeoutMs, 90_000);
 
   const afterSecond = planProviderCall({
@@ -89,7 +89,7 @@ test("two long attempts cannot starve the next one into an unusable timeout", ()
     configuredTimeoutMs: 90_000,
   });
   assert.equal(afterSecond.ok, true);
-  if (afterSecond.ok === false) return;
+  if (!afterSecond.ok) return;
   assert.ok(afterSecond.timeoutMs >= MIN_USEFUL_ATTEMPT_MS);
   assert.ok(afterSecond.timeoutMs <= deadlineAt - (START + first.timeoutMs + afterFirst.timeoutMs));
 
@@ -111,7 +111,7 @@ test("a queue of pending batches reserves a minimum window for each", () => {
     reserveForOthersMs: 3 * MIN_USEFUL_ATTEMPT_MS,
   });
   assert.equal(plan.ok, true);
-  if (plan.ok === false) return;
+  if (!plan.ok) return;
   assert.equal(plan.reservedMs, 3 * MIN_USEFUL_ATTEMPT_MS);
   assert.equal(plan.timeoutMs, 90_000);
 });
@@ -123,7 +123,7 @@ test("the configured ceiling still wins when there is plenty of time", () => {
     configuredTimeoutMs: 45_000,
   });
   assert.equal(plan.ok, true);
-  if (plan.ok === false) return;
+  if (!plan.ok) return;
   assert.equal(plan.timeoutMs, 45_000);
 });
 
