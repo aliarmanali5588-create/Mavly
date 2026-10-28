@@ -128,7 +128,6 @@ test("timeouts, rate limits, transient provider errors and persistence failures 
 test("permanent failures are never retried", () => {
   const permanentCodes: Array<[string, string]> = [
     ["GENERATION_CONTENT_FILTER", "content_filter"],
-    ["GENERATION_TRUNCATED", "generation_truncated"],
     ["GENERATION_MALFORMED", "generation_malformed"],
     ["GENERATION_INCOMPLETE", "generation_incomplete"],
     ["GENERATION_UNSAFE_PATH", "unsafe_path"],
@@ -141,6 +140,15 @@ test("permanent failures are never retried", () => {
     assert.equal(result.retryable, false, code);
     assert.equal(result.errorClass, errorClass, code);
   }
+
+  /**
+   * Truncation is retryable BECAUSE the retry is narrower: a resumed attempt
+   * reuses the persisted manifest and skips verified completed paths. The cap
+   * still comes from the worker attempt budget / one inline continuation.
+   */
+  const truncated = classifyGenerationFailure({ code: "GENERATION_TRUNCATED" });
+  assert.equal(truncated.retryable, true);
+  assert.equal(truncated.errorClass, "generation_truncated");
 
   assert.equal(
     classifyGenerationFailure({

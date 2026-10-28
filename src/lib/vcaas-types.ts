@@ -15,6 +15,32 @@ import type { AndroidCapability } from "@/lib/android/capability";
 
 export type ProjectType = "website" | "android";
 
+/**
+ * The truthful preview state derived on the server from `project_files` and the
+ * latest durable run. See `src/lib/preview-status.ts`.
+ */
+export type VcaasPreviewStatus = "ready" | "stale" | "incomplete" | "unavailable" | "none";
+
+export interface VcaasPreviewState {
+  status: VcaasPreviewStatus;
+  entryPath: string | null;
+  updatedAt: string | null;
+  runStartedAt: string | null;
+  stale: boolean;
+  reason: string | null;
+  canResume: boolean;
+}
+
+export type VcaasGenerationState =
+  | "idle"
+  | "queued"
+  | "running"
+  | "recovering"
+  | "completed"
+  | "failed"
+  | "cancelled"
+  | "incomplete";
+
 export interface VcaasProject {
   projectId: string;
   projectType?: ProjectType;
@@ -33,7 +59,23 @@ export interface VcaasProject {
   description: string;
   plan: string;
   agentProcessStatus?: "init" | "done" | "idle";
-  agentServerStatus?: "Active" | "Creating" | "Starting" | "Archived" | "Unarchiving" | "Archiving";
+  /**
+   * ⚠️ `"Static"` MEANS THERE IS NO DEVELOPMENT SERVER. Mavly previews a saved
+   * static document (`preview.html` / `index.html`); it never runs generated
+   * code on a Mavly host. The old hardcoded `"Active"` claimed a live server
+   * that does not exist. `"Active"` remains in the union only for compatibility
+   * with historical copied payloads.
+   */
+  agentServerStatus?: "Active" | "Creating" | "Starting" | "Archived" | "Unarchiving" | "Archiving" | "Static";
+  /**
+   * The honest preview state. Only project detail/update responses read the
+   * project's files, so a list entry legitimately reports `none`: it has not
+   * looked at `project_files`. Read this field from the detail response, not
+   * from a project list.
+   */
+  previewState?: VcaasPreviewState;
+  /** A coarse, human-facing generation state derived from the durable run. */
+  generation?: VcaasGenerationState;
   createdAt: string;
   deployment?: {
     status: "deploying" | "success" | "error";

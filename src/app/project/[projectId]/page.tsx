@@ -9,7 +9,7 @@ import {
   Rocket, Loader2, Eye, LayoutGrid, Key, Globe,
   RefreshCw, Server, PanelLeftClose, PanelLeft, Monitor, Smartphone,
   ExternalLink, Sparkles, ChevronDown, FolderOpen, Plus,
-  Clock, Github, Code2, ArrowLeft, Figma, Copy, DatabaseIcon,
+  Clock, Github, Code2, ArrowLeft, Figma, Copy,
 } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
@@ -20,7 +20,6 @@ import { PreviewPanel } from "@/components/workspace/PreviewPanel";
 import { useRunProgress } from "@/components/workspace/RunActivity";
 import { isRunOver } from "@/lib/run-progress";
 import { WorkspaceMore } from "@/components/workspace/v2/WorkspaceMore";
-import { DatabasePlaceholder } from "@/components/workspace/DatabasePlaceholder";
 import { V2Banner } from "@/components/workspace/v2/V2Banner";
 import { CodePanel, invalidateCodeCache } from "@/components/workspace/CodePanel";
 import { VersionsModal } from "@/components/workspace/VersionsModal";
@@ -334,7 +333,6 @@ export default function WorkspacePage() {
 
   const TABS = [
     { id: "preview", label: "Preview", icon: Eye },
-    { id: "database", label: "Database", icon: DatabaseIcon },
     { id: "more", label: translate("more.tab"), icon: LayoutGrid },
     { id: "code", label: "Code", icon: Code2 },
   ];
@@ -380,6 +378,7 @@ export default function WorkspacePage() {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewCached, setPreviewCached] = useState(false);
   const [previewKey, setPreviewKey] = useState(0);
+  const [resumingGeneration, setResumingGeneration] = useState(false);
   /** Bumped whenever an import or restore replaces the project's source. */
   const [sourceRevision, setSourceRevision] = useState(0);
   const [chatWidth, setChatWidth] = useState(440);
@@ -1239,13 +1238,21 @@ export default function WorkspacePage() {
   }, [operation.kind, projectId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /**
-   * ⭐ IS THE LIVE APP ACTUALLY THERE? Both halves are required: the machine has to be up,
-   * and the project has to be RECOMMENDING the live url — which upstream only does once
-   * it has fetched that url and seen a real page. `Active` on its own is a server with
-   * nothing served on it yet, and that window is minutes wide.
+   * ⭐ IS THE PREVIEW ACTUALLY THERE? The visual editor scripts the same-origin
+   * preview DOCUMENT, not a development server. What it needs is a current,
+   * served preview entry — not `agentServerStatus === "Active"`, which no longer
+   * exists because Mavly never runs a generated dev server. Payloads that do not
+   * carry `previewState` keep their previous behaviour.
+   *
+   * ⚠️ THE LEGACY URL HALF IS UNCHANGED. It still requires the project to
+   * recommend the live URL field, so a payload without that field stays
+   * blocked exactly as before; this change removes the removed-status lie, it
+   * does not newly enable the visual editor.
    */
   const liveReady =
-    project?.agentServerStatus === "Active" &&
+    (project?.previewState
+      ? project.previewState.status === "ready" || project.previewState.status === "stale"
+      : true) &&
     getPreviewUrlField(project) === "temporalDevelopmentProjectUrl" &&
     !!project?.temporalDevelopmentProjectUrl;
 
@@ -1297,6 +1304,31 @@ export default function WorkspacePage() {
   }, [visual]);
 
   const handleStopAgent = async () => { await vcaasApi.agent.stop(projectId); toast.info("Stop signal sent"); };
+  /**
+   * Manual recovery for a failed/interrupted run. This is the existing
+   * checkpoint-safe endpoint: it reopens the SAME run, re-checks ownership and
+   * admission limits, and the agent skips only verified completed paths. It is
+   * separate from the bounded inline continuation, which already ran before the
+   * workspace could show a failure.
+   */
+  const handleResumeGeneration = async () => {
+    if (resumingGeneration) return;
+    setResumingGeneration(true);
+    try {
+      const res = await vcaasApi.agent.resume(projectId);
+      if (res.ok) {
+        toast.success("Resuming generation");
+        await fetchProject();
+        setPreviewKey((k) => k + 1);
+      } else {
+        toast.error(res.error || "Could not resume generation");
+      }
+    } catch {
+      toast.error("Could not resume generation");
+    } finally {
+      setResumingGeneration(false);
+    }
+  };
   // Autofill the chat prompt with an edit instruction for the given file, then focus the chat.
   const handleAskAiEdit = useCallback((path: string) => {
     setPrompt(`On file ${path} write what you want to edit`);
@@ -1776,8 +1808,7 @@ export default function WorkspacePage() {
               </div>
             )}
             <div className={`flex-1 min-h-0 overflow-hidden ${activeTab === "preview" ? "rounded-none" : "m-2 sm:m-3 rounded-xl shadow-sm"}`} style={{ background: cardBg }}>
-              {activeTab === "preview" && <PreviewPanel key={previewKey} previewUrl={shownPreviewUrl} cached={previewCached} onRefresh={() => { fetchProject(); setPreviewKey((k) => k + 1); }} loading={showInitialGenerationLoader} buildStage={buildStage} buildRetrying={buildRetrying} previewReady={previewReady} emptyMessage={project?.previewUnavailableReason} mobilePreview={mobilePreview} iframePath={iframePath} frameRef={previewFrameRef} /* ⭐ Same-origin ONLY while the editor is open — and for the length of an apply, which outlives the panel: dropping the proxy mid-apply would reload the frame and throw away the preview-only edits the user is watching. */ proxiedSrc={visualEditorOpen || visualLocked ? `/api/preview/${encodeURIComponent(projectId)}` : null} />}
-              {activeTab === "database" && <DatabasePlaceholder />}
+              {activeTab === "preview" && <PreviewPanel key={previewKey} previewUrl={shownPreviewUrl} cached={previewCached} onRefresh={() => { fetchProject(); setPreviewKey((k) => k + 1); }} loading={showInitialGenerationLoader} buildStage={buildStage} buildRetrying={buildRetrying} previewReady={previewReady} emptyMessage={project?.previewUnavailableReason} previewState={project?.previewState} onResumeGeneration={handleResumeGeneration} resumingGeneration={resumingGeneration} mobilePreview={mobilePreview} iframePath={iframePath} frameRef={previewFrameRef} /* ⭐ Same-origin ONLY while the editor is open — and for the length of an apply, which outlives the panel: dropping the proxy mid-apply would reload the frame and throw away the preview-only edits the user is watching. */ proxiedSrc={visualEditorOpen || visualLocked ? `/api/preview/${encodeURIComponent(projectId)}` : null} />}
               {activeTab === "code" && <CodePanel key={`${projectId}:${sourceRevision}`} projectId={projectId} sourceRevision={sourceRevision} darkMode={darkMode} onAskAiEdit={handleAskAiEdit} wake={serverWake} />}
               {activeTab === "more" && <WorkspaceMore project={project} onProjectChanged={() => void fetchProject()}  />}
             </div>
@@ -1874,8 +1905,7 @@ export default function WorkspacePage() {
             </div>
           ) : (
             <div className="h-full min-h-0 overflow-hidden">
-              {activeTab === "preview" && <PreviewPanel key={previewKey} previewUrl={shownPreviewUrl} cached={previewCached} onRefresh={() => { fetchProject(); setPreviewKey((k) => k + 1); }} loading={showInitialGenerationLoader} buildStage={buildStage} buildRetrying={buildRetrying} previewReady={previewReady} emptyMessage={project?.previewUnavailableReason} mobilePreview={false} iframePath={iframePath} />}
-              {activeTab === "database" && <DatabasePlaceholder />}
+              {activeTab === "preview" && <PreviewPanel key={previewKey} previewUrl={shownPreviewUrl} cached={previewCached} onRefresh={() => { fetchProject(); setPreviewKey((k) => k + 1); }} loading={showInitialGenerationLoader} buildStage={buildStage} buildRetrying={buildRetrying} previewReady={previewReady} emptyMessage={project?.previewUnavailableReason} previewState={project?.previewState} onResumeGeneration={handleResumeGeneration} resumingGeneration={resumingGeneration} mobilePreview={false} iframePath={iframePath} />}
               {activeTab === "code" && <CodePanel key={`${projectId}:${sourceRevision}`} projectId={projectId} sourceRevision={sourceRevision} darkMode={darkMode} onAskAiEdit={handleAskAiEdit} wake={serverWake} />}
               {activeTab === "more" && <WorkspaceMore project={project} onProjectChanged={() => void fetchProject()}  />}
             </div>

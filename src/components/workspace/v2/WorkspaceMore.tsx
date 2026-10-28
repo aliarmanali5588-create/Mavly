@@ -15,6 +15,7 @@ import { V2ProjectSettings } from "./V2ProjectSettings";
 import { ProjectPaymentsIntegration } from "./ProjectPaymentsIntegration";
 import { ProjectMemoryPanel } from "./ProjectMemoryPanel";
 import { ProjectWorkflowPanel } from "./ProjectWorkflowPanel";
+import { DatabasePlaceholder } from "../DatabasePlaceholder";
 
 const noop = () => {};
 
@@ -44,6 +45,8 @@ export function WorkspaceMore({
         <MoreView section={section} onSection={setSection}>
             {section === "analytics" ? (
                 <ProjectActivityModal open onOpenChange={noop} projectId={projectId} />
+            ) : section === "database" ? (
+                <DatabasePlaceholder />
             ) : section === "usage" ? (
                 <UsageLimitsModal open onOpenChange={noop} projectId={projectId} />
             ) : section === "secrets" ? (

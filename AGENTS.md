@@ -104,7 +104,8 @@ application version is live. Project-secret encryption also
 requires the server-only `MAVLY_PROJECT_SECRETS_ENCRYPTION_KEY` (32 random bytes,
 base64-encoded); without it create/update fail closed. `npm test` covers the pure
 auth/redirect/ownership/scope modules, the generation state/lease/claim/observability
-modules, the verification runtime/health/preview/policy/config/state/result modules, the
+modules, the generation timeout-budget and preview-document/preview-state modules, the
+verification runtime/health/preview/policy/config/state/result modules, the
 bounded repair policy and parsers, the full-stack runtime/config/database/env/address
 rules, the business-integration registry/config/validation, Razorpay signature and
 provider-error mapping, the payment state machine, the gateway session exemptions, the
@@ -595,6 +596,9 @@ paths with `src/lib/vcaas-scope.ts`, so unknown shapes are refused before any wo
 | `supabase/migrations/16_durable_generation_worker.sql` | Queue columns/constraints/indexes, claim/lease/retry/recovery/resume RPCs, least-privilege grants and the worker schema marker. |
 | `docs/runbooks/generation-worker.md` | Operator runbook for the durable worker. |
 | `src/lib/ai/retry.ts` | Bounded exponential retry, jitter and `Retry-After` parsing. |
+| `src/lib/ai/budget.ts` | Pure run-deadline policy: finalization reserve, per-attempt planning from the time actually left, and the minimum useful attempt. |
+| `src/lib/preview-document.ts` | Pure structural check that a generated `preview.html` is a complete document before it can be persisted. |
+| `src/lib/preview-status.ts` | Pure `ready`/`stale`/`incomplete`/`unavailable`/`none` preview state and generation state derived from saved files plus the durable run. |
 | `src/lib/mavly/checkpoints.ts` | Pure verification of resumed batch hashes. |
 | `supabase/migrations/10_generation_jobs.sql` | Run lifecycle columns, batch checkpoints, admission RPC and RLS. |
 | `src/lib/mavly/snapshots.ts` | Restore points: create, list, read, and the content hash of a source state. |

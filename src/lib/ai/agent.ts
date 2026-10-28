@@ -41,11 +41,18 @@ import {
 } from "./models";
 import { retryWithBackoff, type RetryDecision, type RetryPolicy } from "./retry";
 import {
+  MIN_USEFUL_ATTEMPT_MS,
+  planProviderCall,
+  runBudgetFor,
+  workDeadlineAt,
+} from "./budget";
+import {
   ANDROID_REQUIRED_PATHS,
   androidMainActivityPath,
   androidPathRejection,
   validateAndroidProject,
 } from "@/lib/android/contract";
+import { PREVIEW_ENTRY_PATH, previewDocumentProblem } from "@/lib/preview-document";
 
 export type AgentProjectType = "website" | "android";
 
@@ -266,9 +273,17 @@ export const MAX_BATCH_ESTIMATED_BYTES = 48_000;
 export const DEFAULT_ESTIMATED_FILE_BYTES = 8_000;
 export const BATCH_OUTPUT_TOKENS = 12_000;
 export const MANIFEST_OUTPUT_TOKENS = 4_000;
+/**
+ * The standalone prototype is the largest file the website profile produces and
+ * the most likely to hit a provider's output ceiling. It gets its own batch and
+ * a deliberate ceiling of its own — high enough for a real prototype, still
+ * bounded so a runaway response cannot consume the whole run. The model's own
+ * maximum is applied on top at the call site.
+ */
+export const PREVIEW_OUTPUT_TOKENS = 16_000;
 export const MANIFEST_TIMEOUT_MS = 45_000;
-export const BATCH_TIMEOUT_MS = 120_000;
-export const REPAIR_TIMEOUT_MS = 60_000;
+export const BATCH_TIMEOUT_MS = 90_000;
+export const REPAIR_TIMEOUT_MS = 45_000;
 export const GENERATION_BUDGET_MS = 240_000;
 const MAX_TRUNCATION_RECOVERIES = 16;
 const MAX_ATTEMPTS_RECORDED = 60;
@@ -277,6 +292,12 @@ const RETRY_POLICY: Partial<RetryPolicy> = {
   maxAttempts: 4,
   baseDelayMs: 800,
   maxDelayMs: 15_000,
+  /**
+   * A retry that leaves less than a useful attempt is not a retry: it is a
+   * charge for a request that cannot finish. The same floor is used to decide
+   * whether a new batch may start at all.
+   */
+  minRemainingMs: MIN_USEFUL_ATTEMPT_MS,
 };
 
 const SYSTEM_PROMPT = `You are Mavly's senior full-stack engineer. You build a complete, runnable Next.js application from a user's prompt.
@@ -510,7 +531,17 @@ export async function generateApp(
     input.projectId,
   );
   const now = deps.now ?? (() => Date.now());
-  const deadlineAt = now() + Math.max(30_000, input.budgetMs ?? GENERATION_BUDGET_MS);
+  /**
+   * ⚠️ ONE BUDGET FOR THE WHOLE RUN. `deadlineAt` is the WORK deadline: the
+   * finalization reserve is already subtracted, so persistence, checkpoint
+   * validation and the terminal run write always have time left even when every
+   * provider call spends its full timeout.
+   */
+  const budget = runBudgetFor(
+    now(),
+    Math.max(30_000, input.budgetMs ?? GENERATION_BUDGET_MS),
+  );
+  const deadlineAt = workDeadlineAt(budget);
 
   const completedPaths = new Set(
     (input.resume?.completedPaths ?? [])
@@ -683,7 +714,13 @@ export async function generateApp(
   let truncationRecoveries = 0;
 
   while (pending.length > 0) {
-    if (now() >= deadlineAt - 2_000) {
+    /**
+     * ⚠️ DO NOT START A BATCH THAT CANNOT FINISH. A request launched with only
+     * a few seconds left can only time out and spend credits, and it would also
+     * eat the reserve finalization needs. Fail with a resumable deadline error
+     * while completed batches are safely persisted.
+     */
+    if (now() + MIN_USEFUL_ATTEMPT_MS > deadlineAt) {
       return fail(
         "GENERATION_TIMEOUT",
         "The run reached its time budget before every file was generated. Completed batches were saved and the run can be resumed.",
@@ -693,6 +730,15 @@ export async function generateApp(
     const group = pending.shift()!;
     const requestedPaths = group.map((entry) => entry.path);
     const compact = compactRetried.has(requestedPaths[0] ?? "");
+    /**
+     * The preview gets its own deliberate ceiling. A compact retry keeps the
+     * SAME ceiling on purpose: truncation is solved by reducing scope in the
+     * prompt, not by asking for the same file with less room (which reproduces
+     * the truncation it was meant to fix).
+     */
+    const previewBatch =
+      profile === "website" && requestedPaths.includes(PREVIEW_ENTRY_PATH);
+    const batchTokenBudget = previewBatch ? PREVIEW_OUTPUT_TOKENS : BATCH_OUTPUT_TOKENS;
 
     const messages = buildBatchMessages(input, model, manifest, group, compact, state);
     const call = await callModel(
@@ -701,9 +747,10 @@ export async function generateApp(
       messages,
       {
         timeoutMs: BATCH_TIMEOUT_MS,
-        maxTokens: compact
-          ? Math.min(model.maxOutputTokens, Math.max(2_000, Math.floor(BATCH_OUTPUT_TOKENS / 2)))
-          : Math.min(model.maxOutputTokens, BATCH_OUTPUT_TOKENS),
+        maxTokens: Math.min(model.maxOutputTokens, batchTokenBudget),
+        // Leave each queued batch a minimum useful window. Clamped inside
+        // `planProviderCall` so this attempt always gets its own minimum.
+        reserveForOthersMs: pending.length * MIN_USEFUL_ATTEMPT_MS,
       },
       state,
       deps,
@@ -786,6 +833,7 @@ export async function generateApp(
         {
           timeoutMs: REPAIR_TIMEOUT_MS,
           maxTokens: Math.min(model.maxOutputTokens, BATCH_OUTPUT_TOKENS),
+          reserveForOthersMs: pending.length * MIN_USEFUL_ATTEMPT_MS,
         },
         state,
         deps,
@@ -808,9 +856,13 @@ export async function generateApp(
       parsed = parseBatch(repaired.content, requestedPaths, state, profile);
     }
 
-    if (parsed.ok === false && parsed.code === "GENERATION_TOO_LARGE") {
-      // One oversized file must not discard the other valid files in its batch.
-      // Split the request, or retry the single file with a compact token cap.
+    if (
+      parsed.ok === false &&
+      (parsed.code === "GENERATION_TOO_LARGE" || parsed.code === "GENERATION_TRUNCATED")
+    ) {
+      // One oversized or visibly truncated file must not discard the other valid
+      // files in its batch. Split the request, or retry the single file once as
+      // a smaller-scope compact version.
       if (requestedPaths.length > 1) {
         truncationRecoveries += 1;
         if (truncationRecoveries > truncationLimit) {
@@ -980,6 +1032,8 @@ async function planManifest(
     {
       timeoutMs: MANIFEST_TIMEOUT_MS,
       maxTokens: Math.min(model.maxOutputTokens, MANIFEST_OUTPUT_TOKENS),
+      // The plan is useless if it consumes the budget of the first batch.
+      reserveForOthersMs: MIN_USEFUL_ATTEMPT_MS,
     },
     state,
     deps,
@@ -1027,6 +1081,7 @@ async function planManifest(
       {
         timeoutMs: REPAIR_TIMEOUT_MS,
         maxTokens: Math.min(model.maxOutputTokens, MANIFEST_OUTPUT_TOKENS),
+        reserveForOthersMs: MIN_USEFUL_ATTEMPT_MS,
       },
       state,
       deps,
@@ -1329,6 +1384,22 @@ function parseBatch(
       };
     }
 
+    if (profile === "website" && path === PREVIEW_ENTRY_PATH) {
+      /**
+       * ⚠️ A HALF DOCUMENT IS NOT A PREVIEW. The JSON can be valid while the
+       * file's content is cut off, so structure is checked here — before the
+       * batch reaches the caller's persistence path.
+       */
+      const problem = previewDocumentProblem(recordItem.content);
+      if (problem) {
+        return {
+          ok: false,
+          code: "GENERATION_TRUNCATED",
+          error: `The generated ${PREVIEW_ENTRY_PATH} is not a complete document: ${problem}. It was not saved.`,
+        };
+      }
+    }
+
     seen.add(path);
     files.push({ path, content: recordItem.content });
   }
@@ -1359,11 +1430,68 @@ function parseBatch(
 
 // ── Provider calls and retries ──────────────────────────────────────────────
 
+/**
+ * The provider was not called because the remaining work budget cannot host a
+ * minimum useful attempt. Typed as a `TIMEOUT` so the run is classified and
+ * resumable rather than reported as a generic provider error.
+ */
+function deadlineFailure(model: AiModel): ChatCompletionFailure {
+  return {
+    ok: false,
+    code: "TIMEOUT",
+    error:
+      "The run's time budget did not leave room for another provider attempt. Completed batches were saved and the run can be resumed.",
+    retryable: false,
+    retryAfterMs: null,
+    metadata: {
+      status: null,
+      requestedModel: model.id,
+      model: model.id,
+      finishReason: null,
+      usage: {
+        promptTokens: null,
+        completionTokens: null,
+        totalTokens: null,
+        reasoningTokens: null,
+        costUsd: null,
+      },
+      providerRequestId: null,
+      retryAfterMs: null,
+      errorCode: "TIMEOUT",
+      errorDetail: null,
+    },
+  };
+}
+
+/**
+ * Normalize a success-shaped response whose `finish_reason` is `length` into
+ * the failure the batch pipeline already knows how to recover from.
+ */
+function outputLimitFailure(
+  model: AiModel,
+  metadata: ChatCompletionMetadata,
+): ChatCompletionFailure {
+  return {
+    ok: false,
+    code: "OUTPUT_LIMIT",
+    error: "The provider stopped at its output limit before completing the response.",
+    retryable: false,
+    retryAfterMs: null,
+    metadata: {
+      ...metadata,
+      requestedModel: metadata.requestedModel || model.id,
+      finishReason: metadata.finishReason ?? "length",
+      errorCode: "OUTPUT_LIMIT",
+      errorDetail: null,
+    },
+  };
+}
+
 async function callModel(
   phase: "manifest" | "batch" | "repair",
   model: AiModel,
   messages: ChatMessage[],
-  options: { timeoutMs: number; maxTokens: number },
+  options: { timeoutMs: number; maxTokens: number; reserveForOthersMs?: number },
   state: GenerationState,
   deps: AgentDependencies,
   deadlineAt: number,
@@ -1375,12 +1503,37 @@ async function callModel(
 
   return retryWithBackoff(
     async () => {
-      const remaining = deadlineAt - now();
-      const timeoutMs = Math.max(1_000, Math.min(options.timeoutMs, remaining));
-      return complete(model, messages, {
-        timeoutMs,
+      /**
+       * ⚠️ THE TIMEOUT IS DERIVED, NOT ASSUMED. `retryWithBackoff` re-runs this
+       * closure for every attempt, so each retry is separately measured against
+       * the time that is actually left. A retry after two slow attempts gets the
+       * real remaining window — or no call at all when that window is too small
+       * to be useful.
+       */
+      const plan = planProviderCall({
+        deadlineAt,
+        now: now(),
+        configuredTimeoutMs: options.timeoutMs,
+        reserveForOthersMs: options.reserveForOthersMs,
+        minAttemptMs: MIN_USEFUL_ATTEMPT_MS,
+      });
+      if (plan.ok === false) return deadlineFailure(model);
+
+      const result = await complete(model, messages, {
+        timeoutMs: plan.timeoutMs,
         maxTokens: options.maxTokens,
       });
+
+      /**
+       * Defense in depth: an adapter can surface a 200 whose `finish_reason` is
+       * `length`. That is a truncation, never a success — the batch logic must
+       * see it as an output limit so it shrinks the request instead of
+       * persisting half a document.
+       */
+      if (!isChatCompletionFailure(result) && result.metadata.finishReason === "length") {
+        return outputLimitFailure(model, result.metadata);
+      }
+      return result;
     },
     (result): RetryDecision =>
       isChatCompletionFailure(result)
@@ -1615,7 +1768,16 @@ function buildBatchMessages(
     "Generate EXACTLY these files, each COMPLETE:",
     requested,
     compact
-      ? "\nA previous attempt hit the output limit. Return a complete but more compact version of the requested file. Do not truncate it or leave placeholders."
+      ? [
+          "\nA previous attempt hit the output limit. Return a complete but more compact version of the requested file.",
+          "REDUCE SCOPE, NOT COMPLETENESS:",
+          "- Keep the primary screen and one coherent, responsive layout.",
+          "- Keep the core local interactions working.",
+          "- Drop optional screens, secondary flows, elaborate animation and duplicated sample data.",
+          "- Prefer shorter copy and fewer decorative elements.",
+          "- Return the COMPLETE file — for preview.html, everything from <!doctype html> through </html>, never a partial diff.",
+          "- Do not truncate the file or leave placeholders. A smaller finished document beats a larger unfinished one.",
+        ].join("\n")
       : "",
     "",
     "Return the JSON object now with no files outside the requested list.",

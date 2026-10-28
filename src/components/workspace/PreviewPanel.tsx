@@ -3,9 +3,10 @@
 import Image from "next/image";
 import { useEffect, useState } from "react";
 import type { RefObject } from "react";
-import { Monitor, Archive } from "lucide-react";
+import { Monitor, Archive, AlertTriangle } from "lucide-react";
 import { BuildingLoader } from "@/components/workspace/BuildingLoader";
 import type { RunStage } from "@/lib/run-progress";
+import type { VcaasPreviewState } from "@/lib/vcaas-types";
 
 interface PreviewPanelProps {
   previewUrl: string | null;
@@ -36,9 +37,19 @@ interface PreviewPanelProps {
   previewReady?: boolean;
   /** Why a source that exists cannot be previewed (for example, it needs a build). */
   emptyMessage?: string | null;
+  /**
+   * ⚠️ THE SERVER'S HONEST PREVIEW STATE. Readiness is a fact about saved
+   * content plus the durable run, not about a URL being present. `stale` means a
+   * usable older preview is shown while the newest generation is running or
+   * after it failed.
+   */
+  previewState?: VcaasPreviewState | null;
+  /** Manual recovery, only offered when the API can actually resume the run. */
+  onResumeGeneration?: () => void;
+  resumingGeneration?: boolean;
 }
 
-export function PreviewPanel({ previewUrl, onRefresh, loading, mobilePreview = false, iframePath = "/", cached = false, proxiedSrc, frameRef, buildStage, buildRetrying, previewReady, emptyMessage }: PreviewPanelProps) {
+export function PreviewPanel({ previewUrl, onRefresh, loading, mobilePreview = false, iframePath = "/", cached = false, proxiedSrc, frameRef, buildStage, buildRetrying, previewReady, emptyMessage, previewState, onResumeGeneration, resumingGeneration = false }: PreviewPanelProps) {
   const [iframeLoading, setIframeLoading] = useState(true);
   const [canvasSessionActive, setCanvasSessionActive] = useState(
     () => Boolean(loading && !previewUrl),
@@ -82,6 +93,22 @@ export function PreviewPanel({ previewUrl, onRefresh, loading, mobilePreview = f
     (canvasSessionActive || Boolean(loading && !previewUrl)) &&
     (loading || Boolean(fullIframeUrl));
   const canvasMotionActive = Boolean(loading && !previewReady && !previewUrl);
+  /**
+   * A saved preview can be shown while it is no longer the newest one. Saying so
+   * is the difference between "this is your app" and "this may be an older
+   * version" — and it never hides output that is still usable.
+   */
+  const showStalePreview = Boolean(previewUrl) && previewState?.status === "stale";
+  const emptyTitle =
+    previewState?.status === "unavailable"
+      ? "Preview unavailable"
+      : previewState?.status === "incomplete"
+        ? "Preview incomplete"
+        : "No preview yet";
+  const emptyText =
+    previewState?.reason ??
+    emptyMessage ??
+    "Send a prompt or import a static site with an index.html";
 
   return (
     <div className="h-full min-h-0 flex flex-col overflow-hidden">
@@ -90,9 +117,30 @@ export function PreviewPanel({ previewUrl, onRefresh, loading, mobilePreview = f
         {/* Cached snapshot indicator: shown when the dev server is not active and
             we're displaying the cachedDevelopmentUrl static snapshot */}
         {previewUrl && cached && (
-          <div className="absolute top-2 left-1/2 -translate-x-1/2 z-20 flex items-center gap-1.5 bg-amber-50 border border-amber-200 text-amber-700 text-[11px] font-medium px-2.5 py-1 rounded-full shadow-sm">
+          <div className={`absolute ${showStalePreview ? "top-12" : "top-2"} left-1/2 -translate-x-1/2 z-20 flex items-center gap-1.5 bg-amber-50 border border-amber-200 text-amber-700 text-[11px] font-medium px-2.5 py-1 rounded-full shadow-sm`}>
             <Archive className="w-3 h-3" />
             <span>Cached snapshot · server sleeping</span>
+          </div>
+        )}
+        {showStalePreview && (
+          <div
+            role="status"
+            className="absolute top-2 left-1/2 -translate-x-1/2 z-20 flex max-w-[92%] items-center gap-1.5 bg-amber-50 border border-amber-200 text-amber-800 text-[11px] font-medium px-2.5 py-1 rounded-full shadow-sm"
+          >
+            <AlertTriangle className="w-3 h-3 shrink-0" />
+            <span className="truncate">
+              {previewState?.reason ?? "This preview may be out of date."}
+            </span>
+            {previewState?.canResume && onResumeGeneration && (
+              <button
+                type="button"
+                onClick={onResumeGeneration}
+                disabled={resumingGeneration}
+                className="ml-1 shrink-0 underline underline-offset-2 disabled:opacity-60"
+              >
+                {resumingGeneration ? "Resuming…" : "Resume"}
+              </button>
+            )}
           </div>
         )}
         {!previewUrl ? (
@@ -107,8 +155,18 @@ export function PreviewPanel({ previewUrl, onRefresh, loading, mobilePreview = f
           ) : (
             <div className="flex flex-col items-center justify-center text-center px-8">
               <Monitor className="w-10 h-10 text-gray-300 mb-4" />
-              <p className="text-sm font-medium text-gray-500 mb-1">No preview yet</p>
-              <p className="text-xs text-gray-400">{emptyMessage ?? "Send a prompt or import a static site with an index.html"}</p>
+              <p className="text-sm font-medium text-gray-500 mb-1">{emptyTitle}</p>
+              <p className="text-xs text-gray-400 max-w-sm">{emptyText}</p>
+              {previewState?.canResume && onResumeGeneration && (
+                <button
+                  type="button"
+                  onClick={onResumeGeneration}
+                  disabled={resumingGeneration}
+                  className="mt-4 rounded-full border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-60"
+                >
+                  {resumingGeneration ? "Resuming…" : "Resume generation"}
+                </button>
+              )}
             </div>
           )
         ) : (

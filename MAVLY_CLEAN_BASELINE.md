@@ -32,7 +32,7 @@ revocation or database mutation was performed while preparing this document.
 | AI generation | The active `src/lib/mavly/run-agent.ts` → `src/lib/ai/agent.ts` → `src/lib/ai/provider.ts` → `src/lib/ai/openrouter.ts` pipeline serves both websites (Next.js profile) and Android apps (Kotlin/Compose profile). The default execution path is still the inline `after()` run; a durable worker is available opt-in per project cohort. Worker execution rechecks the persisted project type before generation and does not enqueue the Next.js verification sandbox for an Android run. |
 | Durable generation worker (opt-in) | Off unless `MAVLY_GENERATION_WORKER_ENABLED`, a ≥32-char `MAVLY_GENERATION_WORKER_SECRET`, an explicit `MAVLY_GENERATION_WORKER_PROJECTS` cohort, `SUPABASE_SERVICE_ROLE_KEY` and the Supabase URL are all configured. Admission records `dispatch_mode`; only worker-dispatched runs are claimed. An operator-supplied scheduler calls `/api/generation/worker`, which executes one job per tick under a fenced lease, renews it, recovers expired leases into bounded retries or dead letters, and never deletes accepted work. Uncohort projects remain inline. See `docs/runbooks/generation-worker.md`. |
 | Verification sandbox (opt-in) | Off unless `MAVLY_VERIFICATION_SANDBOX_ENABLED`, an explicit `MAVLY_VERIFICATION_SANDBOX_PROJECTS` cohort, a Vercel provider credential, `SUPABASE_SERVICE_ROLE_KEY` and the Supabase URL are all configured, and migrations 17 then 19 are applied. Only worker-dispatched runs enqueue one verification per completed run and ready snapshot. Later worker ticks re-validate the snapshot, build it in an isolated Vercel Sandbox microVM, start the validated production server on loopback and run a sandbox-local health check. `passed` requires the build, the runtime start and a `2xx`/`3xx` health response; build-only success is never `passed`. Stages run detached and are polled across ticks; every terminal path destroys the sandbox. Unsupported formats return `unsupported_runtime`. A separately opt-in bounded AI repair (default 1, hard cap 2) may create a new immutable snapshot for a source-level failure and rerun the checks. Preview stays unavailable because there is no authenticated proxy. Status appears only in the existing authorized `agent/status` / `agent/stop` responses. See `docs/architecture/phase-4-runtime-verification.md`. |
-| Generation preview | New-project plans always include `preview.html`; it is generated in its own batch. Batch parsing accepts only requested paths. Progress stages use durable run state, manifest/checkpoints, and the static-preview resolver; the UI uses an indeterminate bar rather than estimated completion percentages. |
+| Generation preview | New-project plans always include `preview.html`; it is generated in its own batch. Batch parsing accepts only requested paths and refuses an incomplete HTML document. Progress stages use durable run state, manifest/checkpoints, and the static-preview resolver; the UI uses an indeterminate bar rather than estimated completion percentages. The workspace labels the preview `ready`/`stale`/`incomplete`/`unavailable` from the saved entry plus the latest durable run, and offers `agent/resume` when a failed run can be recovered. |
 | Text generation | `src/lib/ai/provider.ts` serves every website/Android generation request through OpenRouter (`src/lib/ai/openrouter.ts`). The production default is `deepseek/deepseek-v4.1-flash`; `cohere/north-mini-code:free` is selectable only when the project is in the server-configured `MAVLY_NORTH_MINI_CODE_PROJECTS` cohort. Models must pass the catalog and project-cohort checks before a request leaves the server; the shared chat contract lives in `src/lib/ai/chat-contract.ts`. |
 | Conversation and runs | Persisted in `project_messages` and `project_runs`, polled by the workspace. |
 | Project settings | Owner-editable name/description through `PATCH /projects/{id}`; the derived Mavly address is read-only. |
@@ -340,14 +340,22 @@ and the stored token never reaches the model or a log.
 - The run plans a manifest, then requests bounded file batches. The model must return JSON
   with full file contents; one focused repair is made per malformed/empty response.
 - `finish_reason: "length"` is always a failure. The truncated response is discarded, the
-  batch is split, and prior validated batches remain checkpointed.
+  batch is split, and prior validated batches remain checkpointed. A `preview.html` that is
+  not a structurally complete document (`src/lib/preview-document.ts`) is also refused
+  before persistence, even when the JSON envelope parsed.
+- One run has one absolute deadline (`src/lib/ai/budget.ts`): a finalization reserve is
+  never spent on a provider call, every attempt is planned against the time actually left,
+  and an attempt is not started below the minimum useful window.
 - Paths are sanitized, `.env`/`.git`/`node_modules`/build output are refused, and per-file
   and total size caps apply before anything is written.
 - New projects must include `package.json`, `app/layout.tsx`, `app/page.tsx` and
   `preview.html`.
 - The agent runs after the HTTP response via Next.js `after()`; the UI polls the durable
   stage and checkpoint counts. `after()` is not a worker: a terminated invocation leaves an
-  unfinished run that `agent/resume` can reopen, but nothing restarts it automatically.
+  unfinished run that `agent/resume` can reopen, and nothing restarts it automatically once
+  the invocation has ended. Within one inline invocation, one bounded continuation may run
+  immediately for a timeout, transient failure or truncation, reusing the persisted
+  manifest and verified checkpoints; the durable worker keeps its own retry/lease path.
 
 ---
 

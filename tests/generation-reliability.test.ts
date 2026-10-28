@@ -204,7 +204,9 @@ async function assertPreviewStaysInItsOwnBatch(mode: "create" | "update") {
         }
         return success(batchJson(requested.map((path) => [
           path,
-          path === "preview.html" ? "preview from its requested batch" : `valid:${path}`,
+          path === "preview.html"
+            ? "<!doctype html><html><body>preview from its requested batch</body></html>"
+            : `valid:${path}`,
         ] as [string, string])));
       },
       sleep: noop,
@@ -216,7 +218,7 @@ async function assertPreviewStaysInItsOwnBatch(mode: "create" | "update") {
   assert.equal(persisted.filter(([path]) => path === "preview.html").length, 1);
   assert.equal(
     persisted.find(([path]) => path === "preview.html")?.[1],
-    "preview from its requested batch",
+    "<!doctype html><html><body>preview from its requested batch</body></html>",
   );
 }
 
@@ -543,4 +545,138 @@ test("project paths cannot escape the project or target internal files", async (
   }
 
   assert.equal(sanitizeProjectPath(".env.example"), ".env.example");
+});
+
+// ── Phase 0: preview document integrity and deadline refusal ────────────────
+
+const VALID_PREVIEW =
+  "<!doctype html><html><head><style>body{color:#111}</style></head><body><h1>Hi</h1><script>1+1</script></body></html>";
+
+test("a structurally complete preview document is persisted once", async () => {
+  const persisted: string[] = [];
+  const complete = provider((messages) => {
+    if (isPlanner(messages)) return success(manifestJson(["preview.html"]));
+    return success(batchJson([["preview.html", VALID_PREVIEW]]));
+  });
+
+  const outcome = await generateApp(
+    {
+      prompt: "build it",
+      mode: "update",
+      onBatch: (batch) => {
+        persisted.push(...batch.files.map((file) => file.path));
+      },
+    },
+    { complete, sleep: noop },
+  );
+
+  assert.equal(isGenerationFailure(outcome), false);
+  assert.deepEqual(persisted, ["preview.html"]);
+});
+
+test("a preview cut off before </html> is never persisted as a completed preview", async () => {
+  let batchCalls = 0;
+  let persisted = 0;
+  const truncated = "<!doctype html><html><body><h1>Half a page</h1>";
+
+  const complete = provider((messages) => {
+    if (isPlanner(messages)) return success(manifestJson(["preview.html"]));
+    batchCalls += 1;
+    return success(batchJson([["preview.html", truncated]]));
+  });
+
+  const outcome = await generateApp(
+    {
+      prompt: "build it",
+      mode: "update",
+      onBatch: () => {
+        persisted += 1;
+      },
+    },
+    { complete, sleep: noop },
+  );
+
+  assert.equal(isGenerationFailure(outcome), true);
+  if (!isGenerationFailure(outcome)) return;
+  assert.equal(outcome.code, "GENERATION_TRUNCATED");
+  assert.equal(persisted, 0);
+  // One normal attempt plus exactly one smaller-scope compact retry.
+  assert.equal(batchCalls, 2);
+});
+
+test("a success-shaped response with finish_reason length is still a truncation", async () => {
+  const batchCalls: string[][] = [];
+  const complete = provider((messages) => {
+    if (isPlanner(messages)) return success(manifestJson(["a.ts", "b.ts"]));
+    const paths = requestedPaths(messages);
+    batchCalls.push(paths);
+    if (paths.length > 1) {
+      return success(
+        batchJson(paths.map((path) => [path, `content:${path}`] as [string, string])),
+        "length",
+      );
+    }
+    return success(batchJson(paths.map((path) => [path, `content:${path}`] as [string, string])));
+  });
+
+  const outcome = await generateApp(
+    { prompt: "build it", mode: "update" },
+    { complete, sleep: noop },
+  );
+
+  assert.equal(isGenerationFailure(outcome), false);
+  assert.deepEqual(batchCalls, [["a.ts", "b.ts"], ["a.ts"], ["b.ts"]]);
+});
+
+test("a later batch timeout keeps the completed preview and fails as a resumable timeout", async () => {
+  const persisted: string[] = [];
+  const complete = provider((messages) => {
+    if (isPlanner(messages)) return success(manifestJson(["preview.html", "a.ts"]));
+    const paths = requestedPaths(messages);
+    if (paths.includes("preview.html")) {
+      return success(batchJson([["preview.html", VALID_PREVIEW]]));
+    }
+    return failure("TIMEOUT", { retryable: true });
+  });
+
+  const outcome = await generateApp(
+    {
+      prompt: "build it",
+      mode: "update",
+      onBatch: (batch) => {
+        persisted.push(...batch.files.map((file) => file.path));
+      },
+    },
+    { complete, sleep: noop, now: () => Date.now() },
+  );
+
+  assert.equal(isGenerationFailure(outcome), true);
+  if (!isGenerationFailure(outcome)) return;
+  assert.equal(outcome.code, "GENERATION_TIMEOUT");
+  assert.deepEqual(persisted, ["preview.html"]);
+  assert.deepEqual(outcome.partial.completedPaths, ["preview.html"]);
+});
+
+test("no provider call starts when the remaining budget is below the minimum useful attempt", async () => {
+  let calls = 0;
+  const complete = provider((messages) => {
+    calls += 1;
+    if (isPlanner(messages)) return success(manifestJson(["a.ts"]));
+    return success(batchJson([["a.ts", "valid"]]));
+  });
+
+  /**
+   * A 30 s budget leaves 10 s of provider work after the 20 s finalization
+   * reserve — below `MIN_USEFUL_ATTEMPT_MS`. The honest outcome is a typed,
+   * resumable deadline failure with no provider request at all.
+   */
+  const outcome = await generateApp(
+    { prompt: "build it", mode: "update", budgetMs: 30_000 },
+    { complete, sleep: noop },
+  );
+
+  assert.equal(isGenerationFailure(outcome), true);
+  if (!isGenerationFailure(outcome)) return;
+  assert.equal(outcome.code, "GENERATION_TIMEOUT");
+  assert.equal(calls, 0);
 });

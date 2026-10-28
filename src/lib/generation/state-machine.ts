@@ -139,6 +139,34 @@ export interface FailureClassification {
   summary: string;
 }
 
+/**
+ * ═══ WHAT AN INLINE RUN MAY RETRY WITHOUT A SCHEDULER ═══════════════════════
+ *
+ * The durable worker retries with backoff because it has a queue and a lease.
+ * An inline `after()` run has neither: it can only re-enter the pipeline once,
+ * immediately, inside the same request budget. Only classes that are expected
+ * to behave differently on an immediate retry qualify:
+ *
+ *   · a provider timeout, because the window is now different;
+ *   · a transient provider failure, because it is transient by definition;
+ *   · a truncated response, because the next attempt resumes from verified
+ *     checkpoints and asks for a smaller remaining scope.
+ *
+ * Rate limiting is deliberately excluded: it needs a WAIT, and waiting inside
+ * the same request spends the budget that remains. Persistence failures are
+ * excluded too — the next attempt would hit the same unavailable store — and are
+ * retried by the worker path or the user's manual resume instead.
+ */
+export const INLINE_RECOVERABLE_ERROR_CLASSES: readonly GenerationErrorClass[] = [
+  "provider_timeout",
+  "provider_transient",
+  "generation_truncated",
+];
+
+export function isInlineRecoverable(errorClass: GenerationErrorClass): boolean {
+  return INLINE_RECOVERABLE_ERROR_CLASSES.includes(errorClass);
+}
+
 export interface FailureSignals {
   /** A `AgentGenerationFailureCode` when the agent reported one. */
   code?: string | null;
@@ -188,7 +216,14 @@ export function classifyGenerationFailure(signals: FailureSignals): FailureClass
     case "GENERATION_CONTENT_FILTER":
       return { retryable: false, errorClass: "content_filter", summary };
     case "GENERATION_TRUNCATED":
-      return { retryable: false, errorClass: "generation_truncated", summary };
+      /**
+       * ⚠️ RETRYABLE BECAUSE RESUME CHANGES THE REQUEST. A resumed run skips
+       * verified completed batches and honours the manifest already persisted,
+       * so the truncated work is narrower — not the same oversized request
+       * repeated. The inline path still bounds this to one continuation and the
+       * worker to its existing attempt cap.
+       */
+      return { retryable: true, errorClass: "generation_truncated", summary };
     case "GENERATION_MALFORMED":
       return { retryable: false, errorClass: "generation_malformed", summary };
     case "GENERATION_INCOMPLETE":

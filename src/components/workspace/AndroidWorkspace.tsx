@@ -111,7 +111,8 @@ export function AndroidWorkspace({ project }: { project: VcaasProject }) {
   const [buildsOpen, setBuildsOpen] = useState(false);
   const [githubOpen, setGithubOpen] = useState(false);
   const [githubConnected, setGithubConnected] = useState(false);
-  const [mobileView, setMobileView] = useState<"preview" | "database" | "code" | "more">("preview");
+  const [mobileView, setMobileView] = useState<"preview" | "code" | "more">("preview");
+  const [moreSection, setMoreSection] = useState<"database" | "github">("database");
   const [codeSearch, setCodeSearch] = useState("");
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set([""]));
   const [downloading, setDownloading] = useState(false);
@@ -648,18 +649,14 @@ export function AndroidWorkspace({ project }: { project: VcaasProject }) {
               <Eye className="size-3.5" aria-hidden="true" />
               <span className="hidden sm:inline">Preview</span>
             </Button>
-            <Button type="button" variant={mobileView === "database" ? "default" : "outline"} size="sm" onClick={() => setMobileView("database")} className="h-8 gap-1.5 px-2.5" aria-label="Open Android workspace Database">
-              <DatabaseIcon className="size-3.5" aria-hidden="true" />
-              <span className="hidden sm:inline">Database</span>
+            <Button type="button" variant={mobileView === "more" ? "default" : "outline"} size="sm" onClick={() => setMobileView("more")} className="h-8 gap-1.5 px-2.5" aria-label="Open Android workspace More menu">
+              <LayoutGrid className="size-3.5" aria-hidden="true" />
+              <span className="hidden sm:inline">More</span>
             </Button>
             <Button type="button" variant={mobileView === "code" ? "default" : "outline"} size="sm" onClick={() => setMobileView("code")} className="h-8 gap-1.5 px-2.5" aria-label="Open Android Code Explorer">
               <Code2 className="size-3.5" aria-hidden="true" />
               <span className="hidden sm:inline">Code</span>
               {files?.length ? <span className="text-[10px] opacity-70">{files.length}</span> : null}
-            </Button>
-            <Button type="button" variant={mobileView === "more" ? "default" : "outline"} size="sm" onClick={() => setMobileView("more")} className="h-8 gap-1.5 px-2.5" aria-label="Open Android workspace More menu">
-              <LayoutGrid className="size-3.5" aria-hidden="true" />
-              <span className="hidden sm:inline">More</span>
             </Button>
             <Button type="button" variant="outline" size="icon" onClick={() => void loadFiles()} disabled={refreshing} className="size-8" aria-label="Refresh source files">
               <RefreshCw className={`size-3.5 ${refreshing ? "animate-spin" : ""}`} aria-hidden="true" />
@@ -671,18 +668,15 @@ export function AndroidWorkspace({ project }: { project: VcaasProject }) {
             ) : null}
           </div>
         </div>
-        <nav className="grid grid-cols-4 gap-1 border-t border-border p-1.5 md:hidden" aria-label="Workspace view">
+        <nav className="grid grid-cols-3 gap-1 border-t border-border p-1.5 md:hidden" aria-label="Workspace view">
           <button type="button" onClick={() => setMobileView("preview")} aria-pressed={mobileView === "preview"} className={`inline-flex h-9 items-center justify-center gap-1.5 rounded-md text-xs font-medium ${mobileView === "preview" ? "bg-muted text-foreground" : "text-muted-foreground"}`}>
             <Eye className="size-3.5" aria-hidden="true" /> Preview
           </button>
-          <button type="button" onClick={() => setMobileView("database")} aria-pressed={mobileView === "database"} className={`inline-flex h-9 items-center justify-center gap-1.5 rounded-md text-xs font-medium ${mobileView === "database" ? "bg-muted text-foreground" : "text-muted-foreground"}`}>
-            <DatabaseIcon className="size-3.5" aria-hidden="true" /> Database
+          <button type="button" onClick={() => setMobileView("more")} aria-pressed={mobileView === "more"} className={`inline-flex h-9 items-center justify-center gap-1.5 rounded-md text-xs font-medium ${mobileView === "more" ? "bg-muted text-foreground" : "text-muted-foreground"}`}>
+            <LayoutGrid className="size-3.5" aria-hidden="true" /> More
           </button>
           <button type="button" onClick={() => setMobileView("code")} aria-pressed={mobileView === "code"} className={`inline-flex h-9 items-center justify-center gap-1.5 rounded-md text-xs font-medium ${mobileView === "code" ? "bg-muted text-foreground" : "text-muted-foreground"}`}>
             <Code2 className="size-3.5" aria-hidden="true" /> Code
-          </button>
-          <button type="button" onClick={() => setMobileView("more")} aria-pressed={mobileView === "more"} className={`inline-flex h-9 items-center justify-center gap-1.5 rounded-md text-xs font-medium ${mobileView === "more" ? "bg-muted text-foreground" : "text-muted-foreground"}`}>
-            <LayoutGrid className="size-3.5" aria-hidden="true" /> More
           </button>
         </nav>
       </header>
@@ -798,7 +792,7 @@ export function AndroidWorkspace({ project }: { project: VcaasProject }) {
         </section>
 
         <section
-          aria-label={mobileView === "code" ? "Android Code Explorer" : mobileView === "database" ? "Android workspace Database" : mobileView === "more" ? "Android workspace More" : "Android app preview"}
+          aria-label={mobileView === "code" ? "Android Code Explorer" : mobileView === "more" ? "Android workspace More" : "Android app preview"}
           className="flex min-h-0 min-w-0 flex-1 flex-col bg-muted/40"
         >
           {mobileView === "preview" ? (
@@ -834,8 +828,6 @@ export function AndroidWorkspace({ project }: { project: VcaasProject }) {
                 </div>
               </div>
             </div>
-          ) : mobileView === "database" ? (
-            <DatabasePlaceholder />
           ) : mobileView === "code" ? (
             <div className="flex min-h-0 flex-1 flex-col bg-background">
               <div className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-3 sm:px-4">
@@ -922,20 +914,42 @@ export function AndroidWorkspace({ project }: { project: VcaasProject }) {
               </div>
             </div>
           ) : (
-            <div className="min-h-0 flex-1 overflow-y-auto bg-background p-4 sm:p-6">
-              <div className="mx-auto max-w-3xl">
-                <div className="mb-5 flex items-center gap-2">
-                  <LayoutGrid className="size-4 text-muted-foreground" />
-                  <h2 className="text-sm font-semibold">More</h2>
-                </div>
-                <button type="button" onClick={() => setGithubOpen(true)} className="flex w-full items-center gap-3 rounded-xl border border-border bg-card p-4 text-left transition-colors hover:bg-muted/50">
-                  <span className="flex size-10 items-center justify-center rounded-lg border border-border bg-background"><GitBranch className="size-5" /></span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block text-sm font-medium">GitHub</span>
-                    <span className="mt-0.5 block text-xs text-muted-foreground">{githubConnected ? "Connected repository and branches" : "Connect, push, or import source"}</span>
-                  </span>
-                  <ChevronRight className="size-4 text-muted-foreground" />
+            <div className="flex min-h-0 flex-1 flex-col bg-background md:flex-row">
+              <nav aria-label="Android More sections" className="flex shrink-0 gap-1 overflow-x-auto border-b border-border p-2 md:w-52 md:flex-col md:overflow-x-visible md:overflow-y-auto md:border-r md:border-b-0 md:p-3">
+                <button
+                  type="button"
+                  aria-current={moreSection === "database" ? "page" : undefined}
+                  onClick={() => setMoreSection("database")}
+                  className={`flex shrink-0 items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm whitespace-nowrap transition-colors ${moreSection === "database" ? "bg-secondary font-medium text-foreground" : "text-muted-foreground hover:bg-accent hover:text-foreground"}`}
+                >
+                  <DatabaseIcon className="size-4 shrink-0" aria-hidden="true" /> Database
                 </button>
+                <button
+                  type="button"
+                  aria-current={moreSection === "github" ? "page" : undefined}
+                  onClick={() => setMoreSection("github")}
+                  className={`flex shrink-0 items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm whitespace-nowrap transition-colors ${moreSection === "github" ? "bg-secondary font-medium text-foreground" : "text-muted-foreground hover:bg-accent hover:text-foreground"}`}
+                >
+                  <GitBranch className="size-4 shrink-0" aria-hidden="true" /> GitHub
+                </button>
+              </nav>
+              <div className="min-h-0 min-w-0 flex-1 overflow-y-auto">
+                {moreSection === "database" ? (
+                  <DatabasePlaceholder />
+                ) : (
+                  <div className="p-4 sm:p-6">
+                    <div className="mx-auto max-w-3xl">
+                      <button type="button" onClick={() => setGithubOpen(true)} className="flex w-full items-center gap-3 rounded-xl border border-border bg-card p-4 text-left transition-colors hover:bg-muted/50">
+                        <span className="flex size-10 items-center justify-center rounded-lg border border-border bg-background"><GitBranch className="size-5" /></span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-sm font-medium">GitHub</span>
+                          <span className="mt-0.5 block text-xs text-muted-foreground">{githubConnected ? "Connected repository and branches" : "Connect, push, or import source"}</span>
+                        </span>
+                        <ChevronRight className="size-4 text-muted-foreground" />
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           )}

@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { BrainIcon, ChartColumnIcon, CreditCardIcon, GaugeIcon, KeyIcon, SettingsIcon, WorkflowIcon } from "lucide-react";
+import { BrainIcon, ChartColumnIcon, CreditCardIcon, DatabaseIcon, GaugeIcon, KeyIcon, SettingsIcon, WorkflowIcon } from "lucide-react";
 import { InlineModals } from "@/components/primitives";
 import { useT } from "@/i18n";
 import type { TranslationKey } from "@/i18n/types";
@@ -9,10 +9,11 @@ import { cn } from "@/lib/utils";
 
 /** The v2 workspace "More" view: the project's sections in an aside, the chosen one in the main area. */
 /** This app adds the custom domain, which the platform keeps elsewhere in its workspace. */
-export type MoreSection = "analytics" | "usage" | "secrets" | "memory" | "workflow" | "integrations" | "payments" | "settings";
+export type MoreSection = "analytics" | "database" | "usage" | "secrets" | "memory" | "workflow" | "integrations" | "payments" | "settings";
 
 export const MORE_SECTIONS: { id: MoreSection; labelKey: TranslationKey; icon: typeof ChartColumnIcon }[] = [
     { id: "analytics", labelKey: "engineV2.analytics.open", icon: ChartColumnIcon },
+    { id: "database", labelKey: "workspace.tabs.database", icon: DatabaseIcon },
     { id: "usage", labelKey: "engineV2.usage.title", icon: GaugeIcon },
     { id: "secrets", labelKey: "workspace.actions.secrets", icon: KeyIcon },
     { id: "memory", labelKey: "engineV2.memory.title", icon: BrainIcon },

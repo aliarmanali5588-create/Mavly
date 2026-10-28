@@ -36,6 +36,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { chatCompletion } from "@/lib/ai/provider";
 import {
+  GENERATION_BUDGET_MS,
   generateApp,
   isGenerationFailure,
   requiredCreatePathsFor,
@@ -49,6 +50,13 @@ import {
   type AgentProviderAttempt,
   type AgentUsageTotals,
 } from "@/lib/ai/agent";
+import {
+  MAX_INLINE_RECOVERY_ATTEMPTS,
+  MIN_INLINE_RECOVERY_WINDOW_MS,
+  remainingRunMs,
+  runBudgetFor,
+  type RunBudget,
+} from "@/lib/ai/budget";
 import { androidPackageForProject } from "@/lib/android/contract";
 import {
   claimRun,
@@ -93,6 +101,7 @@ import {
 import { loadFigmaDesignContext } from "@/lib/integrations/figma/service";
 import {
   classifyGenerationFailure,
+  isInlineRecoverable,
   type FailureSignals,
 } from "@/lib/generation/state-machine";
 import { retryDelaySeconds, WORKER_LEASE_SECONDS } from "@/lib/generation/leases";
@@ -124,6 +133,12 @@ export interface RunAgentInput {
   requestedModel?: string | null;
   /** True when this is a resume/retry of an interrupted run. */
   resume?: boolean;
+  /**
+   * Total wall-clock budget for this invocation, including any bounded inline
+   * continuation. Defaults to the agent's `GENERATION_BUDGET_MS`; the durable
+   * worker leaves it unset because its lease already bounds the invocation.
+   */
+  budgetMs?: number;
   /** The durable worker context. Absent means the inline `after()` path. */
   worker?: WorkerRunContext;
 }
@@ -151,6 +166,10 @@ interface RunGuard {
   jobAttempt: number;
   maxAttempts: number;
   startedAtMs: number;
+  /** The one deadline shared by every pipeline stage of this invocation. */
+  budget: RunBudget;
+  /** Automatic inline continuations already used (never more than the cap). */
+  recoveryAttempts: number;
 }
 
 interface FailInput {
@@ -181,6 +200,15 @@ async function runInlineAgent(input: RunAgentInput): Promise<RunAgentOutcome> {
   }
 
   const run = claimed.data;
+  /**
+   * ⚠️ ONE BUDGET FOR CLAIM + RECOVERY. The inline path has no scheduler and no
+   * second lease: a continuation must fit inside the SAME wall-clock budget as
+   * the original attempt, and only one continuation is allowed.
+   */
+  const budget = runBudgetFor(
+    Date.now(),
+    Math.max(30_000, input.budgetMs ?? GENERATION_BUDGET_MS),
+  );
   const guard: RunGuard = {
     claimedAt: run.claimed_at ?? run.started_at,
     leaseToken: null,
@@ -188,36 +216,98 @@ async function runInlineAgent(input: RunAgentInput): Promise<RunAgentOutcome> {
     traceId: run.trace_id,
     workerId: null,
     jobAttempt: 1,
-    maxAttempts: 1,
-    startedAtMs: Date.now(),
+    maxAttempts: 1 + MAX_INLINE_RECOVERY_ATTEMPTS,
+    startedAtMs: budget.startedAtMs,
+    budget,
+    recoveryAttempts: 0,
   };
 
-  let outcome: RunAgentOutcome;
-  try {
-    outcome = await execute(input, run, guard);
-  } catch (error) {
-    if (error instanceof RunSupersededError || error instanceof RunLeaseLostError) {
-      // A newer attempt owns this run now; write nothing.
-      return { status: "skipped", runId: input.runId, reason: "superseded" };
-    }
-    if (error instanceof RunCancelledError) {
-      // The user's cancel is already terminal; do not overwrite it. The guarded
-      // update below is a no-op when the cancellation landed first.
-      await finishRun(input.runId, "cancelled", "The run was cancelled by the user.", {
-        stage: "cancelled",
-        errorCode: "RUN_CANCELLED",
-        ...guardPatch(guard),
+  /**
+   * ⚠️ BOUNDED, NOT AN UNBOUNDED LOOP. At most `MAX_INLINE_RECOVERY_ATTEMPTS`
+   * continuations are possible. `fail()` asks for one only for a recoverable
+   * class, while the attempt budget is unused, and when a real recovery window
+   * remains; otherwise it writes the terminal failure itself.
+   */
+  let outcome: RunAgentOutcome = {
+    status: "skipped",
+    runId: input.runId,
+    reason: "not_started",
+  };
+  let currentRun = run;
+
+  for (let attempt = 0; attempt <= MAX_INLINE_RECOVERY_ATTEMPTS; attempt += 1) {
+    guard.recoveryAttempts = attempt;
+    try {
+      outcome = await execute(
+        attempt === 0 ? input : { ...input, resume: true },
+        currentRun,
+        guard,
+      );
+    } catch (error) {
+      if (error instanceof RunSupersededError || error instanceof RunLeaseLostError) {
+        // A newer attempt owns this run now; write nothing.
+        outcome = { status: "skipped", runId: input.runId, reason: "superseded" };
+        break;
+      }
+      if (error instanceof RunCancelledError) {
+        // The user's cancel is already terminal; do not overwrite it. The guarded
+        // update below is a no-op when the cancellation landed first.
+        await finishRun(input.runId, "cancelled", "The run was cancelled by the user.", {
+          stage: "cancelled",
+          errorCode: "RUN_CANCELLED",
+          ...guardPatch(guard),
+        });
+        outcome = { status: "cancelled", runId: input.runId };
+        break;
+      }
+      const message = error instanceof Error ? error.message : String(error);
+      outcome = await fail(input, guard, {
+        message: `The agent run failed unexpectedly: ${message}`,
+        ...(error instanceof RunStoreError
+          ? { signals: { code: "GENERATION_PERSIST_FAILED" } }
+          : {}),
       });
-      return { status: "cancelled", runId: input.runId };
     }
-    const message = error instanceof Error ? error.message : String(error);
-    outcome = await fail(input, guard, {
-      message: `The agent run failed unexpectedly: ${message}`,
-      ...(error instanceof RunStoreError
-        ? { signals: { code: "GENERATION_PERSIST_FAILED" } }
-        : {}),
-    });
+
+    if (outcome.status !== "retry") break;
+
+    /**
+     * `fail` only asks for this when a real window remains. Re-check anyway so a
+     * slow failure path can never start a zero-length continuation, and finish
+     * honestly when the retry cannot actually be made.
+     */
+    const remaining = remainingRunMs(guard.budget, Date.now());
+    if (attempt >= MAX_INLINE_RECOVERY_ATTEMPTS || remaining < MIN_INLINE_RECOVERY_WINDOW_MS) {
+      guard.recoveryAttempts = MAX_INLINE_RECOVERY_ATTEMPTS;
+      outcome = await fail(input, guard, {
+        message:
+          "The run could not continue within its remaining time budget. Completed batches were saved and the run can be resumed.",
+        signals: { code: "GENERATION_TIMEOUT" },
+      });
+      break;
+    }
+
+    /**
+     * Re-read before continuing: this is the persisted manifest, checkpoint
+     * state and cancellation signal — not the row this invocation claimed.
+     */
+    const latest = await getRun(input.projectId, input.runId, guard.client);
+    if (isStoreFailure(latest)) {
+      outcome = { status: "skipped", runId: input.runId, reason: "recovery_unavailable" };
+      break;
+    }
+    if (!latest.data || latest.data.finished_at) {
+      outcome = { status: "skipped", runId: input.runId, reason: "already_finished" };
+      break;
+    }
+    if (latest.data.stage === "cancelled" || latest.data.cancellation_requested_at) {
+      outcome = { status: "cancelled", runId: input.runId };
+      break;
+    }
+
+    currentRun = latest.data;
   }
+
   await recordMemoryForOutcome(input, guard, outcome);
   return outcome;
 }
@@ -282,6 +372,15 @@ async function runWorkerAgent(
     jobAttempt: worker.jobAttempt,
     maxAttempts: worker.maxJobAttempts,
     startedAtMs: Date.now(),
+    /**
+     * The worker's existing lease + attempt machinery is the recovery budget;
+     * it never uses the inline continuation path.
+     */
+    budget: runBudgetFor(
+      Date.now(),
+      Math.max(30_000, input.budgetMs ?? GENERATION_BUDGET_MS),
+    ),
+    recoveryAttempts: MAX_INLINE_RECOVERY_ATTEMPTS,
   };
 
   let outcome: RunAgentOutcome;
@@ -742,6 +841,14 @@ async function execute(
     files: before,
   });
 
+  /**
+   * ⚠️ THE AGENT GETS WHAT IS LEFT, NOT A FRESH 240 s. Planning, Figma and the
+   * optional specialist calls have already consumed part of the invocation's
+   * budget; handing the pipeline the original number would let the run overshoot
+   * its own deadline (and, on inline recovery, its single permitted window).
+   */
+  const remainingBudgetMs = Math.max(0, remainingRunMs(guard.budget, Date.now()));
+
   const generated = await generateApp(
     {
       projectId: input.projectId,
@@ -750,6 +857,7 @@ async function execute(
       projectType,
       androidPackage,
       existingFiles: before,
+      budgetMs: remainingBudgetMs,
       ...(memory.used
         ? {
             contextFiles: memory.contextFiles,
@@ -1069,6 +1177,49 @@ async function fail(
   }
   if (classification.errorClass === "lease_lost") {
     return { status: "skipped", runId: input.runId, reason: "lease_lost" };
+  }
+
+  /**
+   * ── Inline: ONE bounded continuation, no scheduler ────────────────────────
+   *
+   * The inline `after()` path has no queue to wait on and no lease to renew, so
+   * a retry must happen immediately inside the same wall-clock budget. Only the
+   * classes that are expected to behave differently on an immediate retry are
+   * eligible (timeout, transient, truncation — where checkpoints narrow the
+   * work). Rate limits need a wait and persistence failures need a healthy
+   * store; both stay terminal here and remain resumable by the user or worker.
+   *
+   * ⚠️ NOTHING IS WRITTEN BEFORE THIS RETURN. No error message, no terminal
+   * state and no "partial source of a failed run" snapshot: the run has not
+   * failed yet, it is about to continue.
+   */
+  if (
+    !guard.leaseToken &&
+    classification.retryable &&
+    isInlineRecoverable(classification.errorClass) &&
+    guard.recoveryAttempts < MAX_INLINE_RECOVERY_ATTEMPTS &&
+    remainingRunMs(guard.budget, Date.now()) >= MIN_INLINE_RECOVERY_WINDOW_MS
+  ) {
+    console.warn(
+      `[mavly] agent run ${input.runId} will continue once inline (${classification.errorClass}).`,
+    );
+    emitGenerationEvent("generation.retry_scheduled", {
+      traceId: guard.traceId,
+      runId: input.runId,
+      projectId: input.projectId,
+      workerId: guard.workerId,
+      attempt: guard.recoveryAttempts + 1,
+      maxAttempts: MAX_INLINE_RECOVERY_ATTEMPTS,
+      errorClass: classification.errorClass,
+      reason: "inline_recovery",
+      retryAfterSeconds: 0,
+    });
+    return {
+      status: "retry",
+      runId: input.runId,
+      errorClass: classification.errorClass,
+      retryAfterSeconds: 0,
+    };
   }
 
   console.error(

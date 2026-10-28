@@ -79,6 +79,12 @@ import { createAndroidArtifactStore } from "@/lib/android/artifact-store";
 import { createSupabaseWorkerClient } from "@/lib/supabase/worker";
 import { validateProjectSlug } from "@/lib/project-slug";
 import { resolveStaticPreview } from "@/lib/static-site";
+import {
+  resolveGenerationState,
+  resolvePreviewState,
+  type PreviewRunSignal,
+  type PreviewState,
+} from "@/lib/preview-status";
 import { projectGenerationProgressStage } from "@/lib/run-progress";
 import {
   createGenerationJob,
@@ -893,7 +899,12 @@ async function projectResponse(userId: string, projectId: string): Promise<NextR
   if (isStoreFailure(run)) return fail(500, "UNKNOWN", "Could not load this project.");
   const preview =
     project.data.project_type === "android"
-      ? { available: false, reason: "Native Android projects do not have a web preview." }
+      ? {
+          available: false,
+          reason: "Native Android projects do not have a web preview.",
+          entryPath: null,
+          updatedAt: null,
+        }
       : await staticPreviewState(projectId);
   const deployment = await getDeploymentRow(projectId);
   const secrets = await secretsForProject(projectId, userId);
@@ -906,6 +917,9 @@ async function projectResponse(userId: string, projectId: string): Promise<NextR
       preview.reason,
       isDeploymentStoreFailure(deployment) ? null : deployment.data,
       secrets,
+      preview.entryPath && preview.updatedAt
+        ? { path: preview.entryPath, updatedAt: preview.updatedAt }
+        : null,
     ),
   );
 }
@@ -931,7 +945,12 @@ async function updateProjectResponse(userId: string, projectId: string, body: un
   const run = await latestRun(projectId);
   const preview =
     updated.data.project_type === "android"
-      ? { available: false, reason: "Native Android projects do not have a web preview." }
+      ? {
+          available: false,
+          reason: "Native Android projects do not have a web preview.",
+          entryPath: null,
+          updatedAt: null,
+        }
       : await staticPreviewState(projectId);
   const deployment = await getDeploymentRow(projectId);
   const secrets = await secretsForProject(projectId, userId);
@@ -943,6 +962,9 @@ async function updateProjectResponse(userId: string, projectId: string, body: un
       preview.reason,
       isDeploymentStoreFailure(deployment) ? null : deployment.data,
       secrets,
+      preview.entryPath && preview.updatedAt
+        ? { path: preview.entryPath, updatedAt: preview.updatedAt }
+        : null,
     ),
   );
 }
@@ -2801,17 +2823,32 @@ async function snapshotRestoreResponse(
   return ok(data);
 }
 
-async function staticPreviewState(
-  projectId: string,
-): Promise<{ available: boolean; reason: string | null }> {
+interface StaticPreviewState {
+  available: boolean;
+  reason: string | null;
+  /** The file the preview route will actually serve, when one exists. */
+  entryPath: string | null;
+  /** `project_files.updated_at` for that entry. */
+  updatedAt: string | null;
+}
+
+async function staticPreviewState(projectId: string): Promise<StaticPreviewState> {
   const files = await listFiles(projectId);
-  if (!files.ok) return { available: false, reason: null };
+  if (!files.ok) {
+    return { available: false, reason: null, entryPath: null, updatedAt: null };
+  }
   const resolved = resolveStaticPreview(
     files.data.map((file) => ({ path: file.path, content: file.content })),
   );
+  const entryPath = resolved.site?.entryPath ?? null;
+  const entry = entryPath
+    ? files.data.find((file) => file.path === entryPath) ?? null
+    : null;
   return {
     available: resolved.site !== null,
     reason: resolved.unsupported ? resolved.reason : null,
+    entryPath,
+    updatedAt: entry?.updated_at ?? null,
   };
 }
 
@@ -2822,9 +2859,31 @@ function projectFromRow(
   previewUnavailableReason: string | null,
   deployment: DeploymentRow | null,
   secrets: VcaasSecret[] = [],
+  previewEntry: { path: string; updatedAt: string } | null = null,
 ): VcaasProject {
   const previewPath = `/api/preview/${encodeURIComponent(row.project_id)}/`;
   const previewUrl = preview ? previewPath : null;
+  /**
+   * ⚠️ THE PREVIEW LABEL COMES FROM SAVED CONTENT AND THE DURABLE RUN, never
+   * from the presence of a URL. A failed run that left an older preview.html is
+   * "stale", not "ready"; no saved entry is "none"/"incomplete", not a blank
+   * frame pretending to be a site.
+   */
+  const runSignal: PreviewRunSignal | null = run
+    ? {
+        stage: run.stage,
+        status: run.status,
+        startedAt: run.started_at,
+        finishedAt: run.finished_at,
+        errorMessage: run.error_message,
+      }
+    : null;
+  const previewState: PreviewState = resolvePreviewState({
+    entry: previewEntry,
+    unavailableReason: previewUnavailableReason,
+    run: runSignal,
+  });
+  const generation = resolveGenerationState(runSignal);
   /**
    * `unpublished` is a recorded state, but it is not a deployment the workspace
    * should present as existing: there is no live site, no live URL and no
@@ -2862,7 +2921,15 @@ function projectFromRow(
     description: row.description,
     plan: "free",
     agentProcessStatus: isRunActive(run) ? "init" : run ? "done" : "idle",
-    agentServerStatus: "Active",
+    /**
+     * ⚠️ STATIC, NOT ACTIVE. There is no generated development server in Mavly:
+     * the preview route serves a saved HTML document. `"Active"` here was a
+     * hardcoded lie that let the workspace imply a live runtime (and HMR) that
+     * does not exist.
+     */
+    agentServerStatus: "Static",
+    previewState,
+    generation,
     createdAt: row.created_at,
     deployment: deploymentRecord
       ? {
