@@ -1,30 +1,137 @@
 "use client";
 
 import React from "react";
-import { Users, Banknote, Sparkles, Activity, TrendingUp, ArrowUpRight } from "lucide-react";
-import { MOCK_KPI_DATA } from "./mockData";
+import {
+  Activity,
+  ArrowDownRight,
+  ArrowUpRight,
+  Banknote,
+  RefreshCw,
+  Sparkles,
+  Users,
+} from "lucide-react";
 
-const ICON_MAP: Record<string, React.ElementType> = {
+import { percentChange } from "@/lib/admin/overview";
+import type { AdminOverviewPayload } from "@/lib/admin/types";
+
+const ICON_MAP = {
   users: Users,
   revenue: Banknote,
-  sparkles: Sparkles,
-  activity: Activity,
-};
+  generations: Sparkles,
+  rate: Activity,
+} as const;
 
-// Subtle sparklines for Tier-1 SaaS feel
-const SPARKLINE_DATA: Record<string, string> = {
-  kpi_1: "0,25 10,22 20,26 30,18 40,20 50,14 60,18 70,10 80,12 90,4 100,2",
-  kpi_2: "0,28 10,24 20,20 30,22 40,16 50,14 60,12 70,8 80,10 90,6 100,2",
-  kpi_3: "0,20 10,25 20,18 30,22 40,15 50,18 60,12 70,14 80,8 90,4 100,2",
-  kpi_4: "0,15 10,18 20,14 30,12 40,16 50,10 60,8 70,12 80,6 90,4 100,2",
-};
+const numberFormat = new Intl.NumberFormat("en-IN");
 
-export function KpiCards() {
+interface KpiCardsProps {
+  data: AdminOverviewPayload | null;
+  loading: boolean;
+  error: string | null;
+  onRetry: () => void;
+  periodLabel: string;
+}
+
+interface CardModel {
+  id: keyof typeof ICON_MAP;
+  title: string;
+  value: string;
+  context: string;
+  delta: number | null;
+  deltaSuffix: string;
+  muted?: boolean;
+}
+
+export function KpiCards({ data, loading, error, onRetry, periodLabel }: KpiCardsProps) {
+  if (loading && !data) return <KpiSkeletons />;
+
+  if (error && !data) {
+    return (
+      <div className="bg-white rounded-2xl p-5 border border-black/[0.08] shadow-[0_2px_8px_rgba(0,0,0,0.02)] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <p className="text-sm font-bold text-gray-950">Overview metrics are unavailable</p>
+          <p className="text-xs text-gray-500 mt-1">{error}</p>
+        </div>
+        <button
+          type="button"
+          onClick={onRetry}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-black/[0.1] text-xs font-semibold text-gray-800 hover:bg-gray-50"
+        >
+          <RefreshCw className="w-3.5 h-3.5" />
+          <span>Try again</span>
+        </button>
+      </div>
+    );
+  }
+
+  if (!data) return <KpiSkeletons />;
+
+  const rate = data.runs.successRate;
+  const previousRate = data.runs.previousSuccessRate;
+  const rateDelta =
+    rate !== null && previousRate !== null ? Math.round((rate - previousRate) * 10) / 10 : null;
+
+  const cards: CardModel[] = [
+    {
+      id: "users",
+      title: "Total Users",
+      value: numberFormat.format(data.users.total),
+      context: `${numberFormat.format(data.users.new)} registered in ${periodLabel} · all-time accounts`,
+      delta: percentChange(data.users.new, data.users.previousNew),
+      deltaSuffix: "vs previous period",
+    },
+    {
+      id: "revenue",
+      title: "Monthly Revenue",
+      value: "—",
+      context: "No Mavly billing source is configured",
+      delta: null,
+      deltaSuffix: "",
+      muted: true,
+    },
+    {
+      id: "generations",
+      title: "Successful Generations",
+      value: numberFormat.format(data.runs.completed),
+      context: `${numberFormat.format(data.runs.total)} runs started in ${periodLabel}`,
+      delta: percentChange(data.runs.completed, data.runs.previousCompleted),
+      deltaSuffix: "vs previous period",
+    },
+    {
+      id: "rate",
+      title: "Generation Success Rate",
+      value: rate === null ? "—" : `${rate.toFixed(1)}%`,
+      context:
+        rate === null
+          ? "No terminal runs in this period"
+          : `${numberFormat.format(data.runs.completed)} completed · ${numberFormat.format(
+              data.runs.failed + data.runs.cancelled + data.runs.interrupted
+            )} failed, cancelled or interrupted`,
+      delta: rateDelta,
+      deltaSuffix: "points vs previous period",
+    },
+  ];
+
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-      {MOCK_KPI_DATA.map((card) => {
-        const Icon = ICON_MAP[card.icon] || TrendingUp;
-        const sparkline = SPARKLINE_DATA[card.id] || "0,20 50,10 100,2";
+    <div className="space-y-3">
+      {error ? (
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-4 py-2.5 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-800">
+          <span>Showing the last successful refresh. {error}</span>
+          <button
+            type="button"
+            onClick={onRetry}
+            className="inline-flex items-center gap-1 font-semibold hover:underline self-start sm:self-auto"
+          >
+            <RefreshCw className="w-3 h-3" />
+            Retry
+          </button>
+        </div>
+      ) : null}
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      {cards.map((card) => {
+        const Icon = ICON_MAP[card.id];
+        const positive = card.delta !== null && card.delta > 0;
+        const negative = card.delta !== null && card.delta < 0;
 
         return (
           <div
@@ -33,50 +140,79 @@ export function KpiCards() {
           >
             <div>
               <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold text-gray-500 tracking-wide">
-                  {card.title}
-                </span>
+                <span className="text-xs font-semibold text-gray-500 tracking-wide">{card.title}</span>
                 <div className="p-2 rounded-xl bg-gray-50 border border-black/[0.04] text-gray-700 group-hover:bg-black group-hover:text-white transition-colors duration-200 shrink-0">
                   <Icon className="w-4 h-4" />
                 </div>
               </div>
 
               <div className="mt-2 flex items-baseline justify-between">
-                <h3 className="text-2xl sm:text-3xl font-extrabold text-gray-950 tracking-tight font-sans tabular-nums">
+                <h3
+                  className={`text-2xl sm:text-3xl font-extrabold tracking-tight font-sans tabular-nums ${
+                    card.muted ? "text-gray-400" : "text-gray-950"
+                  }`}
+                >
                   {card.value}
                 </h3>
               </div>
             </div>
 
-            {/* Bottom Row: Delta & Micro Sparkline */}
-            <div className="mt-4 pt-3 border-t border-black/[0.04] flex items-center justify-between gap-2">
+            <div className="mt-4 pt-3 border-t border-black/[0.04] flex flex-col gap-1">
               <div className="flex items-center gap-1.5">
-                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200/60 font-mono">
-                  <TrendingUp className="w-3 h-3 text-emerald-600" />
-                  <span>{card.change}</span>
-                </span>
-                <span className="text-[11px] text-gray-400 font-medium">
-                  {card.timeframe}
-                </span>
+                {card.delta !== null ? (
+                  <span
+                    className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[11px] font-bold border font-mono ${
+                      positive
+                        ? "bg-emerald-50 text-emerald-700 border-emerald-200/60"
+                        : negative
+                          ? "bg-rose-50 text-rose-700 border-rose-200/60"
+                          : "bg-gray-50 text-gray-600 border-gray-200"
+                    }`}
+                  >
+                    {positive ? (
+                      <ArrowUpRight className="w-3 h-3" />
+                    ) : negative ? (
+                      <ArrowDownRight className="w-3 h-3" />
+                    ) : null}
+                    <span>
+                      {card.delta > 0 ? "+" : ""}
+                      {card.delta}
+                      {card.id === "rate" ? " pts" : "%"}
+                    </span>
+                  </span>
+                ) : (
+                  <span className="text-[11px] font-bold font-mono text-gray-400">No comparable period</span>
+                )}
+                {card.deltaSuffix ? (
+                  <span className="text-[11px] text-gray-400 font-medium">{card.deltaSuffix}</span>
+                ) : null}
               </div>
-
-              {/* Inline SVG Sparkline */}
-              <div className="w-16 h-6 opacity-60 group-hover:opacity-100 transition-opacity">
-                <svg className="w-full h-full overflow-visible" viewBox="0 0 100 30">
-                  <polyline
-                    fill="none"
-                    stroke="#10b981"
-                    strokeWidth="2.5"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    points={sparkline}
-                  />
-                </svg>
-              </div>
+              <p className="text-[11px] text-gray-400 font-medium">{card.context}</p>
             </div>
           </div>
         );
       })}
+      </div>
+    </div>
+  );
+}
+
+function KpiSkeletons() {
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      {[0, 1, 2, 3].map((index) => (
+        <div
+          key={index}
+          className="bg-white rounded-2xl p-5 border border-black/[0.08] shadow-[0_2px_8px_rgba(0,0,0,0.02)] animate-pulse"
+        >
+          <div className="flex items-center justify-between">
+            <div className="h-3 w-24 rounded bg-gray-100" />
+            <div className="h-8 w-8 rounded-xl bg-gray-100" />
+          </div>
+          <div className="mt-4 h-8 w-28 rounded bg-gray-100" />
+          <div className="mt-4 pt-3 border-t border-black/[0.04] h-3 w-36 rounded bg-gray-100" />
+        </div>
+      ))}
     </div>
   );
 }

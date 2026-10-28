@@ -1,101 +1,325 @@
 "use client";
 
 import React from "react";
-import Link from "next/link";
-import { Cpu, Zap, CheckCircle2, AlertTriangle, Coins, ArrowRight } from "lucide-react";
+import { Activity, ArrowUpRight, Info } from "lucide-react";
+
+import { adminPeriodLabel } from "@/lib/admin/overview";
+import type { AdminOverviewPayload } from "@/lib/admin/types";
 import { MOCK_AI_MODEL_USAGE } from "./mockData";
 
-export function AiUsageSection() {
+/**
+ * Live mode binds the panel to `project_runs` aggregates. Tokens are the summed
+ * persisted `total_tokens`; cost is provider-reported USD only, never estimated
+ * from a rate card.
+ */
+export function AiUsageSection({
+  live = false,
+  data,
+  error = false,
+}: {
+  live?: boolean;
+  data?: AdminOverviewPayload | null;
+  error?: boolean;
+}) {
+  if (!live) return <DemoAiUsageSection />;
+  if (error) return <AiUsageUnavailable />;
+  if (!data) return <AiUsageSkeleton />;
+  return <LiveAiUsageSection data={data} />;
+}
+
+function LiveAiUsageSection({ data }: { data: AdminOverviewPayload }) {
+  const ai = data.ai;
+  const rows = ai.models;
+  const providerHealth = data.health.find((check) => check.id === "ai_provider");
+  const providerLabel =
+    providerHealth?.state === "not_configured"
+      ? "provider not configured"
+      : "provider configured; health is not probed";
+
   return (
-    <div className="bg-white rounded-2xl p-5 sm:p-6 border border-black/[0.08] shadow-[0_2px_8px_rgba(0,0,0,0.02)] space-y-6 flex flex-col justify-between">
-      {/* ── Top Metric Header ── */}
+    <div className="bg-white rounded-2xl p-5 sm:p-6 border border-black/[0.08] shadow-[0_2px_8px_rgba(0,0,0,0.02)] flex flex-col justify-between space-y-5">
+      {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-black/[0.06]">
         <div>
           <div className="flex items-center gap-2">
-            <div className="p-1.5 rounded-lg bg-purple-50 text-purple-700 border border-purple-200">
-              <Cpu className="w-4 h-4" />
+            <div className="p-1.5 rounded-lg bg-indigo-50 text-indigo-700 border border-indigo-200">
+              <Activity className="w-4 h-4" />
             </div>
-            <h2 className="text-base font-bold text-gray-950">AI Orchestration &amp; Compute</h2>
+            <h2 className="text-base font-bold text-gray-950">AI Orchestration & Compute</h2>
           </div>
           <p className="text-xs text-gray-500 mt-0.5">
-            Model token throughput and provider cost distribution
+            Runs recorded in this deployment · {adminPeriodLabel(data.period)}
           </p>
         </div>
 
-        <Link
-          href="/adminsh/ai-usage"
-          className="text-xs font-bold text-black hover:underline inline-flex items-center gap-1 self-start sm:self-auto"
-        >
-          <span>Deep Analytics</span>
-          <ArrowRight className="w-3.5 h-3.5" />
-        </Link>
-      </div>
-
-      {/* ── Summary Counters ── */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
-        <div className="p-3 rounded-xl bg-gray-50 border border-black/[0.04]">
-          <span className="text-[10px] font-bold uppercase text-gray-400 block">Total Requests</span>
-          <p className="text-base font-extrabold text-gray-950 mt-1 font-mono">1,42,500</p>
-        </div>
-        <div className="p-3 rounded-xl bg-gray-50 border border-black/[0.04]">
-          <span className="text-[10px] font-bold uppercase text-gray-400 block">Success Rate</span>
-          <p className="text-base font-extrabold text-emerald-700 mt-1 font-mono">99.6%</p>
-        </div>
-        <div className="p-3 rounded-xl bg-gray-50 border border-black/[0.04]">
-          <span className="text-[10px] font-bold uppercase text-gray-400 block">Total Tokens</span>
-          <p className="text-base font-extrabold text-gray-950 mt-1 font-mono">102.8M</p>
-        </div>
-        <div className="p-3 rounded-xl bg-gray-50 border border-black/[0.04]">
-          <span className="text-[10px] font-bold uppercase text-gray-400 block">Est. Cost</span>
-          <p className="text-base font-extrabold text-gray-950 mt-1 font-mono">₹1,02,800</p>
+        <div className="flex items-center gap-2">
+          <span className="px-2 py-1 text-[10px] font-bold tracking-wider uppercase bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-lg">
+            {ai.models.length} model{ai.models.length === 1 ? "" : "s"} with usage · {ai.providers.length}{" "}
+            provider{ai.providers.length === 1 ? "" : "s"}
+          </span>
+          <a
+            href="/adminsh/ai-usage"
+            className="px-2.5 py-1 text-[11px] font-bold text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors flex items-center gap-1"
+          >
+            <span>Deep Analytics</span>
+            <ArrowUpRight className="w-3 h-3" />
+          </a>
         </div>
       </div>
 
-      {/* ── Model Breakdown List ── */}
-      <div className="space-y-3 pt-1">
-        <div className="flex items-center justify-between text-[11px] font-bold uppercase tracking-wider text-gray-400">
-          <span>Active Provider Pool</span>
-          <span>Share</span>
-        </div>
+      {/* Stat row */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5">
+        <Stat label="Total Requests" value={ai.totalRequests.toLocaleString("en-IN")} />
+        <Stat
+          label="Success Rate"
+          value={ai.successRate === null ? "—" : `${ai.successRate}%`}
+          muted={ai.successRate === null}
+        />
+        <Stat
+          label="Total Tokens"
+          value={ai.tokens > 0 ? ai.tokens.toLocaleString("en-IN") : "None recorded"}
+          muted={ai.tokens === 0}
+          hint="Sum of persisted run token counts"
+        />
+        <Stat
+          label="Provider Cost"
+          value={ai.costKnownRuns > 0 ? `$${ai.costUsd.toFixed(2)}` : "Not recorded"}
+          muted={ai.costKnownRuns === 0}
+          hint="Provider-reported USD for runs where a cost was returned"
+        />
+      </div>
 
-        <div className="space-y-3">
-          {MOCK_AI_MODEL_USAGE.map((model) => (
+      {/* Provider/model rows */}
+      <div className="space-y-2.5">
+        {rows.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-black/[0.1] bg-gray-50/50 px-4 py-8 text-center">
+            <p className="text-sm font-semibold text-gray-800">No generation runs in {adminPeriodLabel(data.period)}</p>
+            <p className="text-xs text-gray-500 mt-1">Provider rows appear once real runs are recorded.</p>
+          </div>
+        ) : (
+          rows.map((row) => (
             <div
-              key={model.name}
-              className="p-3.5 rounded-xl border border-black/[0.06] bg-gray-50/60 hover:bg-white hover:border-black/20 transition-all space-y-2"
+              key={`${row.provider}/${row.model}`}
+              className="p-3.5 rounded-xl border border-black/[0.06] bg-gray-50/50 hover:bg-white hover:border-black/20 transition-all space-y-2"
             >
-              <div className="flex items-center justify-between text-xs">
-                <div className="flex items-center gap-2">
-                  <span className="font-bold text-gray-950">{model.name}</span>
-                  <span className="text-[10px] text-gray-400 font-mono">
-                    ({model.provider})
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="text-xs font-bold text-gray-950 truncate max-w-[220px]" title={row.label}>
+                    {row.label}
+                  </span>
+                  <span className="text-[10px] uppercase font-bold tracking-wider text-gray-500 bg-white border border-black/[0.08] px-1.5 py-0.5 rounded">
+                    {row.provider}
                   </span>
                 </div>
-                <div className="flex items-center gap-2 font-mono text-[11px]">
-                  <span className="text-gray-500">{model.tokens}</span>
-                  <span className="text-gray-300">·</span>
-                  <span className="font-bold text-gray-950">{model.cost}</span>
+                <div className="flex items-center gap-3 text-[11px] font-semibold text-gray-600 font-mono">
+                  <span>{row.requests.toLocaleString("en-IN")} req</span>
+                  <span>·</span>
+                  <span className="text-gray-400">
+                    {row.tokens > 0 ? `${row.tokens.toLocaleString("en-IN")} tok` : "no tokens"}
+                  </span>
+                  <span>·</span>
+                  <span className={row.successRate === null ? "text-gray-400" : "text-emerald-700"}>
+                    {row.successRate === null ? "—" : `${row.successRate}% ok`}
+                  </span>
+                  <span className="text-gray-300">|</span>
+                  <span className="text-gray-400">
+                    {row.costKnownRuns > 0 ? `$${row.costUsd.toFixed(2)}` : "cost n/a"}
+                  </span>
                 </div>
               </div>
 
-              {/* Share Meter */}
-              <div className="w-full h-1.5 rounded-full bg-gray-200 overflow-hidden">
+              <div className="w-full h-1.5 rounded-full bg-gray-200/70 overflow-hidden">
                 <div
-                  className="h-full bg-black rounded-full transition-all duration-500"
-                  style={{ width: `${model.share}%` }}
+                  className="h-full rounded-full bg-gray-900 transition-all duration-500"
+                  style={{ width: `${Math.max(row.sharePercent, row.requests > 0 ? 2 : 0)}%` }}
                 />
               </div>
 
-              <div className="flex items-center justify-between text-[10px] text-gray-400 font-medium">
-                <span>{model.requests} prompt jobs ({model.share}%)</span>
-                <span className="text-emerald-700 font-bold flex items-center gap-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                  {model.status}
+              <div className="flex flex-wrap items-center justify-between gap-1 text-[10px] text-gray-500 font-medium">
+                <span>{row.sharePercent}% of requests</span>
+                <span>
+                  {row.failed > 0 ? `${row.failed.toLocaleString("en-IN")} failed` : "No failed runs"}
+                  {row.active ? " · catalog model" : " · not in current catalog"}
                 </span>
               </div>
             </div>
-          ))}
+          ))
+        )}
+      </div>
+
+      <p className="text-[10px] text-gray-400 leading-relaxed flex items-start gap-1.5">
+        <Info className="w-3 h-3 mt-0.5 shrink-0" />
+        <span>
+          Requests count runs started in the period, including in-progress runs. Tokens are the
+          persisted provider totals; cost is provider-reported USD only and is never estimated from
+          a rate card. OpenRouter: {providerLabel}.
+        </span>
+      </p>
+    </div>
+  );
+}
+
+function Stat({
+  label,
+  value,
+  muted = false,
+  hint,
+}: {
+  label: string;
+  value: string;
+  muted?: boolean;
+  hint?: string;
+}) {
+  return (
+    <div className="p-3 rounded-xl bg-gray-50 border border-black/[0.05]">
+      <span className="text-[10px] uppercase font-bold tracking-wider text-gray-400 block">{label}</span>
+      <span
+        className={`text-sm font-extrabold font-mono ${muted ? "text-gray-400" : "text-gray-950"}`}
+        title={hint}
+      >
+        {value}
+      </span>
+    </div>
+  );
+}
+
+function AiUsageUnavailable() {
+  return (
+    <div className="bg-white rounded-2xl p-5 sm:p-6 border border-black/[0.08] shadow-[0_2px_8px_rgba(0,0,0,0.02)] space-y-4">
+      <div className="flex items-center gap-2">
+        <div className="p-1.5 rounded-lg bg-indigo-50 text-indigo-700 border border-indigo-200">
+          <Activity className="w-4 h-4" />
         </div>
+        <h2 className="text-base font-bold text-gray-950">AI Orchestration & Compute</h2>
+      </div>
+      <div className="rounded-xl border border-dashed border-black/[0.1] bg-gray-50/50 px-4 py-10 text-center">
+        <p className="text-sm font-semibold text-gray-800">Usage data is unavailable</p>
+        <p className="text-xs text-gray-500 mt-1">The admin aggregate could not be read. No metrics are shown.</p>
+      </div>
+    </div>
+  );
+}
+
+function AiUsageSkeleton() {
+  return (
+    <div className="bg-white rounded-2xl p-5 sm:p-6 border border-black/[0.08] shadow-[0_2px_8px_rgba(0,0,0,0.02)] space-y-4 animate-pulse">
+      <div className="h-4 w-56 rounded bg-gray-100" />
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5">
+        {Array.from({ length: 4 }).map((_, index) => (
+          <div key={index} className="h-16 rounded-xl bg-gray-50" />
+        ))}
+      </div>
+      <div className="h-24 rounded-xl bg-gray-50" />
+    </div>
+  );
+}
+
+function DemoAiUsageSection() {
+  const activeModels = MOCK_AI_MODEL_USAGE.filter((m) => m.status === "Healthy");
+
+  return (
+    <div className="bg-white rounded-2xl p-5 sm:p-6 border border-black/[0.08] shadow-[0_2px_8px_rgba(0,0,0,0.02)] flex flex-col justify-between space-y-5">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-black/[0.06]">
+        <div>
+          <div className="flex items-center gap-2">
+            <div className="p-1.5 rounded-lg bg-indigo-50 text-indigo-700 border border-indigo-200">
+              <Activity className="w-4 h-4" />
+            </div>
+            <h2 className="text-base font-bold text-gray-950">AI Orchestration & Compute</h2>
+          </div>
+          <p className="text-xs text-gray-500 mt-0.5">
+            Live token usage, latency, & provider pool health
+          </p>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <span className="px-2 py-1 text-[10px] font-bold tracking-wider uppercase bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-lg">
+            {activeModels.length} Active Models
+          </span>
+          <a
+            href="/adminsh/ai-usage"
+            className="px-2.5 py-1 text-[11px] font-bold text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors flex items-center gap-1"
+          >
+            <span>Deep Analytics</span>
+            <ArrowUpRight className="w-3 h-3" />
+          </a>
+        </div>
+      </div>
+
+      {/* Top Metrics Row */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5">
+        <div className="p-3 rounded-xl bg-gray-50 border border-black/[0.05]">
+          <span className="text-[10px] uppercase font-bold tracking-wider text-gray-400 block">
+            Total Prompts
+          </span>
+          <span className="text-base font-extrabold text-gray-950 font-mono">
+            1,42,500
+          </span>
+        </div>
+        <div className="p-3 rounded-xl bg-gray-50 border border-black/[0.05]">
+          <span className="text-[10px] uppercase font-bold tracking-wider text-gray-400 block">
+            Success Rate
+          </span>
+          <span className="text-base font-extrabold text-gray-950 font-mono">
+            97.9%
+          </span>
+        </div>
+        <div className="p-3 rounded-xl bg-gray-50 border border-black/[0.05]">
+          <span className="text-[10px] uppercase font-bold tracking-wider text-gray-400 block">
+            Tokens Spend
+          </span>
+          <span className="text-base font-extrabold text-gray-950 font-mono">
+            102.8M
+          </span>
+        </div>
+        <div className="p-3 rounded-xl bg-gray-50 border border-black/[0.05]">
+          <span className="text-[10px] uppercase font-bold tracking-wider text-gray-400 block">
+            Estimated Cost
+          </span>
+          <span className="text-base font-extrabold text-gray-950 font-mono">
+            ₹1,03,000
+          </span>
+        </div>
+      </div>
+
+      {/* Model Distribution List */}
+      <div className="space-y-2.5 pt-1">
+        {MOCK_AI_MODEL_USAGE.map((aiItem) => (
+          <div
+            key={aiItem.name}
+            className="p-3 rounded-xl border border-black/[0.06] bg-gray-50/50 hover:bg-white hover:border-black/20 transition-all space-y-1.5"
+          >
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="text-xs font-bold text-gray-950 truncate max-w-[240px]" title={aiItem.name}>
+                  {aiItem.name}
+                </span>
+                <span className="text-[10px] uppercase font-bold tracking-wider text-gray-500 bg-white border border-black/[0.08] px-1.5 py-0.5 rounded">
+                  {aiItem.provider}
+                </span>
+              </div>
+              <div className="flex items-center gap-3 text-[11px] font-semibold text-gray-600 font-mono">
+                <span>{aiItem.requests}</span>
+                <span>·</span>
+                <span>{aiItem.cost}</span>
+              </div>
+            </div>
+
+            {/* Share Progress Bar */}
+            <div className="w-full h-1.5 rounded-full bg-gray-200/70 overflow-hidden">
+              <div
+                className="h-full rounded-full bg-gray-900 transition-all duration-500"
+                style={{ width: `${aiItem.share}%` }}
+              />
+            </div>
+
+            <div className="flex items-center justify-between text-[10px] text-gray-400 font-medium">
+              <span>{aiItem.share}% of total traffic</span>
+              <span>{aiItem.avgLatency} latency</span>
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );

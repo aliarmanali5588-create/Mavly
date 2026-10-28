@@ -31,6 +31,16 @@ interface AdminSidebarProps {
   setActiveNav?: (nav: AdminNavSection) => void;
   isOpenMobile: boolean;
   setIsOpenMobile: (open: boolean) => void;
+  /** Overview passes live counts so no sidebar badge is a hardcoded metric. */
+  live?: boolean;
+  userCount?: number | null;
+  environment?: string;
+}
+
+function compactCount(value: number): string {
+  if (value >= 1_000_000) return `${Math.round(value / 100_000) / 10}m`;
+  if (value >= 1_000) return `${Math.round(value / 100) / 10}k`;
+  return String(value);
 }
 
 export interface NavItemConfig {
@@ -85,6 +95,9 @@ export function AdminSidebar({
   setActiveNav,
   isOpenMobile,
   setIsOpenMobile,
+  live = false,
+  userCount = null,
+  environment = "unknown",
 }: AdminSidebarProps) {
   const router = useRouter();
 
@@ -122,12 +135,12 @@ export function AdminSidebar({
                 Mavly Admin
               </span>
               <span className="px-1.5 py-0.5 text-[9px] font-mono font-bold tracking-wider uppercase bg-black text-white rounded">
-                PROD
+                {live ? environment : "PROD"}
               </span>
             </div>
             <p className="text-[10px] text-gray-400 font-medium truncate flex items-center gap-1 mt-0.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-              <span>Enterprise Console</span>
+              <span className={`w-1.5 h-1.5 rounded-full ${live ? "bg-gray-400" : "bg-emerald-500 animate-pulse"}`} />
+              <span>{live ? "Verified admin session" : "Enterprise Console"}</span>
             </p>
           </div>
         </Link>
@@ -154,6 +167,15 @@ export function AdminSidebar({
             {group.items.map((item) => {
               const Icon = item.icon;
               const isActive = activeNav === item.id;
+              const badge = live
+                ? item.id === "Users"
+                  ? userCount === null
+                    ? undefined
+                    : compactCount(userCount)
+                  : item.id === "System Health"
+                    ? undefined
+                    : item.badge
+                : item.badge;
 
               return (
                 <Link
@@ -178,7 +200,7 @@ export function AdminSidebar({
                     <span className="truncate">{item.label}</span>
                   </div>
 
-                  {item.badge ? (
+                  {badge ? (
                     <span
                       className={`px-1.5 py-0.5 text-[9px] font-mono font-bold rounded-md shrink-0 ml-1.5 ${
                         isActive
@@ -186,7 +208,7 @@ export function AdminSidebar({
                           : "bg-gray-100 text-gray-600 group-hover:bg-black/10"
                       }`}
                     >
-                      {item.badge}
+                      {badge}
                     </span>
                   ) : isActive ? (
                     <ChevronRight className="w-3.5 h-3.5 text-white/60 shrink-0" />
@@ -202,15 +224,17 @@ export function AdminSidebar({
       <div className="p-3 border-t border-black/[0.06] bg-gray-50/50 space-y-2">
         <div className="p-2.5 rounded-xl bg-white border border-black/[0.06] flex items-center gap-2.5 shadow-[0_1px_3px_rgba(0,0,0,0.02)]">
           <div className="w-8 h-8 rounded-full bg-black text-white flex items-center justify-center font-bold text-xs shrink-0">
-            SA
+            {live ? "AD" : "SA"}
           </div>
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-1.5">
-              <p className="text-xs font-bold text-gray-900 truncate">Super Admin</p>
+              <p className="text-xs font-bold text-gray-900 truncate">
+                {live ? "Administrator" : "Super Admin"}
+              </p>
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
             </div>
             <p className="text-[10px] text-gray-400 font-mono truncate">
-              aitoolkitguide@gmail.com
+              {live ? "Session verified server-side" : "aitoolkitguide@gmail.com"}
             </p>
           </div>
         </div>

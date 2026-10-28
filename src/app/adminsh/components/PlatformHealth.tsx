@@ -1,10 +1,199 @@
 "use client";
 
 import React from "react";
-import { Server, CheckCircle2, ShieldCheck, Activity } from "lucide-react";
+import {
+  Activity,
+  AlertTriangle,
+  CheckCircle2,
+  HelpCircle,
+  Server,
+  ShieldQuestion,
+  XCircle,
+} from "lucide-react";
+
+import { adminPeriodLabel } from "@/lib/admin/overview";
+import type { AdminHealthCheckRow, AdminOverviewPayload } from "@/lib/admin/types";
 import { MOCK_SYSTEM_HEALTH } from "./mockData";
 
-export function PlatformHealth() {
+const STATE_STYLES: Record<
+  AdminHealthCheckRow["state"],
+  { label: string; pill: string; icon: React.ReactNode }
+> = {
+  operational: {
+    label: "Operational",
+    pill: "text-emerald-700 bg-emerald-50 border-emerald-200",
+    icon: <CheckCircle2 className="w-3 h-3" />,
+  },
+  degraded: {
+    label: "Degraded",
+    pill: "text-amber-700 bg-amber-50 border-amber-200",
+    icon: <AlertTriangle className="w-3 h-3" />,
+  },
+  down: {
+    label: "Down",
+    pill: "text-red-700 bg-red-50 border-red-200",
+    icon: <XCircle className="w-3 h-3" />,
+  },
+  not_configured: {
+    label: "Not configured",
+    pill: "text-gray-600 bg-gray-100 border-gray-200",
+    icon: <ShieldQuestion className="w-3 h-3" />,
+  },
+  unknown: {
+    label: "Unknown",
+    pill: "text-gray-600 bg-gray-100 border-gray-200",
+    icon: <HelpCircle className="w-3 h-3" />,
+  },
+};
+
+/**
+ * Live mode renders bounded server-side checks from `/api/adminsh/overview`.
+ * No historical uptime exists, so uptime is never claimed; latency is shown only
+ * when the check actually measured it.
+ */
+export function PlatformHealth({
+  live = false,
+  data,
+  error = false,
+}: {
+  live?: boolean;
+  data?: AdminOverviewPayload | null;
+  error?: boolean;
+}) {
+  if (!live) return <DemoPlatformHealth />;
+  if (error) return <HealthUnavailable />;
+  if (!data) return <HealthSkeleton />;
+  return <LivePlatformHealth data={data} />;
+}
+
+function LivePlatformHealth({ data }: { data: AdminOverviewPayload }) {
+  const checks = data.health;
+  const measured = checks.filter((row) => row.state === "operational");
+  const problems = checks.filter((row) => row.state === "degraded" || row.state === "down");
+
+  const summary =
+    problems.length > 0
+      ? `${problems.length} service${problems.length === 1 ? "" : "s"} need attention`
+      : `${measured.length} of ${checks.length} configured checks operational`;
+
+  return (
+    <div className="bg-white rounded-2xl p-5 sm:p-6 border border-black/[0.08] shadow-[0_4px_20px_rgba(0,0,0,0.02)] space-y-4">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-black/[0.06]">
+        <div>
+          <div className="flex items-center gap-2">
+            <div className="p-1.5 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200">
+              <Server className="w-4 h-4" />
+            </div>
+            <h2 className="text-base font-bold text-gray-950">Platform Health & Infrastructure</h2>
+          </div>
+          <p className="text-xs text-gray-500 mt-1">
+            Bounded checks executed for this request · {adminPeriodLabel(data.period)} data context
+          </p>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <span
+            className={`px-2.5 py-1 text-[10px] font-bold tracking-wider uppercase rounded-lg border flex items-center gap-1.5 ${
+              problems.length > 0
+                ? "bg-amber-50 text-amber-700 border-amber-200"
+                : "bg-emerald-50 text-emerald-700 border-emerald-200"
+            }`}
+          >
+            <Activity className="w-3.5 h-3.5" />
+            <span>{summary}</span>
+          </span>
+          <span className="px-2 py-1 text-[10px] font-bold tracking-wider uppercase bg-gray-100 text-gray-500 rounded-lg">
+            Live checks
+          </span>
+        </div>
+      </div>
+
+      {/* Grid of Health Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        {checks.map((check) => {
+          const style = STATE_STYLES[check.state];
+          return (
+            <div
+              key={check.id}
+              className="p-4 rounded-xl border border-black/[0.06] bg-gray-50/50 hover:bg-white hover:border-black/20 transition-all space-y-2"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs font-bold text-gray-950">{check.label}</span>
+                <span
+                  className={`inline-flex items-center gap-1 text-[11px] font-semibold border px-2 py-0.5 rounded-full ${style.pill}`}
+                >
+                  {style.icon}
+                  {style.label}
+                </span>
+              </div>
+
+              <p className="text-[11px] text-gray-500 leading-snug">{check.description}</p>
+
+              {check.detail ? (
+                <p className="text-[10px] text-gray-600 leading-snug font-medium break-words">
+                  {check.detail}
+                </p>
+              ) : null}
+
+              <div className="pt-2 border-t border-black/[0.04] flex items-center justify-between text-[10px] text-gray-400 font-medium">
+                <span>
+                  Uptime: <strong className="text-gray-500">Not measured</strong>
+                </span>
+                <span className="flex items-center gap-1">
+                  <Activity className="w-3 h-3 text-gray-400" />
+                  Latency:{" "}
+                  <strong className="text-gray-800">
+                    {check.latencyMs === null ? "—" : `${check.latencyMs} ms`}
+                  </strong>
+                </span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <p className="text-[10px] text-gray-400 leading-relaxed">
+        Checks are executed server-side with strict timeouts and never expose hostnames, credentials or
+        internal URLs. Historical uptime percentages are not tracked by this application.
+      </p>
+    </div>
+  );
+}
+
+function HealthUnavailable() {
+  return (
+    <div className="bg-white rounded-2xl p-5 sm:p-6 border border-black/[0.08] shadow-[0_4px_20px_rgba(0,0,0,0.02)] space-y-4">
+      <div className="flex items-center gap-2">
+        <div className="p-1.5 rounded-lg bg-gray-100 text-gray-600 border border-gray-200">
+          <Server className="w-4 h-4" />
+        </div>
+        <h2 className="text-base font-bold text-gray-950">Platform Health & Infrastructure</h2>
+      </div>
+      <div className="rounded-xl border border-dashed border-black/[0.1] bg-gray-50/50 px-4 py-10 text-center">
+        <p className="text-sm font-semibold text-gray-800">Health checks are unavailable</p>
+        <p className="text-xs text-gray-500 mt-1">
+          The status endpoint could not be read. Services are not assumed healthy.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function HealthSkeleton() {
+  return (
+    <div className="bg-white rounded-2xl p-5 sm:p-6 border border-black/[0.08] shadow-[0_4px_20px_rgba(0,0,0,0.02)] space-y-4 animate-pulse">
+      <div className="h-4 w-64 rounded bg-gray-100" />
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        {Array.from({ length: 6 }).map((_, index) => (
+          <div key={index} className="h-24 rounded-xl bg-gray-50" />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function DemoPlatformHealth() {
   return (
     <div className="bg-white rounded-2xl p-5 sm:p-6 border border-black/[0.08] shadow-[0_4px_20px_rgba(0,0,0,0.02)] space-y-4">
       {/* Header */}
@@ -23,7 +212,7 @@ export function PlatformHealth() {
 
         <div className="flex items-center gap-2">
           <span className="px-2.5 py-1 text-[10px] font-bold tracking-wider uppercase bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg flex items-center gap-1.5">
-            <ShieldCheck className="w-3.5 h-3.5" />
+            <CheckCircle2 className="w-3.5 h-3.5" />
             <span>All Systems Operational</span>
           </span>
           <span className="px-2 py-1 text-[10px] font-bold tracking-wider uppercase bg-gray-100 text-gray-500 rounded-lg">
@@ -47,9 +236,7 @@ export function PlatformHealth() {
               </span>
             </div>
 
-            <p className="text-[11px] text-gray-500 leading-snug">
-              {srv.description}
-            </p>
+            <p className="text-[11px] text-gray-500 leading-snug">{srv.description}</p>
 
             <div className="pt-2 border-t border-black/[0.04] flex items-center justify-between text-[10px] text-gray-400 font-medium">
               <span>

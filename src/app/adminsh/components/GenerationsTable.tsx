@@ -1,67 +1,124 @@
 "use client";
 
-import React, { useState } from "react";
+import React from "react";
 import Link from "next/link";
-import { Sparkles, Search, RotateCcw, Terminal, Filter, ArrowRight, X, Clock } from "lucide-react";
-import { toast } from "sonner";
-import { MOCK_GENERATIONS } from "./mockData";
-import { GenerationRecord } from "./types";
+import {
+  ArrowRight,
+  Clock,
+  RefreshCw,
+  Search,
+  Sparkles,
+  Terminal,
+  X,
+} from "lucide-react";
 
+import { formatDuration, generationStatusLabel } from "@/lib/admin/overview";
+import type { AdminGenerationFilter, AdminGenerationRow } from "@/lib/admin/types";
+import { useAdminGenerations, useDebouncedValue } from "./useAdminLiveData";
+
+const PAGE_SIZE = 10;
+
+const FILTERS: ReadonlyArray<{ id: Exclude<AdminGenerationFilter, "queued">; label: string }> = [
+  { id: "all", label: "All" },
+  { id: "completed", label: "Completed" },
+  { id: "running", label: "Running" },
+  { id: "failed", label: "Failed" },
+];
+
+const timestampFormat = new Intl.DateTimeFormat("en-IN", {
+  dateStyle: "medium",
+  timeStyle: "short",
+});
+
+function formatTimestamp(value: string | null): string {
+  if (!value) return "—";
+  const parsed = Date.parse(value);
+  if (!Number.isFinite(parsed)) return "—";
+  return timestampFormat.format(new Date(parsed));
+}
+
+function StatusBadge({ status }: { status: AdminGenerationRow["status"] }) {
+  const styles: Record<AdminGenerationRow["status"], string> = {
+    completed: "bg-emerald-50 text-emerald-700 border-emerald-200",
+    running: "bg-blue-50 text-blue-700 border-blue-200",
+    queued: "bg-amber-50 text-amber-700 border-amber-200",
+    failed: "bg-red-50 text-red-700 border-red-200",
+    cancelled: "bg-gray-100 text-gray-600 border-gray-200",
+    interrupted: "bg-gray-100 text-gray-600 border-gray-200",
+  };
+  const dots: Record<AdminGenerationRow["status"], string> = {
+    completed: "bg-emerald-500",
+    running: "bg-blue-500 animate-pulse",
+    queued: "bg-amber-500",
+    failed: "bg-red-500",
+    cancelled: "bg-gray-400",
+    interrupted: "bg-gray-400",
+  };
+
+  return (
+    <span
+      className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-semibold border ${styles[status]}`}
+    >
+      <span className={`w-1.5 h-1.5 rounded-full ${dots[status]}`} />
+      {generationStatusLabel(status)}
+    </span>
+  );
+}
+
+/**
+ * Live generation stream. Search, status filtering and pagination run in SQL
+ * (`admin_generation_stream`); nothing is filtered from a fully fetched table.
+ * There is no admin-authorized retry endpoint in this repository, so no retry
+ * control is rendered rather than faking one.
+ */
 export function GenerationsTable() {
-  const [searchQuery, setSearchQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState<string>("All");
-  const [selectedGen, setSelectedGen] = useState<GenerationRecord | null>(null);
+  const [searchInput, setSearchInput] = React.useState("");
+  const search = useDebouncedValue(searchInput.trim(), 350);
+  const [status, setStatus] = React.useState<Exclude<AdminGenerationFilter, "queued">>("all");
+  const [page, setPage] = React.useState(0);
+  const [selected, setSelected] = React.useState<AdminGenerationRow | null>(null);
+  // `Date.now()` during SSR would differ from the client render; running-job
+  // durations are therefore shown only after mount. Finished jobs use persisted
+  // timestamps and are deterministic.
+  const [now, setNow] = React.useState<number | null>(null);
 
-  const filteredGenerations = MOCK_GENERATIONS.filter((gen) => {
-    const matchesSearch =
-      gen.project.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      gen.owner.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      gen.model.toLowerCase().includes(searchQuery.toLowerCase());
+  React.useEffect(() => {
+    setPage(0);
+  }, [search, status]);
 
-    const matchesStatus =
-      statusFilter === "All" || gen.status === statusFilter;
+  React.useEffect(() => {
+    setNow(Date.now());
+    const timer = setInterval(() => setNow(Date.now()), 30_000);
+    return () => clearInterval(timer);
+  }, []);
 
-    return matchesSearch && matchesStatus;
+  const { data, loading, error, refresh } = useAdminGenerations({
+    status,
+    search,
+    page,
+    pageSize: PAGE_SIZE,
   });
 
-  const getStatusBadge = (status: GenerationRecord["status"]) => {
-    switch (status) {
-      case "Completed":
-        return (
-          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-            Completed
-          </span>
-        );
-      case "Running":
-        return (
-          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-blue-50 text-blue-700 border border-blue-200">
-            <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
-            Running
-          </span>
-        );
-      case "Failed":
-        return (
-          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-red-50 text-red-700 border border-red-200">
-            <span className="w-1.5 h-1.5 rounded-full bg-red-500" />
-            Failed
-          </span>
-        );
-      case "Queued":
-        return (
-          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">
-            <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
-            Queued
-          </span>
-        );
-    }
-  };
+  // Bounded polling only while the tab is visible; the interval is cleared on
+  // unmount and never stacks because `refresh` is stable.
+  React.useEffect(() => {
+    const timer = setInterval(() => {
+      if (document.visibilityState === "visible") refresh();
+    }, 30_000);
+    return () => clearInterval(timer);
+  }, [refresh]);
 
-  const handleRerun = (project: string) => {
-    toast.info(`Triggered mock re-run for "${project}"`, {
-      description: "Frontend simulation updated.",
-    });
-  };
+  const rows = data?.rows ?? [];
+  const total = data?.total ?? 0;
+  const start = total === 0 ? 0 : (data?.offset ?? 0) + 1;
+  const end = Math.min((data?.offset ?? 0) + rows.length, total);
+
+  const durationFor = (run: AdminGenerationRow): string =>
+    run.finishedAt
+      ? formatDuration(run.startedAt, run.finishedAt)
+      : now === null
+        ? "—"
+        : formatDuration(run.startedAt, null, now);
 
   return (
     <div className="bg-white rounded-2xl p-5 sm:p-6 border border-black/[0.08] shadow-[0_2px_8px_rgba(0,0,0,0.02)] space-y-4">
@@ -75,17 +132,29 @@ export function GenerationsTable() {
             <h2 className="text-base font-bold text-gray-950">Generation Operations Stream</h2>
           </div>
           <p className="text-xs text-gray-500 mt-0.5">
-            Active and completed AI prompt compilation runs
+            Durable generation runs across all projects · live records
           </p>
         </div>
 
-        <Link
-          href="/adminsh/generation-monitor"
-          className="text-xs font-bold text-black hover:underline inline-flex items-center gap-1 self-start sm:self-auto"
-        >
-          <span>Open Full Monitor</span>
-          <ArrowRight className="w-3.5 h-3.5" />
-        </Link>
+        <div className="flex items-center gap-3 self-start sm:self-auto">
+          <button
+            type="button"
+            onClick={refresh}
+            disabled={loading}
+            className="inline-flex items-center gap-1 text-[11px] font-semibold text-gray-600 hover:text-black disabled:opacity-40"
+            title="Refresh run list"
+          >
+            <RefreshCw className={`w-3 h-3 ${loading ? "animate-spin" : ""}`} />
+            <span>Refresh</span>
+          </button>
+          <Link
+            href="/adminsh/generation-monitor"
+            className="text-xs font-bold text-black hover:underline inline-flex items-center gap-1"
+          >
+            <span>Open Full Monitor</span>
+            <ArrowRight className="w-3.5 h-3.5" />
+          </Link>
+        </div>
       </div>
 
       {/* ── Filter & Search Toolbar ── */}
@@ -95,25 +164,25 @@ export function GenerationsTable() {
           <input
             type="text"
             placeholder="Search by project, owner, or model..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            value={searchInput}
+            onChange={(event) => setSearchInput(event.target.value)}
             className="w-full h-8 pl-8 pr-3 text-xs rounded-xl bg-gray-50 border border-black/[0.08] focus:bg-white focus:outline-none focus:ring-2 focus:ring-black text-gray-900 placeholder:text-gray-400"
           />
         </div>
 
         <div className="flex items-center gap-1 bg-gray-50 p-1 rounded-xl border border-black/[0.06] text-xs">
-          {["All", "Completed", "Running", "Failed"].map((status) => (
+          {FILTERS.map((filter) => (
             <button
-              key={status}
+              key={filter.id}
               type="button"
-              onClick={() => setStatusFilter(status)}
+              onClick={() => setStatus(filter.id)}
               className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all cursor-pointer ${
-                statusFilter === status
+                status === filter.id
                   ? "bg-white text-black shadow-xs font-bold"
                   : "text-gray-500 hover:text-black"
               }`}
             >
-              {status}
+              {filter.label}
             </button>
           ))}
         </div>
@@ -134,49 +203,75 @@ export function GenerationsTable() {
             </tr>
           </thead>
           <tbody className="divide-y divide-black/[0.04]">
-            {filteredGenerations.length === 0 ? (
+            {error ? (
+              <tr>
+                <td colSpan={7} className="py-8 text-center">
+                  <p className="text-xs font-semibold text-gray-800">The generation stream is unavailable</p>
+                  <p className="text-[11px] text-gray-500 mt-1">{error}</p>
+                  <button
+                    type="button"
+                    onClick={refresh}
+                    className="mt-2 inline-flex items-center gap-1 text-[11px] font-semibold text-gray-700 hover:text-black"
+                  >
+                    <RefreshCw className="w-3 h-3" />
+                    Try again
+                  </button>
+                </td>
+              </tr>
+            ) : loading && rows.length === 0 ? (
+              Array.from({ length: 4 }).map((_, index) => (
+                <tr key={index} className="animate-pulse">
+                  {Array.from({ length: 7 }).map((__, cell) => (
+                    <td key={cell} className="py-3 px-4">
+                      <div className="h-3 rounded bg-gray-100" />
+                    </td>
+                  ))}
+                </tr>
+              ))
+            ) : rows.length === 0 ? (
               <tr>
                 <td colSpan={7} className="py-8 text-center text-gray-400">
-                  No generation records match your filter criteria.
+                  No generation records match the current search and status filter.
                 </td>
               </tr>
             ) : (
-              filteredGenerations.map((gen) => (
-                <tr key={gen.id} className="hover:bg-gray-50/60 transition-colors">
-                  <td className="py-2.5 px-4 font-bold text-gray-950 max-w-[200px] truncate">
-                    {gen.project}
+              rows.map((run) => (
+                <tr key={run.id} className="hover:bg-gray-50/60 transition-colors">
+                  <td className="py-2.5 px-4 max-w-[200px]">
+                    <p className="font-bold text-gray-950 truncate" title={run.projectLabel ?? run.projectId}>
+                      {run.projectLabel ?? run.projectId}
+                    </p>
+                    <p className="text-[10px] text-gray-400 font-mono truncate">{run.projectId}</p>
                   </td>
-                  <td className="py-2.5 px-4 text-gray-600 max-w-[160px] truncate">
-                    {gen.owner}
+                  <td className="py-2.5 px-4 text-gray-600 max-w-[160px]">
+                    <p className="truncate">{run.ownerName}</p>
+                    {run.ownerEmail ? (
+                      <p className="text-[10px] text-gray-400 truncate">{run.ownerEmail}</p>
+                    ) : null}
                   </td>
-                  <td className="py-2.5 px-4 font-mono text-[11px] text-gray-700">
-                    {gen.model}
+                  <td className="py-2.5 px-4 font-mono text-[11px] text-gray-700 max-w-[180px] truncate">
+                    {run.model}
                   </td>
-                  <td className="py-2.5 px-4">{getStatusBadge(gen.status)}</td>
-                  <td className="py-2.5 px-4 font-mono text-gray-600">{gen.duration}</td>
+                  <td className="py-2.5 px-4">
+                    <StatusBadge status={run.status} />
+                  </td>
+                  <td className="py-2.5 px-4 font-mono text-gray-600">
+                    {durationFor(run)}
+                  </td>
                   <td className="py-2.5 px-4 text-gray-400 whitespace-nowrap">
-                    {gen.createdAt}
+                    <span className="inline-flex items-center gap-1">
+                      <Clock className="w-3 h-3" />
+                      {now === null ? "—" : formatTimestamp(run.startedAt)}
+                    </span>
                   </td>
                   <td className="py-2.5 px-4 text-right">
-                    <div className="flex items-center justify-end gap-1.5">
-                      <button
-                        type="button"
-                        onClick={() => setSelectedGen(gen)}
-                        className="px-2 py-1 rounded-lg text-[11px] font-semibold text-gray-700 bg-gray-100 hover:bg-gray-200 transition-colors"
-                      >
-                        Inspect
-                      </button>
-                      {gen.status === "Failed" && (
-                        <button
-                          type="button"
-                          onClick={() => handleRerun(gen.project)}
-                          className="p-1 rounded-lg text-rose-600 hover:bg-rose-50 transition-colors"
-                          title="Retry Generation"
-                        >
-                          <RotateCcw className="w-3.5 h-3.5" />
-                        </button>
-                      )}
-                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setSelected(run)}
+                      className="px-2 py-1 rounded-lg text-[11px] font-semibold text-gray-700 bg-gray-100 hover:bg-gray-200 transition-colors"
+                    >
+                      Inspect
+                    </button>
                   </td>
                 </tr>
               ))
@@ -185,53 +280,88 @@ export function GenerationsTable() {
         </table>
       </div>
 
-      {/* ── Inspection Modal ── */}
-      {selectedGen && (
+      {/* ── Pagination ── */}
+      <div className="flex items-center justify-between text-[11px] text-gray-500">
+        <span>{loading ? "Loading…" : total === 0 ? "No records" : `${start}–${end} of ${total}`}</span>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setPage((current) => Math.max(0, current - 1))}
+            disabled={page === 0 || loading}
+            className="px-2.5 py-1 rounded-lg border border-black/[0.08] font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            Previous
+          </button>
+          <button
+            type="button"
+            onClick={() => setPage((current) => current + 1)}
+            disabled={loading || end >= total}
+            className="px-2.5 py-1 rounded-lg border border-black/[0.08] font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            Next
+          </button>
+        </div>
+      </div>
+
+      {/* ── Inspection Modal (metadata only) ── */}
+      {selected ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-in fade-in">
           <div className="w-full max-w-lg bg-white rounded-2xl border border-black/[0.08] shadow-2xl p-6 space-y-4">
             <div className="flex items-center justify-between pb-3 border-b border-black/[0.06]">
-              <div>
-                <h3 className="text-base font-bold text-gray-950">{selectedGen.project}</h3>
-                <p className="text-xs text-gray-400 font-mono">Job ID: {selectedGen.id}</p>
+              <div className="min-w-0">
+                <h3 className="text-base font-bold text-gray-950 truncate">
+                  {selected.projectLabel ?? selected.projectId}
+                </h3>
+                <p className="text-xs text-gray-400 font-mono truncate">Run ID: {selected.id}</p>
               </div>
               <button
                 type="button"
-                onClick={() => setSelectedGen(null)}
+                onClick={() => setSelected(null)}
                 className="p-1 text-gray-400 hover:text-black rounded-lg hover:bg-black/5"
+                aria-label="Close inspection"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            <div className="space-y-3 text-xs bg-gray-50 p-4 rounded-xl border border-black/[0.04]">
-              <div className="flex justify-between">
-                <span className="text-gray-500">Status:</span>
-                <span>{getStatusBadge(selectedGen.status)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-500">Owner:</span>
-                <span className="font-semibold text-gray-900">{selectedGen.owner}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-500">Model Engine:</span>
-                <span className="font-mono text-gray-800">{selectedGen.model}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-500">Duration:</span>
-                <span className="font-mono text-gray-800">{selectedGen.duration}</span>
-              </div>
-              <div className="pt-2 border-t border-black/[0.04]">
-                <span className="text-gray-500 block mb-1 font-bold">Prompt Snippet:</span>
-                <p className="bg-white p-2.5 rounded-lg border border-black/[0.06] text-gray-800 font-mono text-[11px]">
-                  {selectedGen.promptSnippet || "Generate a modern responsive website with hero, features, and pricing."}
-                </p>
-              </div>
+            <div className="space-y-2.5 text-xs bg-gray-50 p-4 rounded-xl border border-black/[0.04]">
+              <Detail label="Status" value={<StatusBadge status={selected.status} />} />
+              <Detail label="Stage" value={<span className="font-mono">{selected.stage}</span>} />
+              <Detail label="Owner" value={selected.ownerName} />
+              {selected.ownerEmail ? <Detail label="Owner email" value={selected.ownerEmail} /> : null}
+              <Detail label="Project" value={<span className="font-mono">{selected.projectId}</span>} />
+              <Detail label="Model" value={<span className="font-mono">{selected.model}</span>} />
+              <Detail
+                label="Duration"
+                value={<span className="font-mono">{durationFor(selected)}</span>}
+              />
+              <Detail label="Started" value={formatTimestamp(selected.startedAt)} />
+              <Detail label="Finished" value={formatTimestamp(selected.finishedAt)} />
+              <Detail
+                label="Attempts"
+                value={selected.attempts === null ? "—" : String(selected.attempts)}
+              />
+              <Detail
+                label="Tokens"
+                value={selected.tokens === null ? "Not recorded" : selected.tokens.toLocaleString("en-IN")}
+              />
+              {selected.errorCode ? (
+                <Detail label="Error code" value={<span className="font-mono">{selected.errorCode}</span>} />
+              ) : null}
             </div>
 
-            <div className="flex justify-end pt-2">
+            <p className="text-[10px] text-gray-400 flex items-start gap-1.5">
+              <Terminal className="w-3 h-3 mt-0.5 shrink-0" />
+              <span>
+                Metadata only. Prompt text and generated files stay with the project owner. No admin
+                retry endpoint exists in this build, so retry is not offered here.
+              </span>
+            </p>
+
+            <div className="flex justify-end pt-1">
               <button
                 type="button"
-                onClick={() => setSelectedGen(null)}
+                onClick={() => setSelected(null)}
                 className="mavly-btn-secondary px-4 py-2 text-xs font-semibold"
               >
                 Close
@@ -239,7 +369,16 @@ export function GenerationsTable() {
             </div>
           </div>
         </div>
-      )}
+      ) : null}
+    </div>
+  );
+}
+
+function Detail({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div className="flex items-start justify-between gap-4">
+      <span className="text-gray-500 shrink-0">{label}:</span>
+      <span className="font-semibold text-gray-900 text-right min-w-0 break-words">{value}</span>
     </div>
   );
 }

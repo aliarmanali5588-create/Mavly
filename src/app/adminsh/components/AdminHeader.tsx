@@ -4,75 +4,63 @@ import React, { useState } from "react";
 import {
   Bell,
   Menu,
-  ChevronDown,
-  Calendar,
-  Sparkles,
-  CheckCircle2,
-  AlertCircle,
   X,
-  Search,
-  Activity,
   Layers,
   ShieldCheck,
+  ShieldQuestion,
 } from "lucide-react";
 import { toast } from "sonner";
+
+import { ADMIN_PERIODS, type AdminPeriod } from "@/lib/admin/overview";
 import { AdminNavSection } from "./types";
 
 interface AdminHeaderProps {
   activeNav: AdminNavSection;
   onOpenMobileSidebar: () => void;
+  /**
+   * Live mode is used by the Overview page: the period selector is controlled
+   * by the page, and status/environment reflect measured/configured values.
+   * Other admin pages keep the original demo header.
+   */
+  live?: boolean;
+  period?: AdminPeriod;
+  onPeriodChange?: (period: AdminPeriod) => void;
+  statusSummary?: string;
+  statusTone?: "ok" | "warn" | "unknown";
+  environment?: string;
 }
 
-const SECTION_DESCRIPTIONS: Record<AdminNavSection, string> = {
-  Overview: "Real-time platform telemetry, MRR performance, and active generation traffic.",
-  Users: "Manage registered user accounts, workspace memberships, and tier entitlements.",
-  "Billing & Revenue": "Track subscription revenue, invoice settlement, and payment performance.",
-  "AI Usage & Cost": "Monitor token consumption, provider latency, and model margin economics.",
-  "Generation Monitor": "Live telemetry of active, queued, and completed project build workers.",
-  Projects: "Overview of all generated project sandboxes, repositories, and custom domains.",
-  Credits: "Manage credit ledger transactions, allowance pools, and adjustment grants.",
-  Announcements: "Broadcast global announcements and operational notice banners to users.",
-  "System Health": "Real-time service health, server uptime SLAs, and database connection metrics.",
-  "Audit Logs": "Cryptographic security audit trail of operator actions and system mutations.",
-  Settings: "Configure global system defaults, models, regional currency, and security policies.",
+const STATUS_DOT: Record<NonNullable<AdminHeaderProps["statusTone"]>, string> = {
+  ok: "bg-emerald-500",
+  warn: "bg-amber-500",
+  unknown: "bg-gray-400",
+};
+
+const STATUS_TEXT: Record<NonNullable<AdminHeaderProps["statusTone"]>, string> = {
+  ok: "text-emerald-700",
+  warn: "text-amber-700",
+  unknown: "text-gray-500",
 };
 
 export function AdminHeader({
   activeNav,
   onOpenMobileSidebar,
+  live = false,
+  period = "30d",
+  onPeriodChange,
+  statusSummary = "Status unavailable",
+  statusTone = "unknown",
+  environment = "unknown",
 }: AdminHeaderProps) {
   const [timeRange, setTimeRange] = useState("30D");
   const [showNotifications, setShowNotifications] = useState(false);
-  const [unreadCount, setUnreadCount] = useState(2);
-
-  const notifications = [
-    {
-      id: "n1",
-      title: "Model Spike Detected",
-      time: "10m ago",
-      desc: "DeepSeek V4.1 usage increased by +24% across builder prompt queues.",
-      icon: Sparkles,
-      color: "text-amber-500",
-    },
-    {
-      id: "n2",
-      title: "Automated Backup Completed",
-      time: "1h ago",
-      desc: "Daily PostgreSQL database snapshot successfully verified and encrypted.",
-      icon: CheckCircle2,
-      color: "text-emerald-500",
-    },
-    {
-      id: "n3",
-      title: "Generation Timeout Alert",
-      time: "2h ago",
-      desc: "1 project build job timed out and was automatically compensated.",
-      icon: AlertCircle,
-      color: "text-red-500",
-    },
-  ];
 
   const handleTimeChange = (range: string) => {
+    if (live) {
+      const match = ADMIN_PERIODS.find((entry) => entry.label === range);
+      if (match) onPeriodChange?.(match.id);
+      return;
+    }
     setTimeRange(range);
     toast.success(`Filter updated: ${range}`, { duration: 1200 });
   };
@@ -97,9 +85,12 @@ export function AdminHeader({
             <span>/</span>
             <span className="text-gray-900 font-semibold">{activeNav}</span>
             <span className="hidden sm:inline-block">·</span>
-            <span className="hidden sm:inline-flex items-center gap-1 text-emerald-600 font-semibold">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-              <span>99.98% Operational</span>
+            <span
+              className={`hidden sm:inline-flex items-center gap-1 font-semibold ${STATUS_TEXT[statusTone]}`}
+              title={live ? "Measured/configured service state" : undefined}
+            >
+              <span className={`w-1.5 h-1.5 rounded-full ${STATUS_DOT[statusTone]}`} />
+              <span>{live ? statusSummary : "99.98% Operational"}</span>
             </span>
           </div>
 
@@ -112,36 +103,40 @@ export function AdminHeader({
       {/* ── Right: Refined Segmented Time Selector & Profile Controls ── */}
       <div className="flex items-center gap-2 sm:gap-3">
         {/* Segmented Time Range Selector */}
-        <div className="hidden sm:flex items-center p-1 rounded-xl bg-gray-100/80 border border-black/[0.06] text-xs font-semibold text-gray-600">
-          {["7D", "30D", "3M", "YTD"].map((opt) => (
-            <button
-              key={opt}
-              type="button"
-              onClick={() => handleTimeChange(opt)}
-              className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${
-                timeRange === opt
-                  ? "bg-white text-gray-950 shadow-xs font-bold"
-                  : "hover:text-black"
-              }`}
-            >
-              {opt}
-            </button>
-          ))}
+        <div
+          className="hidden sm:flex items-center p-1 rounded-xl bg-gray-100/80 border border-black/[0.06] text-xs font-semibold text-gray-600"
+          role="group"
+          aria-label="Dashboard period"
+        >
+          {ADMIN_PERIODS.map((option) => {
+            const selected = live ? period === option.id : timeRange === option.label;
+            return (
+              <button
+                key={option.id}
+                type="button"
+                onClick={() => handleTimeChange(option.label)}
+                aria-pressed={selected}
+                title={option.description}
+                className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${
+                  selected ? "bg-white text-gray-950 shadow-xs font-bold" : "hover:text-black"
+                }`}
+              >
+                {option.label}
+              </button>
+            );
+          })}
         </div>
 
         {/* Notifications Popover Trigger */}
         <div className="relative">
           <button
             type="button"
-            onClick={() => {
-              setShowNotifications(!showNotifications);
-              if (unreadCount > 0) setUnreadCount(0);
-            }}
+            onClick={() => setShowNotifications(!showNotifications)}
             className="relative p-2 rounded-xl text-gray-600 hover:text-black hover:bg-black/5 transition-colors cursor-pointer"
             aria-label="Notifications"
           >
             <Bell className="w-4 h-4" />
-            {unreadCount > 0 ? (
+            {!live ? (
               <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-rose-500 ring-2 ring-white" />
             ) : null}
           </button>
@@ -151,54 +146,65 @@ export function AdminHeader({
               <div className="flex items-center justify-between pb-3 border-b border-black/[0.06] mb-3">
                 <div className="flex items-center gap-2">
                   <h3 className="text-xs font-bold text-gray-950">System Notifications</h3>
-                  <span className="px-1.5 py-0.5 text-[9px] font-mono font-bold bg-black text-white rounded">
-                    3
-                  </span>
+                  {!live ? (
+                    <span className="px-1.5 py-0.5 text-[9px] font-mono font-bold bg-black text-white rounded">
+                      3
+                    </span>
+                  ) : null}
                 </div>
                 <button
                   type="button"
                   onClick={() => setShowNotifications(false)}
                   className="p-1 text-gray-400 hover:text-black rounded-lg hover:bg-black/5"
+                  aria-label="Close notifications"
                 >
                   <X className="w-3.5 h-3.5" />
                 </button>
               </div>
 
-              <div className="space-y-2">
-                {notifications.map((n) => {
-                  const Icon = n.icon;
-                  return (
+              {live ? (
+                <div className="py-6 text-center space-y-1">
+                  <ShieldQuestion className="w-5 h-5 text-gray-400 mx-auto" />
+                  <p className="text-xs font-semibold text-gray-800">Notifications are unavailable</p>
+                  <p className="text-[11px] text-gray-500 leading-relaxed px-4">
+                    This deployment has no notification store. No alerts are fabricated.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {[
+                    {
+                      title: "Model Spike Detected",
+                      time: "10m ago",
+                      desc: "DeepSeek V4.1 usage increased by +24% across builder prompt queues.",
+                    },
+                    {
+                      title: "Automated Backup Completed",
+                      time: "1h ago",
+                      desc: "Daily PostgreSQL database snapshot successfully verified and encrypted.",
+                    },
+                    {
+                      title: "Generation Timeout Alert",
+                      time: "2h ago",
+                      desc: "1 project build job timed out and was automatically compensated.",
+                    },
+                  ].map((n) => (
                     <div
-                      key={n.id}
+                      key={n.title}
                       className="p-2.5 rounded-xl bg-gray-50/80 hover:bg-gray-100/80 transition-colors flex items-start gap-2.5"
                     >
-                      <Icon className={`w-4 h-4 shrink-0 mt-0.5 ${n.color}`} />
+                      <Layers className="w-4 h-4 shrink-0 mt-0.5 text-gray-400" />
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center justify-between">
                           <p className="text-xs font-semibold text-gray-900">{n.title}</p>
                           <span className="text-[10px] text-gray-400 font-mono">{n.time}</span>
                         </div>
-                        <p className="text-[11px] text-gray-500 mt-0.5 leading-snug">
-                          {n.desc}
-                        </p>
+                        <p className="text-[11px] text-gray-500 mt-0.5 leading-snug">{n.desc}</p>
                       </div>
                     </div>
-                  );
-                })}
-              </div>
-
-              <div className="mt-3 pt-2.5 border-t border-black/[0.06] text-center">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowNotifications(false);
-                    toast.success("All notifications cleared");
-                  }}
-                  className="text-[11px] font-semibold text-gray-500 hover:text-black cursor-pointer"
-                >
-                  Mark all as acknowledged
-                </button>
-              </div>
+                  ))}
+                </div>
+              )}
             </div>
           ) : null}
         </div>
@@ -206,7 +212,7 @@ export function AdminHeader({
         {/* Environment Badge Pill */}
         <div className="hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-gray-50 border border-black/[0.06] text-[10px] font-bold text-gray-700">
           <ShieldCheck className="w-3.5 h-3.5 text-gray-500" />
-          <span>PRODUCTION</span>
+          <span className="uppercase">{live ? environment : "PRODUCTION"}</span>
         </div>
       </div>
     </header>

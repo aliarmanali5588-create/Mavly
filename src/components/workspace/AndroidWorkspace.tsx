@@ -110,7 +110,7 @@ export function AndroidWorkspace({ project }: { project: VcaasProject }) {
   const [buildsOpen, setBuildsOpen] = useState(false);
   const [githubOpen, setGithubOpen] = useState(false);
   const [githubConnected, setGithubConnected] = useState(false);
-  const [mobileView, setMobileView] = useState<"chat" | "preview" | "code" | "more">("chat");
+  const [mobileView, setMobileView] = useState<"preview" | "code" | "more">("preview");
   const [codeSearch, setCodeSearch] = useState("");
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set([""]));
   const [downloading, setDownloading] = useState(false);
@@ -643,6 +643,10 @@ export function AndroidWorkspace({ project }: { project: VcaasProject }) {
               <Smartphone className="size-3.5" aria-hidden="true" />
               <span className="hidden sm:inline">Builds</span>
             </Button>
+            <Button type="button" variant={mobileView === "preview" ? "default" : "outline"} size="sm" onClick={() => setMobileView("preview")} className="h-8 gap-1.5 px-2.5" aria-label="Open Android app preview">
+              <Eye className="size-3.5" aria-hidden="true" />
+              <span className="hidden sm:inline">Preview</span>
+            </Button>
             <Button type="button" variant={mobileView === "code" ? "default" : "outline"} size="sm" onClick={() => setMobileView("code")} className="h-8 gap-1.5 px-2.5" aria-label="Open Android Code Explorer">
               <Code2 className="size-3.5" aria-hidden="true" />
               <span className="hidden sm:inline">Code</span>
@@ -662,10 +666,7 @@ export function AndroidWorkspace({ project }: { project: VcaasProject }) {
             ) : null}
           </div>
         </div>
-        <nav className="grid grid-cols-4 gap-1 border-t border-border p-1.5 md:hidden" aria-label="Workspace view">
-          <button type="button" onClick={() => setMobileView("chat")} aria-pressed={mobileView === "chat"} className={`inline-flex h-9 items-center justify-center gap-1.5 rounded-md text-xs font-medium ${mobileView === "chat" ? "bg-muted text-foreground" : "text-muted-foreground"}`}>
-            <MessageSquare className="size-3.5" aria-hidden="true" /> Chat
-          </button>
+        <nav className="grid grid-cols-3 gap-1 border-t border-border p-1.5 md:hidden" aria-label="Workspace view">
           <button type="button" onClick={() => setMobileView("preview")} aria-pressed={mobileView === "preview"} className={`inline-flex h-9 items-center justify-center gap-1.5 rounded-md text-xs font-medium ${mobileView === "preview" ? "bg-muted text-foreground" : "text-muted-foreground"}`}>
             <Eye className="size-3.5" aria-hidden="true" /> Preview
           </button>
@@ -678,8 +679,8 @@ export function AndroidWorkspace({ project }: { project: VcaasProject }) {
         </nav>
       </header>
 
-      <div className="flex min-h-0 flex-1">
-        <section aria-label="AI chat" className={`${mobileView === "chat" ? "flex" : "hidden"} min-h-0 w-full flex-col border-r border-border bg-background md:w-[40%] lg:w-[38%] ${(mobileView === "chat" || mobileView === "preview") ? "md:flex" : "md:hidden"}`}>
+      <div className="flex min-h-0 flex-1 flex-col md:flex-row">
+        <section aria-label="AI chat" className="flex h-[42%] min-h-0 w-full shrink-0 flex-col border-b border-border bg-background md:h-auto md:w-[40%] md:border-b-0 md:border-r lg:w-[38%]">
           <div className="flex h-12 shrink-0 items-center justify-between border-b border-border px-4">
             <div className="flex items-center gap-2">
               <Bot className="size-4 text-muted-foreground" aria-hidden="true" />
@@ -790,14 +791,14 @@ export function AndroidWorkspace({ project }: { project: VcaasProject }) {
 
         <section
           aria-label={mobileView === "code" ? "Android Code Explorer" : mobileView === "more" ? "Android workspace More" : "Android app preview"}
-          className={`${mobileView === "chat" ? "hidden" : "flex"} min-h-0 w-full flex-col bg-muted/40 md:flex md:flex-1`}
+          className="flex min-h-0 min-w-0 flex-1 flex-col bg-muted/40"
         >
-          {(mobileView === "chat" || mobileView === "preview") ? (
+          {mobileView === "preview" ? (
             <div className="flex min-h-0 flex-1 flex-col items-center justify-center overflow-hidden px-4 py-4 sm:px-8">
               <div
                 className="relative flex aspect-[9/19.5] w-auto min-h-0 max-h-full max-w-[420px] flex-col overflow-hidden rounded-[2.8rem] border-[7px] border-neutral-800 bg-neutral-900 p-1.5 shadow-2xl ring-1 ring-black/10"
                 style={{
-                  height: "min(860px, calc(100dvh - 104px), calc(100% - 32px))",
+                  height: "min(860px, calc(100% - 32px))",
                   maxWidth: "min(420px, calc(100% - 32px))",
                 }}
               >
