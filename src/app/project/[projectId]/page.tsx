@@ -9,7 +9,7 @@ import {
   Rocket, Loader2, Eye, LayoutGrid, Key, Globe,
   RefreshCw, Server, PanelLeftClose, PanelLeft, Monitor, Smartphone,
   ExternalLink, Sparkles, ChevronDown, FolderOpen, Plus,
-  Clock, Github, Code2, ArrowLeft, Figma, Copy,
+  Clock, Github, Code2, ArrowLeft, Figma, Copy, DatabaseIcon,
 } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
@@ -20,6 +20,7 @@ import { PreviewPanel } from "@/components/workspace/PreviewPanel";
 import { useRunProgress } from "@/components/workspace/RunActivity";
 import { isRunOver } from "@/lib/run-progress";
 import { WorkspaceMore } from "@/components/workspace/v2/WorkspaceMore";
+import { DatabasePlaceholder } from "@/components/workspace/DatabasePlaceholder";
 import { V2Banner } from "@/components/workspace/v2/V2Banner";
 import { CodePanel, invalidateCodeCache } from "@/components/workspace/CodePanel";
 import { VersionsModal } from "@/components/workspace/VersionsModal";
@@ -333,6 +334,7 @@ export default function WorkspacePage() {
 
   const TABS = [
     { id: "preview", label: "Preview", icon: Eye },
+    { id: "database", label: "Database", icon: DatabaseIcon },
     { id: "more", label: translate("more.tab"), icon: LayoutGrid },
     { id: "code", label: "Code", icon: Code2 },
   ];
@@ -1775,6 +1777,7 @@ export default function WorkspacePage() {
             )}
             <div className={`flex-1 min-h-0 overflow-hidden ${activeTab === "preview" ? "rounded-none" : "m-2 sm:m-3 rounded-xl shadow-sm"}`} style={{ background: cardBg }}>
               {activeTab === "preview" && <PreviewPanel key={previewKey} previewUrl={shownPreviewUrl} cached={previewCached} onRefresh={() => { fetchProject(); setPreviewKey((k) => k + 1); }} loading={showInitialGenerationLoader} buildStage={buildStage} buildRetrying={buildRetrying} previewReady={previewReady} emptyMessage={project?.previewUnavailableReason} mobilePreview={mobilePreview} iframePath={iframePath} frameRef={previewFrameRef} /* ⭐ Same-origin ONLY while the editor is open — and for the length of an apply, which outlives the panel: dropping the proxy mid-apply would reload the frame and throw away the preview-only edits the user is watching. */ proxiedSrc={visualEditorOpen || visualLocked ? `/api/preview/${encodeURIComponent(projectId)}` : null} />}
+              {activeTab === "database" && <DatabasePlaceholder />}
               {activeTab === "code" && <CodePanel key={`${projectId}:${sourceRevision}`} projectId={projectId} sourceRevision={sourceRevision} darkMode={darkMode} onAskAiEdit={handleAskAiEdit} wake={serverWake} />}
               {activeTab === "more" && <WorkspaceMore project={project} onProjectChanged={() => void fetchProject()}  />}
             </div>
@@ -1872,6 +1875,7 @@ export default function WorkspacePage() {
           ) : (
             <div className="h-full min-h-0 overflow-hidden">
               {activeTab === "preview" && <PreviewPanel key={previewKey} previewUrl={shownPreviewUrl} cached={previewCached} onRefresh={() => { fetchProject(); setPreviewKey((k) => k + 1); }} loading={showInitialGenerationLoader} buildStage={buildStage} buildRetrying={buildRetrying} previewReady={previewReady} emptyMessage={project?.previewUnavailableReason} mobilePreview={false} iframePath={iframePath} />}
+              {activeTab === "database" && <DatabasePlaceholder />}
               {activeTab === "code" && <CodePanel key={`${projectId}:${sourceRevision}`} projectId={projectId} sourceRevision={sourceRevision} darkMode={darkMode} onAskAiEdit={handleAskAiEdit} wake={serverWake} />}
               {activeTab === "more" && <WorkspaceMore project={project} onProjectChanged={() => void fetchProject()}  />}
             </div>

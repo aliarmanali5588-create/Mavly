@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState, useMemo, type ReactNode } fro
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import {
-  AlertCircle, ArrowLeft, Bot, Check, ChevronDown, ChevronRight, Code2, Download, Eye,
+  AlertCircle, ArrowLeft, Bot, Check, ChevronDown, ChevronRight, Code2, DatabaseIcon, Download, Eye,
   FileCode2, Folder, FolderOpen, GitBranch, LayoutGrid, Loader2, MessageSquare,
   RefreshCw, Search, Send, Smartphone, User,
 } from "lucide-react";
@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { vcaasApi } from "@/lib/vcaas";
 import { CreditsIndicator } from "@/components/workspace/CreditsIndicator";
+import { DatabasePlaceholder } from "@/components/workspace/DatabasePlaceholder";
 import { GithubModal } from "@/components/workspace/GithubModal";
 import { silenceMonacoDiagnostics } from "@/lib/monaco-diagnostics";
 import { PremiumAiActivity, type ActivityChecklistStage } from "@/components/workspace/GenerationProgressVisuals";
@@ -110,7 +111,7 @@ export function AndroidWorkspace({ project }: { project: VcaasProject }) {
   const [buildsOpen, setBuildsOpen] = useState(false);
   const [githubOpen, setGithubOpen] = useState(false);
   const [githubConnected, setGithubConnected] = useState(false);
-  const [mobileView, setMobileView] = useState<"preview" | "code" | "more">("preview");
+  const [mobileView, setMobileView] = useState<"preview" | "database" | "code" | "more">("preview");
   const [codeSearch, setCodeSearch] = useState("");
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set([""]));
   const [downloading, setDownloading] = useState(false);
@@ -647,6 +648,10 @@ export function AndroidWorkspace({ project }: { project: VcaasProject }) {
               <Eye className="size-3.5" aria-hidden="true" />
               <span className="hidden sm:inline">Preview</span>
             </Button>
+            <Button type="button" variant={mobileView === "database" ? "default" : "outline"} size="sm" onClick={() => setMobileView("database")} className="h-8 gap-1.5 px-2.5" aria-label="Open Android workspace Database">
+              <DatabaseIcon className="size-3.5" aria-hidden="true" />
+              <span className="hidden sm:inline">Database</span>
+            </Button>
             <Button type="button" variant={mobileView === "code" ? "default" : "outline"} size="sm" onClick={() => setMobileView("code")} className="h-8 gap-1.5 px-2.5" aria-label="Open Android Code Explorer">
               <Code2 className="size-3.5" aria-hidden="true" />
               <span className="hidden sm:inline">Code</span>
@@ -666,9 +671,12 @@ export function AndroidWorkspace({ project }: { project: VcaasProject }) {
             ) : null}
           </div>
         </div>
-        <nav className="grid grid-cols-3 gap-1 border-t border-border p-1.5 md:hidden" aria-label="Workspace view">
+        <nav className="grid grid-cols-4 gap-1 border-t border-border p-1.5 md:hidden" aria-label="Workspace view">
           <button type="button" onClick={() => setMobileView("preview")} aria-pressed={mobileView === "preview"} className={`inline-flex h-9 items-center justify-center gap-1.5 rounded-md text-xs font-medium ${mobileView === "preview" ? "bg-muted text-foreground" : "text-muted-foreground"}`}>
             <Eye className="size-3.5" aria-hidden="true" /> Preview
+          </button>
+          <button type="button" onClick={() => setMobileView("database")} aria-pressed={mobileView === "database"} className={`inline-flex h-9 items-center justify-center gap-1.5 rounded-md text-xs font-medium ${mobileView === "database" ? "bg-muted text-foreground" : "text-muted-foreground"}`}>
+            <DatabaseIcon className="size-3.5" aria-hidden="true" /> Database
           </button>
           <button type="button" onClick={() => setMobileView("code")} aria-pressed={mobileView === "code"} className={`inline-flex h-9 items-center justify-center gap-1.5 rounded-md text-xs font-medium ${mobileView === "code" ? "bg-muted text-foreground" : "text-muted-foreground"}`}>
             <Code2 className="size-3.5" aria-hidden="true" /> Code
@@ -790,7 +798,7 @@ export function AndroidWorkspace({ project }: { project: VcaasProject }) {
         </section>
 
         <section
-          aria-label={mobileView === "code" ? "Android Code Explorer" : mobileView === "more" ? "Android workspace More" : "Android app preview"}
+          aria-label={mobileView === "code" ? "Android Code Explorer" : mobileView === "database" ? "Android workspace Database" : mobileView === "more" ? "Android workspace More" : "Android app preview"}
           className="flex min-h-0 min-w-0 flex-1 flex-col bg-muted/40"
         >
           {mobileView === "preview" ? (
@@ -826,6 +834,8 @@ export function AndroidWorkspace({ project }: { project: VcaasProject }) {
                 </div>
               </div>
             </div>
+          ) : mobileView === "database" ? (
+            <DatabasePlaceholder />
           ) : mobileView === "code" ? (
             <div className="flex min-h-0 flex-1 flex-col bg-background">
               <div className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-3 sm:px-4">
