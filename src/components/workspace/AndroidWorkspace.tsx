@@ -1056,3 +1056,5 @@ export function AndroidWorkspace({ project }: { project: VcaasProject }) {
         onProjectChanged={() => void loadFiles()}
       />
     </main>
+  );
+}
