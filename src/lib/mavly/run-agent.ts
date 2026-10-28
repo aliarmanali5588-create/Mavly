@@ -35,12 +35,15 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { chatCompletion } from "@/lib/ai/provider";
+import { resolveRoleModel } from "@/lib/ai/model-roles";
 import {
   GENERATION_BUDGET_MS,
   generateApp,
   isGenerationFailure,
   requiredCreatePathsFor,
   sanitizeProjectPath,
+  AgentGenerationSetupError,
+  type AgentGenerationInput,
   type AgentBatchCheckpoint,
   type AgentGenerationFailure,
   type AgentGenerationResult,
@@ -57,6 +60,12 @@ import {
   runBudgetFor,
   type RunBudget,
 } from "@/lib/ai/budget";
+import {
+  EMPTY_USAGE,
+  addUsage,
+  persistedAttempts,
+  seededUsage,
+} from "@/lib/ai/usage";
 import { androidPackageForProject } from "@/lib/android/contract";
 import {
   claimRun,
@@ -89,6 +98,7 @@ import { verifyCheckpointBatches } from "./checkpoints";
 import {
   beginOrchestration,
   markCodingStarted,
+  POST_CODING_REVIEW_RESERVE_MS,
   recordCodingCompleted,
   recordCodingFailed,
   runPlanningAgents,
@@ -98,19 +108,28 @@ import {
   cancelWorkflowForRun,
   failWorkflowForRun,
 } from "@/lib/orchestration/store";
+import { subordinateContextBlock } from "@/lib/orchestration/roles";
 import { loadFigmaDesignContext } from "@/lib/integrations/figma/service";
 import {
   classifyGenerationFailure,
+  hasRecoverableTruncationProgress,
   isInlineRecoverable,
   type FailureSignals,
 } from "@/lib/generation/state-machine";
 import { retryDelaySeconds, WORKER_LEASE_SECONDS } from "@/lib/generation/leases";
 import { reportedCostOf } from "@/lib/observability/cost";
+import {
+  recordRunUsage,
+  releaseRunCredits,
+  settleRunCredits,
+} from "@/lib/credits/service";
 import { emitGenerationEvent, emitVerificationEvent } from "@/lib/observability/events";
 import { maybeEnqueueVerification } from "@/lib/sandbox/enqueue";
 import { buildAgentMemoryContext } from "@/lib/memory/context";
 import { recordRunFailureMemory } from "@/lib/memory/outcomes";
 import type { MemoryRunOutcome } from "@/lib/memory/types";
+import { managedBackendConfig } from "@/lib/managed-backend/config";
+import { ensureManagedBackend } from "@/lib/managed-backend/service";
 
 /**
  * Present only when the durable worker claimed this run. The worker has no user
@@ -151,7 +170,19 @@ export interface RunAgentInput {
 export type RunAgentOutcome =
   | { status: "completed"; runId: string }
   | { status: "failed"; runId: string; errorClass: string }
-  | { status: "retry"; runId: string; errorClass: string; retryAfterSeconds: number }
+  | {
+      status: "retry";
+      runId: string;
+      errorClass: string;
+      retryAfterSeconds: number;
+      /**
+       * Provider usage this attempt already spent. The inline loop carries it
+       * into the continuation so the eventual terminal write reports the whole
+       * run; the worker persists it before scheduling and leaves it unset.
+       */
+      usage?: AgentUsageTotals;
+      attempts?: readonly AgentProviderAttempt[];
+    }
   | { status: "dead_letter"; runId: string; errorClass: string }
   | { status: "cancelled"; runId: string }
   | { status: "skipped"; runId: string; reason: string };
@@ -170,6 +201,16 @@ interface RunGuard {
   budget: RunBudget;
   /** Automatic inline continuations already used (never more than the cap). */
   recoveryAttempts: number;
+  /**
+   * ⚠️ PROVIDER USAGE IS CUMULATIVE FOR THE RUN. Migration 16 is explicit: a
+   * manual resume resets the job-attempt budget, never the provider counters.
+   * These are seeded ONCE from the row this invocation claimed, then extended
+   * by every attempt of this invocation that does not write terminal state
+   * itself (the inline continuation). They are never re-read mid-invocation, so
+   * the same usage cannot be counted twice.
+   */
+  priorUsage: AgentUsageTotals;
+  priorAttempts: readonly AgentProviderAttempt[];
 }
 
 interface FailInput {
@@ -178,6 +219,61 @@ interface FailInput {
   baseline?: SnapshotSummary | null;
   failure?: AgentGenerationFailure;
   signals?: FailureSignals;
+}
+
+function priorRepairContext(
+  orchestration: OrchestrationHandle | null,
+  manifest: AgentManifest | null,
+): string | null {
+  if (!orchestration || !manifest) return null;
+  const task = orchestration.tasks.find(
+    (candidate) =>
+      candidate.key === "repair" &&
+      candidate.status === "completed" &&
+      candidate.output?.role === "repair",
+  );
+  const rawFixes = task?.output?.data.fixes;
+  if (!Array.isArray(rawFixes)) return null;
+
+  const allowedPaths = new Set(manifest.files.map((file) => file.path));
+  const fixes: string[] = [];
+  for (const entry of rawFixes) {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) continue;
+    const fix = entry as Record<string, unknown>;
+    if (
+      typeof fix.path !== "string" ||
+      !allowedPaths.has(fix.path) ||
+      (fix.action !== "change" && fix.action !== "add" && fix.action !== "remove") ||
+      typeof fix.detail !== "string" ||
+      !fix.detail.trim()
+    ) {
+      continue;
+    }
+    fixes.push(`- ${fix.path} (${fix.action}): ${fix.detail.trim().slice(0, 500)}`);
+    if (fixes.length >= 8) break;
+  }
+  return fixes.length > 0
+    ? `Evidence-linked suggestions from the prior failed attempt:\n${fixes.join("\n")}`
+    : null;
+}
+
+/**
+ * The cumulative counters this invocation starts from.
+ *
+ * ⚠️ SEEDED ONCE, FROM THE CLAIMED ROW. Re-reading the row later would include
+ * this invocation's own terminal write and double-count it.
+ */
+function carriedUsage(run: RunRow): Pick<RunGuard, "priorUsage" | "priorAttempts"> {
+  return {
+    priorUsage: seededUsage({
+      promptTokens: run.prompt_tokens,
+      completionTokens: run.completion_tokens,
+      totalTokens: run.total_tokens,
+      reasoningTokens: run.reasoning_tokens,
+      attemptCount: run.attempt_count,
+    }),
+    priorAttempts: persistedAttempts(run.provider_attempts),
+  };
 }
 
 export async function runAgent(input: RunAgentInput): Promise<RunAgentOutcome> {
@@ -220,6 +316,7 @@ async function runInlineAgent(input: RunAgentInput): Promise<RunAgentOutcome> {
     startedAtMs: budget.startedAtMs,
     budget,
     recoveryAttempts: 0,
+    ...carriedUsage(run),
   };
 
   /**
@@ -252,11 +349,28 @@ async function runInlineAgent(input: RunAgentInput): Promise<RunAgentOutcome> {
       if (error instanceof RunCancelledError) {
         // The user's cancel is already terminal; do not overwrite it. The guarded
         // update below is a no-op when the cancellation landed first.
-        await finishRun(input.runId, "cancelled", "The run was cancelled by the user.", {
+        const cancelled = await finishRun(input.runId, "cancelled", "The run was cancelled by the user.", {
           stage: "cancelled",
           errorCode: "RUN_CANCELLED",
           ...guardPatch(guard),
         });
+        if (cancelled) {
+          // ⚠️ A CANCELLED RUN IS NOT CHARGED. The release RPC refuses a
+          // completed run, so this cannot be used to escape a legitimate charge.
+          await releaseRunCredits({
+            runId: input.runId,
+            projectId: input.projectId,
+            traceId: guard.traceId,
+            client: guard.client,
+            reason: "Run cancelled before completion",
+          });
+          await recordRunUsage({
+            runId: input.runId,
+            projectId: input.projectId,
+            traceId: guard.traceId,
+            client: guard.client,
+          });
+        }
         outcome = { status: "cancelled", runId: input.runId };
         break;
       }
@@ -270,6 +384,40 @@ async function runInlineAgent(input: RunAgentInput): Promise<RunAgentOutcome> {
     }
 
     if (outcome.status !== "retry") break;
+
+    /**
+     * The `retry` outcome already contains this invocation's cumulative totals.
+     * Persist them as absolute run totals before continuing so a process
+     * interruption cannot discard the failed attempt; the next invocation will
+     * seed from this row, while this guard prevents double-counting locally.
+     */
+    guard.priorUsage = outcome.usage;
+    guard.priorAttempts = outcome.attempts;
+    const usagePersisted = await heartbeatRun(
+      input.runId,
+      {
+        attemptCount: outcome.usage.attempts,
+        promptTokens: outcome.usage.promptTokens,
+        completionTokens: outcome.usage.completionTokens,
+        totalTokens: outcome.usage.totalTokens,
+        reasoningTokens: outcome.usage.reasoningTokens,
+        providerAttempts: outcome.attempts,
+        providerRequestId:
+          lastProviderRequestId(outcome.attempts) ?? currentRun.provider_request_id,
+        expectedClaimedAt: guard.claimedAt ?? undefined,
+      },
+      guard.client,
+    );
+    if (!usagePersisted) {
+      emitGenerationEvent("generation.heartbeat_failed", {
+        traceId: guard.traceId,
+        runId: input.runId,
+        projectId: input.projectId,
+        reason: "inline_recovery_usage_persist_failed",
+      });
+      outcome = { status: "skipped", runId: input.runId, reason: "recovery_usage_persist_failed" };
+      break;
+    }
 
     /**
      * `fail` only asks for this when a real window remains. Re-check anyway so a
@@ -381,6 +529,7 @@ async function runWorkerAgent(
       Math.max(30_000, input.budgetMs ?? GENERATION_BUDGET_MS),
     ),
     recoveryAttempts: MAX_INLINE_RECOVERY_ATTEMPTS,
+    ...carriedUsage(run),
   };
 
   let outcome: RunAgentOutcome;
@@ -725,6 +874,50 @@ async function execute(
 
   const writtenPaths = new Set<string>(completedPaths);
   let latestProviderRequestId: string | null = null;
+  let managedBackendContext: AgentGenerationInput["managedBackendContext"];
+  let generationInput: AgentGenerationInput | null = null;
+  let managedBackendPrepared = false;
+
+  const prepareManagedBackend = async (manifest: AgentManifest): Promise<void> => {
+    if (managedBackendPrepared) return;
+    managedBackendPrepared = true;
+    if (
+      projectType !== "website" ||
+      manifest.backendRequirement?.requiresDatabase !== true
+    ) {
+      return;
+    }
+
+    managedBackendContext = "not_provisioned";
+    if (generationInput) generationInput.managedBackendContext = managedBackendContext;
+    const config = managedBackendConfig();
+    const inCohort = config.cohort.includes(input.projectId.toLowerCase());
+    if (!config.requested || !inCohort) return;
+
+    if (!input.worker) return;
+    if (!config.ready) {
+      throw new AgentGenerationSetupError(
+        "Neon provisioning is enabled for this project but its approved platform configuration is incomplete. No database was created.",
+      );
+    }
+    if (!guard.client) {
+      throw new AgentGenerationSetupError(
+        "The managed database worker has no authorized Supabase client. No database was created.",
+      );
+    }
+
+    const backend = await ensureManagedBackend({
+      client: guard.client,
+      userId: input.userId,
+      projectId: input.projectId,
+      config,
+    });
+    if (backend.ok === false) {
+      throw new AgentGenerationSetupError(backend.error);
+    }
+    managedBackendContext = "provisioned_without_runtime";
+    if (generationInput) generationInput.managedBackendContext = managedBackendContext;
+  };
 
   const onManifest = async (manifest: AgentManifest): Promise<void> => {
     const saved = await setRunManifest(
@@ -739,6 +932,7 @@ async function execute(
       throw new RunStoreError(`Could not save the generation plan: ${saved.error}`);
     }
     resumeManifest = manifest;
+    await prepareManagedBackend(manifest);
   };
 
   const onBatch = async (batch: AgentBatchCheckpoint): Promise<void> => {
@@ -828,6 +1022,22 @@ async function execute(
     if (guard.leaseToken && !resumed) throw new RunLeaseLostError();
   }
 
+  if (resumeManifest) {
+    try {
+      await prepareManagedBackend(resumeManifest);
+    } catch (error) {
+      if (error instanceof AgentGenerationSetupError) {
+        return fail(input, guard, {
+          message: error.message,
+          before,
+          baseline,
+          signals: { code: error.code },
+        });
+      }
+      throw error;
+    }
+  }
+
   /**
    * Phase 8 context is assembled from the CURRENT files plus persisted decisions
    * and observed outcomes. It is optional: `used: false` leaves the pre-Phase-8
@@ -848,40 +1058,70 @@ async function execute(
    * its own deadline (and, on inline recovery, its single permitted window).
    */
   const remainingBudgetMs = Math.max(0, remainingRunMs(guard.budget, Date.now()));
+  const generationBudgetMs = orchestration
+    ? Math.max(0, remainingBudgetMs - POST_CODING_REVIEW_RESERVE_MS)
+    : remainingBudgetMs;
+  const repairContext = priorRepairContext(orchestration, resumeManifest);
+  const generationPlanContext = [
+    planContext,
+    repairContext
+      ? subordinateContextBlock("Prior repair findings", repairContext, 4_000)
+      : null,
+  ]
+    .filter((entry): entry is string => Boolean(entry))
+    .join("\n\n");
+  const codingRoleModel = orchestration
+    ? resolveRoleModel({
+        role: "coding",
+        env: process.env,
+        projectId: input.projectId,
+      })
+    : null;
+  if (orchestration && !codingRoleModel) {
+    return fail(input, guard, {
+      message: "The pinned model for the coding role is not available in the enabled OpenRouter catalog.",
+      before,
+      baseline,
+      signals: { code: "ROLE_MODEL_UNAVAILABLE" },
+    });
+  }
 
+  const nextGenerationInput: AgentGenerationInput = {
+    projectId: input.projectId,
+    prompt: input.prompt,
+    mode,
+    projectType,
+    androidPackage,
+    existingFiles: before,
+    budgetMs: generationBudgetMs,
+    managedBackendContext,
+    ...(memory.used
+      ? {
+          contextFiles: memory.contextFiles,
+          memoryContext: memory.memoryText,
+          planning: true,
+        }
+      : {}),
+    requestedModel: codingRoleModel?.id ?? input.requestedModel,
+    designContext: design.data,
+    ...(generationPlanContext ? { planContext: generationPlanContext } : {}),
+    ...(designDirectives ? { designDirectives } : {}),
+    ...(resumeManifest || completedPaths.length > 0 || nextBatchIndex > 0
+      ? {
+          resume: {
+            manifest: resumeManifest,
+            completedPaths,
+            nextBatchIndex,
+          },
+        }
+      : {}),
+    onManifest,
+    onBatch,
+    onProgress,
+  };
+  generationInput = nextGenerationInput;
   const generated = await generateApp(
-    {
-      projectId: input.projectId,
-      prompt: input.prompt,
-      mode,
-      projectType,
-      androidPackage,
-      existingFiles: before,
-      budgetMs: remainingBudgetMs,
-      ...(memory.used
-        ? {
-            contextFiles: memory.contextFiles,
-            memoryContext: memory.memoryText,
-            planning: true,
-          }
-        : {}),
-      requestedModel: input.requestedModel,
-      designContext: design.data,
-      ...(planContext ? { planContext } : {}),
-      ...(designDirectives ? { designDirectives } : {}),
-      ...(resumeManifest || completedPaths.length > 0 || nextBatchIndex > 0
-        ? {
-            resume: {
-              manifest: resumeManifest,
-              completedPaths,
-              nextBatchIndex,
-            },
-          }
-        : {}),
-      onManifest,
-      onBatch,
-      onProgress,
-    },
+    nextGenerationInput,
     {
       // Keep the most recent provider request id for the run summary. Every
       // attempt is also persisted separately by the agent.
@@ -920,6 +1160,19 @@ async function execute(
 
   await assertRunOwned(input, guard);
 
+  const resultWithBackendBoundary =
+    managedBackendContext === "provisioned_without_runtime"
+      ? {
+          ...generated.result,
+          message: `${generated.result.message}\n\nA Neon database was provisioned for this project, but Mavly does not yet provide a secure runtime binding or apply application schema migrations. Persistent database features, CRUD and authentication are not live.`,
+        }
+      : managedBackendContext === "not_provisioned"
+        ? {
+            ...generated.result,
+            message: `${generated.result.message}\n\nMavly did not provision a Neon database for this generation. Persistent database features, CRUD and authentication are not live.`,
+          }
+        : generated.result;
+
   if (generated.result.deletedPaths.length > 0) {
     const deleted = await writeFiles(
       input.userId,
@@ -948,7 +1201,7 @@ async function execute(
   return complete(
     input,
     guard,
-    generated.result,
+    resultWithBackendBoundary,
     before,
     baseline,
     writtenPaths.size,
@@ -996,7 +1249,18 @@ async function complete(
     );
   }
 
-  const cost = reportedCostOf(result.attempts);
+  /**
+   * ⚠️ THE RUN'S TOTAL, NOT THIS INVOCATION'S. `guard.prior*` was seeded ONCE
+   * from the claimed row and extended only by work whose usage was not yet
+   * persisted (the inline continuation). Adding this invocation's attempts to it
+   * reports every provider call the run ever made, without re-reading the row
+   * and counting this write twice. Cost is derived from the combined attempt
+   * records, so an earlier unreported cost keeps the total unknown rather than
+   * silently disappearing.
+   */
+  const usage = addUsage(guard.priorUsage, result.usage);
+  const attempts = [...guard.priorAttempts, ...result.attempts];
+  const cost = reportedCostOf(attempts);
 
   /**
    * ⚠️ THE RESTORE TARGET IS THE BASELINE — the state BEFORE the run. A user
@@ -1008,10 +1272,10 @@ async function complete(
     "done",
     undefined,
     {
-      ...metadataPatch(result.usage, result.attempts, null),
+      ...metadataPatch(usage, attempts, null),
       stage: "completed",
       filesWritten,
-      providerRequestId: latestProviderRequestId ?? lastProviderRequestId(result.attempts),
+      providerRequestId: latestProviderRequestId ?? lastProviderRequestId(attempts),
       reportedCostUsd: cost.costUsd,
       costKnown: cost.known,
       ...guardPatch(guard),
@@ -1023,6 +1287,25 @@ async function complete(
     // A cancellation, a recovery, or a newer attempt finalized the run first.
     return { status: "skipped", runId: input.runId, reason: "finish_not_applied" };
   }
+
+  /**
+   * ⚠️ CREDIT SIDE EFFECTS FOLLOW THE TERMINAL RUN WRITE, NEVER PRECEDE IT.
+   * Only the invocation that won the fenced completion may consume the hold.
+   * A failure here is reported and repaired by the durable worker sweep or the
+   * owner's next balance read; the run itself stays completed.
+   */
+  await settleRunCredits({
+    runId: input.runId,
+    projectId: input.projectId,
+    traceId: guard.traceId,
+    client: guard.client,
+  });
+  await recordRunUsage({
+    runId: input.runId,
+    projectId: input.projectId,
+    traceId: guard.traceId,
+    client: guard.client,
+  });
 
   if (orchestration) {
     try {
@@ -1170,7 +1453,29 @@ async function fail(
     message,
     retryAfterSeconds:
       signals?.retryAfterSeconds ?? lastAttemptRetryAfterSeconds(failure?.attempts),
+    /**
+     * ⚠️ WHAT MAKES A TRUNCATION WORTH RETRYING. Verified checkpoints must be
+     * skippable AND more than one planned path must remain; a lone oversized
+     * file has already exhausted the agent's narrower split/compact attempts.
+     */
+    hasRecoverableProgress: hasRecoverableTruncationProgress(
+      failure?.partial.completedPaths ?? [],
+      parseManifest(current.generation_manifest)?.files.map((file) => file.path) ?? [],
+    ),
   });
+
+  /**
+   * ⚠️ CUMULATIVE, AND COMPUTED ONCE. `guard.prior*` is what the run had before
+   * this invocation; `failure` is what THIS invocation spent. The sum is what
+   * the terminal write and the retry hand-off must carry. It is derived here
+   * instead of re-reading the row so a repeated finalization cannot count the
+   * same provider calls twice.
+   */
+  const usage = failure ? addUsage(guard.priorUsage, failure.usage) : guard.priorUsage;
+  const attempts = failure
+    ? [...guard.priorAttempts, ...failure.attempts]
+    : [...guard.priorAttempts];
+  const cost = reportedCostOf(attempts);
 
   if (classification.errorClass === "cancelled") {
     return { status: "cancelled", runId: input.runId };
@@ -1219,6 +1524,9 @@ async function fail(
       runId: input.runId,
       errorClass: classification.errorClass,
       retryAfterSeconds: 0,
+      /** The loop carries this into the continuation; it is not persisted yet. */
+      usage,
+      attempts,
     };
   }
 
@@ -1243,10 +1551,6 @@ async function fail(
     }
   }
 
-  const cost = failure
-    ? reportedCostOf(failure.attempts)
-    : { costUsd: null, known: false };
-
   // ── Worker: bounded retry, then dead letter ───────────────────────────────
   if (
     guard.leaseToken &&
@@ -1255,6 +1559,40 @@ async function fail(
     guard.jobAttempt < guard.maxAttempts
   ) {
     const retryAfterSeconds = retryDelaySeconds(guard.jobAttempt);
+    /**
+     * ⚠️ PERSIST BEFORE THE RETRY IS SCHEDULED. A worker retry is a NEW
+     * invocation with a NEW guard, so usage held only in memory would be lost.
+     * These are absolute cumulative counters — the next claim seeds from this
+     * row — and the attempt records ride along so the eventual cost is still
+     * derived from real provider numbers instead of an estimate. A failed write
+     * means the lease is no longer ours: do not schedule, let lease recovery
+     * advance the job.
+     */
+    const usagePersisted = await heartbeatRun(
+      input.runId,
+      {
+        attemptCount: usage.attempts,
+        promptTokens: usage.promptTokens,
+        completionTokens: usage.completionTokens,
+        totalTokens: usage.totalTokens,
+        reasoningTokens: usage.reasoningTokens,
+        providerAttempts: attempts,
+        expectedLeaseToken: guard.leaseToken,
+        leaseSeconds: WORKER_LEASE_SECONDS,
+      },
+      guard.client,
+    );
+    if (!usagePersisted) {
+      emitGenerationEvent("generation.worker_error", {
+        traceId: guard.traceId,
+        runId: input.runId,
+        projectId: input.projectId,
+        workerId: guard.workerId,
+        reason: "retry_state_persist_failed",
+      });
+      return { status: "skipped", runId: input.runId, reason: "retry_state_persist_failed" };
+    }
+
     const scheduled = await scheduleGenerationRetry(guard.client, {
       runId: input.runId,
       leaseToken: guard.leaseToken,
@@ -1345,7 +1683,7 @@ async function fail(
     message,
     {
       ...(failure
-        ? metadataPatch(failure.usage, failure.attempts, failure.code)
+        ? metadataPatch(usage, attempts, failure.code)
         : { stage: "failed" as const }),
       stage: "failed",
       errorClass: classification.errorClass,
@@ -1361,6 +1699,25 @@ async function fail(
   if (!finished) {
     return { status: "skipped", runId: input.runId, reason: "finish_not_applied" };
   }
+
+  /**
+   * ⚠️ A TERMINAL FAILURE RELEASES ITS HOLD. The RPC re-reads the run row and
+   * refuses anything that is not genuinely terminal and unsuccessful, so this
+   * call cannot un-charge a completed run.
+   */
+  await releaseRunCredits({
+    runId: input.runId,
+    projectId: input.projectId,
+    traceId: guard.traceId,
+    client: guard.client,
+    reason: `Run failed before completion (${classification.errorClass})`,
+  });
+  await recordRunUsage({
+    runId: input.runId,
+    projectId: input.projectId,
+    traceId: guard.traceId,
+    client: guard.client,
+  });
 
   await insertMessage(
     input.projectId,
@@ -1585,6 +1942,14 @@ function parseManifest(value: unknown): AgentManifest | null {
     }
   }
 
+  const rawBackendRequirement = record.backendRequirement;
+  const backendRecord =
+    rawBackendRequirement &&
+    typeof rawBackendRequirement === "object" &&
+    !Array.isArray(rawBackendRequirement)
+      ? rawBackendRequirement as Record<string, unknown>
+      : null;
+
   return {
     message:
       typeof record.message === "string"
@@ -1592,6 +1957,17 @@ function parseManifest(value: unknown): AgentManifest | null {
         : "Updated the project.",
     ...(typeof record.plan === "string" && record.plan.trim()
       ? { plan: record.plan.trim().slice(0, 2_000) }
+      : {}),
+    ...(backendRecord
+      ? {
+          backendRequirement: {
+            requiresDatabase: backendRecord.requiresDatabase === true,
+            reason:
+              typeof backendRecord.reason === "string"
+                ? backendRecord.reason.trim().slice(0, 240)
+                : "",
+          },
+        }
       : {}),
     files,
     deletedPaths,

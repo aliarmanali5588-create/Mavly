@@ -155,6 +155,8 @@ export interface AgentFinding {
   path?: string;
   /** 1-based source line when the finding came from a file scan. */
   line?: number;
+  /** Short, redacted source excerpt validated against the cited line. */
+  evidence?: string;
 }
 
 export type AgentVerificationStatus =

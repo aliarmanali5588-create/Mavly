@@ -404,6 +404,13 @@ export default function DashboardPage({ profile }: { profile: ProfileSummary }) 
   const [buildCreating, setBuildCreating] = useState(false);
   const buildCreatingRef = useRef(false);
   const androidCreateRequestRef = useRef<{ fingerprint: string; requestId: string } | null>(null);
+  /**
+   * A retried website launch must be the SAME logical request. The id is stable
+   * for one (slug, prompt, type) attempt and survives a reload, so a double
+   * click, a timeout or a browser retry cannot create a second run or charge the
+   * generation twice.
+   */
+  const launchRequestRef = useRef<{ fingerprint: string; requestId: string } | null>(null);
 
   // Delete confirmation modal
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
@@ -784,12 +791,41 @@ export default function DashboardPage({ profile }: { profile: ProfileSummary }) 
        * which is the whole point of holding the token until now. A failed connect does
        * not fail the launch — it comes back as a `figma` warning, surfaced below.
        */
+      /** The same logical submission keeps one id until it is accepted. */
+      const launchFingerprint = `${id}\n${prompt}\n${promptMode}`;
+      let launchRequestId =
+        launchRequestRef.current?.fingerprint === launchFingerprint
+          ? launchRequestRef.current.requestId
+          : null;
+      if (!launchRequestId) {
+        try {
+          const stored = window.sessionStorage.getItem("mavly:website-launch");
+          const parsed = stored ? (JSON.parse(stored) as { fingerprint?: string; requestId?: string }) : null;
+          if (parsed?.fingerprint === launchFingerprint && parsed.requestId) {
+            launchRequestId = parsed.requestId;
+          }
+        } catch {
+          // Session storage is optional; the ref still dedupes this tab.
+        }
+      }
+      launchRequestId ??= crypto.randomUUID();
+      launchRequestRef.current = { fingerprint: launchFingerprint, requestId: launchRequestId };
+      try {
+        window.sessionStorage.setItem(
+          "mavly:website-launch",
+          JSON.stringify({ fingerprint: launchFingerprint, requestId: launchRequestId }),
+        );
+      } catch {
+        // The server-side request id remains valid when session storage is unavailable.
+      }
+
       const launched = await vcaasApi.projects.launch({
         engineVersion: "v2", // always the v2 workspace engine
         projectId: id,
         prompt,
         description: prompt.slice(0, 200),
         projectType: promptMode,
+        clientRequestId: launchRequestId,
         ...(figmaToken ? { figma: { token: figmaToken } } : {}),
       });
       // Used once, then gone — see the note on the state.
@@ -801,6 +837,13 @@ export default function DashboardPage({ profile }: { profile: ProfileSummary }) 
       }
 
       const created = launched.data.projectId;
+      // Accepted: the id must not be reused for a later, genuinely new prompt.
+      launchRequestRef.current = null;
+      try {
+        window.sessionStorage.removeItem("mavly:website-launch");
+      } catch {
+        // ignore
+      }
       if (launched.data.requestedProjectId && launched.data.requestedProjectId !== created) {
         toast.info(`"${launched.data.requestedProjectId}" was taken — your project is "${created}".`);
       }

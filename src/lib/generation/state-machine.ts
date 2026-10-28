@@ -149,8 +149,10 @@ export interface FailureClassification {
  *
  *   · a provider timeout, because the window is now different;
  *   · a transient provider failure, because it is transient by definition;
- *   · a truncated response, because the next attempt resumes from verified
- *     checkpoints and asks for a smaller remaining scope.
+ *   · a truncated response, *when verified completed work exists and multiple
+ *     planned paths remain*, so the next attempt skips completed work and has
+ *     a meaningful multi-file scope left. A lone oversized file has no narrower
+ *     request to make, so the classification marks it terminal.
  *
  * Rate limiting is deliberately excluded: it needs a WAIT, and waiting inside
  * the same request spends the budget that remains. Persistence failures are
@@ -176,6 +178,30 @@ export interface FailureSignals {
   message?: string | null;
   /** A provider's explicit retry hint, when it gave one. */
   retryAfterSeconds?: number | null;
+  /**
+   * True only when the failed run has verified completed work and more than one
+   * planned path remains. With one remaining path, a compact single-file
+   * truncation would repeat the same request; absent means "no useful progress".
+   */
+  hasRecoverableProgress?: boolean;
+}
+
+/**
+ * Whether a truncation retry can skip verified work and still have a
+ * multi-file remainder to generate. A single remaining path has already
+ * exhausted the agent's split/compact recovery path and is not worth blindly
+ * retrying as a new worker attempt.
+ */
+export function hasRecoverableTruncationProgress(
+  completedPaths: readonly string[],
+  plannedPaths: readonly string[],
+): boolean {
+  const planned = new Set(plannedPaths);
+  const completed = new Set(completedPaths.filter((path) => planned.has(path)));
+  if (completed.size === 0) return false;
+
+  const remaining = [...planned].filter((path) => !completed.has(path));
+  return remaining.length > 1;
 }
 
 const TRANSIENT_PATTERNS =
@@ -217,13 +243,18 @@ export function classifyGenerationFailure(signals: FailureSignals): FailureClass
       return { retryable: false, errorClass: "content_filter", summary };
     case "GENERATION_TRUNCATED":
       /**
-       * ⚠️ RETRYABLE BECAUSE RESUME CHANGES THE REQUEST. A resumed run skips
-       * verified completed batches and honours the manifest already persisted,
-       * so the truncated work is narrower — not the same oversized request
-       * repeated. The inline path still bounds this to one continuation and the
-       * worker to its existing attempt cap.
+       * ⚠️ RETRYABLE ONLY WHEN THE RETRY ASKS FOR LESS. A resumed attempt skips
+       * verified completed paths and honours the manifest already persisted.
+       * Retry only when there is also a multi-file remainder; with no checkpoint
+       * or only one unfinished path, the same deterministic single-file
+       * truncation would be sent again. Such a truncation is terminal and the
+       * run stays resumable by the owner.
        */
-      return { retryable: true, errorClass: "generation_truncated", summary };
+      return {
+        retryable: signals.hasRecoverableProgress === true,
+        errorClass: "generation_truncated",
+        summary,
+      };
     case "GENERATION_MALFORMED":
       return { retryable: false, errorClass: "generation_malformed", summary };
     case "GENERATION_INCOMPLETE":

@@ -3,33 +3,72 @@
 import * as React from "react";
 import Image from "next/image";
 import { cn } from "@/lib/utils";
+import { vcaasApi } from "@/lib/vcaas";
 
 /**
- * FRONTEND-ONLY DEMONSTRATION PLACEHOLDER.
+ * Compact available-credit indicator for the workspace navigation bar.
  *
- * This value is strictly for frontend demonstration in the workspace navigation bar.
- * It is not connected to any backend, database, balance calculations, or payment logic.
+ * ⚠️ THE OLD COMPONENT RENDERED A HARDCODED `10`. There is now a real credit
+ * account, so this component reads it from `GET /vcaas/credits` — the same
+ * authoritative number the ledger and the run pipeline use.
+ *
+ * It shows AVAILABLE credits (balance − active holds), which is what a new
+ * generation can actually spend. A disabled deployment or a failed read shows
+ * "—", never a fabricated number.
+ *
+ * The value is refreshed when `refreshKey` changes (the workspace passes the
+ * run state, so a finished run updates the balance) and once on mount.
  */
-export const DEMO_CREDITS_COUNT = 10;
-
 export interface CreditsIndicatorProps {
   className?: string;
+  /** Explicit value, for a caller that already has the account. */
   credits?: number;
+  /** Change this token to refetch, e.g. when a generation run ends. */
+  refreshKey?: string | number;
 }
 
-/**
- * Compact Credits indicator positioned immediately to the left of the Publish button
- * in the Mavly project workspace top navigation bar.
- */
-export function CreditsIndicator({
-  className,
-  credits = DEMO_CREDITS_COUNT,
-}: CreditsIndicatorProps) {
+export function CreditsIndicator({ className, credits, refreshKey }: CreditsIndicatorProps) {
+  const explicit = typeof credits === "number";
+  /** `undefined` = still loading; `null` = known unavailable. */
+  const [accountCredits, setAccountCredits] = React.useState<number | null | undefined>(undefined);
+
+  React.useEffect(() => {
+    if (explicit) return;
+    let active = true;
+    setAccountCredits(undefined);
+
+    vcaasApi
+      .credits()
+      .then((result) => {
+        if (!active) return;
+        const available = result.ok ? result.data?.available : null;
+        setAccountCredits(
+          result.ok && result.data?.enabled && typeof available === "number" ? available : null,
+        );
+      })
+      .catch(() => {
+        if (active) setAccountCredits(null);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [explicit, refreshKey]);
+
+  const value = explicit ? credits : accountCredits;
+  const label = value === undefined ? "…" : value === null ? "—" : String(value);
+  const title =
+    value === null
+      ? "Credits are unavailable"
+      : value === undefined
+        ? "Loading credits"
+        : "Available credits";
+
   return (
     <div
       data-testid="workspace-credits-indicator"
-      aria-label={`Credits: ${credits}`}
-      title="Credits"
+      aria-label={`Credits: ${label}`}
+      title={title}
       className={cn(
         "flex items-center gap-1.5 h-7 px-2 rounded-lg shrink-0 select-none",
         "border border-gray-200/60 dark:border-gray-700/60",
@@ -49,7 +88,7 @@ export function CreditsIndicator({
         unoptimized
       />
       <span className="text-xs font-medium tabular-nums leading-none">
-        {credits}
+        {label}
       </span>
     </div>
   );

@@ -49,6 +49,13 @@ export interface ChatCompletionUsage {
   completionTokens: number | null;
   totalTokens: number | null;
   reasoningTokens: number | null;
+  /**
+   * Prompt tokens served from the provider's cache, when it reports them. This
+   * is a subset of `promptTokens`; NULL means the provider did not say.
+   */
+  cachedReadTokens: number | null;
+  /** Prompt tokens written to the provider's cache, when it reports them. */
+  cachedWriteTokens: number | null;
   /** Present only when the provider reports it. Never estimated. */
   costUsd: number | null;
 }
@@ -111,6 +118,8 @@ export const EMPTY_USAGE: ChatCompletionUsage = {
   completionTokens: null,
   totalTokens: null,
   reasoningTokens: null,
+  cachedReadTokens: null,
+  cachedWriteTokens: null,
   costUsd: null,
 };
 
@@ -212,11 +221,31 @@ export function completionUsage(payload: unknown): ChatCompletionUsage {
   const reasoningTokens =
     numericValue(detailObject?.reasoning_tokens) ?? numericValue(usage.reasoning_tokens);
 
+  /**
+   * Providers name cache usage differently (`prompt_tokens_details.cached_tokens`
+   * for OpenAI-style caches, `cache_read_input_tokens` for Anthropic-style
+   * ones). Only a reported value is used; an absent one stays NULL.
+   */
+  const promptDetails = usage.prompt_tokens_details;
+  const promptDetailObject =
+    promptDetails && typeof promptDetails === "object"
+      ? (promptDetails as Record<string, unknown>)
+      : null;
+  const cachedReadTokens =
+    numericValue(promptDetailObject?.cached_tokens) ??
+    numericValue(usage.cache_read_input_tokens) ??
+    numericValue(usage.cached_tokens);
+  const cachedWriteTokens =
+    numericValue(usage.cache_write_input_tokens) ??
+    numericValue(promptDetailObject?.cache_write_tokens);
+
   return {
     promptTokens,
     completionTokens,
     totalTokens,
     reasoningTokens,
+    cachedReadTokens,
+    cachedWriteTokens,
     costUsd: numericValue(usage.cost),
   };
 }

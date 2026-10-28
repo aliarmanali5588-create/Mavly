@@ -106,6 +106,7 @@ test("credit-limits/at-limit is account-level; a project's own limit is not", ()
 test("only the vetted account endpoints are allowed", () => {
   const cases: Array<[string, string[], string]> = [
     ["GET", ["credit-costs"], "credit-costs"],
+    ["GET", ["credits"], "credits"],
     ["GET", ["usage"], "usage"],
     ["GET", ["webhooks"], "webhooks"],
     ["POST", ["webhooks"], "webhooks"],
@@ -130,7 +131,7 @@ test("an unknown root is refused, not forwarded", () => {
   for (const path of [
     ["account"],
     ["accounts"],
-    ["credits"],
+    ["billing"],
     ["projects2", "my-app"],
     ["", "my-app"],
   ]) {

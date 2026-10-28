@@ -53,6 +53,7 @@ import type {
   FigmaValidateResult,
   VcaasWebhook,
   VcaasSecret,
+  CreditAccount,
   ProjectLaunchResult,
   ProjectSnapshot,
   ProjectSnapshotDetail,
@@ -410,6 +411,12 @@ export const vcaasApi = {
         maxInfrastructureCreditsPerMonth?: number;
       };
       figma?: { token: string };
+      /**
+       * Idempotency key for this launch. A retry with the same id returns the SAME
+       * run (never a second run and never a second generation charge); a different
+       * prompt under the same id is refused as a conflict.
+       */
+      clientRequestId?: string;
       /** `"v2"` = the current engine (what this app creates); `"legacy"` only for the legacy database endpoints. */
       engineVersion?: "v2" | "legacy";
       /** Agent tier of the first prompt on the current engine: `"auto"` (default), `"cheap"`, `"normal"`, `"expensive"`. */
@@ -1297,6 +1304,15 @@ export const vcaasApi = {
   /** GET /vcaas/credit-costs — the fixed price, in credits, of every fixed-price action and monthly fee. Free. */
   creditCosts: (engine: "v2" | "legacy" = "v2"): Promise<VcaasResponse<{ creditCosts: Record<string, number> }>> =>
     proxy.get<{ creditCosts: Record<string, number> }>(`${API}/credit-costs?engine=${engine}`),
+
+  /**
+   * GET /vcaas/credits — the caller's authoritative credit account. Free.
+   *
+   * A disabled deployment answers `enabled: false` with NULL values, so the
+   * indicator can say "unavailable" instead of inventing a balance.
+   */
+  credits: (): Promise<VcaasResponse<CreditAccount>> =>
+    proxy.get<CreditAccount>(`${API}/credits`),
 
   // ─── Non-JSON endpoints (dedicated internal routes, not the catch-all) ───
 

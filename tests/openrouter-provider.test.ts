@@ -71,22 +71,41 @@ const USER: ChatMessage[] = [{ role: "user", content: "build a landing page" }];
 // ── catalog and selection ───────────────────────────────────────────────────
 
 test("the catalog contains the production default and cohort-gated testing model", () => {
+  const expectedCatalog = [
+    MODEL_ID,
+    NORTH_MINI_CODE_ID,
+  ];
   assert.deepEqual(AI_PROVIDER_IDS, ["openrouter"]);
   assert.deepEqual(
     AI_MODEL_CATALOG.map((entry) => entry.id),
-    [MODEL_ID, NORTH_MINI_CODE_ID],
+    expectedCatalog,
     "only explicitly registered OpenRouter IDs may reach the wire",
   );
   assert.deepEqual(
     OPENROUTER_MODEL_CATALOG.map((entry) => entry.id),
-    [MODEL_ID, NORTH_MINI_CODE_ID],
+    expectedCatalog,
   );
   assert.equal(resolveModel().id, MODEL_ID);
   assert.equal(resolveOpenRouterModel().id, MODEL_ID);
   assert.equal(model.label, "DeepSeek V4.1 Flash (OpenRouter)");
   assert.equal(model.maxOutputTokens, 24_000);
-  assert.equal(OPENROUTER_MODEL_CATALOG[1].label, "Cohere: North Mini Code (free)");
-  assert.equal(OPENROUTER_MODEL_CATALOG[1].id, COHERE_NORTH_MINI_CODE_MODEL_ID);
+  const cohortModel = OPENROUTER_MODEL_CATALOG.find(
+    (entry) => entry.id === COHERE_NORTH_MINI_CODE_MODEL_ID,
+  );
+  assert.equal(cohortModel?.label, "Cohere: North Mini Code (free)");
+  assert.equal(cohortModel?.id, COHERE_NORTH_MINI_CODE_MODEL_ID);
+});
+
+test("unverified requested specialist IDs never reach the provider", () => {
+  const unverified = [
+    "deepseek/deepseek-v4-pro",
+    "anthropic/claude-sonnet-5",
+    "openai/gpt-5.6-sol",
+  ];
+  for (const id of unverified) {
+    assert.equal(OPENROUTER_MODEL_CATALOG.some((entry) => entry.id === id), false);
+    assert.equal(resolveModel(id).id, MODEL_ID);
+  }
 });
 
 test("the Cohere model requires an explicit project cohort and cannot become the default", () => {

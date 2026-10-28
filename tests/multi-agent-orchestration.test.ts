@@ -41,6 +41,7 @@ import {
   parseJsonObject,
   parsePlannerPlan,
   parseRepairDiagnosis,
+  parseSourceReview,
   roleAllowsTool,
   subordinateContextBlock,
 } from "../src/lib/orchestration/roles";
@@ -69,12 +70,21 @@ import {
   tasksForComplexity,
   workflowStatesThatCanTransitionTo,
 } from "../src/lib/orchestration/workflow";
+import {
+  ROLE_MODEL_DEFINITIONS,
+  resolveRoleModel,
+  roleModelStatus,
+} from "../src/lib/ai/model-roles";
+import { OPENROUTER_MODEL_CATALOG } from "../src/lib/ai/models";
 
 const read = (path: string) =>
   readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
 
 const MIGRATION = read("supabase/migrations/29_multi_agent_orchestration.sql");
 const RUN_AGENT = read("src/lib/mavly/run-agent.ts");
+const ENGINE = read("src/lib/orchestration/engine.ts");
+const MODEL_ROLE_SOURCE = read("src/lib/ai/model-roles.ts");
+const CREDITS_STORE = read("src/lib/credits/store.ts");
 const API = read("src/lib/mavly/api.ts");
 const STATIC_PUBLISH = read("src/lib/deployments/service.ts");
 const FULLSTACK_PUBLISH = read("src/lib/deployments/fullstack.ts");
@@ -429,7 +439,13 @@ test("agent output is bounded before it can be persisted", () => {
       filesChanged: ["a.ts", "a.ts", "b.ts"],
       data: { text: "t".repeat(10_000), list: ["x", "y", 3], nested: { a: 1 } },
       findings: [
-        { id: "f1", severity: "high", title: "t".repeat(500), detail: "d".repeat(2_000) },
+        {
+          id: "f1",
+          severity: "high",
+          title: "t".repeat(500),
+          detail: "d".repeat(2_000),
+          evidence: "e".repeat(300),
+        },
       ],
     }),
   );
@@ -440,6 +456,7 @@ test("agent output is bounded before it can be persisted", () => {
   assert.equal(normalized.data.nested, undefined);
   assert.equal(normalized.findings[0].title.length, 200);
   assert.equal(normalized.findings[0].detail.length, 1_000);
+  assert.equal(normalized.findings[0].evidence?.length, 200);
 });
 
 // ── Configuration ───────────────────────────────────────────────────────────
@@ -764,6 +781,91 @@ test("planner, design and repair parsers bound their output", () => {
   assert.equal(repair.ok, true);
   if (repair.ok) assert.equal(repair.value.fixes.length, 1);
   assert.equal(parseRepairDiagnosis('{"fixes":[]}').ok, false);
+});
+
+test("source-review findings must cite an existing path and source line", () => {
+  const parsed = parseSourceReview(
+    JSON.stringify({
+      summary: "Review limited to the supplied source.",
+      findings: [
+        {
+          severity: "medium",
+          title: "Missing accessible name",
+          detail: "The input has no associated label.",
+          path: "app/page.tsx",
+          line: 2,
+          evidence: "<input />",
+        },
+        {
+          severity: "high",
+          title: "Unknown path",
+          detail: "This path was not supplied.",
+          path: "missing.ts",
+          line: 1,
+          evidence: "const missing = true;",
+        },
+        {
+          severity: "critical",
+          title: "Out-of-range line",
+          detail: "This line is not in the supplied file.",
+          path: "app/page.tsx",
+          line: 40,
+          evidence: "<input />",
+        },
+      ],
+      risks: ["Runtime behavior was not checked."],
+    }),
+    [{ path: "app/page.tsx", content: "const title = 'Page';\n<input />" }],
+  );
+  assert.equal(parsed.ok, true);
+  if (parsed.ok) {
+    assert.equal(parsed.value.findings.length, 1);
+    assert.equal(parsed.value.findings[0].line, 2);
+  }
+});
+
+test("each multi-agent role resolves its exact pinned model without fallback", () => {
+  const verifiedRoleModel = "deepseek/deepseek-v4.1-flash";
+  const expected: Record<string, string | null> = {
+    planner: verifiedRoleModel,
+    ui_ux: verifiedRoleModel,
+    coding: verifiedRoleModel,
+    qa: verifiedRoleModel,
+    security: verifiedRoleModel,
+    repair: verifiedRoleModel,
+    deployment: null,
+  };
+  assert.deepEqual(
+    Object.fromEntries(ROLE_MODEL_DEFINITIONS.map(({ role, modelId }) => [role, modelId])),
+    expected,
+  );
+  for (const definition of ROLE_MODEL_DEFINITIONS) {
+    assert.equal(
+      resolveRoleModel({ role: definition.role })?.id ?? null,
+      expected[definition.role],
+    );
+    if (definition.modelId) {
+      assert.equal(
+        OPENROUTER_MODEL_CATALOG.some((model) => model.id === definition.modelId),
+        true,
+      );
+    }
+  }
+  assert.doesNotMatch(MODEL_ROLE_SOURCE, /\bresolveModel\s*\(/);
+  assert.equal(
+    roleModelStatus({} as unknown as NodeJS.ProcessEnv, "my-project").find((entry) => entry.role === "deployment")?.kind,
+    "deterministic",
+  );
+});
+
+test("role completions use per-attempt usage accounting and the existing coding engine", () => {
+  assert.match(ENGINE, /recordRoleUsageAttempt/);
+  assert.match(ENGINE, /const attemptKey = `orchestration:/);
+  assert.match(ENGINE, /promptTokens: result\.metadata\.usage\.promptTokens/);
+  assert.match(ENGINE, /requestedModel: model\.id/);
+  assert.match(CREDITS_STORE, /rpc\("record_ai_usage_attempt"/);
+  assert.match(RUN_AGENT, /resolveRoleModel/);
+  assert.match(RUN_AGENT, /requestedModel: codingRoleModel\?\.id \?\? input\.requestedModel/);
 });
 
 test("specialist context is explicitly subordinate and bounded", () => {

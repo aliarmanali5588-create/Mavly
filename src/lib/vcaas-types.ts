@@ -68,10 +68,8 @@ export interface VcaasProject {
    */
   agentServerStatus?: "Active" | "Creating" | "Starting" | "Archived" | "Unarchiving" | "Archiving" | "Static";
   /**
-   * The honest preview state. Only project detail/update responses read the
-   * project's files, so a list entry legitimately reports `none`: it has not
-   * looked at `project_files`. Read this field from the detail response, not
-   * from a project list.
+   * The honest preview state. Detail/update responses derive it from
+   * `project_files`; list summaries do not include this field.
    */
   previewState?: VcaasPreviewState;
   /** A coarse, human-facing generation state derived from the durable run. */
@@ -106,27 +104,10 @@ export interface VcaasProject {
     errorMessage?: string;
   } | null;
   /**
-   * ⭐⭐ A PROJECT IMPORT IN PROGRESS — `null`/absent when none is running.
-   *
-   * ⚠️ IT IS THE CANONICAL SIGNAL, AND THE ONLY REFRESH-PROOF ONE. It reflects
-   * totalum-backend's own import lock (`currentImportProcess`), dated by the server
-   * that started the work — so a reload, a second tab, another device and an import
-   * started from the API or MCP all agree about whether one is running and since
-   * when. A browser-local stamp can do none of that, which is why the workspace's
-   * blocking import overlay is driven from here.
-   *
-   * ⚠️ WHILE IT IS SET, PROMPTING IS REFUSED UPSTREAM WITH `IMPORT_IN_PROGRESS` —
-   * an import replaces the project's files AND its database wholesale. The
-   * workspace's composer lock mirrors that rule rather than inventing one.
-   *
-   * ⚠️ IT SELF-EXPIRES. account-backend reports `null` once the lock is older than
-   * 30 minutes, because a job that died leaves the flag set for ever — so a UI that
-   * blocks on this field can never be pinned open. Do not add a longer timeout on
-   * this side than upstream's; see `OPERATION_PROFILES.import`.
-   *
-   * ⚠️ AND IT IS `null` FOR A FAILED IMPORT TOO. The import is over either way; the
-   * reason is in the project's conversation. There is no "finished badly" state to
-   * render here.
+   * Optional compatibility signal for a backend that exposes an active import.
+   * The current Mavly project response returns `null`; the workspace therefore
+   * uses a served static preview as its readiness signal and keeps a bounded
+   * timeout for operations whose completion cannot be observed.
    */
   importInProgress?: {
     startedAt: string;
@@ -1302,6 +1283,25 @@ export interface ProjectLaunchResult {
   };
   /** `{ step, errorCode, errorMessage }` per step that did not happen (`message`/`endpoint` on older answers). */
   warnings?: { step?: string; errorCode?: string; errorMessage?: string; message?: string; endpoint?: string }[];
+}
+
+/**
+ * The caller's authoritative credit account (`GET /vcaas/credits`).
+ *
+ * ⚠️ EVERY NUMERIC FIELD IS NULLABLE ON PURPOSE. A deployment without credits,
+ * or one whose migration is missing, returns NULL rather than a fabricated
+ * zero balance. `enabled` distinguishes "credits are off" from "you have none".
+ */
+export interface CreditAccount {
+  enabled: boolean;
+  ready: boolean;
+  currency: "credits";
+  balance: number | null;
+  reserved: number | null;
+  available: number | null;
+  /** Whole credits the server will reserve for one generation run, when set. */
+  generationCost: number | null;
+  problem: string | null;
 }
 
 // ── Phase 10: multi-agent workflow + deployment approval ────────────────────

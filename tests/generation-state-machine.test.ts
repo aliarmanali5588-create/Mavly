@@ -9,6 +9,7 @@ import {
   canResumeStage,
   canTransition,
   classifyGenerationFailure,
+  hasRecoverableTruncationProgress,
   isExecutionStage,
   isReadyStage,
   isTerminalStage,
@@ -141,14 +142,16 @@ test("permanent failures are never retried", () => {
     assert.equal(result.errorClass, errorClass, code);
   }
 
-  /**
-   * Truncation is retryable BECAUSE the retry is narrower: a resumed attempt
-   * reuses the persisted manifest and skips verified completed paths. The cap
-   * still comes from the worker attempt budget / one inline continuation.
-   */
   const truncated = classifyGenerationFailure({ code: "GENERATION_TRUNCATED" });
-  assert.equal(truncated.retryable, true);
+  assert.equal(truncated.retryable, false);
   assert.equal(truncated.errorClass, "generation_truncated");
+  assert.equal(
+    classifyGenerationFailure({
+      code: "GENERATION_TRUNCATED",
+      hasRecoverableProgress: true,
+    }).retryable,
+    true,
+  );
 
   assert.equal(
     classifyGenerationFailure({
@@ -174,6 +177,19 @@ test("an unrecognised failure is not retried", () => {
   const result = classifyGenerationFailure({ message: "something unexpected happened" });
   assert.equal(result.retryable, false);
   assert.equal(result.errorClass, "unknown");
+});
+
+test("truncation recovery requires checkpoints and multiple unfinished paths", () => {
+  assert.equal(hasRecoverableTruncationProgress([], ["a.ts", "b.ts"]), false);
+  assert.equal(hasRecoverableTruncationProgress(["a.ts"], ["a.ts", "b.ts"]), false);
+  assert.equal(
+    hasRecoverableTruncationProgress(["outside-manifest.ts"], ["a.ts", "b.ts", "c.ts"]),
+    false,
+  );
+  assert.equal(
+    hasRecoverableTruncationProgress(["a.ts"], ["a.ts", "b.ts", "c.ts"]),
+    true,
+  );
 });
 
 test("cancellation and a lost lease are classified apart from provider failures", () => {

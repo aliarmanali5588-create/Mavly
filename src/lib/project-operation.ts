@@ -79,10 +79,9 @@ export const PROJECT_OPERATION_KINDS = [
      * being replaced wholesale and the preview shows the wrong app. See
      * `ImportOverlay.tsx`.
      *
-     * ⚠️ AND IT IS THE ONLY ONE WITH A DURABLE SERVER-SIDE SIGNAL. `GET /projects/:id`
-     * reports `importInProgress`, so — unlike a restart, which only this browser
-     * knows about — a reload, a second tab and another device all agree. The stamp
-     * below is only a first-paint optimisation for the tab that started it.
+     * A backend may expose `importInProgress` as a durable signal. The current Mavly
+     * project response does not, so the workspace also watches for a served static
+     * preview and preserves a bounded unknown-operation timeout.
      */
     "import",
 ] as const;

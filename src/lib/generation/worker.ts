@@ -36,6 +36,8 @@ import {
 } from "@/lib/mavly/store";
 import { createSupabaseWorkerClient } from "@/lib/supabase/worker";
 import { emitGenerationEvent, emitVerificationEvent } from "@/lib/observability/events";
+import { maintainCreditsForWorker } from "@/lib/credits/service";
+import type { CreditReconciliation } from "@/lib/credits/store";
 import { runVerificationTick } from "@/lib/sandbox/verification";
 import {
   runAndroidBuildTick,
@@ -77,6 +79,8 @@ export interface WorkerTickResult {
   recovered?: number;
   /** Present only when this tick advanced the verification queue instead. */
   verification?: WorkerVerificationSummary;
+  /** Present only when the credit sweep ran (settled/released/backfilled). */
+  credits?: CreditReconciliation;
   /** Present only when this tick advanced the Android build queue instead. */
   androidBuild?: AndroidBuildTickSummary;
 }
@@ -135,6 +139,13 @@ export async function runGenerationWorkerOnce(
 
   const recovered = await recoverExpired(client, config);
 
+  /**
+   * ⚠️ CREDIT RECONCILIATION RUNS BEFORE CLAIMING. A previous tick may have
+   * completed a run and died before settlement; the sweep repairs those holds
+   * so an abandoned reservation cannot block the user's available balance.
+   */
+  const credits = await maintainCreditsForWorker(client);
+
   const claim = await claimWorkerJob(client, {
     workerId: config.workerId,
     leaseSeconds: WORKER_LEASE_SECONDS,
@@ -174,6 +185,7 @@ export async function runGenerationWorkerOnce(
     return {
       status: "empty",
       recovered,
+      ...(credits ? { credits } : {}),
       ...(verification ? { verification } : {}),
       ...(androidBuild ? { androidBuild } : {}),
     };
@@ -274,6 +286,7 @@ export async function runGenerationWorkerOnce(
       : {}),
     ...(outcome.status === "skipped" ? { reason: outcome.reason } : {}),
     recovered,
+    ...(credits ? { credits } : {}),
   };
 }
 

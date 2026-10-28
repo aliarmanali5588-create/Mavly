@@ -100,7 +100,27 @@ artifact-retention state, owner-safe column grants, schema marker 26 and a priva
 orchestration or the deployment approval gate: it adds the durable workflow/task/event
 tables, the owner-scoped deployment-proposal table and atomic consume RPC, and schema
 marker 29. It is additive and non-destructive and can be applied while the previous
-application version is live. Project-secret encryption also
+application version is live. Apply `30_managed_backends.sql` after 29 and before
+enabling managed Neon provisioning; it adds an owner-readable-metadata-only registry
+and service-role-only fenced provisioning RPCs. It is additive and non-destructive.
+Apply `31_credit_foundation.sql` after 30 before enabling ANY credit enforcement or
+role-level AI usage metering: it adds the credit accounts, append-only ledger,
+reservations, per-attempt usage tables, the database-owned `credit_project_policies`
+cohort/cost mirror, service-role-only credit admission/resume/release/terminal RPCs and
+the service-role metering RPC. It is additive and does not alter migration 16's
+queue/fencing RPCs. Credit-enforced projects must also be in the durable worker cohort;
+the database run-state guard blocks authenticated legacy create/resume paths and permits
+service-role insert/resume only through the credit-aware transaction-local markers.
+Synchronize enabled policy rows with `MAVLY_CREDITS_PROJECTS` and
+`MAVLY_CREDITS_GENERATION_COST`. Without migration 31, `MAVLY_CREDITS_ENABLED` fails
+closed with `MIGRATION_REQUIRED`. With the flag off, application credit/usage RPC calls
+are disabled, but an enabled database policy continues to block unreserved legacy run
+writes until drained and explicitly disabled. See `docs/runbooks/credits.md`.
+Generation-level and per-role usage-metering failures are logged without changing the
+terminal generation outcome and without discarding an already-produced advisory role
+result; the missing usage row stays missing and no cost is claimed for it. Neither path
+changes credit settlement.
+Project-secret encryption also
 requires the server-only `MAVLY_PROJECT_SECRETS_ENCRYPTION_KEY` (32 random bytes,
 base64-encoded); without it create/update fail closed. `npm test` covers the pure
 auth/redirect/ownership/scope modules, the generation state/lease/claim/observability
@@ -116,8 +136,9 @@ config/policy/archive/artifact/migration contracts, the Phase 10 workflow transi
 dependency/budget/output/config/approval/security/tool/parser rules and its static
 migration/catalog/deploy-gate invariants, the build-image reference/registry and
 offline-verification static contracts in `infra/android-build/`, the operator-doc coverage
-checks, the OpenRouter adapter contract, the model-catalog policy and static
-route/migration invariants.
+checks, the OpenRouter adapter contract, the model-catalog policy, the Phase 11
+credit configuration/lifecycle/RPC-error/migration contracts (pure and static),
+per-role model resolution, and static route/migration invariants.
 It does not
 exercise a
 real Supabase session, OpenRouter, a live worker/queue, the Supabase OAuth connection, Vercel
@@ -137,6 +158,22 @@ a delivered webhook, a container image build/publish, or the migrations against 
   `MAVLY_NORTH_MINI_CODE_PROJECTS` cohort. The same key serves the image API; the shared
   chat contract is `src/lib/ai/chat-contract.ts`. Do not add another model provider or
   hosted builder backend without approval.
+- **Managed Neon database provisioning is an opt-in foundation only.** A website planner
+  can signal that persistent data is required; only a worker-dispatched project in the
+  explicit `MAVLY_MANAGED_BACKENDS_PROJECTS` cohort may ask the orchestrator to provision
+  one Neon project. It requires `MAVLY_MANAGED_BACKENDS_ENABLED`,
+  `MAVLY_NEON_AGENT_PLAN_APPROVED`, `NEON_API_KEY`, `NEON_ORG_ID`, `NEON_REGION_ID`, the
+  server-only `MAVLY_MANAGED_BACKENDS_ENCRYPTION_KEY`, migration 30, and a Neon Agent Plan
+  enrollment approved by Neon (active Scale plan + team approval). It sets bounded
+  project quotas and reconciles ambiguous creates by a deterministic server-derived name
+  rather than repeating a potentially non-idempotent POST. The Neon connection URI is
+  AES-256-GCM encrypted in an owner-readable-metadata-only registry; only the worker
+  service client can access ciphertext. `provisioned` means only that Mavly's server-side
+  `select 1` succeeded. No application schema is migrated, generated server code is not
+  executed or bound to the URI, and generated CRUD/auth is not live. Do not claim managed
+  backend readiness until a separately reviewed runtime and controlled migration path
+  exist. Project deletion does not automatically delete the Neon resource, and Mavly usage
+  or billing attribution is not wired. No live Neon provisioning has been verified.
 - **Native Android source generation is implemented (Phase 9).** Project types persist in
   `public.projects.project_type` (migration 22) and Android creation is idempotent through
   migration 25. An Android prompt flows through the same durable run, OpenRouter provider, batch
@@ -237,7 +274,8 @@ a delivered webhook, a container image build/publish, or the migrations against 
   the run without deleting it. Expired leases become retries or dead letters, never
   duplicates. Cancellation is persisted and fences the worker at safe checkpoints; a
   provider request already sent cannot be undone. **The service-role client is confined to
-  `src/lib/supabase/worker.ts`, the worker orchestrator and its route. RLS is unchanged,
+  `src/lib/supabase/worker.ts`, the worker orchestrator and its route; the managed-backend
+  provisioning service only receives that client from the worker. RLS is unchanged,
   and the authenticated role's UPDATE grant explicitly excludes all worker-owned columns.**
   There is no built-in scheduler; see `docs/runbooks/generation-worker.md` for invocation,
   alerting, pause/drain, safe rollback and capacity limits. Do not raise the 2/user or
@@ -401,23 +439,32 @@ a delivered webhook, a container image build/publish, or the migrations against 
   enabled only by `MAVLY_MULTI_AGENT_ENABLED` plus an explicit
   `MAVLY_MULTI_AGENT_PROJECTS` cohort, a fully configured durable generation worker
   (migration 16), `SUPABASE_SERVICE_ROLE_KEY`, `NEXT_PUBLIC_SUPABASE_URL`,
-  `OPENROUTER_API_KEY` and migration 29. It runs **only for worker-dispatched runs**;
+  `OPENROUTER_API_KEY`, migrations 29 and 31. It runs **only for worker-dispatched runs**;
   inline `after()` runs and projects outside the cohort keep the existing pipeline and
   record no workflow. The durable `project_runs` row remains the only job/lease and
   `generateApp` remains the only writer of `project_files`: the orchestrator adds a
   1:1 `agent_workflows` record, dependency-aware `agent_tasks` and a bounded
-  `agent_workflow_events` audit trail. The planner (45 s / 2k tokens) and UI/UX
-  (30 s / 1.5k tokens) roles are bounded advisory model calls injected after the
-  existing prompt's repository rules and marked as subordinate context; coding
-  delegates to the existing generation engine; QA delegates to the existing
-  verification sandbox and reports `pending`/`unavailable` rather than passing; the
-  security role is a deterministic static scan (no model call, no runtime proof); the
-  repair role is **diagnostic only** and never writes source; the deployment role can
-  only record a proposal and never deploys. Every model call is budget-limited,
-  timed out, bounded and persisted as reported cost; a role failure is recorded
-  truthfully and never changes the generation run's own outcome. The workflow
+  `agent_workflow_events` audit trail. Role IDs are pinned in
+  `src/lib/ai/model-roles.ts`. Only DeepSeek V4.1 Flash and the cohort-gated
+  Cohere North Mini Code are currently treated as verified OpenRouter catalog entries.
+  Until the requested DeepSeek V4 Pro, Claude Sonnet 5 and GPT-5.6 Sol ids are verified,
+  all model roles are explicitly pinned to the verified DeepSeek V4.1 Flash entry; there
+  is no environment override or implicit fallback. Coding still delegates to the
+  existing generation engine; QA adds a bounded advisory source
+  review while the existing verification sandbox alone can report build/runtime
+  checks; Security combines a bounded advisory review with the deterministic static
+  scan. Repair suggestions are passed only as subordinate context to the existing
+  coding engine on a durable retry and never write source directly. Deployment
+  remains deterministic and can only record a proposal. Specialist attempts record
+  provider tokens, request ids and reported cost through migration 31; unknown cost
+  stays unknown and no credit-price or settlement rules change. Role failures are
+  reflected in workflow/task state and never turn into fabricated passes. The workflow
   projection is owner-readable through the existing authorized `agent/workflow`
-  routes and the workspace's **Agents & approvals** panel. **The deployment approval
+  routes and the workspace's **Agents & approvals** panel. QA and Security reviews run
+  after the `project_runs` row is marked done: their failure
+  can fail the workflow record but cannot change that run's terminal state or trigger a
+  retry. Only a separate eligible generation retry may receive the Repair role's
+  subordinate suggestions. **The deployment approval
   gate is separate and server-enforced** (`MAVLY_DEPLOYMENT_APPROVAL_REQUIRED`, or
   automatically for a multi-agent cohort project): a publish without an owner-approved,
   unexpired, single-use proposal bound to the exact server-derived snapshot/target/
@@ -429,6 +476,36 @@ a delivered webhook, a container image build/publish, or the migrations against 
   workflow, real OpenRouter planning calls, the panel and the approval gate have not
   been exercised live. See `docs/architecture/phase-10-multi-agent-orchestration.md`
   and `docs/runbooks/multi-agent-orchestration.md`.
+- **The credit foundation is implemented but OFF BY DEFAULT (Phase 11).** It is
+  enabled only when `MAVLY_CREDITS_ENABLED` is truthy, an explicit
+  `MAVLY_CREDITS_PROJECTS` cohort exists and `MAVLY_CREDITS_GENERATION_COST` is a whole
+  number between 1 and 100000, the project is in the worker cohort, and a service-managed
+  `credit_project_policies` row matches the project and fixed cost. Credits are whole
+  `bigint` units; USD uses `numeric(20,9)`. The service-role-only
+  `create_generation_job_with_credits` RPC calls the existing `create_generation_job`
+  and takes the hold in the SAME transaction, so an insufficient balance raises and rolls
+  the job back. An enabled database policy blocks authenticated legacy create/resume calls
+  and permits service-role insert/resume only through the transaction-local markers set
+  by the credit-aware RPCs. A completed run settles; a terminal failed/cancelled run
+  releases only through a trusted worker/server path; owner reconciliation settles
+  successes only. A resume re-holds only after a release, and a duplicate resume of an
+  active run is refused instead of starting or charging a second execution. A hold whose
+  run row was deleted (a deleted project cascades its runs) is released by the worker
+  sweep's bounded orphan pass, and the launch path releases the hold before deleting a
+  project it just created. The workspace sends a stable `clientRequestId` per launch, and
+  the wrapper rejects a reused key with a different prompt/model as a conflict. The
+  `credit_ledger` is append-only (a trigger rejects UPDATE/DELETE) and reconciles to the
+  cached account (`sum(amount) = balance`, `sum(reserved_delta) = reserved`).
+  Authenticated users have SELECT only; admission/resume/release/failure-cancellation,
+  grants/refunds, role usage writes and worker sweep are service-role only. **There is no
+  Mavly credit-funding flow** — credits exist only
+  through the service-role `grant_credits` RPC, so enabling enforcement before funding
+  refuses generation with `402 INSUFFICIENT_CREDITS`. Per-attempt usage is derived from
+  the server-written run row; actual cost is provider-reported only, and estimated cost
+  is NULL unless an operator installs a row in `ai_cost_rates`. A timeout/network
+  failure stays `uncertain`, never zero. **Unverified:** migration 31, its RLS/RPCs,
+  live settlement and the workspace balance indicator. See
+  `docs/architecture/phase-11-credit-foundation.md` and `docs/runbooks/credits.md`.
 - **Restore points are implemented.** Every completed AI execution that changes the
   project's source leaves a durable snapshot (`project_snapshots` +
   `project_snapshot_files`). The chat renders a **Restore Code** action on that execution,
@@ -443,7 +520,8 @@ a delivered webhook, a container image build/publish, or the migrations against 
   Image generation panel was removed, so no UI currently calls this route; the API and
   its tests remain. The image
   is **not persisted** (there is no binary asset pipeline; `project_files` is text) and
-  **no credits are charged** (there is no credit engine). The image catalog is separate
+  **no credits are charged** (the Phase 11 credit foundation covers generation runs
+  only, is off by default, and no image price exists). The image catalog is separate
   from `src/lib/ai/models.ts` on purpose: `resolveModel()` must never select an image
   model for website generation. Reference images are not supported, and a URL-only
   provider response is refused rather than fetched. Admission is a best-effort,
@@ -539,6 +617,8 @@ browser ── src/lib/vcaas.ts (client catalog, same-origin only)
    │             └── service.ts → src/lib/vercel/provider.ts → api.vercel.com
    ├── /api/generation/worker      Bearer secret → service-role worker tick
    │      ├── src/lib/generation/worker.ts → run-agent (worker mode)
+   │      │      └── src/lib/managed-backend/service.ts → Neon API + encrypted Supabase registry
+   │      │             (opt-in provisioning only; no generated-app runtime)
    │      └── src/lib/sandbox/verification.ts → provider microVM (build + runtime)
    ├── /api/app/v1/payments/*      public, project API key (integrations:*) → Razorpay
    ├── /api/integrations/webhooks/razorpay/{token}
@@ -628,6 +708,15 @@ paths with `src/lib/vcaas-scope.ts`, so unknown shapes are refused before any wo
 | `src/lib/mavly/image-limits.ts` | Best-effort per-user/per-instance image-generation admission windows. |
 | `src/lib/ai/provider.ts` | The fixed OpenRouter boundary for completion calls and configuration errors. |
 | `src/lib/ai/models.ts` | OpenRouter model catalog and default-model resolution. |
+| `src/lib/managed-backend/` | Off-by-default Neon configuration, fixed-origin API client, encrypted connection-URI storage, worker-only idempotent provisioning and connectivity probe. Infrastructure status is not application runtime readiness. |
+| `supabase/migrations/30_managed_backends.sql` | Owner-readable Neon lifecycle metadata, service-role-only provisioning RPCs, encrypted-URI column grants and a fenced per-project provisioning claim. It does not apply generated application SQL. |
+| `src/lib/credits/config.ts` | Opt-in flag/cohort/fixed whole-credit cost; a half-configured deployment charges nothing and reports the exact problem. |
+| `src/lib/credits/state.ts` | Pure balance, settle/release eligibility, resume and insufficient-credits rules. |
+| `src/lib/credits/store.ts` | Typed wrappers for the credit RPCs; fail-closed error mapping; no fabricated balance. |
+| `src/lib/credits/service.ts` | Post-terminal settlement/release/usage recording, owner snapshot and worker sweep. |
+| `supabase/migrations/31_credit_foundation.sql` | Accounts, append-only ledger, reservations, service-managed cohort/cost policies, per-attempt usage, service-role credit admission/resume/release/terminal RPCs, successful owner reconciliation and worker sweep. Additive; apply after 30. |
+| `src/lib/ai/model-roles.ts` | Per-role model resolution over the verified catalog; deployment is deterministic; unverified overrides are ignored. |
+| `docs/architecture/phase-11-credit-foundation.md`, `docs/runbooks/credits.md` | Phase 11 design, invariants, rollout, funding gap and acceptance checklist. |
 | `src/lib/mavly-hostname.ts` | Pure derivation of `<project-id>.mavly.xyz` from the immutable, owned project id; refuses reserved labels. |
 | `src/lib/tenant-host.ts` | Pure request-host parser and the only way to identify a public tenant. |
 | `src/lib/reserved-hostnames.ts` | Mavly-owned host labels, shared by slug creation, publishing, routing and migration 14. |
@@ -667,8 +756,10 @@ paths with `src/lib/vcaas-scope.ts`, so unknown shapes are refused before any wo
 | `src/components/workspace/v2/ProjectMemoryPanel.tsx` | Real memory controls: derived facts, list, add/edit/approve/reject/archive/delete/clear; disabled and error states are truthful. |
 | `docs/architecture/phase-8-agent-memory.md`, `docs/runbooks/agent-memory.md` | Phase 8 memory authority, storage/retrieval, freshness, security, rollout and acceptance. |
 | `src/lib/orchestration/contracts.ts`, `workflow.ts` | Phase 10 pure role/task/workflow contracts, explicit transitions, dependency graph, bounded scheduling, complexity classification, budgets, retries and normalized output projection. |
-| `src/lib/orchestration/config.ts`, `roles.ts`, `tools.ts`, `security.ts` | Opt-in cohort/approval configuration, specialist prompts and parsers, the scoped tool registry, and the deterministic static security scan (no model call). |
-| `src/lib/orchestration/engine.ts` | The orchestration engine: worker-only workflow start, planner/UI-UX advisory calls, coding markers, QA delegation, security review, diagnostic repair and the truthful workflow projection. |
+| `src/lib/ai/model-roles.ts` | Fixed role-to-OpenRouter model mapping with no fallback for missing or disabled model entries. |
+| `src/lib/orchestration/config.ts`, `roles.ts`, `tools.ts`, `security.ts` | Opt-in cohort/approval configuration, specialist prompts and source-line-validated parsers, the scoped tool registry, and the deterministic static security scan. |
+| `src/lib/orchestration/engine.ts` | Worker-only workflow start, pinned specialist calls, per-attempt usage recording, bounded QA/security review, coding markers, repair diagnosis and the truthful workflow projection. |
+| `src/lib/credits/store.ts` | Typed wrappers for migration 31 credit and per-role AI usage RPCs; specialist calls use its service-role-only attempt recorder. |
 | `src/lib/orchestration/store.ts` | Worker-owned workflow/task/event persistence with compare-and-set transitions, run cancellation/failure helpers and owner cancellation; missing migration is reported, never faked. |
 | `src/lib/orchestration/approval.ts`, `approval-store.ts`, `approval-service.ts`, `approval-gate.ts` | Artifact-bound deployment proposals: pure validity rules, owner-scoped SECURITY DEFINER RPC wrappers, service-layer proposal derivation, and the deploy-time atomic consume gate. |
 | `src/components/workspace/v2/ProjectWorkflowPanel.tsx` | Agents & approvals panel: truthful workflow/check/finding state, reported cost, proposal create/approve/revoke and deploy-with-approval. |
@@ -704,16 +795,18 @@ paths with `src/lib/vcaas-scope.ts`, so unknown shapes are refused before any wo
    `MAVLY_ANDROID_BUILD_ENABLED`, `MAVLY_ANDROID_BUILD_PROJECTS`,
    `MAVLY_ANDROID_BUILD_IMAGE`, `MAVLY_ANDROID_ARTIFACT_BUCKET`,
    `MAVLY_BUSINESS_INTEGRATIONS_ENABLED`,
-   `MAVLY_BUSINESS_INTEGRATIONS_RPC_SECRET` and the
-   worker's server-only configuration are server-only
+   `MAVLY_BUSINESS_INTEGRATIONS_RPC_SECRET`, `NEON_API_KEY`,
+   `MAVLY_MANAGED_BACKENDS_ENCRYPTION_KEY` and the worker's server-only configuration
+   are server-only
    and must never be renamed with a `NEXT_PUBLIC_`
    prefix. Razorpay credentials are **never** environment variables on Mavly: they are
    entered per project, encrypted as project secrets, and decrypted only inside the
-   owner test or gateway request. Never commit `.env*` files. The service-role client is confined to
-   `src/lib/supabase/worker.ts`, the worker orchestrator, `/api/generation/worker`, the
-   verification sandbox tick and the Android build worker that receive it from the worker,
-   and the owner-checked Android artifact-download handler that mints a short-lived signed
-   URL (it re-reads the build row scoped by project); nothing under `components/` or the
+   owner test or gateway request. Never commit `.env*` files. The service-role client is
+   confined to `src/lib/supabase/worker.ts`, the worker orchestrator and route, the
+   verification sandbox tick, the Android build worker, the managed-backend provisioning
+   service that receives it from the worker, and the owner-checked Android
+   artifact-download handler that mints a short-lived signed URL (it re-reads the build
+   row scoped by project); nothing under `components/` or the
    browser catalog may import it. Sandbox provider credentials are used only by the
    server-side adapter and are never uploaded into a sandbox or returned in a build or
    verification result. Android artifact bucket/object keys are service-role only; the
@@ -813,6 +906,33 @@ paths with `src/lib/vcaas-scope.ts`, so unknown shapes are refused before any wo
     never supplies the hash, no model can approve, and a consumed approval is not
     reusable even if the provider call later fails. With the gate off, legacy
     deployment behaviour is unchanged.
+15. **Managed Neon provisioning is infrastructure-only and worker-owned.** It is off
+    unless Neon Agent Plan approval is confirmed by an operator, all server-side
+    prerequisites are valid, and the Mavly project is in an explicit cohort and a
+    worker-dispatched run. The AI may return only a bounded database-requirement signal;
+    it never receives the Neon API key or connection URI. Registry writes require the
+    service-role RPCs and re-check `(project_id, user_id)` ownership. The encrypted URI
+    is not selectable by authenticated users. Ambiguous project-create outcomes are
+    reconciled by the unique server-derived project name; the code does not blindly
+    retry a non-idempotent create. No automatic provider deletion, application SQL
+    migration, generated-app connection, or app-ready claim is implemented.
+16. **Credit accounting is authoritative, append-only and server-only.** Supabase is the
+    source of truth. Authenticated users can read their own account, ledger,
+    reservations and usage rows; they have no INSERT/UPDATE/DELETE grant and cannot
+    directly admit, resume, release or terminalize a credit run. An enabled
+    `credit_project_policies` row blocks authenticated legacy run writes and requires
+    service-role admission/resume markers. Only successful settlement, balance and owner
+    reconciliation are owner-checked; `grant_credits`, credit refunds, admission/resume,
+    failure/cancellation release, per-role usage writes and the worker sweep are
+    service-role only. The browser never
+    supplies a balance, cost, refund amount or entitlement, and no model can mutate the
+    ledger. A hold is never released for a completed run and a run is never charged
+    without `finished_at` + `status = 'done'` + `stage = 'completed'`. Credits are
+    whole `bigint` units and USD is `numeric(20,9)`; floating-point accounting is
+    forbidden. Unknown provider cost stays NULL with an explicit
+    `reconciliation_status`/`uncertain` marker, never zero.     with the flag or cohort off, the application calls no credit/usage RPCs. An enabled
+    database policy remains an independent fail-closed run-write guard until the project
+    is drained and the policy explicitly disabled.
 
 ## UI conventions
 

@@ -14,7 +14,7 @@
  * system prompt, a tool allowlist or an approval requirement.
  */
 
-import type { AgentRole } from "./contracts";
+import type { AgentFinding, AgentRole, ProjectFile } from "./contracts";
 
 export interface RoleDefinition {
   role: AgentRole;
@@ -71,7 +71,7 @@ export const ROLE_CATALOG: Readonly<Record<AgentRole, RoleDefinition>> = {
       "inspect_preview",
     ],
     writesProjectFiles: false,
-    requiresModelCall: false,
+    requiresModelCall: true,
   },
   repair: {
     role: "repair",
@@ -85,7 +85,7 @@ export const ROLE_CATALOG: Readonly<Record<AgentRole, RoleDefinition>> = {
     label: "Security",
     tools: ["list_files", "read_files"],
     writesProjectFiles: false,
-    requiresModelCall: false,
+    requiresModelCall: true,
   },
   deployment: {
     role: "deployment",
@@ -157,6 +157,42 @@ Rules:
 - Reference real paths/tokens that appear in the provided context. If the context does not show a design system, say so and mark it as unknown.
 - Do not propose external fonts, images or network calls that the project does not already use.
 - Keep every array at 12 items or fewer and every string under 500 characters.`;
+
+export const QA_SYSTEM_PROMPT = `${COMMON_RULES}
+
+Role: QA reviewer. Review only the supplied source excerpts and recorded static checks. You cannot run commands, build, test, browse or execute the project.
+
+JSON shape:
+{
+  "summary": "what the supplied evidence supports",
+  "findings": [
+    { "severity": "critical|high|medium|low|info", "title": "...", "detail": "...", "path": "existing path", "line": 1, "evidence": "exact source text from that line" }
+  ],
+  "risks": ["..."]
+}
+
+Rules:
+- Findings must identify an exact supplied path and 1-based line and include a short exact excerpt from that line. If you cannot point to source evidence, put the concern in risks or omit it.
+- Never report a build, runtime, browser, test or security check as passed. Recorded checks are the only evidence for those outcomes.
+- Keep findings and risks to 8 items each; every string must be under 500 characters.`;
+
+export const SECURITY_SYSTEM_PROMPT = `${COMMON_RULES}
+
+Role: Security reviewer. Review the supplied source excerpts for concrete secret exposure, authorization gaps, unsafe execution and injection risks. You are advisory; the deterministic security scan remains a separate required check. Source-backed critical findings may fail the workflow for owner review, but your response cannot pass a check or authorize deployment.
+
+JSON shape:
+{
+  "summary": "what the supplied source evidence supports",
+  "findings": [
+    { "severity": "critical|high|medium|low|info", "title": "...", "detail": "...", "path": "existing path", "line": 1, "evidence": "exact source text from that line" }
+  ],
+  "risks": ["..."]
+}
+
+Rules:
+- Findings must identify an exact supplied path and 1-based line and include a short exact excerpt from that line. If you cannot point to source evidence, put the concern in risks or omit it.
+- Never include secret values, credentials, tokens or connection strings in findings or risks.
+- Do not claim a clean scan proves runtime security. Keep findings and risks to 8 items each; every string must be under 500 characters.`;
 
 export const REPAIR_SYSTEM_PROMPT = `${COMMON_RULES}
 
@@ -273,6 +309,89 @@ export interface DesignReview {
   responsive: string[];
   risks: string[];
   verification: string[];
+}
+
+export interface SourceReview {
+  summary: string;
+  findings: Array<{
+    severity: AgentFinding["severity"];
+    title: string;
+    detail: string;
+    path: string;
+    line: number;
+    evidence: string;
+  }>;
+  risks: string[];
+}
+
+export function parseSourceReview(
+  raw: string,
+  files: readonly ProjectFile[],
+): ParseResult<SourceReview> {
+  const parsed = parseJsonObject(raw);
+  if (parsed.ok === false) return parsed;
+  const summary = text(parsed.value.summary, 1_000);
+  if (!summary) return { ok: false, error: "The source review returned no summary." };
+
+  const fileLines = new Map(
+    files.map((file) => [file.path, file.content.split(/\r?\n/).length]),
+  );
+  const findings: SourceReview["findings"] = [];
+  if (Array.isArray(parsed.value.findings)) {
+    for (const entry of parsed.value.findings) {
+      if (!entry || typeof entry !== "object" || Array.isArray(entry)) continue;
+      const finding = entry as Record<string, unknown>;
+      const path = text(finding.path, 300);
+      const line =
+        typeof finding.line === "number" && Number.isInteger(finding.line)
+          ? finding.line
+          : null;
+      const title = text(finding.title, 200);
+      const detail = text(finding.detail, 500);
+      const evidence = text(finding.evidence, 200);
+      const severity =
+        finding.severity === "critical" ||
+        finding.severity === "high" ||
+        finding.severity === "medium" ||
+        finding.severity === "low" ||
+        finding.severity === "info"
+          ? finding.severity
+          : null;
+      const lineCount = path ? fileLines.get(path) : undefined;
+      const lineContent =
+        path && line !== null
+          ? files.find((file) => file.path === path)?.content.split(/\r?\n/)[line - 1]
+          : undefined;
+      const normalizedLine = lineContent?.replace(/\s+/g, " ").trim().toLowerCase();
+      const normalizedEvidence = evidence?.replace(/\s+/g, " ").trim().toLowerCase();
+      if (
+        path &&
+        line !== null &&
+        line >= 1 &&
+        lineCount !== undefined &&
+        line <= lineCount &&
+        title &&
+        detail &&
+        evidence &&
+        normalizedLine &&
+        normalizedEvidence &&
+        normalizedLine.includes(normalizedEvidence) &&
+        severity
+      ) {
+        findings.push({ severity, title, detail, path, line, evidence });
+      }
+      if (findings.length >= 8) break;
+    }
+  }
+
+  return {
+    ok: true,
+    value: {
+      summary,
+      findings,
+      risks: list(parsed.value.risks, 8, 500),
+    },
+  };
 }
 
 export function parseDesignReview(raw: string): ParseResult<DesignReview> {

@@ -2,9 +2,12 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  BATCH_OUTPUT_TOKENS,
   MAX_FILE_BYTES,
+  PREVIEW_OUTPUT_TOKENS,
   generateApp,
   isGenerationFailure,
+  type AgentDependencies,
   type AgentGenerationInput,
 } from "../src/lib/ai/agent";
 import {
@@ -47,6 +50,8 @@ function success(content: string, finishReason = "stop"): ChatCompletionSuccess 
         completionTokens: 7,
         totalTokens: 18,
         reasoningTokens: 0,
+        cachedReadTokens: 0,
+        cachedWriteTokens: 0,
         costUsd: 0.001,
       },
       providerRequestId: "req-test",
@@ -77,6 +82,8 @@ function failure(
         completionTokens: null,
         totalTokens: null,
         reasoningTokens: null,
+        cachedReadTokens: null,
+        cachedWriteTokens: null,
         costUsd: null,
       },
       providerRequestId: "req-failure",
@@ -576,14 +583,22 @@ test("a structurally complete preview document is persisted once", async () => {
 
 test("a preview cut off before </html> is never persisted as a completed preview", async () => {
   let batchCalls = 0;
+  const batchTokenLimits: number[] = [];
   let persisted = 0;
   const truncated = "<!doctype html><html><body><h1>Half a page</h1>";
 
-  const complete = provider((messages) => {
+  const complete: NonNullable<AgentDependencies["complete"]> = async (
+    _model,
+    messages,
+    options,
+  ) => {
     if (isPlanner(messages)) return success(manifestJson(["preview.html"]));
     batchCalls += 1;
+    batchTokenLimits.push(
+      typeof options === "number" ? options : options.maxTokens ?? 0,
+    );
     return success(batchJson([["preview.html", truncated]]));
-  });
+  };
 
   const outcome = await generateApp(
     {
@@ -600,8 +615,45 @@ test("a preview cut off before </html> is never persisted as a completed preview
   if (!isGenerationFailure(outcome)) return;
   assert.equal(outcome.code, "GENERATION_TRUNCATED");
   assert.equal(persisted, 0);
-  // One normal attempt plus exactly one smaller-scope compact retry.
+  // The incomplete preview is not repaired with the same doomed full-file
+  // request; it gets one compact retry with its preview-specific ceiling.
   assert.equal(batchCalls, 2);
+  assert.deepEqual(batchTokenLimits, [
+    Math.min(model.maxOutputTokens, PREVIEW_OUTPUT_TOKENS),
+    Math.min(model.maxOutputTokens, PREVIEW_OUTPUT_TOKENS),
+  ]);
+});
+
+test("malformed preview repair keeps the preview-specific output ceiling", async () => {
+  let repairTokenLimit: number | null = null;
+  const complete: NonNullable<AgentDependencies["complete"]> = async (
+    _model,
+    messages,
+    options,
+  ) => {
+    if (isPlanner(messages)) return success(manifestJson(["preview.html"]));
+    if (isRepair(messages)) {
+      repairTokenLimit =
+        typeof options === "number" ? options : options.maxTokens ?? null;
+      return success(batchJson([["preview.html", VALID_PREVIEW]]));
+    }
+    return success("not json at all");
+  };
+
+  const outcome = await generateApp(
+    { prompt: "build it", mode: "update" },
+    { complete, sleep: noop },
+  );
+
+  assert.equal(isGenerationFailure(outcome), false);
+  assert.equal(
+    repairTokenLimit,
+    Math.min(model.maxOutputTokens, PREVIEW_OUTPUT_TOKENS),
+  );
+  assert.ok(repairTokenLimit !== null);
+  assert.ok(
+    repairTokenLimit > Math.min(model.maxOutputTokens, BATCH_OUTPUT_TOKENS),
+  );
 });
 
 test("a success-shaped response with finish_reason length is still a truncation", async () => {
@@ -679,4 +731,6 @@ test("no provider call starts when the remaining budget is below the minimum use
   if (!isGenerationFailure(outcome)) return;
   assert.equal(outcome.code, "GENERATION_TIMEOUT");
   assert.equal(calls, 0);
+  assert.equal(outcome.usage.attempts, 0);
+  assert.deepEqual(outcome.attempts, []);
 });

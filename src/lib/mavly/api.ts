@@ -74,6 +74,17 @@ import {
   listAndroidBuilds,
 } from "@/lib/android/build-store";
 import { generationWorkerConfig } from "@/lib/generation/worker-config";
+import { creditCostForProject } from "@/lib/credits/config";
+import {
+  createGenerationJobWithCredits,
+  finishCreditGenerationRun,
+  isCreditsFailure,
+  resumeGenerationJobWithCredits,
+} from "@/lib/credits/store";
+import {
+  creditSnapshotForOwner,
+  recordRunUsage,
+} from "@/lib/credits/service";
 import { toAndroidBuildView, type AndroidBuildView } from "@/lib/android/build-state";
 import { createAndroidArtifactStore } from "@/lib/android/artifact-store";
 import { createSupabaseWorkerClient } from "@/lib/supabase/worker";
@@ -331,6 +342,20 @@ export async function handleMavlyVcaasRequest(input: MavlyRequest): Promise<Next
 
   if (scope.kind === "account" && scope.resource === "credit-costs" && method === "GET") {
     return ok({ creditCosts: {} });
+  }
+
+  /**
+   * ═══ CREDIT ACCOUNT (READ) ═════════════════════════════════════════════════
+   *
+   * The workspace's authoritative balance. The read also performs one bounded
+   * owner-scoped reconciliation, so a process that died between a completed run
+   * and its settlement is repaired before the number is shown.
+   *
+   * When credits are disabled the response says so and carries NULL values —
+   * never a fabricated zero balance.
+   */
+  if (scope.kind === "account" && scope.resource === "credits" && method === "GET") {
+    return creditsResponse();
   }
 
   if (scope.kind === "account" && scope.resource === "figma-validate" && method === "POST") {
@@ -670,6 +695,26 @@ async function listProjectResponse(userId: string, query: URLSearchParams): Prom
   return ok(data);
 }
 
+async function creditsResponse(): Promise<NextResponse> {
+  const snapshot = await creditSnapshotForOwner();
+
+  if (snapshot.errorCode === "MIGRATION_REQUIRED") {
+    return fail(
+      503,
+      "MIGRATION_REQUIRED",
+      snapshot.problem ?? "Credit accounting needs migration 31_credit_foundation.sql.",
+    );
+  }
+  if (snapshot.errorCode === "UNAVAILABLE") {
+    return fail(503, "BACKEND_NOT_CONFIGURED", "Supabase is not configured.");
+  }
+  if (snapshot.errorCode) {
+    return fail(500, "UNKNOWN", snapshot.problem ?? "Could not load the credit account.");
+  }
+
+  return ok(snapshot);
+}
+
 async function createProjectResponse(userId: string, body: unknown): Promise<NextResponse> {
   const record = recordOf(body);
   const requestedId = stringOf(record.projectId)?.trim() ?? "";
@@ -706,6 +751,14 @@ async function launchProjectResponse(userId: string, body: unknown): Promise<Nex
   if (projectType === "android" && !isRequestId(creationRequestId)) {
     return fail(400, "VALIDATION", "A valid clientRequestId is required to launch an Android project.");
   }
+  /**
+   * A WEBSITE LAUNCH MAY ALSO CARRY A CREATION KEY. It is optional, but when it
+   * is present a retry (double click, timeout, reconnect) resolves to the SAME
+   * project and therefore to the SAME run instead of creating a second one.
+   */
+  if (projectType === "website" && creationRequestId && !isRequestId(creationRequestId)) {
+    return fail(400, "VALIDATION", "clientRequestId must be a UUID.");
+  }
   if (!isAiConfigured()) {
     return fail(503, "BACKEND_NOT_CONFIGURED", generationConfigurationError());
   }
@@ -733,15 +786,21 @@ async function launchProjectResponse(userId: string, body: unknown): Promise<Nex
     description,
     label,
     projectType,
-    projectType === "android" ? creationRequestId : undefined,
+    creationRequestId ? creationRequestId : undefined,
   );
   if (isStoreFailure(created)) return fail(created.code === "CONFLICT" ? 409 : 500, created.code ?? "UNKNOWN", created.error);
+
+  /**
+   * ⚠️ A KEYED LAUNCH MAY HAVE RETURNED AN EXISTING PROJECT. It is then not this
+   * request's project, so no failure path below may delete it.
+   */
+  const mayReuseExistingProject = creationRequestId.length > 0;
 
   if (
     requestedModel === COHERE_NORTH_MINI_CODE_MODEL_ID &&
     !isCohereNorthMiniCodeEnabledForProject(created.data.project_id)
   ) {
-    if (projectType === "website") await deleteProject(userId, created.data.project_id);
+    if (!mayReuseExistingProject) await deleteProject(userId, created.data.project_id);
     return fail(403, "FORBIDDEN", "The Cohere testing model is not enabled for this project.");
   }
   const model = resolveModel(requestedModel, "app-generation", process.env, created.data.project_id);
@@ -759,62 +818,103 @@ async function launchProjectResponse(userId: string, body: unknown): Promise<Nex
     }
   }
   const dispatchMode = dispatchModeForProject(created.data.project_id);
-  const admission = await createGenerationJob({
+  /** The server decides the cost; the request body cannot name it. */
+  const creditCost = creditCostForProject(created.data.project_id);
+  const admission = await admitGeneration({
+    userId,
     projectId: created.data.project_id,
     model: model.id,
     prompt,
     idempotencyKey: idempotencyKeyOf(record),
     dispatchMode,
+    creditCost,
   });
-  if (isStoreFailure(admission)) {
+  if (admission.kind === "failure") {
     emitGenerationEvent("generation.rejected", {
       projectId: created.data.project_id,
       reason: admission.code ?? "admission_failed",
       dispatchMode,
     });
-    /**
-     * ⚠️ AN ANDROID LAUNCH MAY HAVE RETURNED AN EXISTING IDEMPOTENT PROJECT.
-     * Deleting it here would destroy a project this request did not create.
-     */
-    if (projectType !== "android") await deleteProject(userId, created.data.project_id);
+    if (!mayReuseExistingProject) await deleteProject(userId, created.data.project_id);
     return admissionFailure(admission);
   }
-  if (admission.data.status === "rate_limited") {
+  if (admission.kind === "insufficient") {
+    emitGenerationEvent("credits.refused", {
+      projectId: created.data.project_id,
+      reason: "INSUFFICIENT_CREDITS",
+      status: "insufficient_credits",
+      ...(admission.available !== null ? { credits: admission.available } : {}),
+    });
+    if (!mayReuseExistingProject) await deleteProject(userId, created.data.project_id);
+    return fail(
+      402,
+      "INSUFFICIENT_CREDITS",
+      "You do not have enough available credits to start this generation. Nothing was charged and no run was created.",
+    );
+  }
+  if (admission.kind === "rate_limited") {
     emitGenerationEvent("generation.rejected", {
       projectId: created.data.project_id,
       reason: "rate_limited",
-      status: admission.data.scope,
+      status: admission.scope,
       dispatchMode,
     });
-    if (projectType !== "android") await deleteProject(userId, created.data.project_id);
-    return rateLimited(admission.data.scope, admission.data.retryAfterSeconds);
+    if (!mayReuseExistingProject) await deleteProject(userId, created.data.project_id);
+    return rateLimited(admission.scope, admission.retryAfterSeconds);
   }
-  if (admission.data.status === "existing" && projectType === "android") {
-    /**
-     * A retried Android launch with the same clientRequestId is the SAME job.
-     * Return it instead of deleting the project or reporting a conflict.
-     */
-    return ok({
-      projectId: created.data.project_id,
-      ...(created.data.project_id !== requestedId ? { requestedProjectId: requestedId } : {}),
-      agent: { started: true, status: admission.data.run.finished_at ? "done" : "init" },
-      warnings,
-    });
-  }
-  if (admission.data.status === "conflict" || admission.data.status === "existing") {
+  if (admission.kind === "conflict") {
     emitGenerationEvent("generation.rejected", {
       projectId: created.data.project_id,
       reason: "conflict",
       dispatchMode,
     });
-    if (projectType !== "android") await deleteProject(userId, created.data.project_id);
+    if (!mayReuseExistingProject) await deleteProject(userId, created.data.project_id);
     return fail(409, "CONFLICT", "A generation is already active for this project.");
   }
+  if (admission.status === "existing") {
+    /**
+     * ⚠️ A RETRY IS NOT A CONFLICT. The creation key resolved to the same
+     * project, so the generation key resolved to the same run: return it,
+     * start nothing, charge nothing and delete nothing.
+     */
+    return ok({
+      projectId: created.data.project_id,
+      ...(created.data.project_id !== requestedId ? { requestedProjectId: requestedId } : {}),
+      agent: { started: true, status: admission.run.finished_at ? "done" : "init" },
+      warnings,
+    });
+  }
 
-  const run = admission.data.run;
+  const run = admission.run;
+  if (creditCost !== null) {
+    emitGenerationEvent("credits.reserved", {
+      runId: run.id,
+      projectId: created.data.project_id,
+      traceId: run.trace_id,
+      credits: creditCost,
+      status: "reserved",
+    });
+  }
   const message = await insertMessage(created.data.project_id, "user", prompt);
   if (isStoreFailure(message)) {
-    await finishRun(run.id, "error", "Could not save the prompt.", { stage: "failed", errorCode: "RUN_PROMPT_SAVE_FAILED" });
+    const finished = await finishOwnerRun({
+      userId,
+      projectId: created.data.project_id,
+      runId: run.id,
+      dispatchMode: run.dispatch_mode,
+      status: "error",
+      message: "Could not save the prompt.",
+      stage: "failed",
+      errorCode: "RUN_PROMPT_SAVE_FAILED",
+      reason: "Run could not start",
+    });
+    if (!finished) {
+      return fail(
+        503,
+        "CREDIT_SETTLEMENT_DEFERRED",
+        "The prompt could not be saved and the run could not be safely finalized. It was kept for recovery.",
+      );
+    }
     if (projectType !== "android") await deleteProject(userId, created.data.project_id);
     return fail(500, "UNKNOWN", "Could not start the agent.");
   }
@@ -868,6 +968,136 @@ function idempotencyKeyOf(body: Record<string, unknown>): string | null {
   return key || null;
 }
 
+/**
+ * The launch path's one admission answer, whether credits are enforced or not.
+ *
+ * ⚠️ THE SERVER DECIDES THE CREDIT COST. `creditCost` comes from
+ * `creditCostForProject`, never from the request body.
+ */
+type LaunchAdmission =
+  | { kind: "run"; status: "created" | "existing"; run: RunRow }
+  | { kind: "conflict" }
+  | { kind: "rate_limited"; scope: "user" | "global"; retryAfterSeconds: number }
+  | { kind: "insufficient"; available: number | null; required: number | null }
+  | { kind: "failure"; error: string; code?: string };
+
+async function admitGeneration(input: {
+  userId: string;
+  projectId: string;
+  model: string;
+  prompt: string;
+  idempotencyKey: string | null;
+  dispatchMode: "inline" | "worker";
+  creditCost: number | null;
+}): Promise<LaunchAdmission> {
+  if (input.creditCost !== null) {
+    if (input.dispatchMode !== "worker") {
+      return {
+        kind: "failure",
+        error: "Credit-enabled generation requires the durable worker for this project.",
+        code: "UNAVAILABLE",
+      };
+    }
+    const admitted = await createGenerationJobWithCredits({
+      userId: input.userId,
+      projectId: input.projectId,
+      model: input.model,
+      prompt: input.prompt,
+      idempotencyKey: input.idempotencyKey,
+      dispatchMode: input.dispatchMode,
+      amountCredits: input.creditCost,
+    });
+    if (isCreditsFailure(admitted)) {
+      if (admitted.code === "INSUFFICIENT_CREDITS") {
+        return {
+          kind: "insufficient",
+          available: admitted.available ?? null,
+          required: admitted.required ?? input.creditCost,
+        };
+      }
+      return { kind: "failure", error: admitted.error, code: admitted.code };
+    }
+    if (admitted.data.status === "rate_limited") {
+      return {
+        kind: "rate_limited",
+        scope: admitted.data.scope,
+        retryAfterSeconds: admitted.data.retryAfterSeconds,
+      };
+    }
+    if (admitted.data.status === "conflict") return { kind: "conflict" };
+    return { kind: "run", status: admitted.data.status, run: admitted.data.run };
+  }
+
+  const admitted = await createGenerationJob({
+    projectId: input.projectId,
+    model: input.model,
+    prompt: input.prompt,
+    idempotencyKey: input.idempotencyKey,
+    dispatchMode: input.dispatchMode,
+  });
+  if (isStoreFailure(admitted)) {
+    return { kind: "failure", error: admitted.error, code: admitted.code };
+  }
+  if (admitted.data.status === "rate_limited") {
+    return {
+      kind: "rate_limited",
+      scope: admitted.data.scope,
+      retryAfterSeconds: admitted.data.retryAfterSeconds,
+    };
+  }
+  if (admitted.data.status === "conflict") return { kind: "conflict" };
+  return { kind: "run", status: admitted.data.status, run: admitted.data.run };
+}
+
+async function finishOwnerRun(input: {
+  userId: string;
+  projectId: string;
+  runId: string;
+  dispatchMode: "inline" | "worker";
+  status: "error" | "cancelled";
+  message: string;
+  stage: "failed" | "cancelled" | "interrupted";
+  errorCode: string;
+  reason: string;
+}): Promise<boolean> {
+  if (input.dispatchMode === "worker" && creditCostForProject(input.projectId) !== null) {
+    const creditFinish = await finishCreditGenerationRun({
+      userId: input.userId,
+      projectId: input.projectId,
+      runId: input.runId,
+      status: input.status,
+      stage: input.stage,
+      errorCode: input.errorCode,
+      errorMessage: input.message,
+      reason: input.reason,
+    });
+    if (!isCreditsFailure(creditFinish)) {
+      if (creditFinish.data !== "not_credit_project") {
+        if (creditFinish.data === input.status) {
+          emitGenerationEvent("credits.released", {
+            runId: input.runId,
+            projectId: input.projectId,
+            status: "released",
+          });
+        }
+        return creditFinish.data === input.status;
+      }
+    } else if (
+      creditFinish.code !== "MIGRATION_REQUIRED" &&
+      creditFinish.code !== "UNAVAILABLE"
+    ) {
+      console.error(`[mavly] credit terminal transition failed: ${creditFinish.code}`);
+      return false;
+    }
+  }
+
+  return finishRun(input.runId, input.status, input.message, {
+    stage: input.stage,
+    errorCode: input.errorCode,
+    cancellationRequestedAt: input.status === "cancelled" ? new Date().toISOString() : undefined,
+  });
+}
+
 function admissionFailure(failure: { error: string; code?: string }): NextResponse {
   if (failure.code === "MIGRATION_REQUIRED") {
     return fail(503, "MIGRATION_REQUIRED", failure.error);
@@ -875,6 +1105,9 @@ function admissionFailure(failure: { error: string; code?: string }): NextRespon
   if (failure.code === "UNAUTHENTICATED") return fail(401, "UNAUTHENTICATED", failure.error);
   if (failure.code === "FORBIDDEN") return fail(403, "FORBIDDEN", failure.error);
   if (failure.code === "CONFLICT") return fail(409, "CONFLICT", failure.error);
+  if (failure.code === "UNAVAILABLE") {
+    return fail(503, "CREDIT_CONFIGURATION", failure.error);
+  }
   return fail(500, "UNKNOWN", "Could not start the agent.");
 }
 
@@ -1810,14 +2043,17 @@ async function startAgentResponse(userId: string, projectId: string, body: unkno
   }
   const model = resolveModel(requestedModel, "app-generation", process.env, projectId);
   const dispatchMode = dispatchModeForProject(projectId);
-  const admission = await createGenerationJob({
+  const creditCost = creditCostForProject(projectId);
+  const admission = await admitGeneration({
+    userId,
     projectId,
     model: model.id,
     prompt,
     idempotencyKey: idempotencyKeyOf(record),
     dispatchMode,
+    creditCost,
   });
-  if (isStoreFailure(admission)) {
+  if (admission.kind === "failure") {
     emitGenerationEvent("generation.rejected", {
       projectId,
       reason: admission.code ?? "admission_failed",
@@ -1826,16 +2062,29 @@ async function startAgentResponse(userId: string, projectId: string, body: unkno
     return admissionFailure(admission);
   }
 
-  if (admission.data.status === "rate_limited") {
+  if (admission.kind === "insufficient") {
+    emitGenerationEvent("credits.refused", {
+      projectId,
+      reason: "INSUFFICIENT_CREDITS",
+      status: "insufficient_credits",
+      ...(admission.available !== null ? { credits: admission.available } : {}),
+    });
+    return fail(
+      402,
+      "INSUFFICIENT_CREDITS",
+      "You do not have enough available credits to start this generation.",
+    );
+  }
+  if (admission.kind === "rate_limited") {
     emitGenerationEvent("generation.rejected", {
       projectId,
       reason: "rate_limited",
-      status: admission.data.scope,
+      status: admission.scope,
       dispatchMode,
     });
-    return rateLimited(admission.data.scope, admission.data.retryAfterSeconds);
+    return rateLimited(admission.scope, admission.retryAfterSeconds);
   }
-  if (admission.data.status === "conflict") {
+  if (admission.kind === "conflict") {
     emitGenerationEvent("generation.rejected", {
       projectId,
       reason: "conflict",
@@ -1848,13 +2097,13 @@ async function startAgentResponse(userId: string, projectId: string, body: unkno
     );
   }
 
-  const run = admission.data.run;
+  const run = admission.run;
 
   /**
    * A repeated request with the same idempotency key returns the existing run.
    * Do not insert the user's prompt twice and do not start a second worker.
    */
-  if (admission.data.status === "existing") {
+  if (admission.status === "existing") {
     return ok({
       status: run.finished_at ? "done" : "init",
       stage: stageOf(run),
@@ -1863,11 +2112,28 @@ async function startAgentResponse(userId: string, projectId: string, body: unkno
     });
   }
 
+  if (creditCost !== null) {
+    emitGenerationEvent("credits.reserved", {
+      runId: run.id,
+      projectId,
+      traceId: run.trace_id,
+      credits: creditCost,
+      status: "reserved",
+    });
+  }
+
   const message = await insertMessage(projectId, "user", prompt);
   if (isStoreFailure(message)) {
-    await finishRun(run.id, "error", "Could not save the prompt.", {
+    await finishOwnerRun({
+      userId,
+      projectId,
+      runId: run.id,
+      dispatchMode: run.dispatch_mode,
+      status: "error",
+      message: "Could not save the prompt.",
       stage: "failed",
       errorCode: "RUN_PROMPT_SAVE_FAILED",
+      reason: "Run could not start",
     });
     return fail(500, "UNKNOWN", "Could not start the agent.");
   }
@@ -1914,44 +2180,100 @@ async function resumeAgentResponse(userId: string, projectId: string): Promise<N
     return fail(409, "RUN_NOT_RESUMABLE", "Only a failed or interrupted run can be resumed.");
   }
 
-  const reopened = await resumeRun(projectId, run.id);
-  if (isStoreFailure(reopened)) {
-    if (reopened.code === "CONFLICT") {
-      return fail(409, "CONFLICT", reopened.error);
+  /**
+   * ⚠️ A RESUME IS A NEW ATTEMPT AND MUST BE PAID FOR LIKE ONE.
+   * The credit-aware RPC reopens the run and takes a fresh hold only when the
+   * previous hold was released; a duplicate resume reuses the live hold.
+   */
+  const creditCost = creditCostForProject(projectId);
+  let reopenedRun: RunRow | null = null;
+
+  if (creditCost !== null) {
+    if (run.dispatch_mode !== "worker" || dispatchModeForProject(projectId) !== "worker") {
+      return fail(
+        503,
+        "CREDIT_CONFIGURATION",
+        "Credit-enabled runs require the durable worker to be enabled for this project before resuming.",
+      );
     }
-    if (reopened.code === "RATE_LIMITED_USER" || reopened.code === "RATE_LIMITED_GLOBAL") {
-      return rateLimited(reopened.code === "RATE_LIMITED_GLOBAL" ? "global" : "user", 30);
+    const resumed = await resumeGenerationJobWithCredits(userId, projectId, run.id, creditCost);
+    if (isCreditsFailure(resumed)) {
+      if (resumed.code === "INSUFFICIENT_CREDITS") {
+        emitGenerationEvent("credits.refused", {
+          runId: run.id,
+          projectId,
+          reason: "INSUFFICIENT_CREDITS",
+          status: "insufficient_credits",
+          ...(resumed.available !== null ? { credits: resumed.available } : {}),
+        });
+        return fail(
+          402,
+          "INSUFFICIENT_CREDITS",
+          "You do not have enough available credits to resume this run. Nothing was charged and the run was not reopened.",
+        );
+      }
+      if (resumed.code === "MIGRATION_REQUIRED") {
+        return fail(503, "MIGRATION_REQUIRED", resumed.error);
+      }
+      return fail(500, "UNKNOWN", "Could not resume the agent.");
     }
-    return fail(500, "UNKNOWN", "Could not resume the agent.");
+    if (resumed.data.status !== "resumed") {
+      return fail(409, "RUN_NOT_RESUMABLE", "That run cannot be resumed.");
+    }
+    reopenedRun = resumed.data.run;
+  } else {
+    const reopened = await resumeRun(projectId, run.id);
+    if (isStoreFailure(reopened)) {
+      if (reopened.code === "CONFLICT") {
+        return fail(409, "CONFLICT", reopened.error);
+      }
+      if (reopened.code === "RATE_LIMITED_USER" || reopened.code === "RATE_LIMITED_GLOBAL") {
+        return rateLimited(reopened.code === "RATE_LIMITED_GLOBAL" ? "global" : "user", 30);
+      }
+      return fail(500, "UNKNOWN", "Could not resume the agent.");
+    }
+    reopenedRun = reopened.data;
   }
-  if (!reopened.data) {
+
+  if (!reopenedRun) {
     return fail(409, "RUN_NOT_RESUMABLE", "That run cannot be resumed.");
+  }
+  const resumedRun = reopenedRun;
+
+  if (creditCost !== null) {
+    emitGenerationEvent("credits.reserved", {
+      runId: resumedRun.id,
+      projectId,
+      traceId: resumedRun.trace_id,
+      credits: creditCost,
+      status: "reserved",
+    });
   }
 
   emitGenerationEvent("generation.accepted", {
-    traceId: reopened.data.trace_id,
-    runId: reopened.data.id,
+    traceId: resumedRun.trace_id,
+    runId: resumedRun.id,
     projectId,
-    model: reopened.data.model,
-    dispatchMode: reopened.data.dispatch_mode,
+    model: resumedRun.model,
+    dispatchMode: resumedRun.dispatch_mode,
     status: "resumed",
   });
 
   // A resumed worker run goes back to the durable queue; the scheduler claims it.
-  if (reopened.data.dispatch_mode !== "worker") {
+  if (resumedRun.dispatch_mode !== "worker") {
     after(() =>
       runAgent({
         userId,
         projectId,
-        runId: reopened.data!.id,
-        prompt: reopened.data!.prompt,
-        requestedModel: reopened.data!.model,
+        runId: resumedRun.id,
+        prompt: resumedRun.prompt,
+        requestedModel: resumedRun.model,
         resume: true,
       }),
     );
   }
 
-  return ok({ status: "init", stage: "queued", runId: reopened.data.id, resumed: true });
+  return ok({ status: "init", stage: "queued", runId: resumedRun.id, resumed: true });
 }
 
 async function cancelAgentResponse(userId: string, projectId: string): Promise<NextResponse> {
@@ -2000,14 +2322,27 @@ async function cancelAgentResponse(userId: string, projectId: string): Promise<N
    * provider request cannot be recalled; the run simply keeps none of its
    * output.
    */
-  const cancelled = await finishRun(run.id, "cancelled", "The run was cancelled by the user.", {
+  const cancelled = await finishOwnerRun({
+    userId,
+    projectId,
+    runId: run.id,
+    dispatchMode: run.dispatch_mode,
+    status: "cancelled",
+    message: "The run was cancelled by the user.",
     stage: "cancelled",
     errorCode: "RUN_CANCELLED",
-    cancellationRequestedAt: new Date().toISOString(),
+    reason: "Run cancelled by the user",
   });
   if (!cancelled) {
     return fail(409, "RUN_NOT_ACTIVE", "That run finished before it could be cancelled.");
   }
+
+  await recordRunUsage({
+    runId: run.id,
+    projectId,
+    traceId: run.trace_id,
+  });
+
   await insertMessage(
     projectId,
     "agent",

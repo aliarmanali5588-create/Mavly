@@ -33,6 +33,10 @@ import { ConfirmDialog } from "@/components/primitives";
 import { ImportOverlay } from "@/components/workspace/ImportOverlay";
 import { PathPicker } from "@/components/workspace/PathPicker";
 import { looksLikePlaceholder } from "@/lib/preview-health";
+import {
+  importWatchVerdict,
+  IMPORT_IDLE_POLLS_BEFORE_READINESS,
+} from "@/lib/import-watch";
 import type { VcaasProject, ConversationMessage, ProjectVersion, AgentRunOptions, AgentInputFile, DeploymentStatus } from "@/lib/vcaas-types";
 import { loadAttachments, saveAttachments } from "@/lib/composer-attachments";
 import { useServerWake } from "@/components/workspace/use-server-wake";
@@ -63,6 +67,48 @@ function isCachedPreview(proj: VcaasProject): boolean {
   return proj.developmentUrlFieldToUse === "cachedDevelopmentUrl";
 }
 
+type PendingAgentStartRequest = {
+  fingerprint: string;
+  clientRequestId: string;
+};
+
+type StoredAgentStartRequest = PendingAgentStartRequest & {
+  accepted: boolean;
+};
+
+function agentStartRequestStorageKey(projectId: string): string {
+  return `mavly:agent-start:${projectId}`;
+}
+
+async function agentStartRequestFingerprint(payload: unknown): Promise<string> {
+  const serialized = JSON.stringify(payload);
+  if (serialized === undefined) {
+    throw new Error("Agent request could not be serialized.");
+  }
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(serialized));
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+function pendingAgentStartRequest(value: unknown): StoredAgentStartRequest | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const record = value as Record<string, unknown>;
+  if (
+    typeof record.fingerprint !== "string" ||
+    !/^[a-f0-9]{64}$/i.test(record.fingerprint) ||
+    typeof record.clientRequestId !== "string" ||
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+      record.clientRequestId,
+    )
+  ) {
+    return null;
+  }
+  return {
+    fingerprint: record.fingerprint,
+    clientRequestId: record.clientRequestId,
+    accepted: record.accepted === true,
+  };
+}
+
 /**
  * ⭐ A PROJECT READ OLDER THAN THIS IS RE-CHECKED WHEN THE USER COMES BACK — see the
  * "stale tab" effect. The hourly archive job puts an idle sandbox to sleep while the tab
@@ -90,15 +136,6 @@ function hasNoLiveServer(proj: VcaasProject | null): boolean {
  * so two can never be open at once.
  */
 type WorkspaceModal = "versions" | "secrets" | "domain" | "github" | "figma";
-
-/** `idle` is only believed after the job has had this many polls to appear. */
-const IDLE_POLLS_BEFORE_GIVING_UP = 3;
-/**
- * After an import's lock clears, how long to keep waiting for the app to actually serve
- * before calling it done anyway — the platform's number. The import DID finish; this is
- * only about not dropping the overlay onto the sandbox's "preview building" placeholder.
- */
-const IMPORT_PREVIEW_GRACE_MS = 90_000;
 
 /** Publishing takes ~3 minutes; 90 × 10s leaves room for a slow Vercel build. */
 const DEPLOY_POLL_INTERVAL_MS = 10_000;
@@ -417,6 +454,8 @@ export default function WorkspacePage() {
   /** When the project was last read successfully — the "stale tab" effect's clock. */
   const lastProjectReadAt = useRef(Date.now());
   const sendingRef = useRef(false);
+  const pendingAgentStartRequestRef = useRef<PendingAgentStartRequest | null>(null);
+  const acceptedAgentStartFingerprintRef = useRef<string | null>(null);
   const autoSentRef = useRef<string | null>(null);
   // Guards the poll loop right after a new run is started: the server may still
   // report the PREVIOUS run's "done"/"idle" for a moment, and concluding on that
@@ -837,12 +876,9 @@ export default function WorkspacePage() {
       }
 
       /**
-       * ⭐⭐ AN IMPORT IS ADOPTED WITH THE SERVER'S OWN CLOCK, AND IT OUTRANKS THE REST.
-       * `importInProgress` is a lock held and dated by the server, so a clone that was
-       * started in the dashboard (which stamps the slot and navigates here) — or in
-       * another tab, or before a reload — shows the overlay on the first frame and keeps
-       * the true elapsed time. Upstream refuses every other long operation while it is
-       * set, so whatever a local stamp claims is in flight, it is not.
+       * Adopt a durable import lock when a backend supplies one. The local operation
+       * stamp still paints immediately after navigation; the current Mavly response
+       * leaves `importInProgress` null, so the watcher also checks static readiness.
        */
       if (proj?.importInProgress) {
         operation.adopt("import", Date.parse(proj.importInProgress.startedAt) || undefined);
@@ -886,6 +922,48 @@ export default function WorkspacePage() {
   // dashboard whose first prompt is carried over via sessionStorage).
   const sendPromptText = useCallback(async (text: string, files?: { name: string; url: string; imageDescription: string }[], options?: AgentRunOptions) => {
     if ((!text.trim() && (!files || files.length === 0)) || sendingRef.current) return;
+    const runOptions = optionsForEngine(options || {}, isV2Project(project));
+    const requestPayload = { prompt: text, inputFiles: files || [], ...runOptions };
+    let fingerprint: string;
+    try {
+      fingerprint = await agentStartRequestFingerprint(requestPayload);
+    } catch (error) {
+      console.error("[workspace] Could not prepare an idempotent agent request.", error);
+      toast.error("Could not safely prepare this request. Please try again.");
+      return;
+    }
+
+    let pendingStart = pendingAgentStartRequestRef.current;
+    if (pendingStart?.fingerprint !== fingerprint) {
+      pendingStart = null;
+    }
+    if (!pendingStart && acceptedAgentStartFingerprintRef.current !== fingerprint) {
+      try {
+        const stored = sessionStorage.getItem(agentStartRequestStorageKey(projectId));
+        if (stored) {
+          const parsed = pendingAgentStartRequest(JSON.parse(stored));
+          pendingStart =
+            parsed && !parsed.accepted && parsed.fingerprint === fingerprint
+              ? parsed
+              : null;
+        }
+      } catch {
+        pendingStart = null;
+      }
+    }
+    if (!pendingStart) {
+      pendingStart = { fingerprint, clientRequestId: crypto.randomUUID() };
+    }
+    pendingAgentStartRequestRef.current = pendingStart;
+    try {
+      sessionStorage.setItem(
+        agentStartRequestStorageKey(projectId),
+        JSON.stringify(pendingStart),
+      );
+    } catch {
+      // The in-memory key still protects retries for this mounted workspace.
+    }
+
     sendingRef.current = true;
     setSending(true);
     const hasFiles = !!files && files.length > 0;
@@ -896,8 +974,22 @@ export default function WorkspacePage() {
      * ⚠️ ONLY WHAT THE USER CHOSE IS SENT. `options` is `{}` unless the run-options menu
      * was touched, so Totalum's own model/effort routing stays in charge by default.
      */
-    const res = await vcaasApi.agent.start(projectId, { prompt: text, inputFiles: files || [], ...optionsForEngine(options || {}, isV2Project(project)) });
+    const res = await vcaasApi.agent.start(projectId, {
+      ...requestPayload,
+      clientRequestId: pendingStart.clientRequestId,
+    });
     if (res.ok) {
+      pendingAgentStartRequestRef.current = null;
+      acceptedAgentStartFingerprintRef.current = fingerprint;
+      try {
+        sessionStorage.setItem(
+          agentStartRequestStorageKey(projectId),
+          JSON.stringify({ ...pendingStart, accepted: true }),
+        );
+        sessionStorage.removeItem(agentStartRequestStorageKey(projectId));
+      } catch {
+        // A stale stored key is ignored when the next request fingerprint differs.
+      }
       setProject((prev) => prev ? { ...prev, agentProcessStatus: "init" } : prev);
       pendingRunRef.current = true; runWaitPollsRef.current = 0;
       // A new run: the previous run's estimate must not show while the first poll is out.
@@ -1149,9 +1241,8 @@ export default function WorkspacePage() {
     let cancelled = false;
     let attempts = 0;
     let idleSeen = 0;
-    /** Import only: whether the lock was ever seen, and when it was seen to clear. */
+    /** Import only: whether the server-side lock was observed at least once. */
     let sawImporting = false;
-    let importClearedAt = 0;
     let timer: ReturnType<typeof setTimeout> | null = null;
 
     /**
@@ -1187,27 +1278,27 @@ export default function WorkspacePage() {
         if (detail.ok && detail.data?.agentServerStatus === "Active") return finish("Your server is back");
       }
 
-      /**
-       * ⭐ IMPORT — the platform's rule, verbatim: the server's lock must clear, then
-       * the sandbox must be `Active` AND serving the project's own app. If the lock was
-       * never seen at all, give it a few polls to appear before believing "not running".
-       * Once the lock has cleared, a bounded grace covers the cold build, after which the
-       * import is a success either way — it DID finish; only the preview is late.
-       */
+      /** Imports settle on their server lock or on a genuinely served static preview. */
       if (kind === "import") {
         const detail = await vcaasApi.projects.get(projectId);
         if (cancelled) return;
         if (detail.ok && detail.data) {
-          if (detail.data.importInProgress) {
-            sawImporting = true;
-            importClearedAt = 0;
-          } else if (sawImporting || ++idleSeen >= IDLE_POLLS_BEFORE_GIVING_UP || importClearedAt !== 0) {
-            if (importClearedAt === 0) importClearedAt = Date.now();
-            const graceExpired = Date.now() - importClearedAt > IMPORT_PREVIEW_GRACE_MS;
-            if ((detail.data.agentServerStatus === "Active" && (await appIsServing())) || graceExpired) {
-              if (cancelled) return;
-              return finish(translate("workspace.operation.import.succeeded"));
-            }
+          const importInProgress = !!detail.data.importInProgress;
+          if (importInProgress) sawImporting = true;
+          else idleSeen += 1;
+
+          const verdict = importWatchVerdict({
+            importInProgress,
+            importWasObserved: sawImporting,
+            idlePolls: idleSeen,
+            previewReady: detail.data.previewState?.status === "ready",
+          });
+          if (
+            verdict === "completed" ||
+            (verdict === "preview-ready" && (await appIsServing()))
+          ) {
+            if (cancelled) return;
+            return finish(translate("workspace.operation.import.succeeded"));
           }
         }
       }
@@ -1743,7 +1834,7 @@ export default function WorkspacePage() {
                 {previewUrl && <a href={previewUrl} target="_blank" rel="noopener noreferrer" className="p-1 rounded text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 shrink-0"><ExternalLink className="w-3.5 h-3.5" /></a>}
               </div>
             </div>
-            <CreditsIndicator />
+            <CreditsIndicator refreshKey={isBuilding ? "running" : "idle"} />
           </div>
         </header>
         {/* Desktop main */}

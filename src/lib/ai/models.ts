@@ -33,7 +33,8 @@ export const AI_PROVIDER_IDS: readonly AiProviderId[] = ["openrouter"];
 /** The provider used for all text generation. */
 export const DEFAULT_AI_PROVIDER: AiProviderId = "openrouter";
 
-const OPENROUTER_DEFAULT_MODEL_ID = "deepseek/deepseek-v4.1-flash";
+export const OPENROUTER_DEEPSEEK_V4_1_FLASH_MODEL_ID = "deepseek/deepseek-v4.1-flash";
+const OPENROUTER_DEFAULT_MODEL_ID = OPENROUTER_DEEPSEEK_V4_1_FLASH_MODEL_ID;
 export const COHERE_NORTH_MINI_CODE_MODEL_ID = "cohere/north-mini-code:free";
 export const COHERE_NORTH_MINI_CODE_PROJECTS_ENV = "MAVLY_NORTH_MINI_CODE_PROJECTS";
 

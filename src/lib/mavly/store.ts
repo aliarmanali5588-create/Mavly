@@ -541,6 +541,8 @@ function boundedAttempts(attempts: readonly unknown[]): unknown[] {
       "completionTokens",
       "totalTokens",
       "reasoningTokens",
+      "cachedReadTokens",
+      "cachedWriteTokens",
       "providerRequestId",
       "retryAfterMs",
       "errorCode",
@@ -802,7 +804,7 @@ export async function createGenerationJob(
   return dbError("create generation job", "Unexpected admission response", "UNKNOWN");
 }
 
-function normalizeRun(value: unknown): RunRow | null {
+export function normalizeRun(value: unknown): RunRow | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   const row = value as Record<string, unknown>;
   if (typeof row.id !== "string" || typeof row.project_id !== "string") return null;
@@ -918,6 +920,14 @@ export interface RunProgressPatch {
   totalTokens?: number | null;
   reasoningTokens?: number | null;
   providerRequestId?: string | null;
+  /**
+   * The cumulative provider-attempt records for the run.
+   *
+   * ⚠️ WRITTEN BY THE WORKER BEFORE IT SCHEDULES A RETRY. Provider usage is
+   * cumulative for the run, but a retry is a new invocation that only sees the
+   * row, so the attempt records have to be persisted with the counters.
+   */
+  providerAttempts?: readonly unknown[];
   retryAfterSeconds?: number | null;
   errorCode?: string | null;
 }
@@ -976,6 +986,7 @@ export async function heartbeatRun(
   if (patch.totalTokens !== undefined) update.total_tokens = patch.totalTokens;
   if (patch.reasoningTokens !== undefined) update.reasoning_tokens = patch.reasoningTokens;
   if (patch.providerRequestId !== undefined) update.provider_request_id = patch.providerRequestId;
+  if (patch.providerAttempts !== undefined) update.provider_attempts = patch.providerAttempts;
   if (patch.retryAfterSeconds !== undefined) update.retry_after_seconds = patch.retryAfterSeconds;
   if (patch.errorCode !== undefined) update.error_code = patch.errorCode;
 

@@ -40,6 +40,7 @@ export type VcaasScope =
         | "project-list"
         | "credit-limits-at-limit"
         | "credit-costs"
+        | "credits"
         | "usage"
         | "webhooks"
         | "project-groups"
@@ -118,6 +119,16 @@ export function classifyVcaasRequest(method: string, segments: readonly string[]
     case "credit-costs":
       return segments.length === 1 && verb === "GET"
         ? { kind: "account", resource: "credit-costs" }
+        : deny(404, "NOT_FOUND", "Not found");
+
+    /**
+     * The caller's own authoritative credit account. Account-level by design:
+     * a balance belongs to a user, not to one project. Read-only; every
+     * mutation is an RPC reached from a project handler or the worker.
+     */
+    case "credits":
+      return segments.length === 1 && verb === "GET"
+        ? { kind: "account", resource: "credits" }
         : deny(404, "NOT_FOUND", "Not found");
 
     case "usage":

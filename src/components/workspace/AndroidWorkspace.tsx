@@ -640,7 +640,7 @@ export function AndroidWorkspace({ project }: { project: VcaasProject }) {
             <span className={`mr-1 hidden max-w-36 truncate text-xs md:inline ${buildError || latestBuildFailed ? "text-destructive" : "text-muted-foreground"}`}>
               {buildStatus}
             </span>
-            <CreditsIndicator />
+            <CreditsIndicator refreshKey={status?.stage ?? "none"} />
             <Button type="button" variant="outline" size="sm" onClick={() => setBuildsOpen(true)} className="h-8 gap-1.5 px-2.5" aria-label="Android build status">
               <Smartphone className="size-3.5" aria-hidden="true" />
               <span className="hidden sm:inline">Builds</span>

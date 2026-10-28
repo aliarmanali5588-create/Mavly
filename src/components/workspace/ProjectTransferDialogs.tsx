@@ -566,14 +566,14 @@ function useTransferRun() {
      * was nothing at all: no loader, no explanation, and a workspace that looked idle
      * over a project being rebuilt underneath it.
      *
-     * The workspace's import overlay is now the single place a running import is
-     * shown, and it survives a reload because it reads the server's own import lock
-     * (`project.importInProgress`) rather than this component's state.
+     * The workspace's import overlay is the single place a handed-off import is shown.
+     * It adopts a server import lock when one is available; otherwise its watcher waits
+     * for the project's actual static preview rather than a development-server status.
      *
      * ⚠️ THE STAMP IS WRITTEN BEFORE THE NAVIGATION, not after. It is what makes the
      * overlay paint on the destination's FIRST frame instead of after its first
-     * fetch; the server's `startedAt` then takes over, so a browser clock that is
-     * slightly off corrects itself rather than skewing the whole wait.
+     * fetch. A server lock can replace the browser timestamp when the backend provides
+     * one.
      *
      * ⚠️ AND IT IS WRITTEN ONLY ONCE `POST …/import` HAS RETURNED 200 — the moment
      * the work genuinely exists and has been charged for. Stamping earlier would

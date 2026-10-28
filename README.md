@@ -36,6 +36,8 @@ audits listed at the end of this file; it is not a runtime dependency.
 | Project ownership checks | `public.projects` plus RLS, checked by every project-scoped route |
 | Project create/launch/list/get/update/delete | Stored in Supabase |
 | Agent generation | OpenRouter (`deepseek/deepseek-v4.1-flash`), server-side; durable run rows, bounded batches, per-batch checkpoints, resume and cooperative cancel |
+| Managed Neon databases (opt-in foundation) | A worker-only, explicit-cohort Neon provisioning foundation can create one quota-bounded Neon project per Mavly project and encrypt its connection URI in the internal Supabase registry. It does not expose credentials, apply app schema migrations, bind generated code to the database, or make CRUD/auth live. Requires Neon Agent Plan approval; remains off by default. |
+| Credits (opt-in foundation, off by default) | Whole-credit accounts, an append-only ledger, atomic reservation with the generation job, settle-on-completion, release-on-terminal-failure, audited service-role refunds, and per-attempt AI usage/cost reconciliation. Enabled per project cohort with `MAVLY_CREDITS_ENABLED`, `MAVLY_CREDITS_PROJECTS` and `MAVLY_CREDITS_GENERATION_COST`; requires migration 31. There is no Mavly credit-funding flow yet, so credits are granted only through the service-role `grant_credits` RPC. See [`docs/architecture/phase-11-credit-foundation.md`](docs/architecture/phase-11-credit-foundation.md). |
 | Conversations and run status | Persisted in Supabase and polled by the workspace |
 | Project settings | Owner-editable project name and description; the derived Mavly address is read-only |
 | Project secrets | Write-only AES-256-GCM encrypted values per project/environment; list returns metadata only and update replaces without retrieval; **not injected into previews or published static sites** |
@@ -57,11 +59,22 @@ opt-in verification build and loopback runtime check inside an isolated provider
 which never runs on a Mavly host and exposes no public port. A generated backend exists as
 source files, not as a running service.
 
+The optional Neon foundation provisions infrastructure only. `provisioned` means Neon
+created a project and Mavly verified a server-side connection; it does not mean the
+generated app can connect, has schema applied, has authentication, or is hosted. The
+connection URI remains encrypted and server-only. The Neon Agent Plan requires an active
+Scale plan and explicit Neon team approval; ordinary Neon account access is not treated as
+platform enrollment. Deleted Mavly projects do not automatically delete their Neon
+resources, and Mavly usage or billing attribution is not wired. No live provisioning or
+Neon account acceptance has been verified.
+
 ## What does not work yet
 
 Uploads/attachments, rebuilds, database browsing, schema changes, SQL execution,
-customer-owned custom domains, visitor analytics, payments, usage, credits, versions and
-visual edits do not have a local implementation. The workspace has no scheduler, mobile-app
+customer-owned custom domains, visitor analytics, payments, usage, versions and visual
+edits do not have a local implementation. Credit accounting exists only as the opt-in,
+off-by-default generation foundation above; it has no funding flow, pricing engine or
+billing integration. The workspace has no scheduler, mobile-app
 management or runtime-log viewer; Android source generation and its isolated debug builds
 remain, but generated apps are never run on a Mavly host. The durable generation worker is implemented but needs an operator-provided
 scheduler; without one, worker-dispatched runs stay queued. The verification sandbox is

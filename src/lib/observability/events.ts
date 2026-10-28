@@ -31,6 +31,12 @@ export const GENERATION_EVENTS = [
   "generation.worker_empty",
   "generation.worker_unavailable",
   "generation.worker_error",
+  "credits.reserved",
+  "credits.settled",
+  "credits.released",
+  "credits.refused",
+  "credits.settlement_deferred",
+  "credits.usage_recorded",
 ] as const;
 
 export type GenerationEventName = (typeof GENERATION_EVENTS)[number];
@@ -93,6 +99,7 @@ const ALLOWED_FIELDS = new Set([
   "healthHttpStatus",
   "repairAttempt",
   "repairStatus",
+  "credits",
 ]);
 
 const NUMERIC_FIELDS = new Set([
@@ -112,6 +119,7 @@ const NUMERIC_FIELDS = new Set([
   "runtimePort",
   "healthHttpStatus",
   "repairAttempt",
+  "credits",
 ]);
 
 const BOOLEAN_FIELDS = new Set(["costKnown", "cleanupComplete"]);
@@ -183,6 +191,8 @@ export interface GenerationEventFields {
   completionTokens?: number | null;
   costUsd?: number | null;
   costKnown?: boolean | null;
+  /** Whole credits for a reservation/settlement/release event. */
+  credits?: number | null;
 }
 
 /**

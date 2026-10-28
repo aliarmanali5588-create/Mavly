@@ -53,10 +53,10 @@ export const CLONE_COST =
  * mid-clone and there was no loader, no explanation, and a workspace that looked idle
  * over a project being rebuilt underneath it.
  *
- * Both dialogs now hand off the moment `POST …/import` returns 200: they stamp the
- * new project's operation slot and navigate to it, and the workspace's import overlay
- * takes over. That overlay is driven by `project.importInProgress` — a lock held and
- * dated by the SERVER — so it survives a reload, a second tab and another device.
+ * Both dialogs hand off after the import endpoint reports success: they stamp the
+ * project's operation slot and navigate to it. The workspace adopts a server lock when
+ * available, otherwise it waits for an actually served static preview and times out
+ * honestly if completion remains unknown.
  *
  * ⚠️ THE TIMING NOW LIVES IN ONE PLACE: `OPERATION_PROFILES.import` in
  * `@/lib/project-operation`. Do not reintroduce a second set of numbers here; a poll

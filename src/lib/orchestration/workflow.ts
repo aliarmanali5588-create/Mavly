@@ -224,7 +224,7 @@ export function tasksForComplexity(
     title: "Verify the resulting project",
     dependsOn: [{ key: "implement", required: true }],
     writesFiles: false,
-    required: false,
+    required: true,
     maxAttempts: 1,
   };
 
@@ -510,6 +510,9 @@ export function normalizeAgentOutput(output: AgentOutput): AgentOutput {
       ...finding,
       title: finding.title.slice(0, 200),
       detail: finding.detail.slice(0, 1_000),
+      ...(finding.evidence
+        ? { evidence: finding.evidence.slice(0, 200) }
+        : {}),
     })),
     data: boundedRecord(output.data),
   };

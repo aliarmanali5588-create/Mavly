@@ -37,6 +37,7 @@ revocation or database mutation was performed while preparing this document.
 | Conversation and runs | Persisted in `project_messages` and `project_runs`, polled by the workspace. |
 | Project settings | Owner-editable name/description through `PATCH /projects/{id}`; the derived Mavly address is read-only. |
 | Project secrets | Write-only AES-256-GCM ciphertext per project/environment; API responses carry metadata only. Values are not injected into the static output. |
+| Managed Neon databases (opt-in foundation) | Only worker-dispatched projects in an explicit cohort can provision one quota-bounded Neon project per Mavly project. Connection URIs are encrypted in an internal Supabase registry and never reach the browser or model. `provisioned` means only that Mavly's server-side `select 1` succeeded; no app schema, generated-app runtime binding, CRUD/auth, automatic cleanup or Mavly usage/billing attribution exists. Requires approved Neon Agent Plan access, migration 30, and explicit server configuration. No live provisioning has been verified. |
 | Project activity | Real run history aggregated from `project_runs`; visitor analytics are not collected. |
 | Project files | `project_files`; tree/content reads and content writes. |
 | Image generation | `POST …/images/generate` asks `black-forest-labs/flux.2-klein-4b` through OpenRouter's dedicated image API, validates the returned PNG/JPEG and returns it as base64 in the response. Nothing is persisted and nothing is billed. The workspace's More-menu panel for it was removed, so no UI calls the route. |
@@ -239,10 +240,79 @@ which is not implemented. Over-limit requests answer `429 RATE_LIMITED` with `re
 
 The image is returned as base64 and is **not stored**: there is no binary asset pipeline
 (`project_files` is text served as text by the static preview), so the workspace shows it
-for the session and offers a download. There is also **no credit charge** — this build has
-no credit engine (no balance, reservation, finalisation or refund), and inventing a price
-would be a fake debit. The provider's own cost stays inside its server-side metadata and
-is deliberately **not** returned to the browser.
+for the session and offers a download. Images are **not charged**: the credit foundation
+below covers generation runs only, it is off by default, and no image price was invented.
+The provider's own cost stays inside its server-side metadata and is deliberately **not**
+returned to the browser.
+
+### Credits (opt-in foundation)
+
+`supabase/migrations/31_credit_foundation.sql` adds authoritative, append-only credit
+accounting for generation runs. It is **OFF BY DEFAULT**: nothing is charged unless
+`MAVLY_CREDITS_ENABLED` is truthy, an explicit `MAVLY_CREDITS_PROJECTS` cohort exists, and
+`MAVLY_CREDITS_GENERATION_COST` is a whole number between 1 and 100000. Credited projects
+must also be explicitly worker-dispatched and have a matching service-managed
+`credit_project_policies` row; the database policy is an independent write guard and must
+be disabled only after all runs/holds are drained. Projects outside the enabled database
+policy retain the existing generation behavior.
+
+- **Tables:** `credit_accounts` (whole-credit `balance_credits`/`reserved_credits`, both
+  `bigint`, with `balance >= reserved >= 0`), service-managed `credit_project_policies`,
+  `credit_reservations`, `credit_ledger` (append-only; an UPDATE/DELETE raises),
+  `ai_cost_rates` (empty by default) and `ai_usage_attempts` (per provider attempt). USD is
+  `numeric(20,9)`; credits are never stored as floating point.
+- **Atomic admission:** `create_generation_job_with_credits` calls the existing
+  `create_generation_job` and then takes the hold in the SAME transaction. It is
+  service-role-only, verifies project ownership and the database policy's fixed price, and
+  requires worker dispatch. Insufficient available credits RAISE, rolling back the job
+  insert, so no orphan run or partial reservation exists. The RPC also rejects a reused
+  idempotency key whose prompt/model differ (`idempotency_key_reused`). A database trigger
+  blocks authenticated direct use of legacy generation admission/resume RPCs on enabled
+  credit projects.
+- **Lifecycle:** reserve at admission; `settle_generation_reservation` consumes the hold
+  only when the run is finished, `status = 'done'` and `stage = 'completed'`;
+  successful runs can be settled by the worker or owner reconciliation.
+  `release_generation_reservation` is service-role-only and returns the hold only for a
+  terminal unsuccessful run. A service-role terminal handler atomically writes failed or
+  cancelled state and releases; worker settlement/release is recoverable through the
+  durable sweep. Only a `reserved` row is acted on, so duplicate settlement/release is
+  harmless.
+- **Resume:** `resume_generation_job_with_credits` reopens a failed/interrupted run and
+  is service-role-only, verifies owner/policy/cost and requires worker dispatch. It takes a
+  fresh hold only when the previous hold was released. A duplicate resume of a run that is
+  still active is refused (`run_active`) without starting or charging a second execution;
+  a terminal run whose hold was never released has that hold released in the same
+  transaction before the new one is taken (one live hold per run is a partial unique
+  index). A resumed run can never start unpaid.
+- **Refund:** `refund_generation_reservation` is **service-role only** and audited. No
+  automatic customer refund policy is invented; a refund is an operator action.
+- **Recovery:** settlement/release follow the fenced terminal run write. A crash between
+  them is repaired by the durable worker's `maintain_credit_reservations` sweep and by the
+  owner's bounded `reconcile_owner_credits` on the balance read. That sweep also runs
+  `release_orphaned_credit_reservations`: a deleted project cascades its runs, and a hold
+  keyed to a run that no longer exists could otherwise never be settled or released, so it
+  is returned with a ledger entry after a one-hour grace window. The launch path releases
+  the hold itself before it deletes a project it just created.
+- **Usage metering:** `record_ai_usage_attempts` derives one row per provider attempt from
+  the server-written `project_runs.provider_attempts` (no client payload). Cached-token
+  fields are recorded when the provider reports them. `actual_cost_usd` is the
+  provider-reported cost only; `estimated_cost_usd` exists only when an operator has
+  installed a row in `ai_cost_rates`. A timeout/network failure after dispatch is
+  `uncertain = true`, never zero.
+- **Access:** authenticated users may SELECT only their own account/ledger/reservations/
+  usage rows and call owner-checked successful settlement, balance and reconciliation
+  RPCs. They have no INSERT/UPDATE/DELETE grant on credit tables and cannot directly
+  admit, resume, release or terminalize a credit run. An enabled database policy blocks
+  authenticated legacy run writes. Credit admission/resume, failure/cancellation release,
+  grants/refunds, per-role usage writes and the worker sweep are service-role only.
+- **Funding is not implemented in the product.** There is no Mavly credit-pack or
+  subscription grant flow: credits can only be created by the service-role `grant_credits`
+  RPC (an operator or a future payment integration). Enabling a charge before granting
+  credits therefore refuses generation with `402 INSUFFICIENT_CREDITS`. This is a known
+  product gap, not a hidden default.
+
+Not verified live: migration 31, its RLS/RPCs, settlement under a real Supabase session,
+and the workspace balance indicator have not been exercised against a database.
 
 ### Restore points
 
@@ -370,7 +440,7 @@ the explicit 503. No mock data, fabricated id or fake success is returned.
 | Rebuild / runtime | `rebuild`, `rebuild/status`, server wake, agent stop/clear-context |
 | Dynamic deploy / hosting | building generated source, server/API hosting, customer custom domains, deployment logs. Static preview publishing with a Mavly-owned address is implemented behind an operator flag. |
 | Versions / visual edits | versions, Git diff, `/api/visual-edit/.../apply` |
-| Data platform | database browsing, SQL execution, schema changes, migrations, backups, backup download |
+| Data platform | database browsing, SQL execution, application schema changes/migrations, backups, backup download. Neon provisioning infrastructure alone does not provide any of these. |
 | Integrations | customer-owned domains/DNS, environment files. Project secrets are stored and managed (see above) but not injected into generated sites. |
 | Account/product | usage, credits, payments, an included scheduler (the durable worker requires an operator-provided one), mobile builds, visitor analytics, webhooks |
 | Project transfer | export, import, duplicate |
@@ -543,7 +613,10 @@ The Totalum client `src/lib/vcaas-server.ts` remains deleted and must not be rec
   hosting, `16_durable_generation_worker.sql` before enabling the durable worker,
   `17_verification_sandbox.sql` (after 16) and then `19_runtime_verification.sql` (after
   17) before enabling verification, and
-  `08_figma_integration.sql` before using Figma.
+  `08_figma_integration.sql` before using Figma. Apply
+  `30_managed_backends.sql` after `29_multi_agent_orchestration.sql` before enabling
+  managed Neon provisioning; provisioning also requires the approved Neon Agent Plan
+  enrollment and server-only operator configuration.
 - The verification sandbox is off by default, applies only to worker-dispatched runs, and
   is not proven against a live provider by this document. `passed` means the production
   build exited `0`, the validated runtime started on loopback, and a sandbox-local health
@@ -586,11 +659,11 @@ The Totalum client `src/lib/vcaas-server.ts` remains deleted and must not be rec
   `MAVLY_VERIFICATION_MAX_REPAIRS` (`0..2`, default 1) and also needs `OPENROUTER_API_KEY`; it
   never changes whether verification itself is configured.
 - Image generation is operator-cost-bearing but user-unbilled: it uses
-  `OPENROUTER_API_KEY` and no credit policy exists to charge against. The active generation
-  path reads the same server key, so both share one provider account. Enabling billing for
-  it is a product decision that needs a real credit engine first. Generated images are not
-  saved to the project and are not available to the generated app; the workspace panel
-  that displayed them was removed, so the route currently has no caller.
+  `OPENROUTER_API_KEY` and is outside the generation credit foundation. The active
+  generation path reads the same server key, so both share one provider account. Pricing
+  images is a separate product decision; no image charge was invented. Generated images
+  are not saved to the project and are not available to the generated app; the workspace
+  panel that displayed them was removed, so the route currently has no caller.
 - A real Supabase OAuth app is required. Scopes are app-level:
   `organizations:read` and `projects:read`.
 - Changing `MAVLY_INTEGRATION_ENCRYPTION_KEY`, the OAuth client ID or the OAuth app makes

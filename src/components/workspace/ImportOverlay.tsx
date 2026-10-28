@@ -13,8 +13,8 @@ import { runProgress } from "@/lib/agent-progress";
  * A clone or import replaces EVERYTHING underneath: code, data, the running server.
  * There is nothing to work with until it lands, so this covers the workspace for the
  * length of the wait. It renders whenever the operation slot says `import`, which the
- * transfer dialogs stamp before navigating here and the workspace adopts from the
- * server's own lock (`project.importInProgress`) after a reload.
+ * transfer dialogs stamp before navigating here. A backend lock can restore the stamp
+ * after reload; the current Mavly route instead exposes static preview readiness.
  *
  * ⚠️ DELIBERATELY NOT THE PLATFORM'S FIRST-BUILD SCREEN. That one is a four-stage
  * narrative with a 3-D scene and a "Did you know…" tour, written for someone seeing

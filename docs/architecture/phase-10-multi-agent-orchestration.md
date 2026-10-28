@@ -7,10 +7,10 @@
 
 ## Scope
 
-This phase adds a **provider-agnostic specialist workflow** around the existing
+This phase adds a **role-specific specialist workflow** around the existing
 generation engine, plus a **server-enforced owner approval** before production
 deployment. It does **not** add a second queue, a second generation pipeline, a
-second provider, an autonomous deploy path, or a credit/billing engine.
+second provider, an autonomous deploy path, or change credit/billing economics.
 
 The existing `project_runs` row remains the only job and the only lease owner.
 `generateApp` remains the only writer of `project_files`. The provider remains
@@ -37,14 +37,15 @@ project_runs (only job + lease)
 run-agent.ts ── beginOrchestration() ──► agent_workflows (1:1 run_id)
    │                                        agent_tasks (dependencies)
    │                                        agent_workflow_events
-   ├── runPlanningAgents() ─ planner model call + UI/UX model call
+   ├── runPlanningAgents() ─ verified DeepSeek V4.1 Flash planner + UI/UX
    │        └─ planContext / designDirectives injected as SUBORDINATE prompt context
-   ├── generateApp() ───── existing pipeline, unchanged writer of project_files
+   ├── generateApp() ───── verified DeepSeek V4.1 Flash, existing only writer of project_files
    ├── recordCodingCompleted()
-   │        ├─ securityReview()  deterministic static scan (no model)
-   │        ├─ QA delegation record (pending/unavailable until the sandbox runs)
+   │        ├─ QA source review + sandbox delegation (only the sandbox proves build/runtime)
+   │        ├─ verified DeepSeek V4.1 Flash security review + deterministic security scan
    │        └─ deployment proposal task (skipped; can never deploy)
-   └── recordCodingFailed() ─ optional bounded repair DIAGNOSIS (no source writes)
+   └── recordCodingFailed() ─ verified DeepSeek V4.1 Flash repair diagnosis; bounded suggestions
+            are passed as subordinate context to the existing coding engine on retry
 ```
 
 The layer activates only when **all** of the following hold:
@@ -64,16 +65,33 @@ pipeline and record no workflow. There is no simulated fallback.
 
 | Role | Task kind | Model call | Writes files | Authority |
 |---|---|---|---|---|
-| Planner | `plan` | Yes (45 s, 2k tokens) | No | Advisory implementation plan. |
-| UI/UX | `design_review` | Yes (30 s, 1.5k tokens) | No | Advisory design/accessibility/responsive directives. |
-| Coding | `implement` | Existing pipeline | **Yes** (only writer) | The existing generation engine. |
-| QA | `verify` | No | No | Records static checks and delegates build/runtime to the verification sandbox. |
-| Repair | `repair` | Yes (45 s, 1.5k tokens) | No | Diagnosis + targeted fix proposals. Never applied by this layer. |
-| Security | `security_review` | No | No | Deterministic static scan over generated text. |
+| Planner | `plan` | DeepSeek V4.1 Flash (45 s, 2k tokens) | No | Advisory implementation plan. |
+| UI/UX | `design_review` | DeepSeek V4.1 Flash (30 s, 1.5k tokens) | No | Advisory design/accessibility/responsive directives. |
+| Coding | `implement` | DeepSeek V4.1 Flash via existing pipeline | **Yes** (only writer) | The existing generation engine and its checkpoint path. |
+| QA | `verify` | DeepSeek V4.1 Flash (30 s, 1.5k tokens) | No | Advisory source review plus sandbox delegation; model output never proves a build/runtime pass. |
+| Repair | `repair` | DeepSeek V4.1 Flash (45 s, 1.5k tokens) | No | Bounded diagnosis; validated suggestions are handed to the existing coding engine on a durable retry. |
+| Security | `security_review` | DeepSeek V4.1 Flash plus deterministic scan | No | Bounded source review; the deterministic scan remains a separate required check, and source-backed critical model findings may fail the workflow for owner review. |
 | Deployment | `deployment_proposal` | No | No | Can only propose that the owner review a deployment. Never deploys. |
 
 Every role output is bounded and normalized before persistence (`normalizeAgentOutput`):
 summary ≤1,500 chars, ≤200 changed paths, ≤40 findings, bounded data fields.
+The role IDs are fixed in `src/lib/ai/model-roles.ts`. Only
+`deepseek/deepseek-v4.1-flash` and the explicitly cohort-gated
+`cohere/north-mini-code:free` are currently treated as verified catalog entries. The
+requested `deepseek/deepseek-v4-pro`, `anthropic/claude-sonnet-5`, and
+`openai/gpt-5.6-sol` specialist IDs are not allowlisted until verified; the roles use an
+explicit pin to DeepSeek V4.1 Flash in the meantime. There is no environment override, and
+specialist calls do not fall back to a requested or global default model: a role whose
+pinned id is missing from the catalog fails as unavailable. Each specialist API attempt is recorded through the
+service-role `record_ai_usage_attempt` RPC from migration 31 with provider
+tokens, request id and reported cost (NULL remains unknown). Coding usage remains
+on the existing run-attempt accounting path; no credit price, reservation or
+settlement rule changes here. Deployment remains deterministic.
+
+If a failed generation has no eligible worker retry, its repair suggestions
+remain diagnostic and are not applied. When a retry occurs, only suggestions
+whose paths remain in the saved manifest are included as subordinate context;
+the repair model never writes `project_files` or bypasses generation batches.
 
 ### Tool scopes
 
@@ -116,6 +134,11 @@ Task statuses: `pending`, `waiting_for_dependency`, `queued`, `running`,
   default.
 - A model call that fails or times out records a truthful failed task with a
   redacted error class; it never becomes a fabricated success.
+- A specialist result is discarded if OpenRouter reports a model different from
+  the role's pinned ID. A usage row that cannot be recorded is logged and left
+  absent; it does not discard an advisory result the provider already produced,
+  and no cost is claimed for the missing row. Unknown provider cost stays unknown;
+  it is never replaced with an invented value.
 - Worker cancellation (`cancelWorkflowForRun`) and unexpected failure
   (`failWorkflowForRun`) settle the workflow without changing the run's own retry
   or failure classification. A completed/cancelled workflow is never reopened by a
@@ -199,10 +222,13 @@ approval. The browser never supplies the source hash.
   commands, builds, tests or browsers.
 - `passed` still means build + runtime + sandbox-local health (Phases 3/4). A
   pending check is never rendered as a pass.
-- Security is a static scan only; authorization is reported `unavailable` because
-  static text cannot prove it.
-- A critical security finding fails the workflow and prevents it from reporting
-  completion.
+- Security combines the deterministic static scan with a bounded advisory source
+  review; authorization is reported `unavailable` because static text cannot prove
+  it. A source-backed critical finding can fail the workflow, but cannot change the
+  already-terminal generation run.
+- Post-coding QA and Security reviews run after `project_runs` is marked done, so
+  a failed workflow review does not rewrite the generation run's terminal state or
+  trigger a generation retry.
 - No new snapshot is created by this layer. The coding pipeline keeps its existing
   immutable snapshots and restore points.
 
@@ -221,15 +247,22 @@ path and never auto-deploys.
 
 ## Provider, credits and cost
 
-- There is **no credit engine** in Mavly. This phase does not charge, reserve or
-  invent credits, and it does not change pricing or billing.
-- Each planner/UI-UX/repair model call goes through the existing provider boundary
-  and records the provider-reported USD cost when the provider reports it. If any
-  call does not report cost, the workflow is marked `costKnown: false` rather than
-  estimating.
-- Model selection reuses `resolveModel(..., "review", env, projectId)`, so only
-  catalogued OpenRouter models can be used. A client-supplied model is an exact
-  catalog requirement or is ignored.
+- This phase does not charge or reserve credits, and it does not change pricing
+  or billing. The Phase 11 credit foundation exists, but specialist usage
+  metering records provider usage only; it does not debit credits or change
+  generation reservation settlement.
+- Planner, UI/UX, QA, Security and Repair calls use the fixed role-to-model mapping
+  in `src/lib/ai/model-roles.ts` and go through the existing OpenRouter boundary.
+  When `MAVLY_CREDITS_ENABLED` is truthy, each specialist attempt records
+  provider-reported tokens, request id and USD cost through migration 31. When
+  the flag is off, no credit/usage RPC is called. Unknown provider cost stays
+  `NULL`; no estimate is presented as actual cost. Coding usage remains on the
+  existing generation-run accounting path.
+- A specialist result is discarded and its task is failed if OpenRouter reports a
+  model different from the pinned role model. A failed usage write is logged (and
+  with `MAVLY_CREDITS_ENABLED` off no usage RPC is called at all); the result is kept
+  and the usage row stays absent, so nothing is fabricated. Neither outcome alters
+  credit settlement.
 
 ## Security invariants
 
@@ -259,10 +292,13 @@ path and never auto-deploys.
   scoped tool registry (`validateToolRequest`, `roleAllowsTool`) is the enforced
   allowlist for any tool request and is covered by unit tests, but only the
   existing coding pipeline writes files.
-- **Repair is diagnostic only** in this phase. It never edits `project_files`; a
-  follow-up generation or the existing verification repair path must apply a fix.
-- **QA is delegated, not executed here.** Without the verification sandbox, build
-  and runtime stay `pending`/`unavailable`.
+- **Repair is diagnostic only** and never edits `project_files`. For a failed
+  generation, validated suggestions for paths still in the saved manifest may be
+  passed as subordinate context to the existing coding engine on an eligible
+  durable retry. Without that retry, suggestions remain unapplied. QA/Security
+  findings arise after the generation run is terminal and do not trigger repair.
+- **QA does not execute the project here.** Its source review is advisory; without
+  the verification sandbox, build and runtime stay `pending`/`unavailable`.
 - **No benchmark claims.** Tests are unit/static only; no live Supabase, provider,
   sandbox or Vercel deployment was exercised by the authoring agent.
 - **Migration 29, RLS and the RPCs are unverified against a real database.**
