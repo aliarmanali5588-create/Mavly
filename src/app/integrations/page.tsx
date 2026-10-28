@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import {
   GitBranch,
-  Database,
   Globe,
   Cpu,
   ArrowRight,
@@ -19,11 +18,11 @@ import { MarketingPageShell } from "@/components/common/MarketingPageShell";
 export const metadata: Metadata = {
   title: "Integrations — Mavly AI Website Builder",
   description:
-    "Connect GitHub repositories and Supabase projects, publish static sites, and generate website code with OpenRouter.",
+    "Connect GitHub repositories, publish static sites, and generate website code with OpenRouter.",
   openGraph: {
     title: "Integrations — Mavly AI Website Builder",
     description:
-      "Connect GitHub repositories and Supabase projects, publish static sites, and generate website code with OpenRouter.",
+      "Connect GitHub repositories, publish static sites, and generate website code with OpenRouter.",
     images: ["/logo/Mavly.png"],
   },
 };
@@ -102,49 +101,6 @@ export default function IntegrationsPage() {
 
             <div className="p-3.5 rounded-xl bg-gray-50 border border-black/[0.04] text-[11px] text-gray-500">
               <strong>Security Invariant:</strong> Tokens are encrypted using AES-256-GCM and never exposed to client browsers or model prompts.
-            </div>
-          </div>
-
-          {/* Supabase Connection */}
-          <div className="p-8 rounded-3xl bg-white border border-black/[0.08] shadow-[0_4px_20px_rgba(0,0,0,0.02)] space-y-6">
-            <div className="flex items-center justify-between">
-              <div className="w-12 h-12 rounded-2xl bg-emerald-600 text-white flex items-center justify-center">
-                <Database className="w-6 h-6" />
-              </div>
-              <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-full">
-                Verified Available
-              </span>
-            </div>
-
-            <div className="space-y-2">
-              <h3 className="text-xl font-bold text-gray-950">Supabase Connection</h3>
-              <p className="text-xs text-gray-600 leading-relaxed">
-                Connect your user-owned Supabase account to authorize read-only organization and project discovery.
-              </p>
-            </div>
-
-            <div className="space-y-2.5 text-xs text-gray-700 border-t border-black/[0.06] pt-4">
-              <h4 className="font-semibold text-gray-900">Supported Capabilities:</h4>
-              <ul className="space-y-2">
-                <li className="flex items-start gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-                  <span>Read-only organization and project discovery under user scope.</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-                  <span>Select an external project to associate with your workspace.</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <AlertCircle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
-                  <span className="text-gray-500">
-                    Direct SQL query execution, table modification, and database schema migrations are intentionally gated and not supported in this client.
-                  </span>
-                </li>
-              </ul>
-            </div>
-
-            <div className="p-3.5 rounded-xl bg-gray-50 border border-black/[0.04] text-[11px] text-gray-500">
-              <strong>Account-Level:</strong> Tokens ride in ciphertext inside <code>supabase_integrations</code> with strict single-use PKCE states.
             </div>
           </div>
 
@@ -238,7 +194,7 @@ export default function IntegrationsPage() {
             <div className="p-4 rounded-xl bg-gray-50 border border-black/[0.04] space-y-2">
               <span className="font-bold text-gray-950">1. Authorize Service</span>
               <p className="text-gray-600 leading-relaxed">
-                Open the Workspace Settings drawer and click &quot;Connect GitHub&quot; or &quot;Connect Supabase&quot; to begin the OAuth flow.
+                Open the workspace settings or integrations panel and authorize the GitHub App through its secure OAuth flow.
               </p>
             </div>
             <div className="p-4 rounded-xl bg-gray-50 border border-black/[0.04] space-y-2">

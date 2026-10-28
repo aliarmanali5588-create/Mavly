@@ -78,6 +78,18 @@ import {
   type SnapshotSummary,
 } from "./snapshots";
 import { verifyCheckpointBatches } from "./checkpoints";
+import {
+  beginOrchestration,
+  markCodingStarted,
+  recordCodingCompleted,
+  recordCodingFailed,
+  runPlanningAgents,
+  type OrchestrationHandle,
+} from "@/lib/orchestration/engine";
+import {
+  cancelWorkflowForRun,
+  failWorkflowForRun,
+} from "@/lib/orchestration/store";
 import { loadFigmaDesignContext } from "@/lib/integrations/figma/service";
 import {
   classifyGenerationFailure,
@@ -288,15 +300,48 @@ async function runWorkerAgent(
       return { status: "skipped", runId: input.runId, reason: "lease_lost" };
     }
     if (error instanceof RunCancelledError) {
+      if (guard.client) {
+        try {
+          await cancelWorkflowForRun(guard.client, input.projectId, input.runId);
+        } catch (workflowError) {
+          console.warn(
+            `[mavly] run ${input.runId}: could not cancel its workflow:`,
+            workflowError instanceof Error ? workflowError.message : String(workflowError),
+          );
+        }
+      }
       return { status: "cancelled", runId: input.runId };
     }
     const message = error instanceof Error ? error.message : String(error);
+    if (guard.client) {
+      try {
+        await failWorkflowForRun(
+          guard.client,
+          input.projectId,
+          input.runId,
+          error instanceof RunStoreError ? "GENERATION_PERSIST_FAILED" : "GENERATION_FAILED",
+          `The run failed unexpectedly: ${message}`,
+        );
+      } catch (workflowError) {
+        console.warn(
+          `[mavly] run ${input.runId}: could not fail its workflow:`,
+          workflowError instanceof Error ? workflowError.message : String(workflowError),
+        );
+      }
+    }
     outcome = await fail(input, guard, {
       message: `The agent run failed unexpectedly: ${message}`,
       ...(error instanceof RunStoreError
         ? { signals: { code: "GENERATION_PERSIST_FAILED" } }
         : {}),
     });
+  }
+  if (outcome.status === "cancelled" && guard.client) {
+    try {
+      await cancelWorkflowForRun(guard.client, input.projectId, input.runId);
+    } catch {
+      // The run's cancellation is already terminal; the workflow record is best effort.
+    }
   }
   await recordMemoryForOutcome(input, guard, outcome);
   return outcome;
@@ -496,6 +541,52 @@ async function execute(
    */
   const baseline = await ensureBaseline(input, before, guard.client);
 
+  /**
+   * ═══ OPT-IN MULTI-AGENT LAYER (PHASE 10) ═══════════════════════════════════
+   *
+   * It runs only in durable-worker mode (a confined service-role client exists)
+   * and only for an explicit project cohort. Every failure here is swallowed:
+   * orchestration observability must never change the run's own outcome. The
+   * existing `generateApp` pipeline still writes every file.
+   */
+  let orchestration: OrchestrationHandle | null = null;
+  try {
+    orchestration = input.worker
+      ? await beginOrchestration({
+          client: guard.client,
+          userId: input.userId,
+          projectId: input.projectId,
+          runId,
+          prompt: input.prompt,
+          projectType,
+          mode,
+          existingFiles: before,
+          requestedModel: input.requestedModel,
+        })
+      : null;
+  } catch (error) {
+    console.warn(
+      `[mavly] run ${runId}: orchestration setup failed:`,
+      error instanceof Error ? error.message : String(error),
+    );
+  }
+
+  let planContext: string | null = null;
+  let designDirectives: string | null = null;
+  if (orchestration) {
+    try {
+      const specialist = await runPlanningAgents(orchestration, before);
+      planContext = specialist.planContext;
+      designDirectives = specialist.designDirectives;
+      await markCodingStarted(orchestration);
+    } catch (error) {
+      console.warn(
+        `[mavly] run ${runId}: planning agents failed:`,
+        error instanceof Error ? error.message : String(error),
+      );
+    }
+  }
+
   let resumeManifest: AgentManifest | null = parseManifest(run.generation_manifest);
   let completedPaths: string[] = [];
   let nextBatchIndex = 0;
@@ -668,6 +759,8 @@ async function execute(
         : {}),
       requestedModel: input.requestedModel,
       designContext: design.data,
+      ...(planContext ? { planContext } : {}),
+      ...(designDirectives ? { designDirectives } : {}),
       ...(resumeManifest || completedPaths.length > 0 || nextBatchIndex > 0
         ? {
             resume: {
@@ -693,6 +786,22 @@ async function execute(
   );
 
   if (isGenerationFailure(generated)) {
+    if (orchestration) {
+      try {
+        await recordCodingFailed(orchestration, {
+          message: generated.error,
+          errorClass: generated.code,
+          completedPaths: generated.partial.completedPaths,
+          plannedPaths: resumeManifest?.files.map((file) => file.path) ?? [],
+          files: before,
+        });
+      } catch (error) {
+        console.warn(
+          `[mavly] run ${runId}: could not record the orchestration failure:`,
+          error instanceof Error ? error.message : String(error),
+        );
+      }
+    }
     return fail(input, guard, {
       message: generated.error,
       before,
@@ -737,6 +846,7 @@ async function execute(
     writtenPaths.size,
     latestProviderRequestId,
     projectType,
+    orchestration,
   );
 }
 
@@ -759,6 +869,7 @@ async function complete(
   filesWritten: number,
   latestProviderRequestId: string | null,
   projectType: AgentProjectType,
+  orchestration: OrchestrationHandle | null,
 ): Promise<RunAgentOutcome> {
   await assertRunOwned(input, guard);
 
@@ -803,6 +914,20 @@ async function complete(
   if (!finished) {
     // A cancellation, a recovery, or a newer attempt finalized the run first.
     return { status: "skipped", runId: input.runId, reason: "finish_not_applied" };
+  }
+
+  if (orchestration) {
+    try {
+      await recordCodingCompleted(orchestration, {
+        allFiles: after,
+        changedPaths: diffPaths(diff),
+      });
+    } catch (error) {
+      console.warn(
+        `[mavly] run ${input.runId}: could not record orchestration completion:`,
+        error instanceof Error ? error.message : String(error),
+      );
+    }
   }
 
   await insertMessage(

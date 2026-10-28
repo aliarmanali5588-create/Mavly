@@ -6,7 +6,6 @@ import {
   Code2,
   Eye,
   GitBranch,
-  Database,
   Globe,
   Layers,
   Wand2,
@@ -192,16 +191,6 @@ export default function FeaturesPage() {
               <h3 className="text-base font-bold text-gray-950">GitHub App Integration</h3>
               <p className="text-xs text-gray-600 leading-relaxed">
                 Connect your personal GitHub account, select existing repositories, or commit the initial codebase with automated first-push tracking.
-              </p>
-            </div>
-
-            <div className="p-6 rounded-2xl bg-white border border-black/[0.08] shadow-[0_4px_20px_rgba(0,0,0,0.02)] space-y-3">
-              <div className="w-10 h-10 rounded-xl bg-amber-50 border border-amber-200/50 flex items-center justify-center text-amber-700">
-                <Database className="w-5 h-5" />
-              </div>
-              <h3 className="text-base font-bold text-gray-950">Supabase Connection</h3>
-              <p className="text-xs text-gray-600 leading-relaxed">
-                Connect your user-owned Supabase account with read-only organization and project discovery, secured with AES-256-GCM token encryption.
               </p>
             </div>
 

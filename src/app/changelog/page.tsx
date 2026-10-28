@@ -48,12 +48,10 @@ const RELEASES: ChangelogRelease[] = [
   {
     version: "v2.3.0",
     date: "September 2026",
-    headline: "User-Owned Supabase Connection & Figma URL Context",
+    headline: "Figma URL Context",
     status: "Shipped",
     highlights: [
-      "Shipped account-level user-owned Supabase connection with read-only organization and project discovery.",
       "Added support for Figma selection links in prompts: extracts visual layout frames and injects bounded design context into generation.",
-      "Hardened AES-256-GCM encryption for all integration tokens stored in Supabase child tables.",
       "Strict Content Security Policy (CSP) sandboxing for static preview iframes, eliminating unauthorized script execution.",
     ],
   },

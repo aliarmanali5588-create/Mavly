@@ -108,7 +108,6 @@ test("the two Phase 6 prefixes are public and authenticate themselves", () => {
     "/api/app/v1x/payments",
     "/api/app/v2/payments",
     "/api/integrations/github/start",
-    "/api/integrations/supabase/status",
     "/api/integrations/webhooksx",
   ]) {
     assert.equal(apiSessionDecision(path, false), "unauthenticated", path);

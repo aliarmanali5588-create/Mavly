@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { BrainIcon, ChartColumnIcon, CreditCardIcon, DatabaseIcon, GaugeIcon, GlobeIcon, KeyIcon, SettingsIcon } from "lucide-react";
+import { BrainIcon, ChartColumnIcon, CreditCardIcon, GaugeIcon, KeyIcon, SettingsIcon, WorkflowIcon } from "lucide-react";
 import { InlineModals } from "@/components/primitives";
 import { useT } from "@/i18n";
 import type { TranslationKey } from "@/i18n/types";
@@ -9,23 +9,22 @@ import { cn } from "@/lib/utils";
 
 /** The v2 workspace "More" view: the project's sections in an aside, the chosen one in the main area. */
 /** This app adds the custom domain, which the platform keeps elsewhere in its workspace. */
-export type MoreSection = "database" | "analytics" | "usage" | "secrets" | "memory" | "integrations" | "payments" | "domain" | "settings";
+export type MoreSection = "analytics" | "usage" | "secrets" | "memory" | "workflow" | "integrations" | "payments" | "settings";
 
-export const MORE_SECTIONS: { id: MoreSection; labelKey: TranslationKey; icon: typeof DatabaseIcon }[] = [
-    { id: "database", labelKey: "workspace.tabs.database", icon: DatabaseIcon },
+export const MORE_SECTIONS: { id: MoreSection; labelKey: TranslationKey; icon: typeof ChartColumnIcon }[] = [
     { id: "analytics", labelKey: "engineV2.analytics.open", icon: ChartColumnIcon },
     { id: "usage", labelKey: "engineV2.usage.title", icon: GaugeIcon },
     { id: "secrets", labelKey: "workspace.actions.secrets", icon: KeyIcon },
     { id: "memory", labelKey: "engineV2.memory.title", icon: BrainIcon },
+    { id: "workflow", labelKey: "engineV2.workflow.title", icon: WorkflowIcon },
     { id: "integrations", labelKey: "engineV2.integrations.title", icon: CreditCardIcon },
     { id: "payments", labelKey: "engineV2.payments.title", icon: CreditCardIcon },
-    { id: "domain", labelKey: "workspace.domain.title", icon: GlobeIcon },
     { id: "settings", labelKey: "workspace.projectSettings.open", icon: SettingsIcon },
 ];
 
 /**
  * `children` is the chosen section, rendered by the shell with the SAME component it opens as a modal: inside
- * `<InlineModals>` that modal lays itself out in place. The database is the panel itself and owns its full height.
+ * `<InlineModals>` that modal lays itself out in place.
  */
 export function MoreView({ section, onSection, children }: { section: MoreSection; onSection: (section: MoreSection) => void; children: React.ReactNode }) {
     const t = useT();
@@ -59,7 +58,7 @@ export function MoreView({ section, onSection, children }: { section: MoreSectio
                     </button>
                 ))}
             </nav>
-            <div className={cn("min-h-0 min-w-0 flex-1", section === "database" ? "flex flex-col" : "tp-scroll overflow-y-auto px-4 pt-6 sm:px-8")}>
+            <div className="min-h-0 min-w-0 flex-1 tp-scroll overflow-y-auto px-4 pt-6 sm:px-8">
                 <InlineModals>{children}</InlineModals>
             </div>
         </div>

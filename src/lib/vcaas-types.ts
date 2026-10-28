@@ -1261,3 +1261,65 @@ export interface ProjectLaunchResult {
   /** `{ step, errorCode, errorMessage }` per step that did not happen (`message`/`endpoint` on older answers). */
   warnings?: { step?: string; errorCode?: string; errorMessage?: string; message?: string; endpoint?: string }[];
 }
+
+// ── Phase 10: multi-agent workflow + deployment approval ────────────────────
+//
+// The wire shapes are the PURE projections from `src/lib/orchestration`: no
+// prompt, no file content, no secret, no provider body. Importing them as types
+// only is erased at compile time, so the browser catalog never pulls a server
+// module. A model's claim of success is never part of these shapes — only
+// recorded task state and recorded checks are.
+export type {
+  AgentFinding,
+  AgentRole,
+  AgentTaskKind,
+  AgentTaskStatus,
+  AgentVerificationCheck,
+  AgentVerificationResult,
+  AgentVerificationStatus,
+  TaskComplexity,
+  WorkflowState,
+  WorkflowView,
+} from "@/lib/orchestration/contracts";
+export type {
+  DeploymentProposalStatus,
+  DeploymentProposalView,
+  DeploymentTarget,
+} from "@/lib/orchestration/approval";
+
+/**
+ * `GET …/agent/workflow` — the durable workflow recorded for the project's latest
+ * run. `workflow: null` means no run has recorded one yet, never "the agents
+ * passed". `migrationRequired` and `enabled` are reported rather than guessed.
+ */
+export interface AgentWorkflowStatus {
+  /** True only when this deployment + project cohort can run the multi-agent layer. */
+  enabled: boolean;
+  /** True when production deployment requires an owner-approved proposal. */
+  approvalRequired: boolean;
+  /** True when migration 29 is missing; `note` carries the actionable message. */
+  migrationRequired: boolean;
+  workflow: import("@/lib/orchestration/contracts").WorkflowView | null;
+  note?: string;
+}
+
+/** `GET …/deployments/proposals` */
+export interface DeploymentProposalList {
+  approvalRequired: boolean;
+  proposals: import("@/lib/orchestration/approval").DeploymentProposalView[];
+}
+
+/** `POST …/deployments/proposals` */
+export interface DeploymentProposalResponse {
+  proposal: import("@/lib/orchestration/approval").DeploymentProposalView;
+  approvalRequired: boolean;
+}
+
+/** `POST …/deployments/deploy` — a server-derived snapshot and/or an approval id. */
+export interface DeploymentRequest {
+  confirmDestructive?: boolean;
+  /** Full-stack only: pin an already-verified snapshot (re-validated server-side). */
+  snapshotId?: string;
+  /** Required when the approval gate is enabled for this project. */
+  approvalId?: string;
+}

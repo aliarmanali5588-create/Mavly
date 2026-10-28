@@ -116,11 +116,6 @@ import {
 } from "@/lib/deployments/store";
 import {
   deploymentHost,
-  discardVercelProject,
-  getProjectDeploymentStatus,
-  isDeploymentServiceFailure,
-  publishProject,
-  unpublishProject,
   wireDeploymentStatus,
 } from "@/lib/deployments/service";
 import {
@@ -130,6 +125,27 @@ import {
   isFullstackFailure,
   rollbackFullstackProject,
 } from "@/lib/deployments/fullstack";
+import { toWorkflowView } from "@/lib/orchestration/engine";
+import {
+  cancelOwnedWorkflow,
+  getLatestWorkflow,
+  isWorkflowStoreFailure,
+  listTasks,
+} from "@/lib/orchestration/store";
+import {
+  deploymentApprovalRequiredFor,
+  isProjectInMultiAgentCohort,
+  multiAgentConfig,
+  multiAgentProblemMessage,
+} from "@/lib/orchestration/config";
+import {
+  approveProposal,
+  getProposal,
+  isApprovalServiceFailure,
+  listProposals,
+  proposeDeployment,
+  revokeProposal,
+} from "@/lib/orchestration/approval-service";
 import {
   getDatabaseStatus,
   isDatabaseServiceFailure,
@@ -385,6 +401,45 @@ export async function handleMavlyVcaasRequest(input: MavlyRequest): Promise<Next
   }
   if (action === "deployments/status" && method === "GET") {
     return deploymentStatusResponse(userId, projectId);
+  }
+  /**
+   * ═══ DEPLOYMENT APPROVAL (PHASE 10) ═══════════════════════════════════════
+   *
+   * A proposal is NOT a deployment. It records the exact server-derived target,
+   * snapshot and source hash a human may approve. Approval is a separate owner
+   * act; the deploy route consumes it atomically.
+   */
+  if (action === "deployments/proposals" && method === "GET") {
+    return deploymentProposalsResponse(userId, projectId);
+  }
+  if (action === "deployments/proposals" && method === "POST") {
+    return proposeDeploymentResponse(userId, projectId, body);
+  }
+  if (action.startsWith("deployments/proposals/")) {
+    const rest = action.slice("deployments/proposals/".length).split("/");
+    const proposalId = rest[0];
+    if (proposalId && rest.length === 1 && method === "GET") {
+      return deploymentProposalResponse(userId, projectId, proposalId);
+    }
+    if (proposalId && rest.length === 2 && method === "POST" && rest[1] === "approve") {
+      return approveDeploymentProposalResponse(userId, projectId, proposalId);
+    }
+    if (proposalId && rest.length === 2 && method === "POST" && rest[1] === "revoke") {
+      return revokeDeploymentProposalResponse(userId, projectId, proposalId, body);
+    }
+  }
+  /**
+   * ═══ AGENT WORKFLOW OBSERVABILITY (PHASE 10) ══════════════════════════════
+   *
+   * READ-ONLY projection of the durable workflow/tasks the worker recorded for
+   * this project's latest run. `cancel` stops the workflow record; it does not
+   * pretend to undo a provider request already sent.
+   */
+  if (action === "agent/workflow" && method === "GET") {
+    return workflowStatusResponse(projectId);
+  }
+  if (action === "agent/workflow/cancel" && method === "POST") {
+    return workflowCancelResponse(userId, projectId);
   }
   /**
    * ═══ FULL-STACK DEPLOYMENT OPERATIONS ═════════════════════════════════════
@@ -893,43 +948,21 @@ async function updateProjectResponse(userId: string, projectId: string, body: un
 }
 
 async function deleteProjectResponse(userId: string, projectId: string): Promise<NextResponse> {
-  const deployment = await getDeploymentRow(projectId);
   const deleted = await deleteProject(userId, projectId);
   if (isStoreFailure(deleted)) return fail(500, "UNKNOWN", "Could not delete this project.");
-
-  /**
-   * The local delete must succeed even if Vercel cleanup does not. Run the
-   * remote delete after the response and never report a fabricated failure.
-   */
-  if (!isDeploymentStoreFailure(deployment) && deployment.data) {
-    const deploymentRow = deployment.data;
-    after(() => discardVercelProject(deploymentRow));
-  }
-
   return ok({ deleted: true });
 }
 
 async function deployResponse(
-  userId: string,
-  projectId: string,
-  body: unknown,
+  _userId: string,
+  _projectId: string,
+  _body: unknown,
 ): Promise<NextResponse> {
-  /**
-   * `snapshotId` is optional and only used by full-stack hosting: it pins an
-   * already-verified snapshot. It is re-validated server-side (ownership, hash
-   * and passed verification), so the id alone grants nothing.
-   */
-  const snapshotId = stringOf(recordOf(body).snapshotId);
-  const result = await publishProject(userId, projectId, { snapshotId });
-  if (isDeploymentServiceFailure(result)) {
-    return fail(
-      result.status,
-      result.code,
-      result.error,
-      result.retryAfterSeconds ? { "retry-after": String(result.retryAfterSeconds) } : undefined,
-    );
-  }
-  return ok(result.data);
+  return fail(
+    503,
+    "BACKEND_NOT_CONFIGURED",
+    "Customer-app publishing is unavailable. No deployment provider is configured; this action has not changed or deployed the project.",
+  );
 }
 
 async function rejectAndroidWebsiteDeployment(
@@ -1317,23 +1350,162 @@ async function androidBuildActionResponse(
   return fail(404, "NOT_FOUND", "Not found");
 }
 
-async function unpublishResponse(userId: string, projectId: string): Promise<NextResponse> {
-  const result = await unpublishProject(userId, projectId);
-  if (isDeploymentServiceFailure(result)) {
-    return fail(
-      result.status,
-      result.code,
-      result.error,
-      result.retryAfterSeconds ? { "retry-after": String(result.retryAfterSeconds) } : undefined,
-    );
+async function unpublishResponse(_userId: string, _projectId: string): Promise<NextResponse> {
+  return fail(
+    503,
+    "BACKEND_NOT_CONFIGURED",
+    "Customer-app publishing is unavailable, so an existing provider deployment cannot be taken down by Mavly here.",
+  );
+}
+
+async function deploymentStatusResponse(_userId: string, _projectId: string): Promise<NextResponse> {
+  return fail(
+    503,
+    "BACKEND_NOT_CONFIGURED",
+    "Customer-app deployment status is unavailable. No deployment provider is configured.",
+  );
+}
+
+function workflowStoreFailureResponse(failure: {
+  code: string;
+  error: string;
+}): NextResponse {
+  switch (failure.code) {
+    case "migration_required":
+    case "unavailable":
+      return fail(503, "BACKEND_NOT_CONFIGURED", failure.error);
+    case "unauthorized":
+      return fail(403, "FORBIDDEN", failure.error);
+    case "not_found":
+      return fail(404, "NOT_FOUND", failure.error);
+    case "conflict":
+      return fail(409, "CONFLICT", failure.error);
+    default:
+      return fail(500, "UNKNOWN", failure.error);
   }
+}
+
+async function workflowStatusResponse(projectId: string): Promise<NextResponse> {
+  const config = multiAgentConfig();
+  const enabled = isProjectInMultiAgentCohort(projectId, config);
+  const approvalRequired = deploymentApprovalRequiredFor(projectId);
+  const note = enabled ? undefined : multiAgentProblemMessage(config.problems);
+  const client = await createSupabaseServerClient();
+  if (!client) {
+    return fail(503, "BACKEND_NOT_CONFIGURED", "Supabase is not configured.");
+  }
+
+  const workflow = await getLatestWorkflow(client, projectId);
+  if (isWorkflowStoreFailure(workflow)) {
+    if (workflow.code === "migration_required") {
+      return ok({
+        enabled,
+        approvalRequired,
+        migrationRequired: true,
+        workflow: null,
+        note: workflow.error,
+      });
+    }
+    return workflowStoreFailureResponse(workflow);
+  }
+  if (!workflow.data) {
+    return ok({
+      enabled,
+      approvalRequired,
+      migrationRequired: false,
+      workflow: null,
+      ...(note ? { note } : {}),
+    });
+  }
+
+  const tasks = await listTasks(client, workflow.data.id);
+  if (isWorkflowStoreFailure(tasks)) return workflowStoreFailureResponse(tasks);
+  return ok({
+    enabled,
+    approvalRequired,
+    migrationRequired: false,
+    workflow: toWorkflowView(workflow.data, tasks.data),
+    ...(note ? { note } : {}),
+  });
+}
+
+async function workflowCancelResponse(userId: string, projectId: string): Promise<NextResponse> {
+  const ownership = await getProject(userId, projectId);
+  if (isStoreFailure(ownership)) {
+    return fail(500, "UNKNOWN", "Could not load this project.");
+  }
+  if (!ownership.data || ownership.data.user_id !== userId) {
+    return fail(403, "FORBIDDEN", "You don't have access to this project.");
+  }
+
+  const client = await createSupabaseServerClient();
+  if (!client) {
+    return fail(503, "BACKEND_NOT_CONFIGURED", "Supabase is not configured.");
+  }
+  const latest = await getLatestWorkflow(client, projectId);
+  if (isWorkflowStoreFailure(latest)) return workflowStoreFailureResponse(latest);
+  if (!latest.data) return fail(404, "NOT_FOUND", "This project has no workflow to cancel.");
+
+  const cancelled = await cancelOwnedWorkflow(client, projectId, latest.data.id);
+  if (isWorkflowStoreFailure(cancelled)) {
+    return workflowStoreFailureResponse(cancelled);
+  }
+  return workflowStatusResponse(projectId);
+}
+
+async function deploymentProposalsResponse(
+  userId: string,
+  projectId: string,
+): Promise<NextResponse> {
+  const result = await listProposals(userId, projectId);
+  if (isApprovalServiceFailure(result)) return fail(result.status, result.code, result.error);
   return ok(result.data);
 }
 
-async function deploymentStatusResponse(userId: string, projectId: string): Promise<NextResponse> {
-  const result = await getProjectDeploymentStatus(userId, projectId);
-  if (isDeploymentServiceFailure(result)) return fail(result.status, result.code, result.error);
-  return ok(result.data satisfies DeploymentStatus);
+async function proposeDeploymentResponse(
+  userId: string,
+  projectId: string,
+  body: unknown,
+): Promise<NextResponse> {
+  const record = recordOf(body);
+  const result = await proposeDeployment(userId, projectId, {
+    snapshotId: stringOf(record.snapshotId),
+    target: record.target,
+  });
+  if (isApprovalServiceFailure(result)) return fail(result.status, result.code, result.error);
+  return ok(result.data);
+}
+
+async function deploymentProposalResponse(
+  userId: string,
+  projectId: string,
+  proposalId: string,
+): Promise<NextResponse> {
+  const result = await getProposal(userId, projectId, proposalId);
+  if (isApprovalServiceFailure(result)) return fail(result.status, result.code, result.error);
+  return ok(result.data);
+}
+
+async function approveDeploymentProposalResponse(
+  userId: string,
+  projectId: string,
+  proposalId: string,
+): Promise<NextResponse> {
+  const result = await approveProposal(userId, projectId, proposalId);
+  if (isApprovalServiceFailure(result)) return fail(result.status, result.code, result.error);
+  return ok(result.data);
+}
+
+async function revokeDeploymentProposalResponse(
+  userId: string,
+  projectId: string,
+  proposalId: string,
+  body: unknown,
+): Promise<NextResponse> {
+  const reason = stringOf(recordOf(body).reason);
+  const result = await revokeProposal(userId, projectId, proposalId, reason);
+  if (isApprovalServiceFailure(result)) return fail(result.status, result.code, result.error);
+  return ok(result.data);
 }
 
 function fullstackFailureResponse(failure: {

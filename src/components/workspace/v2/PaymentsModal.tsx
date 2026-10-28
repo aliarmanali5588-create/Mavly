@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { ExternalLinkIcon, FlaskConicalIcon, RefreshCwIcon, RocketIcon } from "lucide-react";
+import { ExternalLinkIcon, FlaskConicalIcon, RefreshCwIcon } from "lucide-react";
 import { ConfirmDialog, CopyButton, Modal, StatusPill } from "@/components/primitives";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,7 +19,6 @@ import {
     pickStripeCountry,
     liveSwitch,
     onboardingUrls,
-    publishFirst,
     type PaymentsMode,
     type PaymentsStatus,
     type ProjectWebhook,
@@ -42,14 +41,10 @@ export function PaymentsModal({
     open,
     onOpenChange,
     projectId,
-    published,
-    onPublish,
 }: {
     open: boolean;
     onOpenChange: (open: boolean) => void;
     projectId: string;
-    published: boolean;
-    onPublish: () => void;
 }) {
     const t = useT();
     const { locale } = useLocale();
@@ -154,7 +149,7 @@ export function PaymentsModal({
         // a new account (first or after a disconnection) needs the business country; dev's test account defaults it
         const needsCountry = mode === "live" && (view === "none" || view === "disconnected");
         const label = view === "none" ? (mode === "live" ? "connect" : "devConnect") : view === "disconnected" ? "reconnect" : "continue";
-        const mustPublish = publishFirst(mode, published, view);
+        const mustPublish = false;
         return (
             <div className="space-y-3">
                 <p className="text-muted-foreground text-[13px]">{t(`engineV2.payments.stateBody.${view}`)}</p>
@@ -182,15 +177,6 @@ export function PaymentsModal({
                     </div>
                 )}
                 {needsCountry ? <p className="text-muted-foreground text-xs">{t("engineV2.payments.countryFinal")}</p> : null}
-                {mustPublish ? (
-                    <div className="flex flex-wrap items-center gap-2" data-testid="payments-publish-first">
-                        <p className="text-warning text-xs">{t("engineV2.payments.publishFirst")}</p>
-                        <Button size="sm" variant="outline" onClick={onPublish}>
-                            <RocketIcon className="size-4" aria-hidden />
-                            {t("engineV2.payments.publishNow")}
-                        </Button>
-                    </div>
-                ) : null}
             </div>
         );
     };

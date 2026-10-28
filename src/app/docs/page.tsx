@@ -210,13 +210,6 @@ export default function DocsPage() {
                 </div>
 
                 <div className="p-5 rounded-xl bg-white border border-black/[0.08] space-y-2">
-                  <h3 className="font-bold text-gray-950 text-sm">Supabase Read-Only Discovery</h3>
-                  <p className="text-xs text-gray-600">
-                    The user-owned Supabase OAuth integration lets you link an external project for tracking. Note: database schema migrations and SQL console access are not executed through this client.
-                  </p>
-                </div>
-
-                <div className="p-5 rounded-xl bg-white border border-black/[0.08] space-y-2">
                   <h3 className="font-bold text-gray-950 text-sm">Vercel Publishing Prerequisites</h3>
                   <p className="text-xs text-gray-600">
                     Publishing uploads the standalone static preview bytes to <code>&lt;project-id&gt;.mavly.xyz</code>. It is disabled by default and requires server operator configuration. If not configured, requests return a truthful 503 error.

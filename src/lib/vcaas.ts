@@ -59,6 +59,12 @@ import type {
   RestoreResult,
   DeploymentStatus,
   VcaasDeployError,
+  AgentWorkflowStatus,
+  DeploymentProposalList,
+  DeploymentProposalResponse,
+  DeploymentProposalView,
+  DeploymentRequest,
+  DeploymentTarget,
   PaymentsIntegrationStatus,
   AccountDomain,
   DomainDnsRecord,
@@ -536,6 +542,27 @@ export const vcaasApi = {
     /** POST …/agent/server/start-or-restart — (re)start the project dev server. */
     restartServer: (projectId: string): Promise<VcaasResponse<unknown>> =>
       proxy.post(`${project(projectId)}/agent/server/start-or-restart`, {}),
+
+    /**
+     * GET …/agent/workflow — the durable multi-agent workflow recorded for the
+     * project's latest run (Phase 10).
+     *
+     * ⚠️ `workflow: null` means no run has recorded one yet. It is never a pass,
+     * and a task's own claim is not verification: only `verification` checks and
+     * recorded state are shown.
+     */
+    workflow: (projectId: string): Promise<VcaasResponse<AgentWorkflowStatus>> =>
+      proxy.get(`${project(projectId)}/agent/workflow`),
+
+    /**
+     * POST …/agent/workflow/cancel — cancel the durable WORKFLOW record.
+     *
+     * It is not the same as `stop`: stopping the run is what fences the worker,
+     * and this only settles the orchestration record. The API re-reads the
+     * workflow after the change, so the response is the truthful new state.
+     */
+    cancelWorkflow: (projectId: string): Promise<VcaasResponse<AgentWorkflowStatus>> =>
+      proxy.post(`${project(projectId)}/agent/workflow/cancel`, {}),
   },
 
   // ───────────────────────── Deployments ──────────────────────────
@@ -557,9 +584,61 @@ export const vcaasApi = {
      *
      * `confirmDestructive` (new engine): run pending migrations that drop data or delete/overwrite rows. Without it
      * such a publish ends `error` with `DESTRUCTIVE_MIGRATION_NEEDS_CONFIRMATION` and nothing changes on live.
+     *
+     * Phase 10: when the deployment approval gate is enabled for this project the
+     * request is refused `428 DEPLOYMENT_APPROVAL_REQUIRED` unless it carries an
+     * `approvalId` bound to the exact server-derived source. The browser never
+     * supplies a hash; the server re-derives it. A boolean second argument is kept
+     * for existing callers.
      */
-    deploy: (projectId: string, confirmDestructive = false): Promise<VcaasResponse<unknown>> =>
-      proxy.post(`${project(projectId)}/deployments/deploy`, confirmDestructive ? { confirmDestructive: true } : {}),
+    deploy: (
+      projectId: string,
+      options: boolean | DeploymentRequest = false
+    ): Promise<VcaasResponse<unknown>> => {
+      const body: DeploymentRequest =
+        typeof options === "boolean"
+          ? options
+            ? { confirmDestructive: true }
+            : {}
+          : { ...options };
+      return proxy.post(`${project(projectId)}/deployments/deploy`, body);
+    },
+
+    /**
+     * Deployment proposals and owner approvals (Phase 10).
+     *
+     * ⚠️ A PROPOSAL IS NOT A DEPLOYMENT. Creating one records the server-derived
+     * target, snapshot and source hash; approving it is a separate owner act; and
+     * the deploy above atomically consumes it. Only `approved` (not expired) can
+     * deploy, and one approval can be used once. Creating a proposal never
+     * deploys and never changes the project.
+     */
+    proposals: {
+      list: (projectId: string): Promise<VcaasResponse<DeploymentProposalList>> =>
+        proxy.get(`${project(projectId)}/deployments/proposals`),
+
+      create: (
+        projectId: string,
+        body: { snapshotId?: string; target?: DeploymentTarget } = {}
+      ): Promise<VcaasResponse<DeploymentProposalResponse>> =>
+        proxy.post(`${project(projectId)}/deployments/proposals`, body),
+
+      get: (projectId: string, proposalId: string): Promise<VcaasResponse<DeploymentProposalView>> =>
+        proxy.get(`${project(projectId)}/deployments/proposals/${encodeURIComponent(proposalId)}`),
+
+      approve: (projectId: string, proposalId: string): Promise<VcaasResponse<DeploymentProposalView>> =>
+        proxy.post(`${project(projectId)}/deployments/proposals/${encodeURIComponent(proposalId)}/approve`, {}),
+
+      revoke: (
+        projectId: string,
+        proposalId: string,
+        reason?: string
+      ): Promise<VcaasResponse<DeploymentProposalView>> =>
+        proxy.post(
+          `${project(projectId)}/deployments/proposals/${encodeURIComponent(proposalId)}/revoke`,
+          reason ? { reason } : {}
+        ),
+    },
 
     /**
      * POST …/deployments/unpublish — take the published site down.

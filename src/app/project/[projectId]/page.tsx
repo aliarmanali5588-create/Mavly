@@ -27,7 +27,6 @@ import { SecretsModal } from "@/components/workspace/SecretsModal";
 import { ProjectDomainPanel } from "@/components/workspace/v2/ProjectDomainPanel";
 import { GithubModal } from "@/components/workspace/GithubModal";
 import { CreditsIndicator } from "@/components/workspace/CreditsIndicator";
-import { DeployControl } from "@/components/workspace/DeployControl";
 import { CloneProjectDialog } from "@/components/workspace/ProjectTransferDialogs";
 import { DiffViewer, type DiffSource } from "@/components/workspace/DiffViewer";
 import { ConfirmDialog } from "@/components/primitives";
@@ -1308,11 +1307,18 @@ export default function WorkspacePage() {
     }, 60);
   }, []);
   /** `confirmDestructive`: the user confirmed the pending migration that deletes data (new engine; from the banner). */
-  const handleDeploy = async (confirmDestructive = false) => {
+  const handleDeploy = async (options: boolean | { approvalId?: string } = false) => {
     if (deploying || unpublishing) return;
     if (refuseWhileBusy()) return;
     setDeploying(true);
-    const res = await vcaasApi.deployments.deploy(projectId, confirmDestructive);
+    const res = await vcaasApi.deployments.deploy(
+      projectId,
+      typeof options === "boolean"
+        ? options
+          ? { confirmDestructive: true }
+          : {}
+        : options,
+    );
 
     /**
      * ⭐ THE SERVER WAS ASLEEP, SO THE API STARTED IT AND REFUSED THE PUBLISH. Not a
@@ -1343,7 +1349,21 @@ export default function WorkspacePage() {
       operation.begin("publish");
       startDeployPolling("publish");
     }
+    else if (String(res.code ?? "") === "DEPLOYMENT_APPROVAL_REQUIRED") {
+      toast.error("Approval required", {
+        description: "Create a deployment proposal in More → Agents & approvals, approve it, then deploy that approval.",
+      });
+      setDeploying(false);
+    }
     else { toast.error(res.error || "Failed to deploy"); setDeploying(false); }
+  };
+  /**
+   * Agents & approvals: deploy exactly the approved proposal. The id alone grants
+   * nothing — the server re-derives the source, checks the approval and consumes
+   * it atomically, so a stale or reused approval is refused.
+   */
+  const handleDeployWithApproval = async (approvalId: string) => {
+    await handleDeploy({ approvalId });
   };
   /**
    * ═══ UNPUBLISH — THE REAL TAKEDOWN, NOT A HIDDEN URL ═══════════════════════
@@ -1580,11 +1600,6 @@ export default function WorkspacePage() {
         </button>
       </div>
       <div className="border-t py-1" style={{ borderColor: darkMode ? "#444" : "#eee" }}>
-        {/* Publish on mobile — opens the same dialog the desktop header owns. */}
-        <button onClick={() => { setMenuOpen(false); setPublishDialogOpen(true); }}
-          className="w-full sm:hidden flex items-center gap-2.5 px-3 py-2 text-sm hover:bg-black/5 dark:hover:bg-white/10 transition-colors text-gray-700 dark:text-gray-200">
-          <Rocket className="w-4 h-4 text-gray-400" /> {unpublishing ? translate("workspace.deploy.unpublishing") : deploying ? translate("workspace.deploy.deploying") : translate("workspace.deploy.publish")}
-        </button>
       </div>
       <div className="border-t py-1" style={{ borderColor: darkMode ? "#444" : "#eee" }}>
         <button onClick={() => { handleRestartServer(); setMenuOpen(false); }}
@@ -1694,32 +1709,7 @@ export default function WorkspacePage() {
                 {previewUrl && <a href={previewUrl} target="_blank" rel="noopener noreferrer" className="p-1 rounded text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 shrink-0"><ExternalLink className="w-3.5 h-3.5" /></a>}
               </div>
             </div>
-            {/*
-              ⭐ THE HEADER KEEPS ONLY WHAT IS NOT A PROMPT TOOL: Secrets and Publish.
-              GitHub, Figma and the visual editor moved into the composer's tool tray
-              (see `ChatPanel`), where the platform puts them — they act on what you are
-              about to type, so they sit next to where you type it.
-            */}
-            {/*
-              ⭐⭐ PUBLISH — the platform's control: the button, the dialog that says what
-              publishing does (public address, ~3 minutes, 1 credit) and the custom-domain
-              row with its DNS-propagation notice. Copied unchanged from totalum-platform.
-            */}
             <CreditsIndicator />
-            <DeployControl
-              projectId={projectId}
-              project={project}
-              deploymentStatus={deploymentStatus}
-              isDeploying={deploying}
-              isUnpublishing={unpublishing}
-              isRunning={isBuilding}
-              blockedReason={deploying || unpublishing ? null : operationBusyReason}
-              onDeploy={() => void handleDeploy()}
-              onOpenDomain={() => setOpenModal("domain")}
-              onUnpublish={handleUnpublish}
-              open={publishDialogOpen}
-              onOpenChange={setPublishDialogOpen}
-            />
           </div>
         </header>
         {/* Desktop main */}
@@ -1767,7 +1757,7 @@ export default function WorkspacePage() {
               is gone before the work is.
             */}
             {/* New-engine projects: paused / emergency stop / database move / last publish failed (renders nothing otherwise). */}
-            <V2Banner project={project} onChanged={() => void fetchProject()} onAskFix={setPrompt} onPublishConfirmed={() => void handleDeploy(true)} />
+            <V2Banner project={project} onChanged={() => void fetchProject()} onAskFix={setPrompt} />
             {operation.kind && (
               <div className="px-2 pt-2 sm:px-3">
                 <OperationBanner kind={operation.kind} elapsedMs={operation.elapsedMs} />
@@ -1786,7 +1776,7 @@ export default function WorkspacePage() {
             <div className={`flex-1 min-h-0 overflow-hidden ${activeTab === "preview" ? "rounded-none" : "m-2 sm:m-3 rounded-xl shadow-sm"}`} style={{ background: cardBg }}>
               {activeTab === "preview" && <PreviewPanel key={previewKey} previewUrl={shownPreviewUrl} cached={previewCached} onRefresh={() => { fetchProject(); setPreviewKey((k) => k + 1); }} loading={showInitialGenerationLoader} buildStage={buildStage} buildRetrying={buildRetrying} previewReady={previewReady} emptyMessage={project?.previewUnavailableReason} mobilePreview={mobilePreview} iframePath={iframePath} frameRef={previewFrameRef} /* ⭐ Same-origin ONLY while the editor is open — and for the length of an apply, which outlives the panel: dropping the proxy mid-apply would reload the frame and throw away the preview-only edits the user is watching. */ proxiedSrc={visualEditorOpen || visualLocked ? `/api/preview/${encodeURIComponent(projectId)}` : null} />}
               {activeTab === "code" && <CodePanel key={`${projectId}:${sourceRevision}`} projectId={projectId} sourceRevision={sourceRevision} darkMode={darkMode} onAskAiEdit={handleAskAiEdit} wake={serverWake} />}
-              {activeTab === "more" && <WorkspaceMore project={project} onProjectChanged={() => void fetchProject()} onPublish={() => void handleDeploy()} />}
+              {activeTab === "more" && <WorkspaceMore project={project} onProjectChanged={() => void fetchProject()}  />}
             </div>
             {/* The unsaved-changes bar owns the whole batch: count, undo, discard and apply. */}
             <VisualChangesBar
@@ -1870,7 +1860,7 @@ export default function WorkspacePage() {
           </div>
         )}
 
-        <V2Banner project={project} onChanged={() => void fetchProject()} onAskFix={(text) => { setPrompt(text); setMobileTab("chat"); }} onPublishConfirmed={() => void handleDeploy(true)} />
+        <V2Banner project={project} onChanged={() => void fetchProject()} onAskFix={(text) => { setPrompt(text); setMobileTab("chat"); }} />
 
         {/* Mobile content area */}
         <div className="flex-1 min-h-0 overflow-hidden" style={{ background: cardBg }}>
@@ -1883,7 +1873,7 @@ export default function WorkspacePage() {
             <div className="h-full min-h-0 overflow-hidden">
               {activeTab === "preview" && <PreviewPanel key={previewKey} previewUrl={shownPreviewUrl} cached={previewCached} onRefresh={() => { fetchProject(); setPreviewKey((k) => k + 1); }} loading={showInitialGenerationLoader} buildStage={buildStage} buildRetrying={buildRetrying} previewReady={previewReady} emptyMessage={project?.previewUnavailableReason} mobilePreview={false} iframePath={iframePath} />}
               {activeTab === "code" && <CodePanel key={`${projectId}:${sourceRevision}`} projectId={projectId} sourceRevision={sourceRevision} darkMode={darkMode} onAskAiEdit={handleAskAiEdit} wake={serverWake} />}
-              {activeTab === "more" && <WorkspaceMore project={project} onProjectChanged={() => void fetchProject()} onPublish={() => void handleDeploy()} />}
+              {activeTab === "more" && <WorkspaceMore project={project} onProjectChanged={() => void fetchProject()}  />}
             </div>
           )}
         </div>

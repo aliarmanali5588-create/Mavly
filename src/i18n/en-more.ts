@@ -169,6 +169,9 @@ export const enMore = {
     memory: {
       title: "Project memory"
     },
+    workflow: {
+      title: "Agents & approvals"
+    },
     common: {
       failed: "That did not work. Try again in a moment.",
       unavailable: "Not available right now."
@@ -904,52 +907,5 @@ export const enMore = {
       migIndexes: "{count} indexes",
       migSqlUnavailable: "This migration's SQL file isn't in the project code."
     }
-  },
-  supabase: {
-    title: "Your Supabase project",
-    noticeTitle: "Supabase",
-    description:
-      "Authorize Mavly to list your Supabase organizations and projects. The connection is stored on the server and can be disconnected here.",
-    connect: "Connect Supabase",
-    reconnect: "Reconnect Supabase",
-    connecting: "Starting…",
-    connected: "Connected",
-    notConnected: "Not connected",
-    connectHint: "You will return to this page after authorizing Mavly.",
-    scopeNote:
-      "Mavly requests read-only Organizations and Projects access. It does not create projects, change schemas or run SQL in this phase.",
-    chooseProject: "Choose a Supabase project",
-    noProjects: "No Supabase projects were returned for this account.",
-    selectedProject: "Selected project",
-    noSelection: "No project selected yet.",
-    saveSelection: "Save selection",
-    saving: "Saving…",
-    refresh: "Refresh",
-    disconnect: "Disconnect",
-    disconnecting: "Disconnecting…",
-    disconnectWarning:
-      "Disconnect revokes Mavly's Supabase access and removes the stored connection.",
-    phaseTitle: "Connection only",
-    phaseNote:
-      "Phase 1 connects and selects a project. Browsing tables, schema changes and running queries are not implemented yet.",
-    loadFailed: "We couldn't load your Supabase connection.",
-    connectFailed: "We couldn't start the Supabase connection.",
-    selectFailed: "We couldn't save that project.",
-    disconnectFailed: "We couldn't disconnect Supabase.",
-    disconnected: "Supabase disconnected.",
-    disconnectLocalOnly:
-      "The local connection was removed, but Supabase access could not be revoked. Remove Mavly from your Supabase OAuth apps if needed.",
-    connectedNotice: "Supabase connected. Choose a project below.",
-    notConfigured:
-      "The Supabase integration is not configured on this deployment.",
-    notConfiguredHint:
-      "Set SUPABASE_OAUTH_CLIENT_ID, SUPABASE_OAUTH_CLIENT_SECRET, SUPABASE_OAUTH_REDIRECT_URI and MAVLY_INTEGRATION_ENCRYPTION_KEY on the server.",
-    callbackError: "The Supabase connection did not complete.",
-    callbackDenied: "Supabase access was not granted.",
-    callbackInvalid: "This Supabase connection request is no longer valid.",
-    callbackConfig: "The Supabase integration is not configured.",
-    callbackStorage: "The Supabase connection could not be saved.",
-    connectedAt: "Connected {date}",
-    accountScope: "This selection is stored on your Mavly account."
   },
 };

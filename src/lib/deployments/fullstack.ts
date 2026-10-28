@@ -58,6 +58,7 @@ import { logHostingEvent } from "@/lib/hosting/events";
 import { deploymentOperationLimiter } from "@/lib/hosting/publish-limits";
 import { getProject, isStoreFailure } from "@/lib/mavly/store";
 import { mavlyHostname } from "@/lib/mavly-hostname";
+import { enforceDeploymentApproval } from "@/lib/orchestration/approval-gate";
 import {
   planFullstackDeployment,
   snapshotHashMatches,
@@ -475,6 +476,8 @@ async function uploadAll(
 export interface PublishFullstackOptions {
   /** Pin a verified snapshot. It is re-validated; the id alone grants nothing. */
   snapshotId?: string | null;
+  /** The owner-approved proposal bound to this exact snapshot and hash. */
+  approvalId?: string | null;
 }
 
 /**
@@ -568,6 +571,20 @@ export async function publishFullstackProject(
   if (!hostname) {
     return fail(400, "VALIDATION", "This project id cannot be published on a Mavly address.");
   }
+
+  /**
+   * ⚠️ THE APPROVAL GATE RUNS AFTER THE VERIFIED SNAPSHOT AND DEPLOYABLE HASH ARE
+   * DERIVED, and before the first attempt/provider write. It is a no-op when the
+   * gate is not enabled, so existing full-stack rows keep their behaviour.
+   */
+  const approval = await enforceDeploymentApproval({
+    projectId,
+    target: "fullstack",
+    snapshotId: source.source.snapshotId,
+    sourceHash: plan.plan.sourceHash,
+    approvalId: options.approvalId ?? null,
+  });
+  if (!approval.ok) return fail((approval as { status: number }).status, (approval as { code: string }).code, (approval as { error: string }).error);
 
   const provider = vercelGate();
   if (!("config" in provider)) return provider;

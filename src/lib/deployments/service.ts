@@ -38,6 +38,7 @@ import {
   requiredMigrationFor,
 } from "@/lib/hosting/migration-requirement";
 import { deploymentOperationLimiter } from "@/lib/hosting/publish-limits";
+import { enforceDeploymentApproval } from "@/lib/orchestration/approval-gate";
 import { contentTypeForPath } from "@/lib/hosting/published-version";
 import { verifySharedPublication } from "@/lib/hosting/serve";
 import type { SharedPublicationProbe } from "@/lib/hosting/serve";
@@ -52,6 +53,7 @@ import {
   readSharedHostingSchemaVersion,
 } from "@/lib/hosting/store";
 import { getProject, isStoreFailure, listFiles } from "@/lib/mavly/store";
+import { hashSource } from "@/lib/mavly/snapshots";
 import {
   isVercelDeploymentConfigFailure,
   readVercelDeploymentConfig,
@@ -818,6 +820,11 @@ async function sharedDeploymentStatus(
 export interface PublishProjectOptions {
   /** A verified snapshot to deploy. Only meaningful for full-stack hosting. */
   snapshotId?: string | null;
+  /**
+   * The owner-approved deployment proposal for this exact artifact. Required
+   * only when the deployment approval gate is enabled for the project.
+   */
+  approvalId?: string | null;
 }
 
 export async function publishProject(
@@ -935,6 +942,20 @@ export async function publishProject(
   if (totalBytes > PUBLISH_MAX_BYTES) {
     return fail(400, "VALIDATION", "This static site is too large to publish in one pass.");
   }
+
+  /**
+   * ⚠️ THE APPROVAL GATE RUNS AFTER THE EXACT FILE SET IS DERIVED and before any
+   * provider mutation. When the gate is off this is a no-op, so the legacy path
+   * is unchanged. The hash is server-derived; a browser cannot supply it.
+   */
+  const approval = await enforceDeploymentApproval({
+    projectId,
+    target: "static",
+    snapshotId: null,
+    sourceHash: hashSource(publishFiles),
+    approvalId: options.approvalId ?? null,
+  });
+  if (!approval.ok) return fail((approval as { status: number }).status, (approval as { code: string }).code, (approval as { error: string }).error);
 
   const hostname = mavlyHostname(projectId);
   if (!hostname) {

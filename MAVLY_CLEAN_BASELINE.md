@@ -1,6 +1,6 @@
 # Mavly — Clean Backend Baseline
 
-**Status:** local AI builder, Phase 1 user-owned Supabase connection, an off-by-default
+**Status:** local AI builder, no customer-owned Supabase integration, an off-by-default
 static-publishing path, an off-by-default durable generation worker, and an off-by-default
 isolated verification sandbox implemented; the
 rest of the platform backend remains unavailable.
@@ -45,7 +45,7 @@ revocation or database mutation was performed while preparing this document.
 | GitHub | A GitHub App with user-to-server tokens: connect, push, import. |
 | Preview | Generated static `preview.html`, or an imported static `index.html` / `public/index.html` with local assets, served with a CSP sandbox. Framework entry points that need a build are reported as unsupported. |
 | Supabase account connection | OAuth + PKCE, encrypted access/refresh tokens, organization/project discovery, one selected project. |
-| Static publishing (opt-in) | Off unless `MAVLY_VERCEL_DEPLOYMENTS_ENABLED` and `VERCEL_API_TOKEN` are set. Uploads the generated `preview.html`, or an imported static site and its local assets, as a static Vercel site, attaches the derived `<project-id>.mavly.xyz` domain, and records mapping/deployment/domain status in `project_deployments`. Success requires a ready deployment and a verified domain. **Unpublish is a real Vercel takedown** (domain detach + production deployment removal) that records `unpublished`; project/files and the republish mapping are preserved. |
+| Customer publishing | Retired. The publish, unpublish, and deployment-status APIs fail closed with `BACKEND_NOT_CONFIGURED`; no provider is called and no deployment success is fabricated. Historical deployment rows/migrations remain untouched. |
 | Shared tenant hosting (opt-in) | Off unless `MAVLY_HOSTING_MODE=shared` and a project cohort is configured. A publish freezes an immutable `project_published_versions` / `project_published_files` artifact, then migration 15's `activate_shared_publication` atomically links it from `project_deployments.active_version_id` and marks the attempt `ready`. The public resolver serves from that active pointer, **not** the attempt status, so republishing or a failed attempt leaves the previous version live. It serves at `<project-id>.mavly.xyz` from Mavly's own tenant runtime, which re-checks the cohort after resolution. Public access is two published-only `SECURITY DEFINER` RPCs; drafts and `project_files` are never served publicly. Unpublish deactivates the mapping without deleting history. Wildcard DNS/TLS and provider eligibility remain operator prerequisites; see `MAVLY_SHARED_HOSTING.md`. |
 | `/api/config` | Still returns `{ ok: true, data: { configured: false } }`. |
 | Visual shell | Dashboard, workspace, chat, composer, dialogs and preview frame render. |
@@ -170,15 +170,9 @@ verification tick the worker invokes; the
 worker re-verifies the project owner and cohort itself. RLS is unchanged. Sandbox provider
 credentials are used only by the server-side adapter and are never uploaded into a sandbox.
 
-`supabase/migrations/04_supabase_integration.sql` adds:
-
-- `supabase_integrations`, one row per Mavly user, with encrypted access/refresh tokens and
-  optional selected-project metadata;
-- `supabase_oauth_states`, short-lived hashed state with an encrypted PKCE verifier;
-- RLS policies for both tables and grants for `authenticated` only.
-
-The user-owned Supabase connection continues to use the caller's RLS-scoped client; the
-service-role exception described above is limited to the generation worker.
+`supabase/migrations/04_supabase_integration.sql` is retained as historical customer-
+integration schema. Its runtime integration routes and modules have been retired. Do not
+add a destructive migration or drop these tables automatically.
 
 ### API paths
 
@@ -201,18 +195,9 @@ The project routes run authentication → path scope → ownership → handler:
 | `GET /api/vcaas/source-code/{id}` | ZIP of the generated files. |
 | `GET/HEAD /api/preview/{id}/…` | Sandboxed static preview: `preview.html`, `index.html`, or `public/index.html` plus local assets. |
 
-The user-owned Supabase routes run authentication at the Mavly account level; project
-ownership is not involved because the connection is not attached to a Mavly project.
-
-| Path | Behaviour |
-| --- | --- |
-| `POST /api/integrations/supabase/start` | Creates single-use state + PKCE and returns the Supabase authorize URL. |
-| `GET /api/integrations/supabase/status` | Connection summary; never returns ciphertext. |
-| `GET /api/integrations/supabase/organizations` | Organizations visible to the authorized account. |
-| `GET /api/integrations/supabase/projects` | Projects visible to the authorized account. |
-| `POST /api/integrations/supabase/select` | Re-fetches projects, then stores verified selection metadata. |
-| `POST /api/integrations/supabase/disconnect` | Revokes the grant, then deletes the local encrypted row. |
-| `GET /auth/supabase/callback` | Verifies the Mavly session, consumes state, exchanges code and stores tokens. |
+The customer-owned Supabase OAuth connection is not implemented and no such routes are
+available. Mavly's own Supabase infrastructure remains required for authentication, RLS,
+project storage, runs, snapshots, and worker state.
 
 ### Image generation
 
@@ -440,9 +425,9 @@ with HTTP **503** and `cache-control: private, no-store, max-age=0`.
    service-role RPCs.
 8. Mavly sign-in OAuth still sends no custom `state`, and its callback stays a bare
    `/auth/callback` with the destination in the `mavly_oauth_next` cookie.
-9. The user-owned Supabase integration uses its own `/auth/supabase/callback`. It verifies
-   the Mavly session, consumes a user-bound single-use state row and uses PKCE S256.
-10. Integration access/refresh tokens and the PKCE verifier are AES-256-GCM ciphertext with
+9. Customer-owned Supabase OAuth is retired. Mavly sign-in remains the internal
+   `/auth/callback` OAuth path only.
+10. Integration tokens where implemented are AES-256-GCM ciphertext with
     user/purpose associated data. `MAVLY_INTEGRATION_ENCRYPTION_KEY` and the OAuth client
     secret are server-only. Tokens never reach the browser.
 
@@ -520,14 +505,9 @@ with HTTP **503** and `cache-control: private, no-store, max-age=0`.
   optimistic unpublish claim/finish/release lease.
 - `src/lib/deployments/service.ts` — publish/unpublish/status orchestration, domain gating,
   stale-claim reconciliation and cleanup.
-- `src/lib/integrations/supabase/*` — config, encryption, OAuth client, store, token
-  lifecycle, HTTP helpers and browser client.
-- `src/app/api/integrations/supabase/*` — start/status/discovery/select/disconnect routes.
-- `src/app/auth/supabase/callback/route.ts` — Supabase connection callback.
-- `src/components/workspace/database-v2/SupabaseDatabasePanel.tsx` — Database-tab panel.
 - `src/lib/project-activity.ts` — shared project-activity types and range helper.
 - `src/components/workspace/v2/ProjectActivityModal.tsx` — real generation-run activity panel.
-- `.env.example` — model placeholder plus server-only Supabase OAuth/encryption key
+- `.env.example` — model placeholders plus server-only integration encryption keys
   placeholders. It contains no real secrets.
 
 The Totalum client `src/lib/vcaas-server.ts` remains deleted and must not be recreated.

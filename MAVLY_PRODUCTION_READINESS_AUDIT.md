@@ -112,7 +112,7 @@ These are capabilities with coherent implementation and persistence, **not runti
 | Tenant runtime | `/api/tenant/[[...path]]` via proxy rewrite | `src/lib/hosting/serve.ts`, `tenant-host.ts` | public RPCs | `tenant-host`, `shared-hosting` | Working but cohort gap |
 | Domains | deployment service | `mavly-hostname.ts`, `domain-status.ts` | `project_deployments` | `deployment-host` | Partial |
 | GitHub integration | `/api/integrations/github/*` | `src/lib/integrations/github/*` | `github_connections`, `github_repository_connections` | `github-installation` | Working |
-| Supabase integration | `/api/integrations/supabase/*` | `src/lib/integrations/supabase/*` | `supabase_integrations`, `supabase_oauth_states` | `backend-disconnection` | Working |
+| Customer Supabase integration | Retired; no runtime route | Historical migration 04 only | Historical tables retained | none | Retired |
 | Figma integration | `/api/vcaas/projects/{id}/figma/*` | `src/lib/integrations/figma/*` | `figma_connections` | none found | Working, untested |
 | Project secrets | `/api/vcaas/projects/{id}/secrets` | `src/lib/project-secrets/*` | `project_secrets` | `project-secrets` | Working |
 | Project API keys | UI + store only | `src/lib/project-api-keys/*` | `project_api_keys` | none found | **Not wired** |
@@ -331,7 +331,7 @@ stateDiagram-v2
 | Task/execution state | `project_runs.status/stage`, `generation_manifest`, `project_run_batches` | Partial |
 | File versions/diffs | `project_files` (current only), `project_snapshots` + `project_snapshot_files` | Partial |
 | Build/test results | None — no build or test runs | Missing |
-| Integration configuration status | `github_connections`, `figma_connections`, `supabase_integrations` | Partial |
+| Integration configuration status | `github_connections`, `figma_connections` | Partial |
 | External prerequisites | Not modeled; UI copy only | Missing |
 | Deployment state | `project_deployments`, `project_published_versions` | Partial |
 | Recovery checkpoints | Baseline snapshot, per-batch hashes, pre-restore snapshot | Working |
@@ -632,7 +632,7 @@ Every integration should declare: identifier/version, required credentials and s
 | Child tables inherit ownership through `projects` RLS | `project_files`, `project_runs`, `project_deployments`, etc. | VERIFIED |
 | Project secrets write-only ciphertext | `project_secrets`, migration 11, metadata-only column grants | VERIFIED |
 | AES-256-GCM with AAD | `project-secrets/crypto.ts`, integration crypto modules | VERIFIED |
-| Single-use OAuth state | `supabase_oauth_states` | VERIFIED |
+| Mavly sign-in OAuth state | Supabase Auth callback session exchange | VERIFIED |
 | Sandboxed preview | CSP `sandbox allow-scripts`, `connect-src 'none'` | VERIFIED |
 | Fixed upstream origins | Groq, OpenRouter image, Vercel clients | VERIFIED |
 | No client-supplied upstream URL in active paths | code inspection | VERIFIED |
@@ -654,8 +654,6 @@ Every integration should declare: identifier/version, required credentials and s
 | `figma_connections` | Yes | encrypted token | inherited |
 | `project_secrets` | Yes | `value_ciphertext` | authenticated has no SELECT on ciphertext |
 | `project_api_keys` | Yes | `key_hash` | select/insert grants; see finding |
-| `supabase_integrations` | Yes | encrypted tokens | user-scoped |
-| `supabase_oauth_states` | Yes | state/PKCE | user-scoped |
 
 ### 10.3 Findings
 

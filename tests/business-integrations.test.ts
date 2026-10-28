@@ -382,7 +382,6 @@ test("the gateway and webhook prefixes are public, near misses are not", () => {
     "/api/app/v1",
     "/api/app/v2/payments",
     "/api/integrations/github/start",
-    "/api/integrations/supabase/start",
     "/api/integrations/webhooksx",
   ]) {
     assert.equal(apiSessionDecision(path, false), "unauthenticated", path);

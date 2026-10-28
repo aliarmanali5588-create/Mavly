@@ -11,8 +11,7 @@ editor surfaces and settings dialogs of an AI app builder.
 > provider. Supabase
 > stores the generated source, conversation and run state; the workspace
 > previews the generated static `preview.html`, or an imported static site with an
-> `index.html` / `public/index.html` and local assets. A user-owned Supabase account can
-> also be connected through OAuth to list and select one of its projects. An **opt-in,
+> `index.html` / `public/index.html` and local assets. An **opt-in,
 > off-by-default** publishing path can upload those static files to a Mavly-managed Vercel
 > account as a static site; it is not a dynamic backend host. A separate **opt-in,
 > off-by-default** verification sandbox builds a generated App Router project inside an
@@ -46,7 +45,7 @@ audits listed at the end of this file; it is not a runtime dependency.
 | Preview | Sandboxed static `preview.html`, or an imported static `index.html` / `public/index.html` with local assets |
 | Supabase account connection | OAuth with PKCE, encrypted server-side tokens, organization/project discovery and one selected project |
 | Figma design reference | Personal access token validated with Figma, encrypted per project, and a bounded design summary injected into generation |
-| Publishing (opt-in, disabled by default) | Static files → deterministic Vercel project, published at `<project-id>.mavly.xyz`; framework builds are not run. Deployment and domain state persisted and polled. **Unpublish** removes the Mavly project domain and production deployments, preserving the project/files for republishing. Requires `MAVLY_VERCEL_DEPLOYMENTS_ENABLED=1`, `VERCEL_API_TOKEN` and operator-configured `mavly.xyz` DNS/SSL. See [`MAVLY_VERCEL_DEPLOYMENTS.md`](MAVLY_VERCEL_DEPLOYMENTS.md). |
+| Customer publishing | Retired; no deployment provider is configured. Publish, unpublish, and deployment-status actions fail closed with `BACKEND_NOT_CONFIGURED` and do not claim a live deployment or success. Source editing, static preview, source export, generation, and restore points remain available. Historical deployment rows and migrations are preserved rather than destructively rewritten. |
 | Shared tenant hosting (opt-in, off by default) | Immutable published versions stored in Supabase and served at `<project-id>.mavly.xyz` by Mavly's own tenant runtime. Enabled per project cohort with `MAVLY_HOSTING_MODE=shared` + `MAVLY_SHARED_HOSTING_PROJECTS`; the legacy Vercel path remains the default. See [`MAVLY_SHARED_HOSTING.md`](MAVLY_SHARED_HOSTING.md). |
 | Durable generation worker (opt-in, off by default) | A project-cohort worker claims durable runs with `FOR UPDATE SKIP LOCKED`, executes them under a fenced lease, renews the lease, recovers crashed/expired jobs into bounded retries or dead letters, and never deletes accepted work. Requires `MAVLY_GENERATION_WORKER_ENABLED`, a ≥32-char secret, an explicit cohort, `SUPABASE_SERVICE_ROLE_KEY` and an operator-supplied scheduler. Uncohort projects keep the inline `after()` path. See [`docs/runbooks/generation-worker.md`](docs/runbooks/generation-worker.md). |
 | Verification sandbox (opt-in, off by default) | Worker-dispatched runs enqueue one durable verification for their completed run and immutable snapshot. A later worker tick installs and builds the project's source in a Vercel Sandbox microVM, starts the validated `next start` on `127.0.0.1`, and requests `/` from inside the sandbox. `passed` requires the build to exit `0`, the runtime to start and the local health response to be `2xx`/`3xx`; a build-only success is never `passed`. Unsupported formats return `unsupported_runtime`. Detached stages span ticks, every terminal path destroys the sandbox, and cleanup failure never overwrites the outcome. An optional bounded AI repair (default 1, hard cap 2) may create one new immutable snapshot after a source-level `build_failed`/`runtime_start_failed`/`health_check_failed`, then rebuild and recheck. Preview remains unavailable: no public provider URL is stored or returned. Requires `MAVLY_VERIFICATION_SANDBOX_ENABLED`, `MAVLY_VERIFICATION_SANDBOX_PROJECTS`, Vercel provider credentials, migrations `17` then `19`, and a human-run `npm install` for `@vercel/sandbox`. No generated code runs on a Mavly host. See [`docs/architecture/phase-4-runtime-verification.md`](docs/architecture/phase-4-runtime-verification.md). |
@@ -120,15 +119,11 @@ browser ── src/lib/vcaas.ts (client catalog, same-origin only)
    │                               auth + ownership → 503
    ├── /api/visual-edit/.../apply  auth + ownership → 503
    ├── /api/vcaas/backup-download  auth + ownership → 503
-   ├── /api/integrations/supabase/* auth → encrypted OAuth connection
-   │      └── src/lib/integrations/supabase/* → api.supabase.com
-   ├── /auth/supabase/callback      auth → state/CSRF/PKCE → encrypted token save
    └── /api/config                 200 { configured: false }
 ```
 
 - **Auth:** `@supabase/ssr`, OAuth callback at `/auth/callback`, sessions refreshed in
-  `src/proxy.ts`. The separate `/auth/supabase/callback` belongs to the user-owned
-  Supabase connection, not Mavly sign-in.
+  `src/proxy.ts`.
 - **Authorization:** a row in `public.projects` for `(project_id, user_id)`, read through
   the caller's RLS-scoped Supabase client. Missing and foreign rows return the same
   non-enumerating 403; lookup failures fail closed. Child tables inherit that ownership
@@ -145,19 +140,13 @@ browser ── src/lib/vcaas.ts (client catalog, same-origin only)
   while reusing the same generator and checkpoints. See
   [Generation reliability](#generation-reliability) and the
   [worker runbook](docs/runbooks/generation-worker.md).
-- **Publishing:** disabled unless `MAVLY_VERCEL_DEPLOYMENTS_ENABLED` is one of
-  `1`/`true`/`yes`/`on` and `VERCEL_API_TOKEN` is set. The server uploads the static
-  entry point (`preview.html`, `index.html`, or `public/index.html`) and its local assets
-  as a static site, creates one deterministic Vercel project per
-  Mavly project, attaches the derived `<project-id>.mavly.xyz` domain, and records
-  deployment plus domain status in `project_deployments`. Success requires both the
-  deployment and the verified domain. The browser never calls Vercel and never supplies a
-  Vercel id, URL or hostname.
-- **Unpublishing:** a separate authenticated operation. It claims the mapping, detaches the
-  Mavly project domain, removes the project's production deployments, and records
-  `unpublished` only after Vercel confirms. The Vercel project, Mavly hostname, project row
-  and files are preserved, so republishing reuses the same address. Shared DNS and the
-  wildcard are never touched.
+- **Publishing:** retired. The workspace does not expose a customer publish action, and
+  the deployment API returns `503 BACKEND_NOT_CONFIGURED` without creating a provider
+  deployment, changing a live URL, or reporting success. Source editing, static preview,
+  source export, generation, and restore points remain unchanged.
+- **Unpublishing:** unavailable until a replacement deployment provider is implemented.
+  The retired path does not call Vercel or claim that an external deployment was removed;
+  historical deployment rows and migrations are preserved.
 - **Verification (opt-in):** after a worker-dispatched run completes, one verification row
   is enqueued for its immutable snapshot. A later worker tick re-validates the snapshot,
   uploads a manifest-validated copy into a Vercel Sandbox microVM with restricted egress,
@@ -286,9 +275,6 @@ MAVLY_DEFAULT_MODEL=          # optional; must be in the OpenRouter model catalo
 MAVLY_NORTH_MINI_CODE_PROJECTS=  # optional test cohort; explicit project ids only
 OPENROUTER_API_KEY=your-openrouter-api-key  # text generation + image generation
 
-SUPABASE_OAUTH_CLIENT_ID=your-oauth-app-client-id
-SUPABASE_OAUTH_CLIENT_SECRET=your-oauth-app-client-secret
-SUPABASE_OAUTH_REDIRECT_URI=http://localhost:3000/auth/supabase/callback
 MAVLY_INTEGRATION_ENCRYPTION_KEY=your-32-byte-base64-key
 MAVLY_PROJECT_SECRETS_ENCRYPTION_KEY=your-32-byte-base64-key
 
@@ -320,7 +306,7 @@ MAVLY_FULLSTACK_HOSTING_PROJECTS=
 ```
 
 Only the two `NEXT_PUBLIC_SUPABASE_*` values and `NEXT_PUBLIC_APP_URL` are public.
-`OPENROUTER_API_KEY` (text generation and images), the OAuth client secrets,
+`OPENROUTER_API_KEY` (text generation and images), server OAuth secrets such as GitHub/Figma when enabled,
 `MAVLY_INTEGRATION_ENCRYPTION_KEY`, `MAVLY_PROJECT_SECRETS_ENCRYPTION_KEY`,
 `VERCEL_API_TOKEN`, `VERCEL_OIDC_TOKEN`, `VERCEL_TOKEN`, `VERCEL_PROJECT_ID`,
 `MAVLY_GENERATION_WORKER_SECRET` and
@@ -393,19 +379,6 @@ the prompt, injects a bounded text summary of their layout, typography, colours 
 and never sends the token to the model. A link that selects a whole file is resolved only
 when that file has one top-level design; otherwise the run asks for a frame link.
 
-### User-owned Supabase connection
-
-Create an OAuth app in the Supabase dashboard, set its redirect URL to the exact
-`SUPABASE_OAUTH_REDIRECT_URI` above (or the deployed equivalent), and request only
-`organizations:read` and `projects:read`. Generate the encryption key with:
-
-```bash
-openssl rand -base64 32
-```
-
-Keep that key stable and server-only. Changing it, the OAuth client ID, or the OAuth app
-makes existing stored connections undecryptable; affected users must reconnect. The
-integration stores ciphertext only and never sends tokens to the browser.
 
 The Database tab connects the Mavly account and stores one selected external project. This
 is an account-level selection in Phase 1, not a mapping from each Mavly project to a
@@ -440,11 +413,9 @@ provider retry classification, checkpoint verification, deployment host/state ru
 verification runtime/health/preview/config/state/result modules, the bounded repair policy
 and parsers, and static invariants of migration `19` (including the build+runtime+health
 `passed` rule). They do not exercise a real
-Supabase session, a live OpenRouter generation or image call, the Supabase OAuth connection, a
+Supabase session, a live OpenRouter generation or image call, a live customer OAuth integration, a
 real Vercel Sandbox or any other verification provider, a generated app, a repair model
-call, or the migrations against a database. A manual OAuth check needs a real Supabase
-OAuth app: connect, verify organization/project discovery, save a selection, refresh the
-page, disconnect, and confirm the grant is revoked. A manual publish check requires a real
+call, or the migrations against a database. A manual publish check requires a real
 Vercel token and explicit eligibility approval; see
 [`MAVLY_VERCEL_DEPLOYMENTS.md`](MAVLY_VERCEL_DEPLOYMENTS.md). A manual verification check
 needs a disposable Vercel team/project and an explicit cohort, plus a human-run

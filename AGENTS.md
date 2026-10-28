@@ -6,9 +6,8 @@ a local, server-side AI implementation: OpenRouter generates frontend and backen
 files through its OpenAI-compatible chat-completions API, and the same server-only key
 serves the separate OpenRouter image-generation API. OpenRouter is the only supported
 text-generation provider. Supabase stores projects/files/messages/runs, and the workspace
-previews a generated static `preview.html`. A separate user-owned Supabase connection lets
-a signed-in user authorize read-only organization/project access and select one external
-project.
+previews a generated static `preview.html`. Customer-owned Supabase account/project OAuth
+connections are not supported.
 
 Read `MAVLY_CLEAN_BASELINE.md` before changing anything under `src/app/api/`,
 `src/lib/ai/`, `src/lib/mavly/` or `src/lib/vcaas*`. It records what was removed and what
@@ -96,7 +95,12 @@ it adds an owner-scoped creation request key so retries return the same project.
 `26_android_builds.sql` after 25 (and after 20) before enabling isolated Android debug
 builds: it adds the durable build table, fenced claim/lease/complete/recovery RPCs,
 artifact-retention state, owner-safe column grants, schema marker 26 and a private
-`android-artifacts` Storage bucket. It never stores an APK/AAB in Postgres. Project-secret encryption also
+`android-artifacts` Storage bucket. It never stores an APK/AAB in Postgres. Apply
+`29_multi_agent_orchestration.sql` after 28 (and after 16) before enabling multi-agent
+orchestration or the deployment approval gate: it adds the durable workflow/task/event
+tables, the owner-scoped deployment-proposal table and atomic consume RPC, and schema
+marker 29. It is additive and non-destructive and can be applied while the previous
+application version is live. Project-secret encryption also
 requires the server-only `MAVLY_PROJECT_SECRETS_ENCRYPTION_KEY` (32 random bytes,
 base64-encoded); without it create/update fail closed. `npm test` covers the pure
 auth/redirect/ownership/scope modules, the generation state/lease/claim/observability
@@ -107,7 +111,9 @@ provider-error mapping, the payment state machine, the gateway session exemption
 Phase 7 durable rate-limit migration contracts, payment-event metadata/redaction, the
 admin surface gate, Phase 8 memory validation/retrieval/prompt framing/migration
 contracts, the Phase 9 Android source contract/profile/capability rules, the Android build
-config/policy/archive/artifact/migration contracts, the build-image reference/registry and
+config/policy/archive/artifact/migration contracts, the Phase 10 workflow transition/
+dependency/budget/output/config/approval/security/tool/parser rules and its static
+migration/catalog/deploy-gate invariants, the build-image reference/registry and
 offline-verification static contracts in `infra/android-build/`, the operator-doc coverage
 checks, the OpenRouter adapter contract, the model-catalog policy and static
 route/migration invariants.
@@ -164,20 +170,10 @@ a delivered webhook, a container image build/publish, or the migrations against 
   request reports the exact capability. No build row, log or artifact is fabricated. See
   `docs/architecture/phase-9-android.md`, `docs/runbooks/android.md` and
   `infra/android-build/README.md`.
-- **Vercel publishing is an optional, off-by-default hosting path**, not a builder backend.
-  It is enabled only by `MAVLY_VERCEL_DEPLOYMENTS_ENABLED` (accepted: `1`, `true`, `yes`,
-  `on`) plus `VERCEL_API_TOKEN`, and uploads only static files. It prefers the generated
-  standalone `preview.html`; an imported repository is publishable only when it already
-  contains `index.html` or `public/index.html` and its sibling static assets. Each publish
-  attaches the server-derived `<project-id>.mavly.xyz` domain; success requires both the
-  deployment and a Vercel-verified domain. **Unpublishing is a real takedown**: it claims the
-  mapping, detaches the Mavly project domain, removes the project's production deployments,
-  and records `unpublished` only after Vercel confirms. The Vercel project, hostname, project
-  row and files are preserved for republishing; shared DNS/wildcard records are never
-  touched. The operator must configure
-  `mavly.xyz` DNS/wildcard resolution and confirm certificates before enabling. Do not
-  enable it in a real deployment until the operator has confirmed Vercel plan/terms
-  eligibility for Mavly-managed customer hosting; see `MAVLY_VERCEL_DEPLOYMENTS.md`.
+- **Customer Vercel publishing is retired** and is not a builder backend. The workspace
+  does not expose a publish action, and deployment routes fail closed instead of calling
+  Vercel or reporting success. Historical deployment rows and migrations are preserved;
+  no production database mutation or external takedown is performed by this removal.
 - **Shared tenant hosting is implemented but off by default** (`MAVLY_HOSTING_MODE=shared`
   plus an explicit `MAVLY_SHARED_HOSTING_PROJECTS` cohort). A shared publish stores an
   immutable version in `project_published_versions` / `project_published_files`, then
@@ -199,19 +195,21 @@ a delivered webhook, a container image build/publish, or the migrations against 
 - Implemented paths authenticate, check `/api/vcaas` scope and project ownership, then use
   Supabase through the caller's RLS-scoped client:
   - project list/create/launch/get/update/delete;
-  - `agent/start`, `agent/status`, `agent/full-conversation`;
+  - `agent/start`, `agent/status`, `agent/full-conversation`, `agent/workflow` (GET) and
+    `agent/workflow/cancel` (POST, owner-only orchestration record cancellation);
   - `files/tree`, `files/content` (GET/PUT);
   - `deployments/deploy` (POST), `deployments/unpublish` (POST) and
     `deployments/status` (GET), which fail closed with
-    `BACKEND_NOT_CONFIGURED` unless publishing is explicitly enabled and configured.
+    `BACKEND_NOT_CONFIGURED` unless publishing is explicitly enabled and configured;
+  - `deployments/proposals` (GET/POST), `deployments/proposals/{id}` (GET),
+    `…/approve` (POST) and `…/revoke` (POST), the Phase 10 owner approval chain. A
+    proposal is not a deployment; `deployments/deploy` consumes an approved proposal
+    atomically when the gate is enabled.
 - Dedicated routes serve the generated source ZIP (`/api/vcaas/source-code/{id}`) and the
   sandboxed static preview (`/api/preview/{id}/`).
-- The user-owned Supabase connection is account-level and separate from Mavly
-  `public.projects`. Implemented: OAuth start, status, organization/project discovery,
-  verified selection and disconnect under `/api/integrations/supabase/`; callback at
-  `/auth/supabase/callback`. Tokens are AES-256-GCM ciphertext in
-  `supabase_integrations`; single-use OAuth state lives in `supabase_oauth_states`.
-  Database browsing, SQL, schema changes and per-project linking are not implemented.
+- Customer-owned Supabase account/project OAuth connections are retired. Migration `04` is
+  historical and retained; its tables are not served by runtime code. Mavly's own Supabase
+  authentication, projects, RLS, generation, publishing, and worker infrastructure remain.
 - **Generation jobs are durable per run.** `project_runs.stage` records
   `queued/validating/generating/retrying/retry_wait/completed/failed/cancelled/interrupted`;
   `project_run_batches` stores a validated batch and per-path SHA-256 hashes. A run plans a
@@ -398,6 +396,38 @@ a delivered webhook, a container image build/publish, or the migrations against 
   archive/delete/clear controls. **Unverified:** migration 24, RLS, real retrieval and the
   UI have not been exercised live; no benchmark claims are made. See
   `docs/architecture/phase-8-agent-memory.md` and `docs/runbooks/agent-memory.md`.
+- **Multi-agent orchestration is implemented but off by default (Phase 10).** It is
+  enabled only by `MAVLY_MULTI_AGENT_ENABLED` plus an explicit
+  `MAVLY_MULTI_AGENT_PROJECTS` cohort, a fully configured durable generation worker
+  (migration 16), `SUPABASE_SERVICE_ROLE_KEY`, `NEXT_PUBLIC_SUPABASE_URL`,
+  `OPENROUTER_API_KEY` and migration 29. It runs **only for worker-dispatched runs**;
+  inline `after()` runs and projects outside the cohort keep the existing pipeline and
+  record no workflow. The durable `project_runs` row remains the only job/lease and
+  `generateApp` remains the only writer of `project_files`: the orchestrator adds a
+  1:1 `agent_workflows` record, dependency-aware `agent_tasks` and a bounded
+  `agent_workflow_events` audit trail. The planner (45 s / 2k tokens) and UI/UX
+  (30 s / 1.5k tokens) roles are bounded advisory model calls injected after the
+  existing prompt's repository rules and marked as subordinate context; coding
+  delegates to the existing generation engine; QA delegates to the existing
+  verification sandbox and reports `pending`/`unavailable` rather than passing; the
+  security role is a deterministic static scan (no model call, no runtime proof); the
+  repair role is **diagnostic only** and never writes source; the deployment role can
+  only record a proposal and never deploys. Every model call is budget-limited,
+  timed out, bounded and persisted as reported cost; a role failure is recorded
+  truthfully and never changes the generation run's own outcome. The workflow
+  projection is owner-readable through the existing authorized `agent/workflow`
+  routes and the workspace's **Agents & approvals** panel. **The deployment approval
+  gate is separate and server-enforced** (`MAVLY_DEPLOYMENT_APPROVAL_REQUIRED`, or
+  automatically for a multi-agent cohort project): a publish without an owner-approved,
+  unexpired, single-use proposal bound to the exact server-derived snapshot/target/
+  source hash is refused with `428 DEPLOYMENT_APPROVAL_REQUIRED`; the consume RPC is
+  atomic and burns the approval before any provider mutation. No model, QA result or
+  security scan approves anything, and nothing auto-deploys or auto-merges. With the
+  flag off, generation, publishing and verification are unchanged; the gate is also a
+  no-op unless explicitly enabled. **Unverified:** migration 29, its RLS/RPCs, a live
+  workflow, real OpenRouter planning calls, the panel and the approval gate have not
+  been exercised live. See `docs/architecture/phase-10-multi-agent-orchestration.md`
+  and `docs/runbooks/multi-agent-orchestration.md`.
 - **Restore points are implemented.** Every completed AI execution that changes the
   project's source leaves a durable snapshot (`project_snapshots` +
   `project_snapshot_files`). The chat renders a **Restore Code** action on that execution,
@@ -518,9 +548,6 @@ browser ── src/lib/vcaas.ts (client catalog, same-origin only)
    │                               auth + ownership → 503
    ├── /api/visual-edit/.../apply  auth + ownership → 503
    ├── /api/vcaas/backup-download  auth + ownership → 503
-   ├── /api/integrations/supabase/* auth → encrypted OAuth connection
-   │      └── src/lib/integrations/supabase/* → api.supabase.com
-   ├── /auth/supabase/callback      auth → state/PKCE → encrypted token save
    └── /api/config                 200 { configured: false }
 ```
 
@@ -635,6 +662,14 @@ paths with `src/lib/vcaas-scope.ts`, so unknown shapes are refused before any wo
 | `supabase/migrations/24_agent_memory.sql` | Project memory table, decision/failure constraints, owner RLS, revision-based updates, column grants, service-role failure writes and schema marker 24. Additive; apply after 23. |
 | `src/components/workspace/v2/ProjectMemoryPanel.tsx` | Real memory controls: derived facts, list, add/edit/approve/reject/archive/delete/clear; disabled and error states are truthful. |
 | `docs/architecture/phase-8-agent-memory.md`, `docs/runbooks/agent-memory.md` | Phase 8 memory authority, storage/retrieval, freshness, security, rollout and acceptance. |
+| `src/lib/orchestration/contracts.ts`, `workflow.ts` | Phase 10 pure role/task/workflow contracts, explicit transitions, dependency graph, bounded scheduling, complexity classification, budgets, retries and normalized output projection. |
+| `src/lib/orchestration/config.ts`, `roles.ts`, `tools.ts`, `security.ts` | Opt-in cohort/approval configuration, specialist prompts and parsers, the scoped tool registry, and the deterministic static security scan (no model call). |
+| `src/lib/orchestration/engine.ts` | The orchestration engine: worker-only workflow start, planner/UI-UX advisory calls, coding markers, QA delegation, security review, diagnostic repair and the truthful workflow projection. |
+| `src/lib/orchestration/store.ts` | Worker-owned workflow/task/event persistence with compare-and-set transitions, run cancellation/failure helpers and owner cancellation; missing migration is reported, never faked. |
+| `src/lib/orchestration/approval.ts`, `approval-store.ts`, `approval-service.ts`, `approval-gate.ts` | Artifact-bound deployment proposals: pure validity rules, owner-scoped SECURITY DEFINER RPC wrappers, service-layer proposal derivation, and the deploy-time atomic consume gate. |
+| `src/components/workspace/v2/ProjectWorkflowPanel.tsx` | Agents & approvals panel: truthful workflow/check/finding state, reported cost, proposal create/approve/revoke and deploy-with-approval. |
+| `supabase/migrations/29_multi_agent_orchestration.sql` | Workflow/task/event/proposal tables, owner RLS, SELECT-only grants, owner cancellation and proposal lifecycle/consume RPCs, and schema marker 29. Additive; apply after 28 and 16. |
+| `docs/architecture/phase-10-multi-agent-orchestration.md`, `docs/runbooks/multi-agent-orchestration.md` | Phase 10 design, role authority, approval semantics, rollout, operator checks and known limitations. |
 | `src/app/api/tenant/[[...path]]/route.ts` | The tenant runtime (internal path reached by the validated-host rewrite). |
 | `src/lib/api-origin.ts` | Explicit credentialed-origin allowlist and cross-origin mutation policy. |
 | `supabase/migrations/14_shared_hosting.sql` | Published versions/files, active-version RPCs, published-only public lookup, RLS and grants. |
@@ -647,9 +682,6 @@ paths with `src/lib/vcaas-scope.ts`, so unknown shapes are refused before any wo
 | `supabase/migrations/08_figma_integration.sql` | Per-project encrypted Figma connection with project-inherited RLS. |
 | `src/lib/project-ownership.ts` | Ownership registration helpers, idempotent insert, owned-id filtering. |
 | `src/lib/vcaas-errors.ts` | Client error-code vocabulary, including `BACKEND_NOT_CONFIGURED`. |
-| `src/lib/integrations/supabase/` | Server-only OAuth client, encryption, state/token storage, token refresh and browser API client. |
-| `src/app/api/integrations/supabase/` | Account-level start/status/discovery/select/disconnect routes. |
-| `src/app/auth/supabase/callback/route.ts` | User-owned Supabase OAuth callback. |
 | `supabase/migrations/` | `profiles`, `projects`, AI builder tables/RLS, Supabase connection/state tables, GitHub/Figma connections, encrypted project secrets, deployment mapping and Mavly domain state, backfill template. |
 
 ## Security invariants
@@ -709,21 +741,17 @@ paths with `src/lib/vcaas-scope.ts`, so unknown shapes are refused before any wo
 7. **OAuth has two traps.** Do not send a custom `state` to Supabase (PKCE owns it), and
    the Mavly sign-in callback URL must be a bare `/auth/callback` with no query string. The
    destination rides in the `mavly_oauth_next` cookie. Keep Supabase's allowed-redirect
-   list tight. The user-owned Supabase integration has its own callback
-   (`/auth/supabase/callback`) where a custom state is required and verified.
+   list tight to Mavly sign-in callbacks only.
 8. **Integration tokens and project secret values are ciphertext.** AES-256-GCM
    encryption uses `MAVLY_INTEGRATION_ENCRYPTION_KEY` for integration tokens and
    `MAVLY_PROJECT_SECRETS_ENCRYPTION_KEY` for project secrets; both are server-only, and
-   neither may be stored in the database or given a `NEXT_PUBLIC_` prefix. OAuth
-   access/refresh tokens, PKCE verifiers, stored Figma access tokens and project secret
-   values/ciphertext must never be returned to the browser or written to logs.
-   `SUPABASE_OAUTH_CLIENT_SECRET` is also server-only. Scopes are `organizations:read` and
-   `projects:read`; do not add write scopes without explicit approval.
+   neither may be stored in the database or given a `NEXT_PUBLIC_` prefix. Stored Figma
+   access tokens and project secret values/ciphertext must never be returned to the
+   browser or written to logs.
 9. **Child tables inherit ownership through `projects` RLS.** `project_files`,
    `project_messages`, `project_runs`, `project_deployments`, `figma_connections` and
    `project_secrets` are never queried with a service-role key; their policies require an
-   owned parent row. `supabase_integrations` and `supabase_oauth_states` are user-scoped
-   through their own RLS policies. `project_verifications` and
+   owned parent row. `project_verifications` and
    `project_verification_repairs` are worker-owned: an authenticated user may only SELECT
    their own rows through `projects` RLS and cancel their own run through
    `cancel_verification`; every other mutation, including repair begin/finish, is a
@@ -767,6 +795,20 @@ paths with `src/lib/vcaas-scope.ts`, so unknown shapes are refused before any wo
     signing, AAB, store publishing, emulator/device verification or public artifact URL is
     implemented. A missing prerequisite fails closed; no build row, log or artifact is
     fabricated.
+14. **Multi-agent orchestration is observability, and deployment approval is the only
+    gate.** Orchestration runs only in the durable worker and only for an explicit
+    cohort; `project_runs` remains the only job/lease and `generateApp` the only writer
+    of `project_files`. Workflow/task/event writes are worker-owned; the authenticated
+    role has SELECT only, plus owner cancellation through `cancel_agent_workflow`.
+    Planner, UI/UX and repair output is untrusted advisory data: it can never override
+    repository instructions, current files, the current user request, authorization,
+    verification or deployment, and it is never promoted into a passed check.
+    A security scan or QA record is not a deployment authorization. When the approval
+    gate is enabled, the deploy path re-derives the target/snapshot/source hash and
+    atomically consumes an owner-approved, unexpired, single-use proposal; the browser
+    never supplies the hash, no model can approve, and a consumed approval is not
+    reusable even if the provider call later fails. With the gate off, legacy
+    deployment behaviour is unchanged.
 
 ## UI conventions
 
