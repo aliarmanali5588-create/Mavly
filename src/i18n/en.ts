@@ -3645,12 +3645,12 @@ const base = {
   },
 
   // ── The project workspace ──────────────────────────────────────
-  /* This app's "More" tab (the platform's More view plus its custom domain and logs). */
+  /* This app's "More" tab (the platform's More view plus its custom domain). */
   more: {
     tab: "More",
     legacyTitle: "Available on new-engine projects",
     legacyBody:
-      "This project runs on Totalum's legacy engine. The database explorer, scheduled jobs, mobile apps, payments, API keys, usage and the rest of More need a project created on the current engine. Versions, secrets, the custom domain and logs stay in the header.",
+      "This project runs on Totalum's legacy engine. The database explorer, payments, API keys, usage and the rest of More need a project created on the current engine. Versions, secrets and the custom domain stay in the header.",
     settingsDescription: "The agent's instructions and tools, the live address, and pausing the project.",
     boughtTitle: "Domains bought on Totalum",
     attachHere: "Attach to this project",
@@ -3732,7 +3732,6 @@ const base = {
       github: "GitHub",
       figma: "Figma",
       support: "Need help?",
-      logs: "Logs",
       comingSoon: "{name} opens here shortly — it's being built.",
     },
 
@@ -4528,79 +4527,6 @@ const base = {
       unmappedUnsupported: "we found the element, but this value is built by your code rather than written in it. Ask in the chat and the agent will change it.",
       rebuildNotStarted: "The files were written, but the rebuild didn't start. Rebuild from the preview toolbar to see the change.",
       lockedTitle: "The editor is locked while your app rebuilds",
-    },
-
-    logs: {
-      title: "Server logs",
-      // ⚠️ CORRECTED IN F9: development and production are two different machines.
-      modalDescription: "Your development server and your published site, side by side.",
-      sourceLabel: "Which logs to show",
-      sourceDev: "Development",
-      sourceProd: "Production",
-      devHint: "Output from the dev server that powers your preview.",
-      /**
-       * ⚠️ "A FEW MINUTES" WAS WRONG BY TWO ORDERS OF MAGNITUDE, and it is half the
-       * reason production logs read as broken. Cloudflare Logpush delivers to the
-       * `startum-logs` worker in batches that were measured lagging 2–3.5 hours on
-       * 2026-08-06 (the newest record across 100 live projects moved from 08:11Z to
-       * 09:48Z between two scans taken 37 minutes apart). Someone who visits their
-       * own site and immediately opens this tab will correctly see nothing, and the
-       * old copy told them to expect otherwise.
-       */
-      prodHint: "Requests to your published site over the last {range}. Delivered in batches — the last couple of hours may be missing.",
-      // ⚠️ USED IN TWO PLACES — the range select's own options AND inline inside
-      // sentences ("over the last {range}"). Keep them as bare durations so both
-      // read correctly; the select's aria-label supplies the "how far back" framing.
-      rangeLabel: "How far back to look",
-      rangeHours: "{count} h",
-      rangeDays: "{count} days",
-      updated: "Updated {when}",
-      introDescription:
-        "Live output from the server behind your preview — everything your app prints while you build.",
-      introProdDescription:
-        "Requests handled by your published site, with anything your code logged while serving them.",
-      load: "Load the logs",
-      refresh: "Refresh the logs",
-      autoRefresh: "Auto",
-      autoRefreshHint: "Refresh the logs every 10 seconds. Pauses while this tab is in the background.",
-      autoRefreshHintProd:
-        "Refresh the production logs every 30 seconds. Pauses while this tab is in the background. Each refresh counts towards your plan's log-request limit.",
-      download: "Download the logs",
-      searchPlaceholder: "Filter lines…",
-      searchProdPlaceholder: "Search production (regex)…",
-      prodSearchHint:
-        "Searches the whole {range} window on the server, not just what's on screen. Regular expressions work: error|timeout",
-      noMatches: "No line matches “{query}”",
-      matchCount: "{count} of {total} lines",
-      jumpToBottom: "Jump to the latest",
-      newEntries: "New entries",
-      emptyTitle: "No logs yet",
-      emptyDescription:
-        "Nothing has been logged. Use your app — submit a form, load a page — then refresh.",
-      emptyProdTitle: "Nothing from production yet",
-      emptyProdDescription:
-        /**
-         * ⚠️ THE THIRD SENTENCE IS NOT PADDING — IT IS A MEASURED FACT. A request
-         * answered straight from the static-asset layer never invokes the Worker, so
-         * Cloudflare emits no trace event and it can NEVER appear here. Measured
-         * 2026-08-06: 6 asset-served 200s produced 0 records, while all 31
-         * middleware/SSR 307s produced one record each. Without this line, the owner
-         * of a purely static landing page is told their site has no traffic when it
-         * has plenty.
-         */
-        "No requests have reached your published site in the last {range} — or they have, and Cloudflare hasn't delivered them here yet. Batches can lag a couple of hours, so try a longer window before assuming it's quiet. Pages served straight from static files never appear here at all: only pages your app renders, plus API routes, are logged.",
-      emptyProdSearchDescription:
-        "Nothing in the last {range} matches that search. Try a shorter pattern, a longer window, or clear it to see the most recent requests.",
-      notDeployedTitle: "You haven't published this project yet",
-      notDeployedDescription:
-        "Production logs start the moment your site goes live. Publish it, and the requests real visitors make will show up here.",
-      fetchFailed: "We couldn't fetch the logs",
-      fetchFailedDescription: "Your server may not be running. Try restarting it from the preview toolbar.",
-      fetchFailedProdDescription:
-        "We couldn't reach the production log service. Nothing is wrong with your site — try again in a moment.",
-      rateLimitedTitle: "You've hit your plan's log limit",
-      rateLimitedDescription:
-        "Production logs are limited per plan. Wait for the limit to reset, or upgrade for more.",
     },
 
     unsavedTitle: "Discard your changes?",

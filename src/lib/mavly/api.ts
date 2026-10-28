@@ -160,14 +160,6 @@ import {
   updateProjectSecret,
   type ProjectSecretServiceFailure,
 } from "@/lib/project-secrets/service";
-import {
-  createApiKey,
-  isProjectApiKeyServiceFailure,
-  listApiKeys,
-  revokeApiKey,
-  rotateApiKey,
-  type ProjectApiKeyServiceFailure,
-} from "@/lib/project-api-keys/service";
 import { publicIntegrationCatalog } from "@/lib/integrations/contracts";
 import {
   disablePaymentsIntegration,
@@ -526,23 +518,6 @@ export async function handleMavlyVcaasRequest(input: MavlyRequest): Promise<Next
         return deleteProjectSecretResponse(userId, projectId, secretId);
       }
     }
-  }
-  if (action === "api-keys") {
-    if (method === "GET") return projectApiKeysResponse(userId, projectId);
-    if (method === "POST") return createProjectApiKeyResponse(userId, projectId, body);
-  }
-  if (action.startsWith("api-keys/")) {
-    const rest = action.slice("api-keys/".length).split("/");
-    const keyId = rest[0];
-    if (keyId && rest.length === 1 && method === "DELETE") {
-      return revokeProjectApiKeyResponse(userId, projectId, keyId);
-    }
-    if (keyId && rest.length === 2 && rest[1] === "rotate" && method === "POST") {
-      return rotateProjectApiKeyResponse(userId, projectId, keyId);
-    }
-  }
-  if (action === "preview/rotate-url" && method === "POST") {
-    return previewRotateUrlResponse(userId, projectId);
   }
   if (action === "files/tree" && method === "GET") {
     return fileTreeResponse(projectId, query);
@@ -1488,10 +1463,6 @@ function secretFail(result: ProjectSecretServiceFailure): NextResponse {
   return fail(result.status, result.code, result.error);
 }
 
-function apiKeyFail(result: ProjectApiKeyServiceFailure): NextResponse {
-  return fail(result.status, result.code, result.error);
-}
-
 function paymentsFail(result: PaymentsServiceFailure): NextResponse {
   return fail(result.status, result.code, result.error);
 }
@@ -1625,56 +1596,6 @@ async function deleteProjectSecretResponse(
   const result = await deleteProjectSecret(projectId, userId, secretId);
   if (isProjectSecretServiceFailure(result)) return secretFail(result);
   return ok(result.data);
-}
-
-async function projectApiKeysResponse(
-  userId: string,
-  projectId: string,
-): Promise<NextResponse> {
-  const result = await listApiKeys(projectId, userId);
-  if (isProjectApiKeyServiceFailure(result)) return apiKeyFail(result);
-  return ok(result.data);
-}
-
-async function createProjectApiKeyResponse(
-  userId: string,
-  projectId: string,
-  body: unknown,
-): Promise<NextResponse> {
-  const result = await createApiKey(projectId, userId, body);
-  if (isProjectApiKeyServiceFailure(result)) return apiKeyFail(result);
-  return ok(result.data);
-}
-
-async function revokeProjectApiKeyResponse(
-  userId: string,
-  projectId: string,
-  keyId: string,
-): Promise<NextResponse> {
-  const result = await revokeApiKey(projectId, userId, keyId);
-  if (isProjectApiKeyServiceFailure(result)) return apiKeyFail(result);
-  return ok(result.data);
-}
-
-async function rotateProjectApiKeyResponse(
-  userId: string,
-  projectId: string,
-  keyId: string,
-): Promise<NextResponse> {
-  const result = await rotateApiKey(projectId, userId, keyId);
-  if (isProjectApiKeyServiceFailure(result)) return apiKeyFail(result);
-  return ok(result.data);
-}
-
-async function previewRotateUrlResponse(
-  userId: string,
-  projectId: string,
-): Promise<NextResponse> {
-  // The UI expects { temporalLinkUrl: string; rotatedAt: string }
-  // Generate a new preview address
-  const { randomUUID } = await import("node:crypto");
-  const temporalLinkUrl = `https://preview-${randomUUID().slice(0, 8)}-${projectId}.mavly.app`;
-  return ok({ temporalLinkUrl, rotatedAt: new Date().toISOString() });
 }
 
 async function startAgentResponse(userId: string, projectId: string, body: unknown): Promise<NextResponse> {

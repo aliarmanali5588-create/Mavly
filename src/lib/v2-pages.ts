@@ -1,12 +1,11 @@
 /**
- * Pure helpers behind the v2 project pages (Usage & limits, Project API keys, Payments, Mobile apps, Cron jobs).
- * No React, no fetch — tested by `src/lib/__tests__/v2-pages.test.tsx`.
+ * Pure helpers behind the v2 project pages (Usage & limits, Payments).
+ * No React, no fetch — pure so they can be tested directly.
  *
  * Everything here turns an API answer into plain words or a simple shape; the numbers themselves stay the server's.
  */
 
-import type { Translate } from "@/i18n/types";
-import type { CronJob, ProjectApiKey, V2Usage } from "@/lib/vcaas-types";
+import type { V2Usage } from "@/lib/vcaas-types";
 
 // ─────────────────────────────── Usage ───────────────────────────────
 
@@ -77,146 +76,6 @@ export function nextMonthStart(now = new Date()): Date {
     return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
 }
 
-// ─────────────────────────────── Cron ───────────────────────────────
-
-export type CronFrequency = "minutes" | "hourly" | "daily" | "weekdays" | "weekly" | "monthly" | "custom";
-export interface CronForm {
-    frequency: CronFrequency;
-    /** `minutes`: every N minutes. */
-    every: number;
-    /** `HH:MM` in the job's zone (daily / weekdays / weekly / monthly); the minute past the hour for `hourly`. */
-    time: string;
-    /** 0 = Sunday … 6 = Saturday (`weekly`). */
-    weekday: number;
-    /** 1–28 (`monthly`). */
-    day: number;
-    /** `custom`: a raw 5-field expression. */
-    expression: string;
-}
-
-export const DEFAULT_CRON_FORM: CronForm = { frequency: "daily", every: 15, time: "09:00", weekday: 1, day: 1, expression: "0 9 * * *" };
-
-const hm = (time: string): [number, number] => {
-    const [h, m] = time.split(":").map(n => Number.parseInt(n, 10));
-    return [Number.isFinite(h) ? Math.min(23, Math.max(0, h)) : 0, Number.isFinite(m) ? Math.min(59, Math.max(0, m)) : 0];
-};
-
-/** The 5-field cron expression the form describes (in the job's `timezone`, UTC without one). */
-export function buildCron(form: CronForm): string {
-    const [h, m] = hm(form.time);
-    switch (form.frequency) {
-        case "minutes":
-            return `*/${Math.max(1, Math.min(59, Math.round(form.every)))} * * * *`;
-        case "hourly":
-            return `${m} * * * *`;
-        case "daily":
-            return `${m} ${h} * * *`;
-        case "weekdays":
-            return `${m} ${h} * * 1-5`;
-        case "weekly":
-            return `${m} ${h} * * ${form.weekday}`;
-        case "monthly":
-            return `${m} ${h} ${Math.max(1, Math.min(28, form.day))} * *`;
-        default:
-            return form.expression.trim().replace(/\s+/g, " ");
-    }
-}
-
-const WEEKDAY_KEYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"] as const;
-const two = (n: number) => String(n).padStart(2, "0");
-const isInt = (s: string, min: number, max: number) => /^\d+$/.test(s) && Number(s) >= min && Number(s) <= max;
-
-/**
- * A schedule in words: "Every day at 09:00 UTC", "Every 15 minutes", "Every Monday at 08:30 UTC". An expression this
- * does not recognise comes back as "Custom schedule: <expression>" — never a wrong sentence. With `local`, a schedule at a
- * fixed UTC time also says that time in the viewer's zone ("… 08:30 UTC · 10:30 your time"), at today's offset. A job
- * with its own `zone` (cron2: the scheduler keeps it at that local time all year) reads "… 09:00 (Europe/Madrid)".
- */
-export function describeSchedule(schedule: CronJob["schedule"], t: Translate, local?: { timeZone: string; now?: Date }, zone?: string): string {
-    if (typeof schedule !== "string") {
-        const n = schedule.everyMinutes;
-        return n % 60 === 0 && n >= 60
-            ? n === 60 ? t("engineV2.cron.every.hour") : t("engineV2.cron.every.nHours", { n: n / 60 })
-            : n === 1 ? t("engineV2.cron.every.minute") : t("engineV2.cron.every.nMinutes", { n });
-    }
-    const fields = schedule.trim().split(/\s+/);
-    const custom = t("engineV2.cron.every.custom", { expression: schedule.trim() });
-    if (fields.length !== 5) return custom;
-    const [min, hour, dom, mon, dow] = fields;
-    if (mon !== "*") return custom;
-    const step = /^\*\/(\d+)$/;
-    if (hour === "*" && dom === "*" && dow === "*") {
-        if (min === "*") return t("engineV2.cron.every.minute");
-        const s = step.exec(min);
-        if (s) return Number(s[1]) === 1 ? t("engineV2.cron.every.minute") : t("engineV2.cron.every.nMinutes", { n: Number(s[1]) });
-        if (isInt(min, 0, 59)) return Number(min) === 0 ? t("engineV2.cron.every.hour") : t("engineV2.cron.every.hourAt", { minute: two(Number(min)) });
-        return custom;
-    }
-    if (!isInt(min, 0, 59)) return custom;
-    const hs = step.exec(hour);
-    if (hs && dom === "*" && dow === "*") return t("engineV2.cron.every.nHours", { n: Number(hs[1]) });
-    if (!isInt(hour, 0, 23)) return custom;
-    const time = `${two(Number(hour))}:${two(Number(min))}`;
-    const tz = zone && zone !== "UTC" ? `(${zone})` : "UTC";
-    const words =
-        dom === "*" && dow === "*"
-            ? t("engineV2.cron.every.day", { time, tz })
-            : dom === "*" && dow === "1-5"
-              ? t("engineV2.cron.every.weekday", { time, tz })
-              : dom === "*" && isInt(dow, 0, 7)
-                ? t("engineV2.cron.every.week", { day: t(`engineV2.cron.days.${WEEKDAY_KEYS[Number(dow) % 7]}`), time, tz })
-                : dow === "*" && isInt(dom, 1, 31)
-                  ? t("engineV2.cron.every.month", { day: Number(dom), time, tz })
-                  : null;
-    if (!words || !local || tz !== "UTC") return words ?? custom;
-    const at = localTimeOf(Number(hour), Number(min), local.timeZone, local.now ?? new Date());
-    const key = at.dayShift > 0 ? "yourTimeNextDay" : at.dayShift < 0 ? "yourTimePrevDay" : "yourTime";
-    return t(`engineV2.cron.${key}`, { words, time: at.time });
-}
-
-/** `hour:minute` UTC on `now`'s UTC day, in `timeZone`: its clock time and whether it falls on the day before/after. */
-function localTimeOf(hour: number, minute: number, timeZone: string, now: Date): { time: string; dayShift: number } {
-    const utc = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), hour, minute));
-    const parts = Object.fromEntries(
-        new Intl.DateTimeFormat("en-GB", { timeZone, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" })
-            .formatToParts(utc)
-            .map(part => [part.type, part.value])
-    );
-    const localDay = Date.UTC(Number(parts.year), Number(parts.month) - 1, Number(parts.day));
-    const utcDay = Date.UTC(utc.getUTCFullYear(), utc.getUTCMonth(), utc.getUTCDate());
-    return { time: `${parts.hour}:${parts.minute}`, dayShift: Math.sign(localDay - utcDay) };
-}
-
-/** cron2: the "pause after N failed runs in a row" choices offered (the API takes any 1–100; `null` = never). */
-export const PAUSE_AFTER_CHOICES: (number | null)[] = [1, 3, 5, 10, 25, 50, 100, null];
-
-/** cron2: the choices for a job whose setting may be any 1–100 (set through the API): its own value joins the presets. */
-export function pauseChoices(current: number | null | undefined): (number | null)[] {
-    if (current == null || PAUSE_AFTER_CHOICES.includes(current)) return PAUSE_AFTER_CHOICES;
-    return [...PAUSE_AFTER_CHOICES.filter(n => n !== null && n < current), current, ...PAUSE_AFTER_CHOICES.filter(n => n === null || n > current)];
-}
-
-/** cron2: a job's failure setting in words (`undefined` = the default 3; `null` = never, told once after 10). */
-export function failurePolicy(pauseAfterFailures: number | null | undefined, t: Translate): string {
-    if (pauseAfterFailures === null) return t("engineV2.cron.neverPause");
-    const n = pauseAfterFailures ?? 3;
-    return t(n === 1 ? "engineV2.cron.pauseAfterOne" : "engineV2.cron.pauseAfter", { n });
-}
-
-/** A cron run's outcome: `ok` for a 2xx/3xx answer, `failed` otherwise, `skipped` when it was not fired. */
-export function runOutcome(status: number | "timeout" | "error" | "skipped" | undefined): "ok" | "failed" | "skipped" | null {
-    if (status === undefined) return null;
-    if (status === "skipped") return "skipped";
-    return typeof status === "number" && status < 400 ? "ok" : "failed";
-}
-
-// ─────────────────────────────── API keys ───────────────────────────────
-
-/** `app` runs the app, `env` is inside the downloaded .env files, `custom` is one the owner created. */
-export function keyKind(key: Pick<ProjectApiKey, "managed">): "app" | "env" | "custom" {
-    return key.managed === "app" ? "app" : key.managed === "env" ? "env" : "custom";
-}
-
 /** The three permission choices of "Create a key"; `custom` = any other set (advanced). */
 export const SCOPE_PRESETS = {
     read: ["db:read"],
@@ -229,14 +88,4 @@ export function presetOf(scopes: readonly string[]): ScopePreset {
     const set = [...scopes].sort().join(",");
     for (const [name, list] of Object.entries(SCOPE_PRESETS)) if ([...list].sort().join(",") === set) return name as ScopePreset;
     return "custom";
-}
-
-// ─────────────────────────────── Mobile ───────────────────────────────
-
-/** When the next build may start, from a `429 MOBILE_BUILD_RATE_LIMITED` answer's details (`retryAt` or `retryAfterSeconds`). */
-export function retryAtOf(details: unknown, now = Date.now()): Date | null {
-    const d = (details ?? {}) as { retryAt?: unknown; retryAfterSeconds?: unknown };
-    if (typeof d.retryAt === "string" && !Number.isNaN(Date.parse(d.retryAt))) return new Date(d.retryAt);
-    if (typeof d.retryAfterSeconds === "number" && d.retryAfterSeconds > 0) return new Date(now + d.retryAfterSeconds * 1000);
-    return null;
 }

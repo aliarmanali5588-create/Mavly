@@ -73,7 +73,7 @@ export const PRIMARY_PLANS: PricingPlan[] = [
       "Everything included in Free",
       "Source-code export and ZIP download",
       "Custom domain connection with SSL",
-      "Project API keys and encrypted secrets",
+      "Encrypted project secrets",
       "Standard usage and project limits",
       "Basic scheduled jobs, subject to fair-use limits",
     ],

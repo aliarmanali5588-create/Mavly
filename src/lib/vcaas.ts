@@ -40,7 +40,6 @@ import type {
   FileTree,
   FileContent,
   FileWriteResult,
-  ImageGenerationResult,
   GithubStatus,
   GithubPullStatus,
   GithubConnectResult,
@@ -65,8 +64,6 @@ import type {
   DomainDnsRecord,
   DomainDnsRecordInput,
   DomainForward,
-  CronJob,
-  CronRun,
   DbBackup,
   DbBackupSchedule,
   DbEnv,
@@ -75,11 +72,6 @@ import type {
   FeatureLimit,
   McpServer,
   MobileBuild,
-  MobileSettings,
-  OwnBuildKey,
-  MobileStores,
-  StoreUpload,
-  ProjectApiKey,
   ProjectLimits,
   ProjectCreditLimits,
   AtLimitAnswer,
@@ -979,31 +971,6 @@ export const vcaasApi = {
       }),
   },
 
-  // ─────────────────────── Images (server-side OpenRouter) ───────────────────
-  //
-  // ⚠️ NOT THE WEBSITE-GENERATION MODEL. `images.generate` asks
-  // `black-forest-labs/flux.2-klein-4b` on OpenRouter's dedicated image API for
-  // one image. The app-generation model is unchanged and is chosen by
-  // `resolveModel` on the server only.
-  //
-  // ⚠️ NOTHING IS PERSISTED AND NOTHING IS BILLED. The image comes back as
-  // base64 in this response; it is not written to `project_files` (which holds
-  // text served as text) and no credit engine exists in this build. See
-  // `ImageGenerationResult` in `vcaas-types.ts`.
-  images: {
-    /** POST …/images/generate — one image; validate and display it, do not assume it was saved. */
-    generate: (
-      projectId: string,
-      body: {
-        prompt: string;
-        aspectRatio?: string;
-        outputFormat?: "png" | "jpeg";
-        seed?: number;
-      },
-    ): Promise<VcaasResponse<ImageGenerationResult>> =>
-      proxy.post<ImageGenerationResult>(`${project(projectId)}/images/generate`, body),
-  },
-
   // ─────────────────────── Rebuild (not available) ───────────────────────────
   // Kept for the copied catalog. Mavly has no general-purpose website rebuild
   // sandbox and serves a static preview, so both routes answer an explicit 503
@@ -1021,59 +988,6 @@ export const vcaasApi = {
       proxy.get<{ status: "idle" | "rebuilding" | "success" | "error"; errorMessage?: string }>(
         `${project(projectId)}/rebuild/status`,
       ),
-  },
-
-  // ──────────────────────────── Logs ──────────────────────────────
-  // Final VCaaS endpoints: /vcaas/projects/{id}/backend/{dev,prod}/logs
-  //
-  // ⚠️⚠️ TWO ENDPOINTS, TWO MACHINES — CORRECTED IN FEATURE F9. Until F9 the
-  // comment here (and the Logs panel) claimed the dev endpoint also carried
-  // production traffic "because the dev server on PORT 80 serves both". It does
-  // not. Read the two upstream handlers and it is unambiguous:
-  //   · dev  → totalum-backend `getStartumBackendDevLogs` = `cat
-  //            /app/user-project/npm-start.log` ON THE SANDBOX VM.
-  //   · prod → totalum-backend `getProdLogs` = a POST to a Cloudflare **Logpush
-  //            worker**, because a published project runs on Cloudflare.
-  // A user debugging their live site on the dev tab was reading the wrong machine.
-  logs: {
-    /** GET …/backend/dev/logs — the sandbox dev server's stdout/stderr, as text. */
-    dev: (projectId: string): Promise<VcaasResponse<{ logs: string }>> =>
-      proxy.get<{ logs: string }>(`${project(projectId)}/backend/dev/logs`),
-
-    /**
-     * GET …/backend/prod/logs — the published site's request logs.
-     *
-     * ⚠️ THE RESPONSE IS A PASSTHROUGH, NOT A TYPE WE OWN. Account-backend declares
-     * it `{ [key: string]: any }` and forwards the worker's body verbatim, so it is
-     * typed `unknown` here and normalised by `extractProdRecords` in `@/lib/logs`.
-     * Claiming `{ logs: string }` (as this entry did before F9, while unused) would
-     * have been a lie the compiler happily believed.
-     *
-     * Query params, all optional and all forwarded verbatim by the catch-all proxy:
-     *   · `getOnlyLastLogs` — just the most recent slice. The default when the user
-     *     has not asked for anything specific.
-     *   · `from` / `to` — ISO 8601. **Only the last 3 days exist upstream.**
-     *   · `regexSearch` — a REGEX matched server-side across the whole window; the
-     *     only way to find something older than the last slice.
-     *
-     * Upstream answers `429` when the project's plan log-request limit is reached;
-     * that arrives normalised as `RATE_LIMITED`.
-     */
-    prod: (
-      projectId: string,
-      params?: { getOnlyLastLogs?: boolean; from?: string; to?: string; regexSearch?: string },
-    ): Promise<VcaasResponse<unknown>> => {
-      const query = new URLSearchParams();
-      if (params?.getOnlyLastLogs !== undefined) {
-        query.set("getOnlyLastLogs", String(params.getOnlyLastLogs));
-      }
-      if (params?.from) query.set("from", params.from);
-      if (params?.to) query.set("to", params.to);
-      if (params?.regexSearch?.trim()) query.set("regexSearch", params.regexSearch.trim());
-
-      const qs = query.toString();
-      return proxy.get<unknown>(`${project(projectId)}/backend/prod/logs${qs ? `?${qs}` : ""}`);
-    },
   },
 
   // ────────────────────────── Webhooks ────────────────────────────
@@ -1171,19 +1085,6 @@ export const vcaasApi = {
     projectActivity: (projectId: string, range: ProjectActivityRange) =>
       proxy.get<ProjectActivity>(`${project(projectId)}/analytics/activity?range=${range}`),
 
-    cronJobs: (projectId: string) => proxy.get<{ items: CronJob[] }>(`${project(projectId)}/cron-jobs`),
-    createCronJob: (projectId: string, body: Pick<CronJob, "name" | "schedule" | "request" | "timezone" | "pauseAfterFailures">) =>
-      proxy.post<CronJob>(`${project(projectId)}/cron-jobs`, body),
-    updateCronJob: (projectId: string, jobId: string, patch: { enabled: boolean } | { pauseAfterFailures: number | null }) =>
-      proxy.patch<CronJob>(`${project(projectId)}/cron-jobs/${encodeURIComponent(jobId)}`, patch),
-    runCronJob: (projectId: string, jobId: string) =>
-      proxy.post<{ executionId: string }>(`${project(projectId)}/cron-jobs/${encodeURIComponent(jobId)}/run`, {}),
-    deleteCronJob: (projectId: string, jobId: string) =>
-      proxy.delete(`${project(projectId)}/cron-jobs/${encodeURIComponent(jobId)}`),
-    /** The job's last runs (30 days), newest first. */
-    cronJobRuns: (projectId: string, jobId: string, limit = 20) =>
-      proxy.get<{ items: CronRun[]; nextCursor: string | null }>(`${project(projectId)}/cron-jobs/${encodeURIComponent(jobId)}/executions?limit=${limit}`),
-
     systemPrompt: (projectId: string) =>
       proxy.get<{ systemPrompt: string }>(`${project(projectId)}/agent/system-prompt`),
     setSystemPrompt: (projectId: string, systemPrompt: string) =>
@@ -1198,16 +1099,6 @@ export const vcaasApi = {
     removeMcpServer: (projectId: string, mcpId: string) =>
       proxy.delete(`${project(projectId)}/agent/mcp-servers/${encodeURIComponent(mcpId)}`),
 
-    apiKeys: (projectId: string) => proxy.get<{ keys: ProjectApiKey[] }>(`${project(projectId)}/api-keys`),
-    createApiKey: (projectId: string, body: { name: string; scopes: string[]; env: ProjectApiKey["env"] }) =>
-      proxy.post<{ key: ProjectApiKey & { plaintext: string } }>(`${project(projectId)}/api-keys`, body),
-    rotateApiKey: (projectId: string, keyId: string) =>
-      proxy.post<{ key: ProjectApiKey & { plaintext: string } }>(`${project(projectId)}/api-keys/${encodeURIComponent(keyId)}/rotate`, {}),
-    revokeApiKey: (projectId: string, keyId: string) =>
-      proxy.delete(`${project(projectId)}/api-keys/${encodeURIComponent(keyId)}`),
-    /** A10.15: a new development preview address; the old one stops at once. */
-    rotatePreviewUrl: (projectId: string) =>
-      proxy.post<{ temporalLinkUrl: string; rotatedAt: string }>(`${project(projectId)}/preview/rotate-url`, {}),
 
     /** "day" = today so far, "month" = this calendar month so far (UTC); the API needs the range. */
     usage: (projectId: string | null, query: { env: "all" | "dev" | "live"; groupBy: "day" | "month" }) => {
@@ -1259,10 +1150,6 @@ export const vcaasApi = {
               ...(clientRequestId ? { clientRequestId } : {}),
             },
       ),
-    mobileStores: (projectId: string) => proxy.get<MobileStores>(`${project(projectId)}/mobile/stores`),
-    storeUploads: (projectId: string) => proxy.get<{ uploads: StoreUpload[] }>(`${project(projectId)}/mobile/store-uploads`),
-    startStoreUpload: (projectId: string, buildId: string) =>
-      proxy.post<StoreUpload>(`${project(projectId)}/mobile/builds/${encodeURIComponent(buildId)}/store-upload`, {}),
     /** A7.10b: a build still waiting in the Codemagic queue; its reserved credits are given back. */
     cancelMobileBuild: (projectId: string, buildId: string) =>
       proxy.post<{ status: string; build: MobileBuild | null }>(
@@ -1284,23 +1171,6 @@ export const vcaasApi = {
       proxy.get<{ log: string | null; truncated?: boolean; hasLog?: boolean }>(
         `${project(projectId)}/mobile/builds/${encodeURIComponent(buildId)}/log`,
       ),
-    /** Owner-only: connect a store. Google Play takes the Play Console service-account JSON; the App Store reuses the iOS key. */
-    connectGooglePlay: (projectId: string, body: { serviceAccountJson: string; packageName: string }) =>
-      proxy.put<MobileStores>(`${project(projectId)}/mobile/stores/google-play`, body),
-    setIosSigning: (projectId: string, body: { apiKeyP8: string; keyId: string; issuerId: string; bundleId: string }) =>
-      proxy.put<{ configured: boolean }>(`${project(projectId)}/mobile/signing/ios`, body),
-    connectAppStore: (projectId: string, body: { appAppleId?: string }) =>
-      proxy.put<MobileStores>(`${project(projectId)}/mobile/stores/app-store`, body),
-    disconnectStore: (projectId: string, store: "google-play" | "app-store") =>
-      proxy.delete(`${project(projectId)}/mobile/stores/${store}`),
-    /** Owner-only: builds on the owner's own Codemagic account (no shared queue, no build credits). */
-    ownBuildKey: (projectId: string) => proxy.get<OwnBuildKey>(`${project(projectId)}/mobile/signing/codemagic`),
-    setOwnBuildKey: (projectId: string, apiToken: string) =>
-      proxy.put<OwnBuildKey>(`${project(projectId)}/mobile/signing/codemagic`, { apiToken }),
-    removeOwnBuildKey: (projectId: string) => proxy.delete(`${project(projectId)}/mobile/signing/codemagic`),
-    mobileSettings: (projectId: string) => proxy.get<MobileSettings>(`${project(projectId)}/mobile/settings`),
-    setMobileSettings: (projectId: string, body: MobileSettings) =>
-      proxy.put<MobileSettings>(`${project(projectId)}/mobile/settings`, body),
 
     domains: () => proxy.get<{ domains: AccountDomain[] }>(`${API}/domains`),
     searchDomains: (q: string) => proxy.get<{ results: DomainSearchResult[] }>(`${API}/domains/search?q=${encodeURIComponent(q)}`),

@@ -61,9 +61,10 @@ source files, not as a running service.
 ## What does not work yet
 
 Uploads/attachments, rebuilds, database browsing, schema changes, SQL execution,
-customer-owned custom domains, runtime logs, visitor analytics, mobile builds, payments,
-an included scheduler, usage, credits, versions and visual edits do not have a local
-implementation. The durable generation worker is implemented but needs an operator-provided
+customer-owned custom domains, visitor analytics, payments, usage, credits, versions and
+visual edits do not have a local implementation. The workspace has no scheduler, mobile-app
+management or runtime-log viewer; Android source generation and its isolated debug builds
+remain, but generated apps are never run on a Mavly host. The durable generation worker is implemented but needs an operator-provided
 scheduler; without one, worker-dispatched runs stay queued. The verification sandbox is
 implemented but off by default, applies only to worker-dispatched runs, and its `passed`
 status means the production build exited `0`, the validated runtime started, and a

@@ -6,7 +6,7 @@ import { vcaasApi } from "@/lib/vcaas";
 import { githubApi } from "@/lib/github-client";
 import { Button } from "@/components/ui/button";
 import {
-  Rocket, Loader2, Eye, LayoutGrid, Key, Globe, Terminal,
+  Rocket, Loader2, Eye, LayoutGrid, Key, Globe,
   RefreshCw, Server, PanelLeftClose, PanelLeft, Monitor, Smartphone,
   ExternalLink, Sparkles, ChevronDown, FolderOpen, Plus,
   Clock, Github, Code2, ArrowLeft, Figma, Copy,
@@ -30,7 +30,7 @@ import { CreditsIndicator } from "@/components/workspace/CreditsIndicator";
 import { DeployControl } from "@/components/workspace/DeployControl";
 import { CloneProjectDialog } from "@/components/workspace/ProjectTransferDialogs";
 import { DiffViewer, type DiffSource } from "@/components/workspace/DiffViewer";
-import { ConfirmDialog, Modal } from "@/components/primitives";
+import { ConfirmDialog } from "@/components/primitives";
 import { ImportOverlay } from "@/components/workspace/ImportOverlay";
 import { PathPicker } from "@/components/workspace/PathPicker";
 import { looksLikePlaceholder } from "@/lib/preview-health";
@@ -88,8 +88,7 @@ function hasNoLiveServer(proj: VcaasProject | null): boolean {
  * column, which put "restore a version" on the same footing as "look at the preview".
  * They are not places you work; they are errands. totalum-platform renders each as a
  * dialog over the workspace and so does this page now — one string names the open one,
- * so two can never be open at once. Logs has its own flag because it is sized
- * differently (a fixed-height terminal) and opens from the address bar, not a menu.
+ * so two can never be open at once.
  */
 type WorkspaceModal = "versions" | "secrets" | "domain" | "github" | "figma";
 
@@ -236,7 +235,6 @@ export default function WorkspacePage() {
   const [openModal, setOpenModal] = useState<WorkspaceModal | null>(null);
   const [leaveWorkspaceOpen, setLeaveWorkspaceOpen] = useState(false);
   const [leaveWorkspaceHref, setLeaveWorkspaceHref] = useState("/dashboard");
-  const [logsOpen, setLogsOpen] = useState(false);
   /**
    * ⭐ DUPLICATE, FROM THE PROJECT MENU. The dialog is the dashboard's (export → create →
    * import behind one button) and it wants the names already in use to suggest a free
@@ -341,7 +339,7 @@ export default function WorkspacePage() {
   ];
 
   // The errands, for the mobile menu: each opens a modal rather than a tab.
-  const MODAL_ENTRIES: { id: WorkspaceModal | "logs"; label: string; icon: typeof Clock }[] = [
+  const MODAL_ENTRIES: { id: WorkspaceModal; label: string; icon: typeof Clock }[] = [
     { id: "versions", label: "Versions", icon: Clock },
   ];
 
@@ -1493,9 +1491,8 @@ export default function WorkspacePage() {
     });
   }, [projectId, storedPatchFor]);
 
-  const openEntry = (id: WorkspaceModal | "logs") => {
-    if (id === "logs") setLogsOpen(true);
-    else setOpenModal(id);
+  const openEntry = (id: WorkspaceModal) => {
+    setOpenModal(id);
   };
 
   const isBuilding = project?.agentProcessStatus === "init";
@@ -1678,9 +1675,6 @@ export default function WorkspacePage() {
             </div>
             <div className="flex-1 flex items-center justify-center min-w-0">
               <div className={`flex items-center h-7 w-[320px] rounded-full border ${btnBorder} px-1.5 gap-1`}>
-                {/* ⭐ Logs open as a dialog from the address bar — the platform's placement. */}
-                <button onClick={() => setLogsOpen(true)} className="p-1 rounded shrink-0 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300" title={translate("workspace.logs.title")}><Terminal className="w-3.5 h-3.5" /></button>
-                <div className="w-px h-3.5 bg-gray-200 dark:bg-gray-600 shrink-0" />
                 <button onClick={() => setMobilePreview(!mobilePreview)} className="p-1 rounded text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 shrink-0">{mobilePreview ? <Smartphone className="w-3.5 h-3.5" /> : <Monitor className="w-3.5 h-3.5" />}</button>
                 {/*
                   ⭐ THE ADDRESS BOX LISTS THE PROJECT'S OWN PAGES. It was a bare text
@@ -1971,22 +1965,6 @@ export default function WorkspacePage() {
         projectId={projectId}
         onStatusChange={setFigmaConnected}
       />
-      {/*
-        Runtime logs have no local backend: Mavly does not execute generated code, so
-        there is no server or preview log to search. The dialog states that instead of
-        calling the removed platform's log endpoints.
-      */}
-      <Modal
-        open={logsOpen}
-        onOpenChange={setLogsOpen}
-        size="xl"
-        title={translate("workspace.logs.title")}
-        description={translate("engineV2.unavailable.lead")}
-      >
-        <p className="text-muted-foreground border-border rounded-xl border p-4 text-sm leading-relaxed">
-          {translate("engineV2.unavailable.logs")}
-        </p>
-      </Modal>
       {/*
         ═══⭐⭐ THE IMPORT OVERLAY — the one operation that covers the screen ═══════
         A clone or import replaces EVERYTHING underneath: code, data, the running server.

@@ -33,7 +33,7 @@ export { isRoutableProjectSlug };
  *
  * ⚠️ WIRED EVERYWHERE PROJECT-SCOPED. The catch-all classifies each upstream
  * path (`src/lib/vcaas-scope.ts`) and calls `checkProjectAccess` for the
- * project ones; `upload`, `source-code`, `env`, `git-diff`, `preview` and
+ * project ones; `upload`, `source-code`, `git-diff`, `preview` and
  * `visual-edit` call `authorizeProjectRequest`/`enforceProjectScope` before they
  * touch upstream. Account-level endpoints are explicitly allowlisted, and an
  * unknown path is refused rather than forwarded.
@@ -250,8 +250,8 @@ export async function checkProjectAccess(
 /**
  * THE ROUTE-HANDLER SHORTCUT: authenticate, then check ownership of `projectId`.
  *
- * The dedicated non-catch-all routes (`upload`, `source-code`, `env`,
- * `git-diff`) use this so there is exactly one order of operations: the verified
+ * The dedicated non-catch-all routes (`upload`, `source-code`, `git-diff`)
+ * use this so there is exactly one order of operations: the verified
  * session first (401), then the project row (400/403/500) — and only then any
  * upstream request or file read.
  */

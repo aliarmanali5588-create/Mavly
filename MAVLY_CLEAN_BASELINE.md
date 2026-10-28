@@ -39,7 +39,7 @@ revocation or database mutation was performed while preparing this document.
 | Project secrets | Write-only AES-256-GCM ciphertext per project/environment; API responses carry metadata only. Values are not injected into the static output. |
 | Project activity | Real run history aggregated from `project_runs`; visitor analytics are not collected. |
 | Project files | `project_files`; tree/content reads and content writes. |
-| Image generation | `POST …/images/generate` asks `black-forest-labs/flux.2-klein-4b` through OpenRouter's dedicated image API, validates the returned PNG/JPEG and returns it as base64 to the workspace. Nothing is persisted and nothing is billed. |
+| Image generation | `POST …/images/generate` asks `black-forest-labs/flux.2-klein-4b` through OpenRouter's dedicated image API, validates the returned PNG/JPEG and returns it as base64 in the response. Nothing is persisted and nothing is billed. The workspace's More-menu panel for it was removed, so no UI calls the route. |
 | Source archive | ZIP built from `project_files`. |
 | Restore points | `project_snapshots` + `project_snapshot_files`; a "Restore Code" action in the chat. |
 | GitHub | A GitHub App with user-to-server tokens: connect, push, import. |
@@ -575,11 +575,11 @@ The Totalum client `src/lib/vcaas-server.ts` remains deleted and must not be rec
 - The Supabase connection is account-level. It is not linked to individual Mavly
   `projects.project_id` rows, and it grants no SQL/schema/data access in Phase 1.
 - The workspace More view supports project metadata editing, project secrets, the derived
-  Mavly address and real generation activity. API keys, an included scheduler, mobile
-  builds, runtime logs,
-  visitor analytics and custom domains have no local backend and render an explicit
-  unavailable state instead of calling the former platform routes. Usage and payments
-  remain deferred with the credits/billing scope.
+  Mavly address and real generation activity. API keys, visitor analytics and custom
+  domains have no local backend and render an explicit unavailable state instead of
+  calling the former platform routes. Usage and payments remain deferred with the
+  credits/billing scope. The former scheduler, mobile-builds and runtime-logs sections
+  were removed from More; Android source generation and its debug build remain.
 - Project secrets require `supabase/migrations/11_project_secrets.sql` and the server-only
   `MAVLY_PROJECT_SECRETS_ENCRYPTION_KEY` (32 random bytes, base64). The migration and key
   are not applied automatically.
@@ -601,8 +601,8 @@ The Totalum client `src/lib/vcaas-server.ts` remains deleted and must not be rec
   `OPENROUTER_API_KEY` and no credit policy exists to charge against. The active generation
   path reads the same server key, so both share one provider account. Enabling billing for
   it is a product decision that needs a real credit engine first. Generated images are not
-  saved to the project and are not available to the generated app; they are shown in the
-  More view's Image generation section until the user leaves it.
+  saved to the project and are not available to the generated app; the workspace panel
+  that displayed them was removed, so the route currently has no caller.
 - A real Supabase OAuth app is required. Scopes are app-level:
   `organizations:read` and `projects:read`.
 - Changing `MAVLY_INTEGRATION_ENCRYPTION_KEY`, the OAuth client ID or the OAuth app makes

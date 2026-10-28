@@ -1,30 +1,25 @@
 "use client";
 
 import * as React from "react";
-import { BrainIcon, ChartColumnIcon, CreditCardIcon, DatabaseIcon, GaugeIcon, GlobeIcon, ImageIcon, KeyIcon, KeySquareIcon, SettingsIcon, SmartphoneIcon, TerminalIcon, TimerIcon } from "lucide-react";
+import { BrainIcon, ChartColumnIcon, CreditCardIcon, DatabaseIcon, GaugeIcon, GlobeIcon, KeyIcon, SettingsIcon } from "lucide-react";
 import { InlineModals } from "@/components/primitives";
 import { useT } from "@/i18n";
 import type { TranslationKey } from "@/i18n/types";
 import { cn } from "@/lib/utils";
 
 /** The v2 workspace "More" view: the project's sections in an aside, the chosen one in the main area. */
-/** This app adds image generation, the custom domain and the logs, which the platform keeps elsewhere in its workspace. */
-export type MoreSection = "database" | "images" | "analytics" | "usage" | "apiKeys" | "cron" | "secrets" | "memory" | "integrations" | "mobile" | "payments" | "domain" | "logs" | "settings";
+/** This app adds the custom domain, which the platform keeps elsewhere in its workspace. */
+export type MoreSection = "database" | "analytics" | "usage" | "secrets" | "memory" | "integrations" | "payments" | "domain" | "settings";
 
 export const MORE_SECTIONS: { id: MoreSection; labelKey: TranslationKey; icon: typeof DatabaseIcon }[] = [
     { id: "database", labelKey: "workspace.tabs.database", icon: DatabaseIcon },
-    { id: "images", labelKey: "more.imageGeneration.title", icon: ImageIcon },
     { id: "analytics", labelKey: "engineV2.analytics.open", icon: ChartColumnIcon },
     { id: "usage", labelKey: "engineV2.usage.title", icon: GaugeIcon },
-    { id: "apiKeys", labelKey: "engineV2.apiKeys.title", icon: KeySquareIcon },
-    { id: "cron", labelKey: "engineV2.cron.title", icon: TimerIcon },
     { id: "secrets", labelKey: "workspace.actions.secrets", icon: KeyIcon },
     { id: "memory", labelKey: "engineV2.memory.title", icon: BrainIcon },
     { id: "integrations", labelKey: "engineV2.integrations.title", icon: CreditCardIcon },
-    { id: "mobile", labelKey: "engineV2.mobile.title", icon: SmartphoneIcon },
     { id: "payments", labelKey: "engineV2.payments.title", icon: CreditCardIcon },
     { id: "domain", labelKey: "workspace.domain.title", icon: GlobeIcon },
-    { id: "logs", labelKey: "workspace.logs.title", icon: TerminalIcon },
     { id: "settings", labelKey: "workspace.projectSettings.open", icon: SettingsIcon },
 ];
 

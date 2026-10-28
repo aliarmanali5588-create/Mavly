@@ -659,27 +659,23 @@ export function AndroidWorkspace({ project }: { project: VcaasProject }) {
         </section>
 
         <section aria-label="Android app preview" className={`${mobileView === "preview" ? "flex" : "hidden"} min-h-0 w-full flex-col bg-muted/40 md:flex md:flex-1`}>
-          <div className="flex h-12 shrink-0 items-center justify-between border-b border-border bg-background/70 px-4 sm:px-6">
-            <div className="flex items-center gap-2">
-              <Eye className="size-4 text-muted-foreground" aria-hidden="true" />
-              <h2 className="text-sm font-medium">App preview</h2>
-            </div>
-            <span className="rounded-full border border-border bg-background px-2.5 py-1 text-[10px] font-medium text-muted-foreground">
-              Emulator unavailable
-            </span>
-          </div>
-          <div className="flex min-h-0 flex-1 flex-col items-center justify-center overflow-hidden px-4 py-5 sm:px-8">
-            <div className="relative flex h-[min(68dvh,680px)] min-h-[360px] max-h-full aspect-[9/19.5] max-w-full flex-col overflow-hidden rounded-[2.8rem] border-[7px] border-neutral-800 bg-neutral-900 p-1.5 shadow-2xl ring-1 ring-black/10">
+          <div className="flex min-h-0 flex-1 flex-col items-center justify-center overflow-hidden px-4 py-4 sm:px-8">
+            <div
+              className="relative flex aspect-[9/19.5] w-auto max-h-full max-w-full flex-col overflow-hidden rounded-[2.8rem] border-[7px] border-neutral-800 bg-neutral-900 p-1.5 shadow-2xl ring-1 ring-black/10"
+              style={{
+                height: "min(860px, calc(100dvh - 104px), calc(100% - 32px))",
+              }}
+            >
               <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-[2.2rem] bg-background">
                 <div className="flex h-8 shrink-0 items-center justify-center bg-background">
                   <span className="h-1.5 w-16 rounded-full bg-neutral-800" aria-hidden="true" />
                 </div>
                 <div className="flex min-h-0 flex-1 flex-col items-center justify-center border-y border-border bg-muted/30 px-5 text-center">
-                  <div className="mb-4 flex size-14 items-center justify-center rounded-2xl border border-border bg-background text-muted-foreground shadow-sm">
-                    <Smartphone className="size-7" aria-hidden="true" />
+                  <div className="mb-4 flex size-16 items-center justify-center rounded-2xl border border-border bg-background text-muted-foreground shadow-sm">
+                    <Smartphone className="size-8" aria-hidden="true" />
                   </div>
-                  <p className="text-sm font-semibold">Native preview unavailable</p>
-                  <p className="mt-2 max-w-[220px] text-xs leading-relaxed text-muted-foreground">
+                  <p className="text-base font-semibold">Native preview unavailable</p>
+                  <p className="mt-2 max-w-[280px] text-[13px] leading-relaxed text-muted-foreground">
                     This workspace has no Android emulator runtime. Mavly will not display a website preview as a native app.
                   </p>
                   {files?.length ? (

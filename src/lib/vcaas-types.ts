@@ -1073,37 +1073,6 @@ export interface SqlAskResult {
 }
 
 
-/** `GET …/cron-jobs` item (plan 15 §4.5). */
-export interface CronJob {
-  id: string;
-  name: string;
-  /** A 5-field UTC cron expression or `{ everyMinutes }` (contracts `CronSchedule`). */
-  schedule: string | { everyMinutes: number };
-  request: { method: "GET" | "POST"; url: string };
-  enabled: boolean;
-  status: "active" | "paused" | "paused_failures";
-  nextRunAt: string | null;
-  /** `status` is the HTTP status of the fired request, or `timeout` / `error` / `skipped`. */
-  lastRun?: { at: string; status: number | "timeout" | "error" | "skipped"; latencyMs: number };
-  /** `live` fires at the published app, `dev` at the preview (contracts `CronJob.env`). */
-  env?: "live" | "dev";
-  /** cron2: the IANA zone `schedule` is read in (absent = UTC). */
-  timezone?: string;
-  /** cron2: failed runs in a row that pause it (default 3); `null` = never. */
-  pauseAfterFailures?: number | null;
-}
-
-/** `GET …/cron-jobs/:jobId/executions` item (contracts `CronRun`, 30 days). */
-export interface CronRun {
-  id: string;
-  scheduledFor: string;
-  startedAt: string | null;
-  status: number | "timeout" | "error" | "skipped";
-  latencyMs: number | null;
-  error?: string;
-  responseSnippet?: string;
-}
-
 /** `GET …/agent/mcp-servers` item (contracts `McpServer`; header values are write-only). */
 export interface McpServer {
   id: string;
@@ -1116,20 +1085,6 @@ export interface McpServer {
   tools: string[];
 }
 
-/** `GET …/api-keys` item — a project key (`tlm_pk_`, A6.1), not an account key. */
-export interface ProjectApiKey {
-  id: string;
-  name: string;
-  prefix?: string;
-  last4?: string;
-  scopes: string[];
-  env: "live" | "dev" | "both";
-  createdAt: string;
-  lastUsedAt?: string | null;
-  revokedAt?: string | null;
-  /** Totalum's own keys: `app` runs the preview and live Workers, `env` is the one in the downloaded `.env` files. */
-  managed?: "app" | "env";
-}
 
 /** The frozen 13 feature keys of A6.34, in display order. */
 /** Display order of `GET …/limits` `features` (A6.34, A6.45): the total first, AI and its sub-features together. */
@@ -1240,39 +1195,6 @@ export interface MobileBuild {
   logExcerpt?: string | null;
   logTruncated?: boolean;
   hasLog?: boolean;
-}
-
-/** `GET|PUT /vcaas/projects/:id/mobile/settings` (owner-only). */
-/** `GET|PUT /vcaas/projects/:id/mobile/signing/codemagic`: the owner's own Codemagic API key — never returned, only its last 4 characters. */
-export interface OwnBuildKey {
-  configured: boolean;
-  tokenHint: string | null;
-  addedAt: string | null;
-}
-
-export interface MobileSettings {
-  sendToStoresOnPublish: boolean;
-}
-
-/** `GET /vcaas/projects/:id/mobile/stores` (contracts `StoresView`): metadata only. */
-export interface MobileStores {
-  googlePlay: { clientEmail: string; packageName: string; packageFound: boolean; validatedAt: string } | null;
-  appStore: { appAppleId: string; bundleId: string; validatedAt: string } | null;
-}
-
-/** A store upload (contracts `StoreUploadView`): Google Play internal track or TestFlight. */
-export interface StoreUpload {
-  id: string;
-  buildId: string;
-  store: "google-play" | "app-store";
-  track: "internal" | "testflight";
-  status: "queued" | "uploading" | "processing" | "success" | "failed" | "manual_required";
-  versionName: string;
-  versionCode: number;
-  consoleUrl: string | null;
-  error?: { code: string; message: string };
-  createdAt: string;
-  finishedAt: string | null;
 }
 
 /** `GET /vcaas/domains` item (contracts `Domain`, trimmed to what the page shows). */

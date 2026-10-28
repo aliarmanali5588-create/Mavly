@@ -416,9 +416,9 @@ export function ProjectPaymentsIntegration({
                         <Disclosure title="How your app uses this" hint="Server-side calls only">
                             <div className="space-y-2 text-xs leading-relaxed">
                                 <p>
-                                    Your app needs server-side code (a full-stack published project). Create a project API
-                                    key with the <code>integrations:*</code> scope and a live or both environment, keep it
-                                    on the server, and call these endpoints from server code:
+                                    Your app needs server-side code (a full-stack published project). An integration credential
+                                    with the <code>integrations:*</code> scope must be provisioned securely and kept on the server.
+                                    Call these endpoints from server code:
                                 </p>
                                 <ul className="list-disc space-y-1 pl-4 font-mono">
                                     <li>POST /api/app/v1/payments/orders</li>

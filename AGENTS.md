@@ -408,7 +408,9 @@ a delivered webhook, a container image build/publish, or the migrations against 
   `POST /api/vcaas/projects/{id}/images/generate` calls
   `black-forest-labs/flux.2-klein-4b` on OpenRouter's dedicated image API
   (`POST https://openrouter.ai/api/v1/images`), validates that the response is real
-  PNG/JPEG bytes, and returns them as base64 to the workspace's More view. The image
+  PNG/JPEG bytes, and returns them as base64 in the response. The workspace's More-menu
+  Image generation panel was removed, so no UI currently calls this route; the API and
+  its tests remain. The image
   is **not persisted** (there is no binary asset pipeline; `project_files` is text) and
   **no credits are charged** (there is no credit engine). The image catalog is separate
   from `src/lib/ai/models.ts` on purpose: `resolveModel()` must never select an image

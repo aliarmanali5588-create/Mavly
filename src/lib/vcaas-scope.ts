@@ -11,7 +11,7 @@
  *
  *   · which roots are ACCOUNT-level and explicitly allowlisted;
  *   · how a project id is read from `/projects/{id}/...` (and the few dedicated
- *     project roots: `upload`, `source-code`, `env`);
+ *     project roots: `upload`, `source-code`);
  *   · whether a body/query `projectId` conflicts with the path, or names a
  *     project that still needs an ownership check (domain attach/purchase).
  *
@@ -29,7 +29,7 @@ export interface ScopeDenial {
 }
 
 export type VcaasScope =
-  /** `/projects/{id}/...`, `upload/{id}`, `source-code/{id}`, `env/{id}`. */
+  /** `/projects/{id}/...`, `upload/{id}`, `source-code/{id}`. */
   | { kind: "project"; projectId: string }
   /** Creation paths, whose response must be registered in `public.projects`. */
   | { kind: "create"; mode: "create" | "launch" }
@@ -104,8 +104,7 @@ export function classifyVcaasRequest(method: string, segments: readonly string[]
      * same way rather than leaving a second, unguarded door.
      */
     case "upload":
-    case "source-code":
-    case "env": {
+    case "source-code": {
       if (segments.length !== 2 || !isRoutableProjectSlug(second)) {
         return deny(404, "NOT_FOUND", "Not found");
       }
