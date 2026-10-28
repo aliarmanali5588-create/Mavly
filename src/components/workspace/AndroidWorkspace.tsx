@@ -1,14 +1,19 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useMemo, type ReactNode } from "react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import {
-  AlertCircle, ArrowLeft, Bot, Check, Code2, Download, Eye, Loader2, MessageSquare,
-  RefreshCw, Send, Smartphone, User,
+  AlertCircle, ArrowLeft, Bot, Check, ChevronDown, ChevronRight, Code2, Download, Eye,
+  FileCode2, Folder, FolderOpen, GitBranch, LayoutGrid, Loader2, MessageSquare,
+  RefreshCw, Search, Send, Smartphone, User,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { vcaasApi } from "@/lib/vcaas";
+import { CreditsIndicator } from "@/components/workspace/CreditsIndicator";
+import { GithubModal } from "@/components/workspace/GithubModal";
+import { silenceMonacoDiagnostics } from "@/lib/monaco-diagnostics";
 import { PremiumAiActivity, type ActivityChecklistStage } from "@/components/workspace/GenerationProgressVisuals";
 import { RunProgress } from "@/components/workspace/RunProgress";
 import { useRunClock } from "@/components/workspace/use-run-clock";
@@ -18,6 +23,72 @@ import type {
 import type { AndroidCapability } from "@/lib/android/capability";
 
 const CONVERSATION_PAGE_SIZE = 80;
+
+const MonacoEditor = dynamic(() => import("@monaco-editor/react"), {
+  ssr: false,
+  loading: () => (
+    <div className="flex h-full w-full items-center justify-center">
+      <Loader2 className="size-5 animate-spin text-muted-foreground" />
+    </div>
+  ),
+});
+
+function androidLanguageFromPath(path: string): string {
+  const name = path.split("/").pop()?.toLowerCase() ?? "";
+  if (name.endsWith(".kt") || name.endsWith(".kts")) return "kotlin";
+  if (name.endsWith(".xml")) return "xml";
+  if (name.endsWith(".json") || name.endsWith(".json5")) return "json";
+  if (name.endsWith(".properties") || name.endsWith(".gradle") || name === "gradle.properties") return "ini";
+  if (name.endsWith(".toml")) return "ini";
+  if (name.endsWith(".md") || name.endsWith(".txt") || name.endsWith(".readme")) return "plaintext";
+  if (name.endsWith(".yaml") || name.endsWith(".yml")) return "yaml";
+  return "plaintext";
+}
+
+function fileMatchesSearch(path: string, search: string): boolean {
+  return !search.trim() || path.toLowerCase().includes(search.trim().toLowerCase());
+}
+
+type CodeTreeNode = {
+  name: string;
+  path: string;
+  type: "file" | "folder";
+  children?: CodeTreeNode[];
+};
+
+function buildCodeTree(entries: FileTreeEntry[], search: string): CodeTreeNode[] {
+  const root: CodeTreeNode[] = [];
+  for (const entry of entries) {
+    if (entry.type !== "file" || !fileMatchesSearch(entry.path, search)) continue;
+    const parts = entry.path.split("/").filter(Boolean);
+    let level = root;
+    let currentPath = "";
+    parts.forEach((part, index) => {
+      currentPath = currentPath ? `${currentPath}/${part}` : part;
+      const isFile = index === parts.length - 1;
+      if (isFile) {
+        level.push({ name: part, path: entry.path, type: "file" });
+        return;
+      }
+      let folder = level.find((node) => node.type === "folder" && node.path === currentPath);
+      if (!folder) {
+        folder = { name: part, path: currentPath, type: "folder", children: [] };
+        level.push(folder);
+      }
+      level = folder.children ?? [];
+    });
+  }
+  const sortNodes = (nodes: CodeTreeNode[]): CodeTreeNode[] => nodes.sort((a, b) => {
+    if (a.type !== b.type) return a.type === "folder" ? -1 : 1;
+    return a.name.localeCompare(b.name);
+  });
+  const sortChildren = (nodes: CodeTreeNode[]) => {
+    sortNodes(nodes);
+    nodes.forEach((node) => node.children && sortChildren(node.children));
+  };
+  sortChildren(root);
+  return root;
+}
 
 export function AndroidWorkspace({ project }: { project: VcaasProject }) {
   const [messages, setMessages] = useState<ConversationMessage[]>([]);
@@ -36,9 +107,12 @@ export function AndroidWorkspace({ project }: { project: VcaasProject }) {
   const [generationError, setGenerationError] = useState<string | null>(null);
   const [status, setStatus] = useState<AgentStatus | null>(null);
   const [statusError, setStatusError] = useState<string | null>(null);
-  const [filesOpen, setFilesOpen] = useState(false);
   const [buildsOpen, setBuildsOpen] = useState(false);
-  const [mobileView, setMobileView] = useState<"chat" | "preview">("chat");
+  const [githubOpen, setGithubOpen] = useState(false);
+  const [githubConnected, setGithubConnected] = useState(false);
+  const [mobileView, setMobileView] = useState<"chat" | "preview" | "code" | "more">("chat");
+  const [codeSearch, setCodeSearch] = useState("");
+  const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set([""]));
   const [downloading, setDownloading] = useState(false);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
@@ -493,6 +567,51 @@ export function AndroidWorkspace({ project }: { project: VcaasProject }) {
         : buildCapability?.build.available
           ? "Debug APK enabled"
           : "Kotlin source only";
+  const codeTree = useMemo(() => buildCodeTree(files ?? [], codeSearch), [files, codeSearch]);
+  const toggleFolder = (folderPath: string) => {
+    setExpandedFolders((current) => {
+      const next = new Set(current);
+      if (next.has(folderPath)) next.delete(folderPath);
+      else next.add(folderPath);
+      return next;
+    });
+  };
+  const renderCodeTree = (nodes: CodeTreeNode[], depth = 0): ReactNode => nodes.map((node) => (
+    node.type === "folder" ? (
+      <div key={node.path}>
+        <button
+          type="button"
+          onClick={() => toggleFolder(node.path)}
+          className="flex w-full items-center gap-1.5 rounded-md py-1.5 pr-2 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
+          style={{ paddingLeft: `${8 + depth * 14}px` }}
+        >
+          {expandedFolders.has(node.path) || codeSearch.trim()
+            ? <ChevronDown className="size-3.5 shrink-0" />
+            : <ChevronRight className="size-3.5 shrink-0" />}
+          {expandedFolders.has(node.path) || codeSearch.trim()
+            ? <FolderOpen className="size-3.5 shrink-0 text-amber-600" />
+            : <Folder className="size-3.5 shrink-0 text-amber-600" />}
+          <span className="truncate">{node.name}</span>
+        </button>
+        {(expandedFolders.has(node.path) || codeSearch.trim()) && node.children
+          ? renderCodeTree(node.children, depth + 1)
+          : null}
+      </div>
+    ) : (
+      <button
+        key={node.path}
+        type="button"
+        onClick={() => setSelectedPath(node.path)}
+        aria-current={selectedPath === node.path ? "page" : undefined}
+        className={`flex w-full items-center gap-1.5 rounded-md py-1.5 pr-2 text-left text-xs ${selectedPath === node.path ? "bg-muted font-medium text-foreground" : "text-muted-foreground hover:bg-muted/70 hover:text-foreground"}`}
+        style={{ paddingLeft: `${22 + depth * 14}px` }}
+        title={node.path}
+      >
+        <FileCode2 className="size-3.5 shrink-0" />
+        <span className="truncate">{node.name}</span>
+      </button>
+    )
+  ))
 
   return (
     <main className="flex h-dvh flex-col overflow-hidden bg-background text-foreground">
@@ -519,14 +638,19 @@ export function AndroidWorkspace({ project }: { project: VcaasProject }) {
             <span className={`mr-1 hidden max-w-36 truncate text-xs md:inline ${buildError || latestBuildFailed ? "text-destructive" : "text-muted-foreground"}`}>
               {buildStatus}
             </span>
+            <CreditsIndicator />
             <Button type="button" variant="outline" size="sm" onClick={() => setBuildsOpen(true)} className="h-8 gap-1.5 px-2.5" aria-label="Android build status">
               <Smartphone className="size-3.5" aria-hidden="true" />
               <span className="hidden sm:inline">Builds</span>
             </Button>
-            <Button type="button" variant="outline" size="sm" onClick={() => setFilesOpen(true)} className="h-8 gap-1.5 px-2.5" aria-label="View Android source files">
+            <Button type="button" variant={mobileView === "code" ? "default" : "outline"} size="sm" onClick={() => setMobileView("code")} className="h-8 gap-1.5 px-2.5" aria-label="Open Android Code Explorer">
               <Code2 className="size-3.5" aria-hidden="true" />
               <span className="hidden sm:inline">Code</span>
-              {files?.length ? <span className="text-muted-foreground">{files.length}</span> : null}
+              {files?.length ? <span className="text-[10px] opacity-70">{files.length}</span> : null}
+            </Button>
+            <Button type="button" variant={mobileView === "more" ? "default" : "outline"} size="sm" onClick={() => setMobileView("more")} className="h-8 gap-1.5 px-2.5" aria-label="Open Android workspace More menu">
+              <LayoutGrid className="size-3.5" aria-hidden="true" />
+              <span className="hidden sm:inline">More</span>
             </Button>
             <Button type="button" variant="outline" size="icon" onClick={() => void loadFiles()} disabled={refreshing} className="size-8" aria-label="Refresh source files">
               <RefreshCw className={`size-3.5 ${refreshing ? "animate-spin" : ""}`} aria-hidden="true" />
@@ -538,18 +662,24 @@ export function AndroidWorkspace({ project }: { project: VcaasProject }) {
             ) : null}
           </div>
         </div>
-        <nav className="grid grid-cols-2 gap-1 border-t border-border p-1.5 md:hidden" aria-label="Workspace view">
-          <button type="button" onClick={() => setMobileView("chat")} aria-pressed={mobileView === "chat"} className={`inline-flex h-9 items-center justify-center gap-2 rounded-md text-sm font-medium ${mobileView === "chat" ? "bg-muted text-foreground" : "text-muted-foreground"}`}>
-            <MessageSquare className="size-4" aria-hidden="true" /> Chat
+        <nav className="grid grid-cols-4 gap-1 border-t border-border p-1.5 md:hidden" aria-label="Workspace view">
+          <button type="button" onClick={() => setMobileView("chat")} aria-pressed={mobileView === "chat"} className={`inline-flex h-9 items-center justify-center gap-1.5 rounded-md text-xs font-medium ${mobileView === "chat" ? "bg-muted text-foreground" : "text-muted-foreground"}`}>
+            <MessageSquare className="size-3.5" aria-hidden="true" /> Chat
           </button>
-          <button type="button" onClick={() => setMobileView("preview")} aria-pressed={mobileView === "preview"} className={`inline-flex h-9 items-center justify-center gap-2 rounded-md text-sm font-medium ${mobileView === "preview" ? "bg-muted text-foreground" : "text-muted-foreground"}`}>
-            <Eye className="size-4" aria-hidden="true" /> Preview
+          <button type="button" onClick={() => setMobileView("preview")} aria-pressed={mobileView === "preview"} className={`inline-flex h-9 items-center justify-center gap-1.5 rounded-md text-xs font-medium ${mobileView === "preview" ? "bg-muted text-foreground" : "text-muted-foreground"}`}>
+            <Eye className="size-3.5" aria-hidden="true" /> Preview
+          </button>
+          <button type="button" onClick={() => setMobileView("code")} aria-pressed={mobileView === "code"} className={`inline-flex h-9 items-center justify-center gap-1.5 rounded-md text-xs font-medium ${mobileView === "code" ? "bg-muted text-foreground" : "text-muted-foreground"}`}>
+            <Code2 className="size-3.5" aria-hidden="true" /> Code
+          </button>
+          <button type="button" onClick={() => setMobileView("more")} aria-pressed={mobileView === "more"} className={`inline-flex h-9 items-center justify-center gap-1.5 rounded-md text-xs font-medium ${mobileView === "more" ? "bg-muted text-foreground" : "text-muted-foreground"}`}>
+            <LayoutGrid className="size-3.5" aria-hidden="true" /> More
           </button>
         </nav>
       </header>
 
       <div className="flex min-h-0 flex-1">
-        <section aria-label="AI chat" className={`${mobileView === "chat" ? "flex" : "hidden"} min-h-0 w-full flex-col border-r border-border bg-background md:flex md:w-[40%] lg:w-[38%]`}>
+        <section aria-label="AI chat" className={`${mobileView === "chat" ? "flex" : "hidden"} min-h-0 w-full flex-col border-r border-border bg-background md:w-[40%] lg:w-[38%] ${(mobileView === "chat" || mobileView === "preview") ? "md:flex" : "md:hidden"}`}>
           <div className="flex h-12 shrink-0 items-center justify-between border-b border-border px-4">
             <div className="flex items-center gap-2">
               <Bot className="size-4 text-muted-foreground" aria-hidden="true" />
@@ -658,38 +788,146 @@ export function AndroidWorkspace({ project }: { project: VcaasProject }) {
           </form>
         </section>
 
-        <section aria-label="Android app preview" className={`${mobileView === "preview" ? "flex" : "hidden"} min-h-0 w-full flex-col bg-muted/40 md:flex md:flex-1`}>
-          <div className="flex min-h-0 flex-1 flex-col items-center justify-center overflow-hidden px-4 py-4 sm:px-8">
-            <div
-              className="relative flex aspect-[9/19.5] w-auto max-h-full max-w-full flex-col overflow-hidden rounded-[2.8rem] border-[7px] border-neutral-800 bg-neutral-900 p-1.5 shadow-2xl ring-1 ring-black/10"
-              style={{
-                height: "min(860px, calc(100dvh - 104px), calc(100% - 32px))",
-              }}
-            >
-              <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-[2.2rem] bg-background">
-                <div className="flex h-8 shrink-0 items-center justify-center bg-background">
-                  <span className="h-1.5 w-16 rounded-full bg-neutral-800" aria-hidden="true" />
-                </div>
-                <div className="flex min-h-0 flex-1 flex-col items-center justify-center border-y border-border bg-muted/30 px-5 text-center">
-                  <div className="mb-4 flex size-16 items-center justify-center rounded-2xl border border-border bg-background text-muted-foreground shadow-sm">
-                    <Smartphone className="size-8" aria-hidden="true" />
+        <section
+          aria-label={mobileView === "code" ? "Android Code Explorer" : mobileView === "more" ? "Android workspace More" : "Android app preview"}
+          className={`${mobileView === "chat" ? "hidden" : "flex"} min-h-0 w-full flex-col bg-muted/40 md:flex md:flex-1`}
+        >
+          {(mobileView === "chat" || mobileView === "preview") ? (
+            <div className="flex min-h-0 flex-1 flex-col items-center justify-center overflow-hidden px-4 py-4 sm:px-8">
+              <div
+                className="relative flex aspect-[9/19.5] w-auto min-h-0 max-h-full max-w-[420px] flex-col overflow-hidden rounded-[2.8rem] border-[7px] border-neutral-800 bg-neutral-900 p-1.5 shadow-2xl ring-1 ring-black/10"
+                style={{
+                  height: "min(860px, calc(100dvh - 104px), calc(100% - 32px))",
+                  maxWidth: "min(420px, calc(100% - 32px))",
+                }}
+              >
+                <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-[2.2rem] bg-background">
+                  <div className="flex h-8 shrink-0 items-center justify-center bg-background">
+                    <span className="h-1.5 w-16 rounded-full bg-neutral-800" aria-hidden="true" />
                   </div>
-                  <p className="text-base font-semibold">Native preview unavailable</p>
-                  <p className="mt-2 max-w-[280px] text-[13px] leading-relaxed text-muted-foreground">
-                    This workspace has no Android emulator runtime. Mavly will not display a website preview as a native app.
-                  </p>
-                  {files?.length ? (
-                    <Button type="button" variant="outline" size="sm" className="mt-4" onClick={() => setFilesOpen(true)}>
-                      <Code2 className="mr-1.5 size-3.5" aria-hidden="true" /> View generated source
-                    </Button>
-                  ) : null}
-                </div>
-                <div className="flex h-7 shrink-0 items-center justify-center bg-background">
-                  <span className="h-1 w-20 rounded-full bg-neutral-800" aria-hidden="true" />
+                  <div className="flex min-h-0 flex-1 flex-col items-center justify-center border-y border-border bg-muted/30 px-5 text-center">
+                    <div className="mb-4 flex size-16 items-center justify-center rounded-2xl border border-border bg-background text-muted-foreground shadow-sm">
+                      <Smartphone className="size-8" aria-hidden="true" />
+                    </div>
+                    <p className="text-base font-semibold">Native preview unavailable</p>
+                    <p className="mt-2 max-w-[280px] text-[13px] leading-relaxed text-muted-foreground">
+                      This workspace has no Android emulator runtime. Mavly will not display a website preview as a native app.
+                    </p>
+                    {files?.length ? (
+                      <Button type="button" variant="outline" size="sm" className="mt-4" onClick={() => setMobileView("code")}>
+                        <Code2 className="mr-1.5 size-3.5" aria-hidden="true" /> View generated source
+                      </Button>
+                    ) : null}
+                  </div>
+                  <div className="flex h-7 shrink-0 items-center justify-center bg-background">
+                    <span className="h-1 w-20 rounded-full bg-neutral-800" aria-hidden="true" />
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
+          ) : mobileView === "code" ? (
+            <div className="flex min-h-0 flex-1 flex-col bg-background">
+              <div className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-3 sm:px-4">
+                <div className="flex min-w-0 items-center gap-2">
+                  <Code2 className="size-4 shrink-0 text-muted-foreground" />
+                  <h2 className="text-sm font-semibold">Code Explorer</h2>
+                  {files?.length ? <span className="text-xs text-muted-foreground">{files.length} files</span> : null}
+                </div>
+                <div className="ml-auto flex shrink-0 items-center gap-1.5">
+                  <Button type="button" variant="outline" size="icon" className="size-8" onClick={() => void loadFiles()} disabled={refreshing} aria-label="Refresh Android source">
+                    <RefreshCw className={`size-3.5 ${refreshing ? "animate-spin" : ""}`} />
+                  </Button>
+                  {files?.length ? (
+                    <Button type="button" variant="outline" size="icon" className="size-8" onClick={() => void downloadSource()} disabled={downloading} aria-label="Download Android source">
+                      {downloading ? <Loader2 className="size-3.5 animate-spin" /> : <Download className="size-3.5" />}
+                    </Button>
+                  ) : null}
+                </div>
+              </div>
+              <div className="flex min-h-0 flex-1 flex-col md:flex-row">
+                <aside className="shrink-0 border-b border-border md:w-64 md:border-b-0 md:border-r">
+                  <div className="border-b border-border p-2">
+                    <label className="relative block">
+                      <Search className="absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+                      <input
+                        value={codeSearch}
+                        onChange={(event) => setCodeSearch(event.target.value)}
+                        placeholder="Search files"
+                        className="h-8 w-full rounded-md border border-border bg-muted/30 pl-8 pr-2 text-xs outline-none focus:border-ring"
+                        aria-label="Search source files"
+                      />
+                    </label>
+                  </div>
+                  <nav aria-label="Android source file tree" className="max-h-44 overflow-y-auto p-1.5 md:max-h-none md:h-[calc(100%-49px)]">
+                    {filesError ? (
+                      <div className="p-2"><p role="alert" className="text-xs text-destructive">{filesError}</p></div>
+                    ) : files === null ? (
+                      <p className="p-3 text-xs text-muted-foreground">Loading files...</p>
+                    ) : files.length === 0 ? (
+                      <p className="p-3 text-xs text-muted-foreground">No Android source files have been saved yet.</p>
+                    ) : codeTree.length === 0 ? (
+                      <p className="p-3 text-xs text-muted-foreground">No files match your search.</p>
+                    ) : renderCodeTree(codeTree)}
+                  </nav>
+                </aside>
+                <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+                  <div className="flex h-10 shrink-0 items-center gap-2 border-b border-border px-3">
+                    <span className="min-w-0 flex-1 truncate font-mono text-xs text-muted-foreground">{selectedPath || "Select a source file"}</span>
+                    {fileContent?.encoding === "utf8" && !contentLoading ? (
+                      editing ? (
+                        <>
+                          <Button type="button" size="sm" className="h-7" onClick={() => void saveFile()} disabled={saving}>{saving ? <Loader2 className="mr-1 size-3 animate-spin" /> : null}{saving ? "Saving" : "Save"}</Button>
+                          <Button type="button" size="sm" variant="outline" className="h-7" onClick={() => { setDraft(fileContent.content); setSaveError(null); setEditing(false); }} disabled={saving}>Cancel</Button>
+                        </>
+                      ) : (
+                        <Button type="button" size="sm" variant="outline" className="h-7" onClick={() => { setDraft(fileContent.content); setSaveError(null); setEditing(true); }}>Edit</Button>
+                      )
+                    ) : null}
+                  </div>
+                  {saveError ? <p role="alert" className="shrink-0 px-3 pt-2 text-xs text-destructive">{saveError}</p> : null}
+                  <div className="min-h-0 flex-1">
+                    {contentLoading ? (
+                      <div className="flex h-full items-center justify-center gap-2 text-sm text-muted-foreground"><Loader2 className="size-4 animate-spin" /> Loading file...</div>
+                    ) : contentError ? (
+                      <p role="alert" className="p-4 text-sm text-destructive">{contentError}</p>
+                    ) : fileContent?.encoding === "base64" ? (
+                      <p className="p-4 text-sm text-muted-foreground">This binary file is saved but cannot be displayed as source text.</p>
+                    ) : fileContent ? (
+                      <MonacoEditor
+                        key={selectedPath ?? "android-source"}
+                        height="100%"
+                        language={androidLanguageFromPath(selectedPath ?? "")}
+                        value={editing ? draft : fileContent.content}
+                        onChange={(value) => editing && setDraft(value ?? "")}
+                        beforeMount={silenceMonacoDiagnostics}
+                        theme="light"
+                        options={{ readOnly: !editing, minimap: { enabled: false }, fontSize: 13, lineNumbers: "on", wordWrap: "off", scrollBeyondLastLine: false, automaticLayout: true, padding: { top: 12, bottom: 12 } }}
+                      />
+                    ) : !filesError && files?.length ? (
+                      <div className="flex h-full items-center justify-center text-sm text-muted-foreground">Select a file to view its contents.</div>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="min-h-0 flex-1 overflow-y-auto bg-background p-4 sm:p-6">
+              <div className="mx-auto max-w-3xl">
+                <div className="mb-5 flex items-center gap-2">
+                  <LayoutGrid className="size-4 text-muted-foreground" />
+                  <h2 className="text-sm font-semibold">More</h2>
+                </div>
+                <button type="button" onClick={() => setGithubOpen(true)} className="flex w-full items-center gap-3 rounded-xl border border-border bg-card p-4 text-left transition-colors hover:bg-muted/50">
+                  <span className="flex size-10 items-center justify-center rounded-lg border border-border bg-background"><GitBranch className="size-5" /></span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-sm font-medium">GitHub</span>
+                    <span className="mt-0.5 block text-xs text-muted-foreground">{githubConnected ? "Connected repository and branches" : "Connect, push, or import source"}</span>
+                  </span>
+                  <ChevronRight className="size-4 text-muted-foreground" />
+                </button>
+              </div>
+            </div>
+          )}
         </section>
       </div>
 
@@ -810,102 +1048,11 @@ export function AndroidWorkspace({ project }: { project: VcaasProject }) {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={filesOpen} onOpenChange={setFilesOpen}>
-        <DialogContent className="flex h-[min(90dvh,900px)] w-[calc(100%-1rem)] max-w-5xl flex-col gap-0 overflow-hidden p-0">
-          <DialogHeader className="flex shrink-0 flex-row items-center justify-between border-b border-border px-5 py-4 pr-12">
-            <div className="min-w-0">
-              <DialogTitle className="flex items-center gap-2 text-sm">
-                <Code2 className="size-4" aria-hidden="true" /> Android source files
-                <span className="font-normal text-muted-foreground">{files ? `· ${files.length}` : ""}</span>
-              </DialogTitle>
-              <p className="mt-1 text-xs text-muted-foreground">Persisted Kotlin/Compose project source</p>
-            </div>
-            <div className="mr-1 flex shrink-0 items-center gap-1.5">
-              <Button type="button" variant="outline" size="sm" onClick={() => void loadFiles()} disabled={refreshing}>
-                <RefreshCw className={`mr-1.5 size-3.5 ${refreshing ? "animate-spin" : ""}`} aria-hidden="true" /> Refresh
-              </Button>
-              {files && files.length > 0 ? (
-                <Button type="button" variant="outline" size="sm" onClick={() => void downloadSource()} disabled={downloading}>
-                  {downloading ? <Loader2 className="mr-1.5 size-3.5 animate-spin" aria-hidden="true" /> : <Download className="mr-1.5 size-3.5" aria-hidden="true" />}
-                  Download
-                </Button>
-              ) : null}
-            </div>
-          </DialogHeader>
-          <div className="flex min-h-0 flex-1 flex-col md:flex-row">
-            <nav aria-label="Saved source files" className="max-h-32 shrink-0 overflow-y-auto border-b border-border p-2 md:max-h-none md:w-64 md:border-b-0 md:border-r">
-              {filesError ? (
-                <div className="p-3">
-                  <p role="alert" className="text-xs text-destructive">{filesError}</p>
-                  <Button type="button" variant="outline" size="sm" className="mt-2" onClick={() => void loadFiles()} disabled={refreshing}>Try again</Button>
-                </div>
-              ) : files === null ? (
-                <p className="p-3 text-xs text-muted-foreground">Loading saved files...</p>
-              ) : files.length === 0 ? (
-                <p className="p-3 text-xs text-muted-foreground">No Android source files have been saved yet.</p>
-              ) : files.map((file) => (
-                <button
-                  key={file.path}
-                  type="button"
-                  onClick={() => setSelectedPath(file.path)}
-                  aria-current={selectedPath === file.path ? "page" : undefined}
-                  className={`block w-full truncate rounded-lg px-3 py-2 text-left font-mono text-xs ${selectedPath === file.path ? "bg-muted text-foreground" : "text-muted-foreground hover:bg-muted/70 hover:text-foreground"}`}
-                  title={file.path}
-                >
-                  {file.path}
-                </button>
-              ))}
-            </nav>
-            <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-              <div className="flex shrink-0 items-center gap-2 border-b border-border px-4 py-2">
-                <span className="min-w-0 flex-1 truncate font-mono text-xs text-muted-foreground">{selectedPath || "Select a source file"}</span>
-                {fileContent?.encoding === "utf8" && !contentLoading ? (
-                  editing ? (
-                    <>
-                      <Button type="button" size="sm" onClick={() => void saveFile()} disabled={saving}>
-                        {saving ? <Loader2 className="mr-1 size-3 animate-spin" aria-hidden="true" /> : null} Save
-                      </Button>
-                      <Button type="button" size="sm" variant="outline" onClick={() => {
-                        setDraft(fileContent.content);
-                        setSaveError(null);
-                        setEditing(false);
-                      }} disabled={saving}>Cancel</Button>
-                    </>
-                  ) : (
-                    <Button type="button" size="sm" variant="outline" onClick={() => {
-                      setDraft(fileContent.content);
-                      setSaveError(null);
-                      setEditing(true);
-                    }}>Edit</Button>
-                  )
-                ) : null}
-              </div>
-              {saveError ? <p role="alert" className="shrink-0 px-4 pt-3 text-sm text-destructive">{saveError}</p> : null}
-              {contentLoading ? (
-                <p className="p-4 text-sm text-muted-foreground">Loading file...</p>
-              ) : contentError ? (
-                <p role="alert" className="p-4 text-sm text-destructive">{contentError}</p>
-              ) : fileContent?.encoding === "base64" ? (
-                <p className="p-4 text-sm text-muted-foreground">This binary file is saved but cannot be displayed as source text.</p>
-              ) : editing ? (
-                <textarea
-                  value={draft}
-                  onChange={(event) => setDraft(event.target.value)}
-                  spellCheck={false}
-                  className="block min-h-0 flex-1 resize-none bg-background p-4 font-mono text-xs leading-relaxed text-foreground outline-none"
-                  aria-label={`Edit ${selectedPath ?? "source file"}`}
-                />
-              ) : fileContent ? (
-                <pre className="min-h-0 flex-1 overflow-auto p-4 text-xs leading-relaxed text-foreground">
-                  <code>{fileContent.content}</code>
-                </pre>
-              ) : !filesError && files?.length ? (
-                <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">Select a file to view its contents.</div>
-              ) : null}
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <GithubModal
+        open={githubOpen}
+        onOpenChange={setGithubOpen}
+        projectId={project.projectId}
+        onStatusChange={setGithubConnected}
+        onProjectChanged={() => void loadFiles()}
+      />
     </main>
-  );
-}
