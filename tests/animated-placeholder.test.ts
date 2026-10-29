@@ -2,10 +2,12 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import {
+  ANDROID_ANIMATED_PROMPTS,
   ANIMATED_PROMPTS,
   ANIMATED_PROMPT_PREFIX,
   advanceTypewriter,
   currentPrompt,
+  shouldAnimateAndroidPlaceholder,
   shouldAnimatePlaceholder,
   shouldSubmitPrompt,
   TYPEWRITER_INITIAL_STATE,
@@ -47,6 +49,36 @@ test("no prompt is empty or absurdly long", () => {
     assert.equal(prompt.trim().length > 20, true);
     assert.equal(prompt.length < 140, true);
   }
+});
+
+test("Android prompts cover all sixteen ideas in order", () => {
+  const expectedIdeas = [
+    "ai-powered fitness tracker",
+    "personal finance and expense manager",
+    "food delivery app",
+    "e-commerce app",
+    "habit tracker",
+    "student study planner",
+    "chat app",
+    "travel planner",
+    "online learning app",
+    "gym workout tracker",
+    "recipe app",
+    "appointment booking app",
+    "task manager",
+    "music streaming app ui",
+    "real estate listing app",
+    "ai-powered notes and productivity app",
+  ];
+
+  assert.equal(ANDROID_ANIMATED_PROMPTS.length, 16);
+  assert.equal(new Set(ANDROID_ANIMATED_PROMPTS).size, 16);
+  assert.deepEqual(
+    ANDROID_ANIMATED_PROMPTS.map((prompt) =>
+      prompt.toLowerCase().match(/build (.+?) with/)?.[1].replace(/^(?:a|an) /, ""),
+    ),
+    expectedIdeas,
+  );
 });
 
 // ── The rotation ────────────────────────────────────────────────────────────
@@ -111,6 +143,22 @@ test("the rotation visits every prompt and comes back around", () => {
   assert.equal(state.promptIndex, 0);
 });
 
+test("the Android rotation visits all sixteen prompts and repeats in order", () => {
+  const seen: number[] = [];
+  let state = TYPEWRITER_INITIAL_STATE;
+
+  for (let i = 0; i < ANDROID_ANIMATED_PROMPTS.length * 400; i += 1) {
+    state = advanceTypewriter(state, ANDROID_ANIMATED_PROMPTS);
+    if (state.length === 1 && state.phase === "typing") seen.push(state.promptIndex);
+    if (seen.length === ANDROID_ANIMATED_PROMPTS.length + 1) break;
+  }
+
+  assert.deepEqual(
+    seen,
+    [...ANDROID_ANIMATED_PROMPTS.keys(), 0],
+  );
+});
+
 test("the visible text is always a prefix of the current prompt", () => {
   let state = TYPEWRITER_INITIAL_STATE;
   for (let i = 0; i < 500; i += 1) {
@@ -136,6 +184,12 @@ test("the animation stops as soon as the user types", () => {
 
 test("the animation stops while the box is focused", () => {
   assert.equal(shouldAnimatePlaceholder("", true), false);
+});
+
+test("the Android animation stops as soon as the prompt is non-empty", () => {
+  assert.equal(shouldAnimateAndroidPlaceholder(""), true);
+  assert.equal(shouldAnimateAndroidPlaceholder(" "), false);
+  assert.equal(shouldAnimateAndroidPlaceholder("Build an app"), false);
 });
 
 // ── The submit key ──────────────────────────────────────────────────────────

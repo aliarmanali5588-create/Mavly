@@ -41,6 +41,25 @@ export const ANIMATED_PROMPTS: readonly string[] = [
   "Ask Mavly to create an event ticketing page with QR code check-in and a guest list.",
 ];
 
+export const ANDROID_ANIMATED_PROMPTS: readonly string[] = [
+  "Build an AI-powered fitness tracker with personalized workout plans and progress charts.",
+  "Build a personal finance and expense manager with budgets, spending categories, and monthly reports.",
+  "Build a food delivery app with restaurant menus, order updates, and live delivery tracking.",
+  "Build an e-commerce app with product categories, a shopping cart, and saved favorites.",
+  "Build a habit tracker with daily goals, streaks, and weekly progress summaries.",
+  "Build a student study planner with a class timetable, assignments, and exam reminders.",
+  "Build a chat app with real-time messaging, group conversations, and profile screens.",
+  "Build a travel planner with saved destinations, trip itineraries, and packing lists.",
+  "Build an online learning app with video lessons, course progress, and quizzes.",
+  "Build a gym workout tracker with exercise plans, logged sets, and progress charts.",
+  "Build a recipe app with searchable recipes, meal planning, and a shopping list.",
+  "Build an appointment booking app with service listings, available time slots, and booking reminders.",
+  "Build a task manager with organized to-do lists, due dates, and reminders.",
+  "Build a music streaming app UI with playlists, album pages, and playback controls.",
+  "Build a real estate listing app with property photos, search filters, and saved homes.",
+  "Build an AI-powered notes and productivity app with organized notebooks, summaries, and task lists.",
+];
+
 /** The phrase every prompt starts with. */
 export const ANIMATED_PROMPT_PREFIX = "Ask Mavly to create";
 
@@ -72,13 +91,19 @@ export const TYPEWRITER_INITIAL_STATE: TypewriterState = {
 };
 
 /** The prompt the given state is on. */
-export function currentPrompt(state: TypewriterState): string {
-  return ANIMATED_PROMPTS[state.promptIndex] ?? "";
+export function currentPrompt(
+  state: TypewriterState,
+  prompts: readonly string[] = ANIMATED_PROMPTS,
+): string {
+  return prompts[state.promptIndex] ?? "";
 }
 
 /** The text that is on screen right now. */
-export function typewriterText(state: TypewriterState): string {
-  return currentPrompt(state).slice(0, state.length);
+export function typewriterText(
+  state: TypewriterState,
+  prompts: readonly string[] = ANIMATED_PROMPTS,
+): string {
+  return currentPrompt(state, prompts).slice(0, state.length);
 }
 
 /** How long to wait before the next step. */
@@ -93,14 +118,17 @@ export function typewriterDelayMs(state: TypewriterState): number {
  * it back and the next prompt starts. The order never breaks: a prompt is
  * always typed completely before it is erased.
  */
-export function advanceTypewriter(state: TypewriterState): TypewriterState {
-  const prompt = currentPrompt(state);
+export function advanceTypewriter(
+  state: TypewriterState,
+  prompts: readonly string[] = ANIMATED_PROMPTS,
+): TypewriterState {
+  const prompt = currentPrompt(state, prompts);
 
   // A prompt that is empty (or the index ran off the list) would never finish
   // typing — skip it instead of stalling.
   if (!prompt) {
     return {
-      promptIndex: (state.promptIndex + 1) % ANIMATED_PROMPTS.length,
+      promptIndex: prompts.length ? (state.promptIndex + 1) % prompts.length : 0,
       length: 0,
       phase: "typing",
       holdTicks: 0,
@@ -126,7 +154,7 @@ export function advanceTypewriter(state: TypewriterState): TypewriterState {
     return { ...state, length: state.length - 1 };
   }
   return {
-    promptIndex: (state.promptIndex + 1) % ANIMATED_PROMPTS.length,
+    promptIndex: prompts.length ? (state.promptIndex + 1) % prompts.length : 0,
     length: 0,
     phase: "typing",
     holdTicks: 0,
@@ -148,6 +176,10 @@ export function shouldAnimatePlaceholder(
 ): boolean {
   if (focused) return false;
   return text.trim().length === 0;
+}
+
+export function shouldAnimateAndroidPlaceholder(text: string): boolean {
+  return text.length === 0;
 }
 
 /**

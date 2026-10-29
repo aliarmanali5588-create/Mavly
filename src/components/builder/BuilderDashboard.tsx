@@ -17,7 +17,12 @@ import { GithubModal } from "@/components/workspace/GithubModal";
 import { GithubPromptButton } from "@/components/prompt/GithubPromptButton";
 import { AuthNav } from "@/components/auth/AuthNav";
 import { AnimatedPlaceholder } from "@/components/builder/AnimatedPlaceholder";
-import { shouldAnimatePlaceholder, shouldSubmitPrompt } from "@/lib/animated-placeholder";
+import {
+  ANDROID_ANIMATED_PROMPTS,
+  shouldAnimateAndroidPlaceholder,
+  shouldAnimatePlaceholder,
+  shouldSubmitPrompt,
+} from "@/lib/animated-placeholder";
 import { PROJECT_SLUG_MAX_LENGTH, suggestProjectSlug, validateProjectSlug } from "@/lib/project-slug";
 import { AttachmentPreviews } from "@/components/workspace/AttachmentPreview";
 import { filesFromClipboard } from "@/lib/attachments";
@@ -331,8 +336,10 @@ export default function DashboardPage({ profile }: { profile: ProfileSummary }) 
     }
   }, [firstPrompt]);
 
-  /** The animation only runs while the box is empty and nobody is typing in it. */
-  const heroAnimated = promptMode === "website" && shouldAnimatePlaceholder(firstPrompt, heroFocused);
+  /** Android stays animated while empty; Website keeps its original focus behavior. */
+  const heroAnimated = promptMode === "website"
+    ? shouldAnimatePlaceholder(firstPrompt, heroFocused)
+    : shouldAnimateAndroidPlaceholder(firstPrompt);
 
   /**
    * ═══⭐ "NEW PROJECT" FOCUSES THE BOX — IT DOES NOT OPEN A FORM ═══════════════
@@ -1031,13 +1038,7 @@ export default function DashboardPage({ profile }: { profile: ProfileSummary }) 
               <h1 className="break-words text-center text-[2rem] font-bold leading-[1.12] tracking-tight text-gray-900 sm:text-[2.5rem] lg:text-[3.25rem]">
                 What do you want to build{headingName ? `, ${headingName}` : ""}?
               </h1>
-              {promptMode === "android" ? (
-                <p className="text-gray-500 max-w-md mx-auto mt-2 text-sm">
-                  Mavly generates native Kotlin and Jetpack Compose source. Debug APK builds are available only where an operator enables them for this project; emulator previews, release signing, AAB and store publishing are not configured. Local attachments are not transferred.
-                </p>
-              ) : (
-                <p className="text-gray-500 max-w-md mx-auto mt-2 text-sm">Describe your app and AI will build it in minutes.</p>
-              )}
+              <p className="text-gray-500 max-w-md mx-auto mt-2 text-sm">Describe your app and AI will build it in minutes.</p>
             </div>
             <div className="mb-2 px-4 sm:px-5">
               <div role="group" aria-label="Project type" className="inline-flex max-w-full gap-1 rounded-xl bg-gray-100 p-1">
@@ -1083,6 +1084,7 @@ export default function DashboardPage({ profile }: { profile: ProfileSummary }) 
                   disabled={buildCreating}
                   onFocus={() => setHeroFocused(true)}
                   onBlur={() => setHeroFocused(false)}
+                  style={heroAnimated ? { caretColor: "transparent" } : undefined}
                   placeholder={
                     promptMode === "website"
                       ? "Describe what you want to build..."
@@ -1102,7 +1104,12 @@ export default function DashboardPage({ profile }: { profile: ProfileSummary }) 
                   ⭐ The animated placeholder sits over the textarea only; it must not
                   cover the mode selector above it.
                 */}
-                <AnimatedPlaceholder active={heroAnimated} />
+                <AnimatedPlaceholder
+                  key={promptMode}
+                  active={heroAnimated}
+                  prompts={promptMode === "android" ? ANDROID_ANIMATED_PROMPTS : undefined}
+                  respectReducedMotion={promptMode === "android"}
+                />
               </div>
               {/*
                 ⭐ The attachments, previewed. Nothing is uploaded yet here — the project
