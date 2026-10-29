@@ -47,6 +47,27 @@ export const LOCKFILES = {
   bun: "bun.lockb",
 } as const;
 
+export const NEXT_CONFIG_FILES = [
+  "next.config.js",
+  "next.config.mjs",
+  "next.config.ts",
+  "next.config.cjs",
+] as const;
+
+/**
+ * Frameworks Mavly generates or imports that are NOT the one live runtime this
+ * adapter can run. They are named explicitly so the workspace reports the real
+ * reason instead of "package.json does not declare the vite dependency".
+ */
+const NON_VITE_FRAMEWORKS: ReadonlyArray<{ dependency: string; label: string }> = [
+  { dependency: "next", label: "Next.js" },
+  { dependency: "nuxt", label: "Nuxt" },
+  { dependency: "@sveltejs/kit", label: "SvelteKit" },
+  { dependency: "astro", label: "Astro" },
+  { dependency: "@remix-run/react", label: "Remix" },
+  { dependency: "@angular/core", label: "Angular" },
+] as const;
+
 function unsupported(
   reason: RuntimeUnsupportedReason,
   detail: string,
@@ -119,6 +140,27 @@ export function detectRuntimeProject(files: readonly SyncSourceFile[]): RuntimeP
     ...dependencyMap(manifest.dependencies),
     ...dependencyMap(manifest.devDependencies),
   };
+
+  /**
+   * Classify the declared framework BEFORE the React/Vite dependency check, so a
+   * Next.js or other generated project gets an accurate eligibility reason
+   * rather than a misleading "missing vite" message.
+   */
+  const declaredFramework = NON_VITE_FRAMEWORKS.find(
+    (framework) => Boolean(dependencies[framework.dependency]),
+  );
+  const hasNextConfig = NEXT_CONFIG_FILES.some((file) => byPath.has(file));
+  if (declaredFramework || hasNextConfig) {
+    const label = declaredFramework?.label ?? "Next.js";
+    const evidence = declaredFramework
+      ? `package.json declares ${label}`
+      : `the project contains a ${label} config file`;
+    return unsupported(
+      "unsupported_framework",
+      `${evidence}, and a live runtime preview runs a React + Vite dev server only. Use the static preview or the verification/deployment path for this framework.`,
+    );
+  }
+
   if (!dependencies.react) {
     return unsupported(
       "missing_react_dependency",
@@ -128,7 +170,7 @@ export function detectRuntimeProject(files: readonly SyncSourceFile[]): RuntimeP
   if (!dependencies.vite) {
     return unsupported(
       "missing_vite_dependency",
-      "package.json does not declare the `vite` dependency.",
+      "This React project does not declare the `vite` dependency; live runtime preview runs Vite only.",
     );
   }
 

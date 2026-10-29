@@ -11,6 +11,10 @@ import { POST as uploadPost } from "../src/app/api/vcaas/upload/[projectId]/rout
 import { GET as sourceCodeGet } from "../src/app/api/vcaas/source-code/[projectId]/route";
 import { GET as envGet } from "../src/app/api/vcaas/env/[projectId]/route";
 import { GET as gitDiffGet } from "../src/app/api/vcaas/git-diff/route";
+import {
+  GET as runtimeGet,
+  POST as runtimePost,
+} from "../src/app/api/runtime/[projectId]/route";
 
 /**
  * ═══ OWNERSHIP AT THE ROUTE BOUNDARY ═══════════════════════════════════════
@@ -43,6 +47,18 @@ test("every project-scoped route refuses an anonymous caller with 401 JSON", asy
     ["source-code", () => sourceCodeGet(req("/api/vcaas/source-code/my-app"), params("my-app"))],
     ["env", () => envGet(req("/api/vcaas/env/my-app?env=dev"), params("my-app"))],
     ["git-diff", () => gitDiffGet(req("/api/vcaas/git-diff?projectId=my-app&url=https%3A%2F%2Ftotalum.app%2Fx"))],
+    ["runtime status", () => runtimeGet(req("/api/runtime/my-app"), params("my-app"))],
+    [
+      "runtime action",
+      () =>
+        runtimePost(
+          req("/api/runtime/my-app", {
+            method: "POST",
+            body: JSON.stringify({ action: "start" }),
+          }),
+          params("my-app"),
+        ),
+    ],
   ];
 
   for (const [name, call] of cases) {
@@ -151,5 +167,26 @@ test("source-code, git-diff, upload and env authorize before touching upstream",
       const at = source.indexOf(dangerous);
       if (at >= 0) assert.ok(authAt < at, `${file}: ${dangerous} must come after authorization`);
     }
+  }
+});
+
+test("the runtime route authorizes before any sandbox or provider work", () => {
+  const source = readFileSync(
+    new URL("../src/app/api/runtime/[projectId]/route.ts", import.meta.url),
+    "utf8",
+  );
+  const authAt = source.indexOf("await authorizeProjectRequest(");
+  assert.ok(authAt > 0, "the runtime route must call the guard");
+  for (const dangerous of [
+    "await createSupabaseServerClient(",
+    "await getProject(",
+    "await getRuntimeSandboxStatus(",
+    "await refreshRuntimeLogs(",
+    "await startRuntimeSandbox(",
+    "await stopRuntimeSandbox(",
+    "await runRuntimeBuildCheck(",
+  ]) {
+    const at = source.indexOf(dangerous);
+    assert.ok(at > authAt, `${dangerous} must come after authorization`);
   }
 });

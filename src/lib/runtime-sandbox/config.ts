@@ -1,10 +1,12 @@
 /**
  * ═══ LIVE RUNTIME SANDBOX CONFIGURATION ═════════════════════════════════════
  *
- * The live preview runtime is OPT-IN, COHORT-SCOPED and OFF BY DEFAULT:
+ * The live preview runtime is OPT-IN and GLOBALLY ENABLED for every authorized
+ * project once the flag is on. There is no per-project allowlist by default:
  *
  *   MAVLY_RUNTIME_SANDBOX_ENABLED            1 / true / yes / on
- *   MAVLY_RUNTIME_SANDBOX_PROJECTS           comma/semicolon separated project ids
+ *   MAVLY_RUNTIME_SANDBOX_PROJECTS           OPTIONAL restriction. Empty or `*`
+ *                                            means every eligible project.
  *   E2B_API_KEY                              server-only provider key
  *   MAVLY_RUNTIME_SANDBOX_TEMPLATE           E2B template with Node + npm (default `base`)
  *   MAVLY_RUNTIME_SANDBOX_PORT               dev-server port (default 5173)
@@ -60,7 +62,6 @@ export const MAX_ACTIVE_PER_USER = 5;
 
 export type RuntimeConfigProblem =
   | "disabled"
-  | "missing_cohort"
   | "invalid_cohort"
   | "missing_api_key"
   | "invalid_template"
@@ -74,6 +75,12 @@ export interface RuntimeSandboxConfig {
   /** Every prerequisite is present and valid. */
   ready: boolean;
   problems: RuntimeConfigProblem[];
+  /**
+   * True when every eligible project is authorized (`MAVLY_RUNTIME_SANDBOX_PROJECTS`
+   * absent/empty or `*`). False only for an explicit operator restriction.
+   */
+  allowAllProjects: boolean;
+  /** Explicit restriction list; empty when `allowAllProjects` is true. */
   cohort: string[];
   /** Server-only. Never serialize this field. */
   apiKey: string | null;
@@ -137,11 +144,21 @@ const TEMPLATE_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._/-]{0,79}$/;
 /** Pure configuration parse. Reads no environment of its own. */
 export function parseRuntimeSandboxConfig(env: RuntimeEnvironment): RuntimeSandboxConfig {
   const requested = isOn(env[RUNTIME_ENABLED_ENV]);
-  const cohort = splitCohort(env[RUNTIME_PROJECTS_ENV] ?? "");
+  /**
+   * ⚠️ GLOBAL BY DEFAULT. Every eligible project is authorized unless an
+   * operator opts into an explicit restriction. The deployment flag, project
+   * ownership/RLS, the framework detector and the per-user/resource limits are
+   * the actual controls; a project-id list is no longer a prerequisite.
+   */
+  const rawCohort = (env[RUNTIME_PROJECTS_ENV] ?? "").trim();
+  const allowAllProjects = rawCohort === "" || rawCohort === "*";
+  const cohort = allowAllProjects ? [] : splitCohort(rawCohort);
   const problems: RuntimeConfigProblem[] = [];
   if (!requested) problems.push("disabled");
 
-  if (cohort.length === 0) problems.push("missing_cohort");
+  if (!allowAllProjects && cohort.length === 0) {
+    problems.push("invalid_cohort");
+  }
   if (cohort.some((projectId) => !isRoutableProjectSlug(projectId))) {
     problems.push("invalid_cohort");
   }
@@ -215,6 +232,7 @@ export function parseRuntimeSandboxConfig(env: RuntimeEnvironment): RuntimeSandb
     requested,
     ready: problems.length === 0,
     problems,
+    allowAllProjects,
     cohort,
     apiKey,
     template,
@@ -241,7 +259,9 @@ export function isProjectInRuntimeCohort(
   projectId: string,
   config: RuntimeSandboxConfig = runtimeSandboxConfig(),
 ): boolean {
-  return config.ready && config.cohort.includes(projectId.toLowerCase());
+  if (!config.ready) return false;
+  if (config.allowAllProjects) return true;
+  return config.cohort.includes(projectId.toLowerCase());
 }
 
 export function runtimeProblemSummary(config: RuntimeSandboxConfig): string {

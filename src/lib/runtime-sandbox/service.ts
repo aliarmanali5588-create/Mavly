@@ -23,6 +23,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { emitRuntimeSandboxEvent } from "@/lib/observability/events";
 
 import {
+  isProjectInRuntimeCohort,
   runtimeSandboxConfig,
   runtimeProblemSummary,
   type RuntimeSandboxConfig,
@@ -189,7 +190,7 @@ function capabilityOf(input: {
       framework: null,
     };
   }
-  if (!input.config.cohort.includes(input.projectId.toLowerCase())) {
+  if (!isProjectInRuntimeCohort(input.projectId, input.config)) {
     return unavailable("project_not_enabled", "e2b");
   }
   if (input.schemaVersion === null) return unavailable("migration_required", "e2b");
@@ -1100,12 +1101,20 @@ export async function runRuntimeBuildCheck(input: {
       detail: "Approved QA builds are not enabled for this deployment.",
     };
   }
-  if (!ctx.config.ready || !ctx.config.cohort.includes(input.projectId.toLowerCase())) {
+  if (!ctx.config.ready) {
     return {
       id: "build",
       label: "Production build",
       status: "unavailable",
-      detail: "Live runtime previews are not enabled for this project.",
+      detail: runtimeProblemSummary(ctx.config),
+    };
+  }
+  if (!isProjectInRuntimeCohort(input.projectId, ctx.config)) {
+    return {
+      id: "build",
+      label: "Production build",
+      status: "unavailable",
+      detail: "Live runtime previews are restricted by this deployment's project list.",
     };
   }
   const latest = await ctx.store.latest(input.projectId);

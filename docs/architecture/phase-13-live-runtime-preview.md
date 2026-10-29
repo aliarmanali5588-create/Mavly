@@ -31,14 +31,19 @@ sandbox expires, it is rebuilt from the current persisted files.
 
 ## 2. Configuration and rollout
 
-Off unless every prerequisite is present:
+Off unless the deployment prerequisites are present:
 
 ```
 MAVLY_RUNTIME_SANDBOX_ENABLED=1
-MAVLY_RUNTIME_SANDBOX_PROJECTS=<explicit project ids>
 E2B_API_KEY=<server-only key>
 NEXT_PUBLIC_SUPABASE_URL=<project url>
+# OPTIONAL temporary restriction; empty or `*` = every eligible project
+# MAVLY_RUNTIME_SANDBOX_PROJECTS=<explicit project ids>
 ```
+
+There is no per-project allowlist by default. Every project the caller owns is
+eligible when the persisted files are a supported React + Vite app; ownership,
+RLS, the framework detector and the per-user/lifetime limits are the controls.
 
 Optional, bounded:
 
@@ -72,7 +77,7 @@ and safe to apply while the previous application version is live.
 
 `package.json` pins `e2b@^2.62.0`; `package-lock.json` resolves `e2b@2.62.0`.
 The SDK is loaded lazily by `src/lib/runtime-sandbox/provider.ts`, so tests and
-non-cohort runs never import it.
+deployments with the flag off never import it.
 
 `src/lib/runtime-sandbox/e2b-provider.ts` is the only file that touches the SDK.
 It implements the typed `RuntimeSandboxProvider` surface:
@@ -158,10 +163,20 @@ writeback is **not implemented**: source changes only enter through `generateApp
 
 Detection uses persisted files, not the planner's claim:
 
+* the declared framework is classified **first**: `next`, `nuxt`,
+  `@sveltejs/kit`, `astro`, `@remix-run/react`, `@angular/core` and any
+  `next.config.*` file return `unsupported_framework` (naming the framework),
+  not a misleading "missing vite" message. This includes the Next.js App Router
+  sites Mavly itself generates;
 * `package.json` parses and declares `react` **and** `vite`;
 * only npm is supported; a yarn/pnpm/bun lockfile is refused;
 * `index.html` exists and declares a local `<script type="module" src=...>`;
 * that entry module exists.
+
+Mavly never adds a dependency, rewrites `package.json` or converts a lockfile to
+make a project eligible. A project that needs Vite must already declare it and
+commit a consistent manifest; otherwise it is reported honestly and keeps the
+static preview.
 
 Unsupported projects return `RUNTIME_SANDBOX_UNSUPPORTED` with the exact reason;
 the static preview remains.
@@ -203,7 +218,10 @@ path, port, environment variable or provider key.
 provider project is configured otherwise. The host label is unguessable but the
 URL itself is not an authentication factor. Mavly does not proxy the preview
 (no authenticated proxy exists), so a private preview is **not** claimed. Treat a
-live preview URL as a secret and disable the cohort if that is unacceptable.
+live preview URL as a secret. If a private preview is mandatory, leave
+`MAVLY_RUNTIME_SANDBOX_ENABLED` off (or set an explicit
+`MAVLY_RUNTIME_SANDBOX_PROJECTS` restriction); there is no per-project gate by
+default.
 
 ## 8. Agent integration
 
@@ -224,8 +242,9 @@ then asking for a follow-up, can produce a matching session. This is a deliberat
 conservative limit, not a claim that every run gets runtime QA evidence.
 
 * **Planner / UI-UX / Coding**: unchanged. `generateApp` remains the only writer.
-* **QA** (`recordQa` in `orchestration/engine.ts`): when the project is in the
-  runtime cohort, the durable row in the multi-agent cohort, and
+* **QA** (`recordQa` in `orchestration/engine.ts`): when the durable row is in the
+  multi-agent cohort, runtime preview is enabled for the project (global unless an
+  operator set an explicit restriction), and
   `MAVLY_RUNTIME_SANDBOX_QA_EVIDENCE` is on, QA reads the latest runtime row and
   adds `runtime-*` checks. A `ready` session alone leaves verification
   `pending`; `passed` requires the separately enabled approved build to have
@@ -315,9 +334,10 @@ preview-host validation, cleanup), not the vendor's behaviour.
 2. Confirm the E2B template provides Node 20+ and npm on `PATH`; if `base` does
    not, set `MAVLY_RUNTIME_SANDBOX_TEMPLATE` to one that does (this has not been
    verified against a live account).
-3. Set the flag, cohort, `E2B_API_KEY` and Supabase URL in one deployment.
-4. Open a cohort website project, press **Start live preview**, and watch the
-   state move to `ready` only after the readiness probe.
+3. Set the flag, `E2B_API_KEY` and Supabase URL in one deployment. A project
+   list is optional and only narrows access; nothing else is per-project.
+4. Open any owned React + Vite website project, press **Start live preview**, and
+   watch the state move to `ready` only after the readiness probe.
 5. Inspect the log panel; confirm no key or environment value appears.
 6. Press **Stop**; confirm the provider sandbox is gone and a second Stop is a
    no-op.

@@ -1,8 +1,9 @@
 # Runbook — live runtime preview sandbox (Phase 13)
 
-The live preview runs a generated React + Vite project's real Vite dev server in
-an isolated E2B sandbox. It is **off by default**, cohort-scoped, and unrelated to
-the Phase 3/4 verification sandbox and to production hosting.
+The live preview runs an existing React + Vite project's real Vite dev server in
+an isolated E2B sandbox. It is **off by default**, **globally enabled once the
+deployment flag is on**, and unrelated to the Phase 3/4 verification sandbox and
+to production hosting.
 
 ## 1. Prerequisites
 
@@ -14,18 +15,24 @@ the Phase 3/4 verification sandbox and to production hosting.
 - `NEXT_PUBLIC_SUPABASE_URL` configured (already required by the app).
 - The project is a **React + Vite** website project whose persisted files include
   `package.json` (react + vite), a root `index.html` with a local module entry,
-  and that entry module. Android, Next.js and other frameworks return
-  `RUNTIME_SANDBOX_UNSUPPORTED`.
+  and that entry module. Android, Next.js, SvelteKit and other frameworks return
+  `RUNTIME_SANDBOX_UNSUPPORTED` with an exact reason.
 - For QA/Security evidence and the worker expiry sweep, the project must also be
   in the durable worker cohort and the deployment must have
   `SUPABASE_SERVICE_ROLE_KEY`.
+
+There is **no per-project allowlist**. Ownership/RLS, the deployment flag, the
+framework detector, the per-user sandbox cap and the lifetime/install limits are
+the actual controls. `MAVLY_RUNTIME_SANDBOX_PROJECTS` is an optional temporary
+restriction only.
 
 ## 2. Enable
 
 ```bash
 MAVLY_RUNTIME_SANDBOX_ENABLED=1
-MAVLY_RUNTIME_SANDBOX_PROJECTS=my-project-id
 E2B_API_KEY=...                    # server-only
+# Optional: restrict to a named subset (empty or `*` = every eligible project)
+# MAVLY_RUNTIME_SANDBOX_PROJECTS=
 # Optional defaults:
 # MAVLY_RUNTIME_SANDBOX_TEMPLATE=base
 # MAVLY_RUNTIME_SANDBOX_PORT=5173
@@ -46,7 +53,7 @@ A misconfigured deployment shows the static preview plus a truthful
 The repository's policy forbids the coding agent from running these. A human
 operator must:
 
-1. Open a cohort project in the workspace.
+1. Open any owned React + Vite project in the workspace.
 2. Press **Start live preview**.
 3. Confirm the status moves through `Preparing`, `Copying project files`,
    `Installing dependencies`, `Starting Vite dev server`, then `Live sandbox
@@ -96,7 +103,7 @@ Suggested alerts:
 
 | Symptom | Meaning | Action |
 |---|---|---|
-| `RUNTIME_SANDBOX_NOT_CONFIGURED` | flag/cohort/key/Supabase URL missing or invalid | fix configuration; nothing was created |
+| `RUNTIME_SANDBOX_NOT_CONFIGURED` | flag/key/Supabase URL missing or invalid | fix configuration; nothing was created |
 | `MIGRATION_REQUIRED` | migration 34 missing | apply it; start fails before provider work |
 | `RUNTIME_SANDBOX_UNSUPPORTED` | not a supported React+Vite project | keep static preview; do not force-install Vite |
 | `RUNTIME_SANDBOX_BUSY` | a start is already in flight for this project | wait; the route polls the same row |
@@ -116,8 +123,9 @@ checkpoints, images, credits or deployment state.
 
 ## 6. Pause, drain and rollback
 
-- **Pause new sandboxes**: unset `MAVLY_RUNTIME_SANDBOX_ENABLED` (or empty the
-  cohort). Existing rows stay readable; the workspace falls back to static.
+- **Pause new sandboxes**: unset `MAVLY_RUNTIME_SANDBOX_ENABLED` (or set an
+  explicit restriction list). Existing rows stay readable; the workspace falls
+  back to static.
 - **Drain running sandboxes**: press Stop for each project, or let the worker's
   expiry sweep destroy them. The sweep is safe to run with the flag off only if
   you call it directly; the worker skips it when the flag is off.

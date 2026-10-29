@@ -5,8 +5,8 @@
  * returns `null`, and the caller must treat that as `configuration_error`.
  *
  * ⚠️ THE E2B SDK IS LOADED LAZILY. Unit tests exercise the service through a
- * mocked provider and never need the vendor SDK, and an inline run that is not
- * in the runtime cohort never loads it at all.
+ * mocked provider and never need the vendor SDK, and a deployment with the runtime
+ * flag off never loads it at all.
  */
 
 import type { RuntimeSandboxConfig } from "./config";

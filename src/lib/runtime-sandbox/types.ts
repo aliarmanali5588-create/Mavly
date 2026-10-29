@@ -360,7 +360,7 @@ export function runtimeCapabilityReasonMessage(reason: string | null): string | 
     case "disabled":
       return "Live runtime previews are switched off for this deployment.";
     case "project_not_enabled":
-      return "Live runtime previews are not enabled for this project.";
+      return "Live runtime previews are restricted by this deployment's project list.";
     case "misconfigured":
       return "Live runtime previews are enabled but not fully configured. An operator must finish the provider setup.";
     case "migration_required":

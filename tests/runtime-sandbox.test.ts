@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 
 import {
+  isProjectInRuntimeCohort,
   parseRuntimeSandboxConfig,
   type RuntimeEnvironment,
   type RuntimeSandboxConfig,
@@ -393,9 +394,40 @@ test("a complete runtime configuration is ready", () => {
   const parsed = config({ MAVLY_RUNTIME_SANDBOX_PORT: "3000" });
   assert.equal(parsed.ready, true, parsed.problems.join(","));
   assert.equal(parsed.cohort[0], "demo-site");
+  assert.equal(parsed.allowAllProjects, false);
   assert.equal(parsed.port, 3000);
   assert.equal(parsed.maxLifetimeSeconds, 1800);
   assert.equal(parsed.apiKey, "e2b_test_key_value");
+});
+
+test("an absent or empty project list enables every eligible project", () => {
+  for (const value of [undefined, "", "   ", "*"]) {
+    const parsed = config(
+      value === undefined
+        ? { MAVLY_RUNTIME_SANDBOX_PROJECTS: undefined }
+        : { MAVLY_RUNTIME_SANDBOX_PROJECTS: value },
+    );
+    assert.equal(parsed.ready, true, `${String(value)}: ${parsed.problems.join(",")}`);
+    assert.equal(parsed.allowAllProjects, true);
+    assert.deepEqual(parsed.cohort, []);
+    assert.equal(isProjectInRuntimeCohort("any-project", parsed), true);
+    assert.equal(isProjectInRuntimeCohort("another-project", parsed), true);
+  }
+});
+
+test("an explicit project list is an optional restriction, not a prerequisite", () => {
+  const parsed = config({ MAVLY_RUNTIME_SANDBOX_PROJECTS: "demo-site;other-site" });
+  assert.equal(parsed.ready, true, parsed.problems.join(","));
+  assert.equal(parsed.allowAllProjects, false);
+  assert.deepEqual(parsed.cohort, ["demo-site", "other-site"]);
+  assert.equal(isProjectInRuntimeCohort("demo-site", parsed), true);
+  assert.equal(isProjectInRuntimeCohort("a-third-site", parsed), false);
+});
+
+test("a malformed explicit project list is refused instead of guessed", () => {
+  const parsed = config({ MAVLY_RUNTIME_SANDBOX_PROJECTS: "," });
+  assert.equal(parsed.ready, false);
+  assert.equal(parsed.problems.includes("invalid_cohort"), true);
 });
 
 test("out-of-range limits are refused, not silently clamped to a different number", () => {
@@ -453,6 +485,50 @@ test("a project without the declared Vite dependency is refused, not guessed", (
   );
   assert.equal(support.supported, false);
   assert.equal(support.reason, "missing_vite_dependency");
+  assert.match(support.detail ?? "", /React project/);
+});
+
+test("a Next.js project is classified by framework, not as a missing Vite dependency", () => {
+  const withDependency = detectRuntimeProject(
+    projectFiles({
+      "package.json": JSON.stringify({
+        dependencies: { next: "16", react: "19" },
+      }),
+    }),
+  );
+  assert.equal(withDependency.supported, false);
+  assert.equal(withDependency.reason, "unsupported_framework");
+  assert.match(withDependency.detail ?? "", /Next\.js/);
+
+  const configOnly = detectRuntimeProject([
+    ...projectFiles({
+      "package.json": JSON.stringify({ dependencies: { next: "16" } }),
+    }),
+    { path: "next.config.ts", content: "export default {};\n" },
+  ]);
+  assert.equal(configOnly.reason, "unsupported_framework");
+});
+
+test("another non-Vite framework is named instead of reported as a Vite gap", () => {
+  const support = detectRuntimeProject(
+    projectFiles({
+      "package.json": JSON.stringify({
+        dependencies: { react: "19" },
+        devDependencies: { "@sveltejs/kit": "2", vite: "7" },
+      }),
+    }),
+  );
+  assert.equal(support.reason, "unsupported_framework");
+  assert.match(support.detail ?? "", /SvelteKit/);
+});
+
+test("a package without React is refused before the Vite check", () => {
+  const support = detectRuntimeProject(
+    projectFiles({
+      "package.json": JSON.stringify({ devDependencies: { vite: "7" } }),
+    }),
+  );
+  assert.equal(support.reason, "missing_react_dependency");
 });
 
 test("yarn/pnpm/bun projects are refused rather than converted", () => {
@@ -641,7 +717,7 @@ test("a disabled deployment reports unavailable and does nothing", async () => {
   assert.equal(provider.calls.create, 0);
 });
 
-test("a project outside the cohort reports not enabled", async () => {
+test("an explicit restriction still refuses an unlisted project", async () => {
   const store = new MemoryStore();
   const provider = mockProvider();
   const options = deps(store, provider);
@@ -656,6 +732,28 @@ test("a project outside the cohort reports not enabled", async () => {
   assert.equal(started.code, "RUNTIME_SANDBOX_NOT_CONFIGURED");
   assert.equal(started.status?.capability.reason, "project_not_enabled");
   assert.equal(provider.calls.create, 0);
+});
+
+test("global enablement starts a project that was never allowlisted", async () => {
+  const store = new MemoryStore();
+  const provider = mockProvider();
+  const options = deps(store, provider);
+  options.config = {
+    ...config({ MAVLY_RUNTIME_SANDBOX_PROJECTS: "" }),
+    installTimeoutMs: 5_000,
+    startupTimeoutMs: 40,
+    idleSeconds: 600,
+  };
+  const started = await startRuntimeSandbox({
+    client: clientStub(),
+    projectId: "brand-new-project",
+    projectType: "website",
+    deps: options,
+  });
+  assert.equal(started.ok, true, started.message ?? "");
+  assert.equal(provider.calls.create, 1);
+  assert.equal(started.status?.capability.reason, null);
+  assert.equal(started.status?.session?.state, "ready");
 });
 
 test("an install failure is recorded, the sandbox destroyed and never ready", async () => {

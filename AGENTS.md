@@ -579,14 +579,17 @@ install/Vite dev server/readiness probe/QA build, or the migrations against a da
   its best-effort per-instance admission window (5 per user / 40 per instance per 10
   minutes) and its 3 MB response cap; the plan-driven stage is bounded by its own count,
   spend, concurrency, attempt and deadline limits instead.
-- **Live runtime previews are implemented but OFF BY DEFAULT (Phase 13).** For a
-  generated **React + Vite** website project, Mavly can materialize the authoritative
+- **Live runtime previews are implemented but OFF BY DEFAULT (Phase 13).** For an
+  existing **React + Vite** website project, Mavly can materialize the authoritative
   `project_files` into an isolated **E2B** sandbox, run `npm ci|install --ignore-scripts`,
   start the installed Vite binary with fixed arguments and a validated port, and mark the
   session `ready` only after a server-side request to the provider's preview host returns
-  2xx/3xx. Enabled only by `MAVLY_RUNTIME_SANDBOX_ENABLED` plus an explicit
-  `MAVLY_RUNTIME_SANDBOX_PROJECTS` cohort, server-only `E2B_API_KEY`,
-  `NEXT_PUBLIC_SUPABASE_URL` and migration 34. The pinned SDK is `e2b@2.62.0`, loaded
+  2xx/3xx. Enabled by `MAVLY_RUNTIME_SANDBOX_ENABLED` plus server-only
+  `E2B_API_KEY`, `NEXT_PUBLIC_SUPABASE_URL` and migration 34. It is global: there
+  is no per-project allowlist, and `MAVLY_RUNTIME_SANDBOX_PROJECTS` is only an
+  optional temporary restriction (empty or `*` means every eligible project). The
+  framework detector, project ownership/RLS and the resource limits are the actual
+  gates. The pinned SDK is `e2b@2.62.0`, loaded
   lazily behind the typed adapter in `src/lib/runtime-sandbox/`. One durable
   `project_runtime_sandboxes` row per project (partial unique index + advisory lock) makes
   concurrent starts reuse one sandbox; a ready row with the same source hash is reused, an
@@ -604,7 +607,9 @@ install/Vite dev server/readiness probe/QA build, or the migrations against a da
   `vite build` requires `MAVLY_RUNTIME_SANDBOX_QA_BUILD`. Repair receives the recorded
   failure as subordinate coding context; source changes still flow through
   `generateApp`. Unsupported frameworks (Next.js/Android/anything else) keep the static
-  preview and fail closed with the exact reason. **Unverified:** no real E2B sandbox,
+  preview and fail closed with the exact reason; Mavly's own generated websites are
+  Next.js App Router, so they are not eligible for this React + Vite runtime.
+  **Unverified:** no real E2B sandbox,
   npm install, Vite server, readiness probe, build, migration 34 or workspace render has
   been exercised. See `docs/architecture/phase-13-live-runtime-preview.md` and
   `docs/runbooks/runtime-sandbox.md`.
@@ -755,7 +760,7 @@ paths with `src/lib/vcaas-scope.ts`, so unknown shapes are refused before any wo
 | `docs/architecture/phase-4-runtime-verification.md` | Phase 4 runtime/health verification, preview security contract, bounded repair, budgets and rollout. |
 | `docs/runbooks/verification-sandbox.md` | Operator validation, alerting, pause/drain, rollback and capacity runbook. |
 | `src/lib/runtime-sandbox/types.ts` | Phase 13 shared, client-safe lifecycle vocabulary, the only legal transition table, the typed provider contract and the owner-visible session/status/evidence views. |
-| `src/lib/runtime-sandbox/config.ts` | Off-by-default live-runtime prerequisites, bounded limits, cohort parsing and the exact capability problem. Pure parse. |
+| `src/lib/runtime-sandbox/config.ts` | Off-by-default live-runtime prerequisites, bounded limits, global-by-default project eligibility (optional restriction list) and the exact capability problem. Pure parse. |
 | `src/lib/runtime-sandbox/policy.ts` | React + Vite detection from persisted files, the fixed install/dev/build commands, provider-preview-host validation and bounded/redacted terminal output. Pure. |
 | `src/lib/runtime-sandbox/paths.ts` | Materialization policy: relative-path safety, secret/runtime exclusions, file/byte limits, stale-path removal and required-file checks. Pure. |
 | `src/lib/runtime-sandbox/e2b-provider.ts`, `provider.ts` | The only E2B SDK adapter (`e2b@2.62.0`) behind the typed surface, and the lazy factory that returns `null` unless configured. |
@@ -1041,8 +1046,11 @@ paths with `src/lib/vcaas-scope.ts`, so unknown shapes are refused before any wo
     database policy remains an independent fail-closed run-write guard until the project
     is drained and the policy explicitly disabled.
 17. **Live previews are isolated, disposable and never authoritative.** Only a fully
-    configured, explicit cohort may start one; the browser carries no command, path,
-    port, environment, provider key or sandbox id. Every lifecycle write is an
+    configured deployment may start one; once `MAVLY_RUNTIME_SANDBOX_ENABLED` and its
+    prerequisites are present, every eligible project the caller owns is authorized.
+    `MAVLY_RUNTIME_SANDBOX_PROJECTS` is only an optional restriction. The browser
+    carries no command, path, port, environment, provider key or sandbox id. Every
+    lifecycle write is an
     owner-checked SECURITY DEFINER RPC whose transition is validated in SQL as well as in
     the service; the table is SELECT-only for its owner. The sandbox is materialized from
     `project_files` only and never writes back; generated lifecycle/package scripts are
