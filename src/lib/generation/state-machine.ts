@@ -115,6 +115,8 @@ export type GenerationErrorClass =
   | "provider_transient"
   | "provider_auth"
   | "provider_rejected"
+  /** The run's own provider-call ceiling stopped it before another paid call. */
+  | "spend_limit"
   | "content_filter"
   | "generation_truncated"
   | "generation_malformed"
@@ -239,6 +241,13 @@ export function classifyGenerationFailure(signals: FailureSignals): FailureClass
       return { retryable: true, errorClass: "provider_timeout", summary };
     case "GENERATION_PERSIST_FAILED":
       return { retryable: true, errorClass: "persistence_failed", summary };
+    case "GENERATION_SPEND_LIMIT":
+      /**
+       * Not retryable as a new attempt: the run already spent its ceiling this
+       * invocation. It stays resumable by the owner (and by a scheduled worker
+       * retry, which starts a fresh ceiling against fewer remaining paths).
+       */
+      return { retryable: false, errorClass: "spend_limit", summary };
     case "GENERATION_CONTENT_FILTER":
       return { retryable: false, errorClass: "content_filter", summary };
     case "GENERATION_TRUNCATED":

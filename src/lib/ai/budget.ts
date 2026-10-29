@@ -42,6 +42,76 @@ export const MIN_INLINE_RECOVERY_WINDOW_MS = 90_000;
 /** Automatic inline recovery is bounded to one continuation, never a loop. */
 export const MAX_INLINE_RECOVERY_ATTEMPTS = 1;
 
+/**
+ * ═══ STREAMED REQUESTS: PROGRESS, NOT TOTAL DURATION ════════════════════════
+ *
+ * A streamed completion is bounded by two different clocks:
+ *
+ *   · an IDLE window — the longest silence that still counts as "stalled". A
+ *     long answer that keeps arriving is never aborted for being long;
+ *   · an ABSOLUTE cap — the longest a single provider request may run at all,
+ *     so a pathological or wedged stream cannot outlive the run.
+ *
+ * Both are derived from the phase's configured timeout, so a call never gets a
+ * window larger than the budget it was planned with.
+ */
+export const MIN_PROVIDER_IDLE_TIMEOUT_MS = 10_000;
+export const MAX_PROVIDER_IDLE_TIMEOUT_MS = 45_000;
+
+/** The idle window for a request whose absolute cap is `absoluteTimeoutMs`. */
+export function idleTimeoutFor(absoluteTimeoutMs: number): number {
+  const third = Math.floor(Math.max(0, absoluteTimeoutMs) / 3);
+  return Math.max(
+    MIN_PROVIDER_IDLE_TIMEOUT_MS,
+    Math.min(MAX_PROVIDER_IDLE_TIMEOUT_MS, third),
+  );
+}
+
+export const MIN_SCALED_ATTEMPT_MS = 12_000;
+export const MAX_SCALED_ATTEMPT_MS = 60_000;
+
+/**
+ * ⚠️ A FIXED 20 s FLOOR IS THE WRONG FLOOR FOR EVERY CLASS. A 150 s batch needs
+ * far more than 20 s to produce anything, so an attempt planned at 20 s is a
+ * guaranteed charge with no result. The minimum scales with the class's own
+ * configured timeout instead.
+ */
+export function minUsefulAttemptFor(configuredTimeoutMs: number): number {
+  const fraction = Math.round(Math.max(0, configuredTimeoutMs) * 0.4);
+  return Math.max(
+    MIN_SCALED_ATTEMPT_MS,
+    Math.min(MAX_SCALED_ATTEMPT_MS, fraction),
+  );
+}
+
+/**
+ * ═══ THE WORKER MUST FIT INSIDE THE FUNCTION ════════════════════════════════
+ *
+ * A worker tick runs generation, then finalization, then the post-coding
+ * reviews, all inside one serverless invocation. The lease is a backstop and is
+ * deliberately longer than the function; the WORK budget must be shorter.
+ */
+export const WORKER_FUNCTION_LIMIT_MS = 300_000;
+/** Persist, snapshot, terminal write and the retry/settlement helpers. */
+export const WORKER_FINALIZE_RESERVE_MS = 20_000;
+/** A 10 s margin so a tick is never scheduled to end exactly at the limit. */
+export const WORKER_FUNCTION_MARGIN_MS = 10_000;
+
+/**
+ * The wall clock one worker tick may spend on generation, given the reserve the
+ * caller needs after it (post-coding reviews, finalization). Never negative and
+ * never larger than the tick ceiling.
+ */
+export function workerGenerationBudgetMs(reserveAfterGenerationMs: number): number {
+  const reserve = Math.max(
+    0,
+    WORKER_FINALIZE_RESERVE_MS +
+      WORKER_FUNCTION_MARGIN_MS +
+      Math.max(0, Math.floor(reserveAfterGenerationMs)),
+  );
+  return Math.max(30_000, WORKER_FUNCTION_LIMIT_MS - reserve);
+}
+
 export interface RunBudget {
   startedAtMs: number;
   /** Total wall-clock budget for planning + batches + provider retries. */

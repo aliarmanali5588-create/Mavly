@@ -42,6 +42,8 @@ export type ChatCompletionErrorCode =
   | "OUTPUT_LIMIT"
   | "EMPTY_COMPLETION"
   | "PROVIDER_ERROR"
+  /** Refused locally: the run's provider-attempt ceiling was already reached. */
+  | "SPEND_LIMIT"
   | "UNKNOWN";
 
 export interface ChatCompletionUsage {
@@ -100,7 +102,16 @@ export interface ChatCompletionFailure {
 export type ChatCompletionResult = ChatCompletionSuccess | ChatCompletionFailure;
 
 export interface ChatCompletionOptions {
+  /**
+   * The ABSOLUTE cap for one provider request. A streamed response that keeps
+   * making progress is bounded by this, not aborted for being long.
+   */
   timeoutMs?: number;
+  /**
+   * The longest silence that still counts as progress. Defaults to a value
+   * derived from `timeoutMs`; never larger than it.
+   */
+  idleTimeoutMs?: number;
   /** Overrides the model's cap for this call (used by bounded batches). */
   maxTokens?: number;
   temperature?: number;

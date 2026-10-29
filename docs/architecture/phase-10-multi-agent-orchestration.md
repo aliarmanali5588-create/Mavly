@@ -65,24 +65,29 @@ pipeline and record no workflow. There is no simulated fallback.
 
 | Role | Task kind | Model call | Writes files | Authority |
 |---|---|---|---|---|
-| Planner | `plan` | DeepSeek V4.1 Flash (45 s, 2k tokens) | No | Advisory implementation plan. |
-| UI/UX | `design_review` | DeepSeek V4.1 Flash (30 s, 1.5k tokens) | No | Advisory design/accessibility/responsive directives. |
-| Coding | `implement` | DeepSeek V4.1 Flash via existing pipeline | **Yes** (only writer) | The existing generation engine and its checkpoint path. |
-| QA | `verify` | DeepSeek V4.1 Flash (30 s, 1.5k tokens) | No | Advisory source review plus sandbox delegation; model output never proves a build/runtime pass. |
-| Repair | `repair` | DeepSeek V4.1 Flash (45 s, 1.5k tokens) | No | Bounded diagnosis; validated suggestions are handed to the existing coding engine on a durable retry. |
-| Security | `security_review` | DeepSeek V4.1 Flash plus deterministic scan | No | Bounded source review; the deterministic scan remains a separate required check, and source-backed critical model findings may fail the workflow for owner review. |
+| Planner | `plan` | `deepseek/deepseek-v4-pro` (45 s, 2k tokens) | No | Advisory implementation plan. |
+| UI/UX | `design_review` | `anthropic/claude-sonnet-5` (30 s, 1.5k tokens) | No | Advisory design/accessibility/responsive directives. |
+| Coding | `implement` | `anthropic/claude-sonnet-5` via existing pipeline | **Yes** (only writer) | The existing generation engine and its checkpoint path. |
+| QA | `verify` | `openai/gpt-5.6-sol` (20 s, 1.5k tokens) | No | Advisory source review plus sandbox delegation; model output never proves a build/runtime pass. |
+| Repair | `repair` | `deepseek/deepseek-v4-pro` (45 s, 1.5k tokens) | No | Bounded diagnosis; validated suggestions are handed to the existing coding engine on a durable retry. |
+| Security | `security_review` | `anthropic/claude-sonnet-5` plus deterministic scan | No | Bounded source review; the deterministic scan remains a separate required check, and source-backed critical model findings may fail the workflow for owner review. |
 | Deployment | `deployment_proposal` | No | No | Can only propose that the owner review a deployment. Never deploys. |
 
 Every role output is bounded and normalized before persistence (`normalizeAgentOutput`):
 summary ≤1,500 chars, ≤200 changed paths, ≤40 findings, bounded data fields.
-The role IDs are fixed in `src/lib/ai/model-roles.ts`. Only
+The role IDs are fixed in `src/lib/ai/model-roles.ts` to the finalized mapping above. All
+five entries are catalog entries that are sent verbatim. There is no environment override,
+and specialist calls do not fall back to a requested or global default model: a role whose
+pinned id is missing from the catalog fails as unavailable, and a role whose id the provider
+rejects fails with that exact id. **Configured is not verified:** only
 `deepseek/deepseek-v4.1-flash` and the explicitly cohort-gated
-`cohere/north-mini-code:free` are currently treated as verified catalog entries. The
-requested `deepseek/deepseek-v4-pro`, `anthropic/claude-sonnet-5`, and
-`openai/gpt-5.6-sol` specialist IDs are not allowlisted until verified; the roles use an
-explicit pin to DeepSeek V4.1 Flash in the meantime. There is no environment override, and
-specialist calls do not fall back to a requested or global default model: a role whose
-pinned id is missing from the catalog fails as unavailable. Each specialist API attempt is recorded through the
+`cohere/north-mini-code:free` are `verified: true`. The three specialist ids are
+`verified: false` until an operator confirms them against the deployment's OpenRouter
+account, and `roleModelStatus` reports `configured`, `resolved` and `verified` separately.
+The deployment's own function limit bounds the reviews: `POST_CODING_REVIEW_RESERVE_MS`
+reserves two 20 s review caps plus a 10 s margin, and the worker's generation budget is
+derived from that reserve (`workerGenerationBudgetMs`) so a tick cannot be killed after the
+terminal run write. Each specialist API attempt is recorded through the
 service-role `record_ai_usage_attempt` RPC from migration 31 with provider
 tokens, request id and reported cost (NULL remains unknown). Coding usage remains
 on the existing run-attempt accounting path; no credit price, reservation or
@@ -228,7 +233,14 @@ approval. The browser never supplies the source hash.
   already-terminal generation run.
 - Post-coding QA and Security reviews run after `project_runs` is marked done, so
   a failed workflow review does not rewrite the generation run's terminal state or
-  trigger a generation retry.
+  trigger a generation retry. **Moving them earlier is not free:** migration 32's
+  trigger settles a completed run and releases a failed one, so failing the run on a
+  review result would refund a delivered generation — a credit-policy change this
+  phase must not make. Instead `recordCodingCompleted` returns a
+  `CodingReviewOutcome`, and the run appends a second chat message that states the
+  review outcome separately from the run's own result. The run and the workflow are
+  therefore never presented as contradicting each other, and neither is presented as
+  a success the other denies.
 - No new snapshot is created by this layer. The coding pipeline keeps its existing
   immutable snapshots and restore points.
 

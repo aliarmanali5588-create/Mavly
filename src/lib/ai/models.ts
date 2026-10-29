@@ -25,6 +25,14 @@ export interface AiModel {
   tasks: readonly AiTask[];
   /** Upper bound for generated project JSON. */
   maxOutputTokens: number;
+  /**
+   * ⚠️ CONFIGURED IS NOT VERIFIED. `true` means this id has been confirmed
+   * against the provider's own catalog by an operator. `false` means the id is
+   * a product requirement that resolves and is sent verbatim, but its live
+   * availability on this deployment's OpenRouter account is UNVERIFIED — a
+   * rejection must surface as an exact role/model error, never a substitution.
+   */
+  verified: boolean;
 }
 
 /** The only supported text-generation provider. */
@@ -39,6 +47,19 @@ export const COHERE_NORTH_MINI_CODE_MODEL_ID = "cohere/north-mini-code:free";
 export const COHERE_NORTH_MINI_CODE_PROJECTS_ENV = "MAVLY_NORTH_MINI_CODE_PROJECTS";
 
 /**
+ * ═══ THE FINALIZED SPECIALIST IDS ═══════════════════════════════════════════
+ *
+ * These are locked product requirements for the multi-agent roles (see
+ * `./model-roles.ts`). They are catalog entries so they resolve and are sent
+ * exactly as written; they are marked `verified: false` until an operator has
+ * confirmed them against the provider account, because this repository cannot
+ * prove live availability without a paid request.
+ */
+export const OPENROUTER_DEEPSEEK_V4_PRO_MODEL_ID = "deepseek/deepseek-v4-pro";
+export const OPENROUTER_CLAUDE_SONNET_5_MODEL_ID = "anthropic/claude-sonnet-5";
+export const OPENROUTER_GPT_5_6_SOL_MODEL_ID = "openai/gpt-5.6-sol";
+
+/**
  * The verified OpenRouter model ID. It is an OpenRouter ID (`vendor/model`);
  * provider-local aliases are never valid here because they would be sent
  * verbatim.
@@ -50,6 +71,7 @@ export const OPENROUTER_MODEL_CATALOG: readonly AiModel[] = [
     provider: "openrouter",
     tasks: ["app-generation", "repair", "review", "fast", "reasoning"],
     maxOutputTokens: 24_000,
+    verified: true,
   },
   {
     id: COHERE_NORTH_MINI_CODE_MODEL_ID,
@@ -57,6 +79,35 @@ export const OPENROUTER_MODEL_CATALOG: readonly AiModel[] = [
     provider: "openrouter",
     tasks: ["app-generation", "repair", "review", "fast", "reasoning"],
     maxOutputTokens: 24_000,
+    verified: true,
+  },
+  {
+    id: OPENROUTER_DEEPSEEK_V4_PRO_MODEL_ID,
+    label: "DeepSeek V4 Pro (OpenRouter)",
+    provider: "openrouter",
+    // Planner and Repair roles. No implicit default ever selects this model:
+    // `resolveModel` only picks it when a caller names it explicitly.
+    tasks: ["review", "reasoning", "repair"],
+    maxOutputTokens: 24_000,
+    verified: false,
+  },
+  {
+    id: OPENROUTER_CLAUDE_SONNET_5_MODEL_ID,
+    label: "Claude Sonnet 5 (OpenRouter)",
+    provider: "openrouter",
+    // Coding, UI/UX and Security roles.
+    tasks: ["app-generation", "repair", "review", "reasoning"],
+    maxOutputTokens: 32_000,
+    verified: false,
+  },
+  {
+    id: OPENROUTER_GPT_5_6_SOL_MODEL_ID,
+    label: "GPT-5.6 Sol (OpenRouter)",
+    provider: "openrouter",
+    // QA role.
+    tasks: ["review", "reasoning"],
+    maxOutputTokens: 24_000,
+    verified: false,
   },
 ];
 

@@ -162,7 +162,13 @@ a delivered webhook, a container image build/publish, or the migrations against 
   `deepseek/deepseek-v4.1-flash` as the default and server-only `OPENROUTER_API_KEY`. The
   optional `cohere/north-mini-code:free` model is restricted to the explicit
   `MAVLY_NORTH_MINI_CODE_PROJECTS` cohort. The same key serves the image API; the shared
-  chat contract is `src/lib/ai/chat-contract.ts`. Do not add another model provider or
+  chat contract is `src/lib/ai/chat-contract.ts`. **Requests are streamed and
+  progress-bounded:** each call class has one absolute cap plus a shorter idle-progress
+  window (`src/lib/ai/budget.ts`), and the streamed-accumulation/completion rules live in
+  `src/lib/ai/stream-contract.ts`. A cancelled, unknown-reason or prematurely closed
+  stream is a failure even when text arrived. A timeout is answered by reducing batch
+  scope, never by repeating the same request, and each run has a provider-attempt ceiling
+  (`MAVLY_MAX_PROVIDER_ATTEMPTS_PER_RUN`, 4–40, default 12). Do not add another model provider or
   hosted builder backend without approval.
 - **Managed Neon database provisioning is an opt-in foundation only.** A website planner
   can signal that persistent data is required; only a worker-dispatched project in the
@@ -451,11 +457,15 @@ a delivered webhook, a container image build/publish, or the migrations against 
   `generateApp` remains the only writer of `project_files`: the orchestrator adds a
   1:1 `agent_workflows` record, dependency-aware `agent_tasks` and a bounded
   `agent_workflow_events` audit trail. Role IDs are pinned in
-  `src/lib/ai/model-roles.ts`. Only DeepSeek V4.1 Flash and the cohort-gated
-  Cohere North Mini Code are currently treated as verified OpenRouter catalog entries.
-  Until the requested DeepSeek V4 Pro, Claude Sonnet 5 and GPT-5.6 Sol ids are verified,
-  all model roles are explicitly pinned to the verified DeepSeek V4.1 Flash entry; there
-  is no environment override or implicit fallback. Coding still delegates to the
+  `src/lib/ai/model-roles.ts` to the finalized product mapping: Planner and Repair
+  `deepseek/deepseek-v4-pro`, UI/UX, Coding and Security `anthropic/claude-sonnet-5`,
+  QA `openai/gpt-5.6-sol`, Deployment deterministic. All of them are catalog entries
+  with no environment override and no implicit fallback: a role whose pinned id is
+  rejected fails with its exact id instead of being substituted. **Configured is not
+  verified.** Only DeepSeek V4.1 Flash and the cohort-gated Cohere North Mini Code are
+  `verified: true`; the three specialist ids are `verified: false` until an operator
+  confirms them against the deployment's OpenRouter account, and `roleModelStatus`
+  reports the two facts separately. Coding still delegates to the
   existing generation engine; QA adds a bounded advisory source
   review while the existing verification sandbox alone can report build/runtime
   checks; Security combines a bounded advisory review with the deterministic static

@@ -824,15 +824,15 @@ test("source-review findings must cite an existing path and source line", () => 
   }
 });
 
-test("each multi-agent role resolves its exact pinned model without fallback", () => {
-  const verifiedRoleModel = "deepseek/deepseek-v4.1-flash";
+test("each multi-agent role resolves its exact finalized model without fallback", () => {
+  /** The locked product mapping. Changing a pin must change this expectation. */
   const expected: Record<string, string | null> = {
-    planner: verifiedRoleModel,
-    ui_ux: verifiedRoleModel,
-    coding: verifiedRoleModel,
-    qa: verifiedRoleModel,
-    security: verifiedRoleModel,
-    repair: verifiedRoleModel,
+    planner: "deepseek/deepseek-v4-pro",
+    ui_ux: "anthropic/claude-sonnet-5",
+    coding: "anthropic/claude-sonnet-5",
+    qa: "openai/gpt-5.6-sol",
+    security: "anthropic/claude-sonnet-5",
+    repair: "deepseek/deepseek-v4-pro",
     deployment: null,
   };
   assert.deepEqual(
@@ -858,14 +858,20 @@ test("each multi-agent role resolves its exact pinned model without fallback", (
   );
 });
 
-test("role completions use per-attempt usage accounting and the existing coding engine", () => {
-  assert.match(ENGINE, /recordRoleUsageAttempt/);
-  assert.match(ENGINE, /const attemptKey = `orchestration:/);
+test("role completions use durable per-attempt accounting and the existing coding engine", () => {
+  // The implementation records each specialist call through the durable
+  // provider-attempt RPCs (migration 32), pre-dispatch, so an aborted call is
+  // still an accounted attempt. These assert the real call sites.
+  assert.match(ENGINE, /beginProviderAttempt\(startInput, handle\.client\)/);
+  assert.match(ENGINE, /completeProviderAttempt\(usageInput, handle\.client\)/);
+  assert.match(ENGINE, /const attemptId = randomUUID\(\)/);
   assert.match(ENGINE, /promptTokens: result\.metadata\.usage\.promptTokens/);
-  assert.match(ENGINE, /requestedModel: model\.id/);
+  assert.match(ENGINE, /model: model\.id,/);
   assert.match(CREDITS_STORE, /rpc\("record_ai_usage_attempt"/);
   assert.match(RUN_AGENT, /resolveRoleModel/);
   assert.match(RUN_AGENT, /requestedModel: codingRoleModel\?\.id \?\? input\.requestedModel/);
+  // A specialist call that cannot be durably recorded is never sent.
+  assert.match(ENGINE, /usage_attempt_unavailable/);
 });
 
 test("specialist context is explicitly subordinate and bounded", () => {

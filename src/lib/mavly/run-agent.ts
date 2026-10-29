@@ -58,6 +58,7 @@ import {
   MIN_INLINE_RECOVERY_WINDOW_MS,
   remainingRunMs,
   runBudgetFor,
+  workerGenerationBudgetMs,
   type RunBudget,
 } from "@/lib/ai/budget";
 import {
@@ -102,8 +103,10 @@ import {
   recordCodingCompleted,
   recordCodingFailed,
   runPlanningAgents,
+  type CodingReviewOutcome,
   type OrchestrationHandle,
 } from "@/lib/orchestration/engine";
+import { isProjectInMultiAgentCohort, multiAgentConfig } from "@/lib/orchestration/config";
 import {
   cancelWorkflowForRun,
   failWorkflowForRun,
@@ -548,12 +551,19 @@ async function runWorkerAgent(
     maxAttempts: worker.maxJobAttempts,
     startedAtMs: Date.now(),
     /**
-     * The worker's existing lease + attempt machinery is the recovery budget;
-     * it never uses the inline continuation path.
+     * ⚠️ THE TICK MUST FIT INSIDE THE FUNCTION. The lease (420 s) is a backstop
+     * and is deliberately longer than the serverless limit (300 s); the WORK
+     * budget is not. It is derived from the function limit minus what this same
+     * tick still has to do afterwards — finalization and the post-coding reviews.
+     * A budget larger than that is how a tick gets killed after the terminal
+     * run write but before the user-facing message.
      */
     budget: runBudgetFor(
       Date.now(),
-      Math.max(30_000, input.budgetMs ?? GENERATION_BUDGET_MS),
+      Math.max(
+        30_000,
+        input.budgetMs ?? workerGenerationBudgetMs(POST_CODING_REVIEW_RESERVE_MS),
+      ),
     ),
     recoveryAttempts: MAX_INLINE_RECOVERY_ATTEMPTS,
     trackProviderUsage:
@@ -852,6 +862,26 @@ async function execute(
     );
   }
 
+  /**
+   * ⚠️ A COHORT PROJECT ON THE INLINE PATH GETS NO SPECIALIST STAGES. That is
+   * deliberate — orchestration needs a confined service-role client for durable
+   * metering and workflow persistence — but it must never be silent, because
+   * "the seven agents did not run" otherwise looks like a bug. The reason is an
+   * operator event, not a substituted stage.
+   */
+  if (!orchestration && !input.worker) {
+    const multiAgent = multiAgentConfig();
+    if (isProjectInMultiAgentCohort(input.projectId, multiAgent)) {
+      emitGenerationEvent("orchestration.skipped", {
+        traceId: guard.traceId,
+        runId,
+        projectId: input.projectId,
+        reason: "orchestration_requires_worker_dispatch",
+        dispatchMode: "inline",
+      });
+    }
+  }
+
   let planContext: string | null = null;
   let designDirectives: string | null = null;
   if (orchestration) {
@@ -1026,7 +1056,11 @@ async function execute(
     }
     if (event.type === "shrinking") {
       patch.errorCode =
-        event.reason === "truncated" ? "GENERATION_TRUNCATED" : "GENERATION_COMPACT_RETRY";
+        event.reason === "truncated"
+          ? "GENERATION_TRUNCATED"
+          : event.reason === "timeout"
+            ? "PROVIDER_TIMEOUT"
+            : "GENERATION_COMPACT_RETRY";
     }
     if (guard.leaseToken) {
       patch.expectedLeaseToken = guard.leaseToken;
@@ -1416,13 +1450,24 @@ async function complete(
     client: guard.client,
   });
 
+  /**
+   * ⚠️ THE REVIEWS ARE POST-RUN, AND THE USER IS TOLD SO. They deliberately run
+   * after the terminal run write (moving them earlier would let a review failure
+   * refund a delivered generation), so the run cannot be "un-completed" by them.
+   * The chat therefore reports the run's own outcome AND the review's outcome as
+   * two separate facts, instead of leaving the workspace claiming success while
+   * the workflow says failed.
+   */
+  let reviewOutcome: CodingReviewOutcome | null = null;
+  let reviewRecordFailed = false;
   if (orchestration) {
     try {
-      await recordCodingCompleted(orchestration, {
+      reviewOutcome = await recordCodingCompleted(orchestration, {
         allFiles: after,
         changedPaths: diffPaths(diff),
       });
     } catch (error) {
+      reviewRecordFailed = true;
       console.warn(
         `[mavly] run ${input.runId}: could not record orchestration completion:`,
         error instanceof Error ? error.message : String(error),
@@ -1438,6 +1483,11 @@ async function complete(
     changed ? baseline?.id ?? null : null,
     guard.client,
   );
+
+  const reviewNotice = reviewOutcomeMessage(reviewOutcome, reviewRecordFailed);
+  if (reviewNotice) {
+    await insertMessage(input.projectId, "agent", reviewNotice, "regular", null, guard.client);
+  }
 
   if (projectType === "android" && changed) {
     await insertMessage(
@@ -1471,6 +1521,31 @@ async function complete(
   }
 
   return { status: "completed", runId: input.runId };
+}
+
+/**
+ * A truthful, user-facing statement about the post-generation reviews.
+ *
+ * Returns `null` when there was nothing to review (no orchestration) or when
+ * every required review passed — the run's own message already covers that.
+ */
+function reviewOutcomeMessage(
+  outcome: CodingReviewOutcome | null,
+  recordFailed: boolean,
+): string | null {
+  if (recordFailed) {
+    return "The source was generated and saved, but the post-generation review could not be recorded. The generation outcome is unchanged; see Agents & approvals for the current review state.";
+  }
+  if (!outcome || outcome.reviewsPassed) return null;
+
+  const reasons = outcome.failedTasks.map((task) => `${task.title}: ${task.summary}`);
+  if (outcome.criticalFindings > 0) {
+    reasons.unshift(
+      `Security review reported ${outcome.criticalFindings} critical finding(s).`,
+    );
+  }
+  const detail = reasons.length > 0 ? ` ${reasons.slice(0, 3).join(" ")}` : "";
+  return `The source was generated and saved, but the post-generation review did not pass.${detail} The saved files are unaffected and the generation run is complete. This review does not authorize a deployment: publishing still needs your own approved proposal in Agents & approvals.`;
 }
 
 /**
@@ -1791,8 +1866,14 @@ async function fail(
     "error",
     message,
     {
-      ...(failure
-        ? metadataPatch(usage, attempts, failure.code)
+      /**
+       * ⚠️ EVERY TERMINAL FAILURE CARRIES THE PROVIDER ATTEMPTS IT ACTUALLY MADE.
+       * Gating this on `failure` silently dropped the attempt records and usage
+       * of a run that failed after real provider calls (a checkpoint or
+       * persistence failure), which then looked like a free run.
+       */
+      ...(attempts.length > 0
+        ? metadataPatch(usage, attempts, failure?.code ?? null)
         : { stage: "failed" as const }),
       stage: "failed",
       errorClass: classification.errorClass,

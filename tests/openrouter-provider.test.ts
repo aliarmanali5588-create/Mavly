@@ -70,10 +70,13 @@ const USER: ChatMessage[] = [{ role: "user", content: "build a landing page" }];
 
 // ── catalog and selection ───────────────────────────────────────────────────
 
-test("the catalog contains the production default and cohort-gated testing model", () => {
+test("the catalog contains the production default, the cohort model and the finalized specialist ids", () => {
   const expectedCatalog = [
     MODEL_ID,
     NORTH_MINI_CODE_ID,
+    "deepseek/deepseek-v4-pro",
+    "anthropic/claude-sonnet-5",
+    "openai/gpt-5.6-sol",
   ];
   assert.deepEqual(AI_PROVIDER_IDS, ["openrouter"]);
   assert.deepEqual(
@@ -85,6 +88,9 @@ test("the catalog contains the production default and cohort-gated testing model
     OPENROUTER_MODEL_CATALOG.map((entry) => entry.id),
     expectedCatalog,
   );
+  // The default is unchanged: adding specialist entries never retargets it.
+  assert.equal(model.id, MODEL_ID);
+  assert.equal(model.verified, true);
   assert.equal(resolveModel().id, MODEL_ID);
   assert.equal(resolveOpenRouterModel().id, MODEL_ID);
   assert.equal(model.label, "DeepSeek V4.1 Flash (OpenRouter)");
@@ -96,15 +102,22 @@ test("the catalog contains the production default and cohort-gated testing model
   assert.equal(cohortModel?.id, COHERE_NORTH_MINI_CODE_MODEL_ID);
 });
 
-test("unverified requested specialist IDs never reach the provider", () => {
-  const unverified = [
+test("finalized specialist IDs resolve exactly and are marked unverified, never defaulted", () => {
+  const specialistIds = [
     "deepseek/deepseek-v4-pro",
     "anthropic/claude-sonnet-5",
     "openai/gpt-5.6-sol",
   ];
-  for (const id of unverified) {
-    assert.equal(OPENROUTER_MODEL_CATALOG.some((entry) => entry.id === id), false);
-    assert.equal(resolveModel(id).id, MODEL_ID);
+  for (const id of specialistIds) {
+    const entry = OPENROUTER_MODEL_CATALOG.find((model) => model.id === id);
+    assert.ok(entry, `${id} must be a catalog entry so it can be sent verbatim`);
+    // Configured, but not proven live on this deployment's provider account.
+    assert.equal(entry.verified, false);
+    // An explicit request resolves to exactly that id — no substitution.
+    assert.equal(resolveModel(id).id, id);
+    assert.equal(resolveOpenRouterModel(id).id, id);
+    // It never becomes the default for an ordinary generation request.
+    assert.equal(resolveModel().id, MODEL_ID);
   }
 });
 
@@ -226,11 +239,16 @@ test("a generation uses OpenRouter auth, the catalog model and supported paramet
     assert.equal(result.ok, true);
     if (!result.ok) return;
 
+    // The transport streams: a long but progressing answer must not be aborted
+    // for its total duration, and `include_usage` is what makes the final chunk
+    // carry the provider's own token/cost figures.
     assert.deepEqual(body, {
       model: MODEL_ID,
       messages: USER,
       temperature: 0.1,
       max_tokens: 12_000,
+      stream: true,
+      stream_options: { include_usage: true },
     });
 
     assert.equal(result.content, '{"files":[]}');
@@ -278,7 +296,7 @@ test("an eligible Cohere test request sends the exact model ID through OpenRoute
   }
 });
 
-test("the adapter sends max_tokens, the field OpenRouter documents for chat completions", async () => {
+test("the adapter sends max_tokens and asks for a usage-bearing stream", async () => {
   useApiKey();
   let body: Record<string, unknown> | null = null;
   stubFetch(
@@ -294,7 +312,8 @@ test("the adapter sends max_tokens, the field OpenRouter documents for chat comp
     const result = await chatCompletion(model, USER);
     assert.equal(result.ok, true);
     assert.equal(body !== null && "max_tokens" in body, true);
-    assert.equal(body !== null && "stream" in body, false, "the pipeline is non-streaming");
+    assert.equal(body !== null && "stream" in body, true, "the transport streams");
+    assert.deepEqual(body?.stream_options, { include_usage: true });
   } finally {
     restoreEnvironment();
   }
@@ -437,6 +456,9 @@ test("usage safely extracts token, reasoning and cost figures", () => {
     completionTokens: 20,
     totalTokens: 30,
     reasoningTokens: 8,
+    // Not reported by this payload, so they stay absent rather than defaulting.
+    cachedReadTokens: null,
+    cachedWriteTokens: null,
     costUsd: 0.0042,
   });
 });

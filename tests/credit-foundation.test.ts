@@ -617,22 +617,36 @@ test("usage writes and credit-aware admission wrappers are service-role-only", (
   assert.match(CREDIT_SQL, /on conflict \(attempt_key\) do nothing/);
 });
 
-test("each role resolves its own verified catalog model", () => {
+test("each role resolves exactly its own finalized catalog model", () => {
   const status = roleModelStatus({ MAVLY_MODEL_PLANNER: "not/a-model" } as unknown as NodeJS.ProcessEnv);
   const byRole = (role: string) => status.find((entry) => entry.role === role);
-  const verifiedRoleModel = "deepseek/deepseek-v4.1-flash";
+  const finalized: Record<string, string> = {
+    planner: "deepseek/deepseek-v4-pro",
+    ui_ux: "anthropic/claude-sonnet-5",
+    coding: "anthropic/claude-sonnet-5",
+    qa: "openai/gpt-5.6-sol",
+    security: "anthropic/claude-sonnet-5",
+    repair: "deepseek/deepseek-v4-pro",
+  };
 
-  for (const role of ["planner", "ui_ux", "coding", "qa", "security", "repair"]) {
-    assert.equal(byRole(role)?.resolved, verifiedRoleModel);
+  for (const [role, expectedModel] of Object.entries(finalized)) {
+    assert.equal(byRole(role)?.resolved, expectedModel);
     assert.equal(byRole(role)?.accepted, true);
+    /**
+     * Configured is not the same as verified: the finalized specialist ids are
+     * catalog entries that must be sent verbatim, but their live availability
+     * is unproven until an operator confirms them.
+     */
+    assert.equal(byRole(role)?.verified, false);
+    assert.match(String(byRole(role)?.note), /not been verified/);
   }
 
   // Deployment is deterministic and has no model at all.
   assert.equal(byRole("deployment")?.kind, "deterministic");
   assert.equal(byRole("deployment")?.resolved, null);
 
-  // No environment variable retargets a role. All current role pins use the
-  // verified catalog model until the requested specialist ids are verified.
+  // No environment variable retargets a role: every model role resolves to the
+  // id it is pinned to, never to the project's requested model or the default.
   for (const entry of status) {
     assert.equal(entry.accepted, true, `${entry.role} must resolve its pinned model`);
     if (entry.kind === "model") assert.equal(entry.resolved, entry.configured);

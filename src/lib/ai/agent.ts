@@ -43,6 +43,8 @@ import {
 import { retryWithBackoff, type RetryDecision, type RetryPolicy } from "./retry";
 import {
   MIN_USEFUL_ATTEMPT_MS,
+  idleTimeoutFor,
+  minUsefulAttemptFor,
   planProviderCall,
   runBudgetFor,
   workDeadlineAt,
@@ -123,7 +125,11 @@ export type AgentProgressEvent =
       phase: "batch";
       paths: string[];
       nextSize: number;
-      reason: "truncated" | "compact-retry";
+      /**
+       * `timeout` is a scope reduction for the same reason as `truncated`: the
+       * batch did not fit, so the next request asks for less.
+       */
+      reason: "truncated" | "compact-retry" | "timeout";
     };
 
 export interface AgentGenerationInput {
@@ -226,6 +232,8 @@ export type AgentGenerationFailureCode =
   | "GENERATION_TOO_MANY_FILES"
   | "GENERATION_INCOMPLETE"
   | "GENERATION_TIMEOUT"
+  /** Refused locally: this run already reached its provider-attempt ceiling. */
+  | "GENERATION_SPEND_LIMIT"
   | "GENERATION_PROVIDER_FAILED"
   | "GENERATION_CONTENT_FILTER"
   | "GENERATION_PERSIST_FAILED"
@@ -315,15 +323,124 @@ export const MANIFEST_OUTPUT_TOKENS = 4_000;
  * maximum is applied on top at the call site.
  */
 export const PREVIEW_OUTPUT_TOKENS = 16_000;
-export const MANIFEST_TIMEOUT_MS = 45_000;
-export const BATCH_TIMEOUT_MS = 90_000;
-export const REPAIR_TIMEOUT_MS = 45_000;
+/**
+ * ⚠️ THESE ARE ABSOLUTE CAPS, NOT TARGET DURATIONS. Requests are streamed, so a
+ * productive response is bounded by these ceilings and by the run's remaining
+ * budget, and is aborted only when it STALLS (see `idleTimeoutFor`).
+ */
+export const MANIFEST_TIMEOUT_MS = 60_000;
+export const BATCH_TIMEOUT_MS = 150_000;
+export const PREVIEW_TIMEOUT_MS = 180_000;
+export const REPAIR_TIMEOUT_MS = 90_000;
 export const GENERATION_BUDGET_MS = 240_000;
 const MAX_TRUNCATION_RECOVERIES = 16;
 const MAX_ATTEMPTS_RECORDED = 60;
 
+/**
+ * ═══ ONE CALL POLICY FOR EVERY PROVIDER REQUEST ═════════════════════════════
+ *
+ * Each class states its own absolute cap, the output ceiling it may ask for,
+ * how many identical attempts a TRANSIENT failure may use, and whether a
+ * TIMEOUT may be retried as-is.
+ *
+ * ⚠️ A TIMEOUT ON A LARGE BATCH IS NEVER RETRIED AS-IS. Repeating the same
+ * oversized request with the same ceiling reproduces the timeout and pays for
+ * it again. The batch loop answers a batch timeout by REDUCING SCOPE (split, or
+ * a single compact retry) instead — the same bounded path a truncation uses.
+ */
+export interface ProviderCallPolicy {
+  /** Absolute cap for one attempt; the budget may still shorten it. */
+  timeoutMs: number;
+  /** Longest silence that still counts as progress. */
+  idleTimeoutMs: number;
+  /** Output ceiling requested from the provider. */
+  maxTokens: number;
+  /** The smallest window worth starting an attempt in, for this class. */
+  minAttemptMs: number;
+  /** Identical attempts allowed for a retryable (transient) failure. */
+  maxAttempts: number;
+  /** Whether a TIMEOUT may consume another identical attempt. */
+  retryTimeoutAsIs: boolean;
+}
+
+function callPolicy(input: {
+  timeoutMs: number;
+  maxTokens: number;
+  maxAttempts: number;
+  retryTimeoutAsIs: boolean;
+}): ProviderCallPolicy {
+  return {
+    timeoutMs: input.timeoutMs,
+    idleTimeoutMs: idleTimeoutFor(input.timeoutMs),
+    maxTokens: input.maxTokens,
+    minAttemptMs: minUsefulAttemptFor(input.timeoutMs),
+    maxAttempts: input.maxAttempts,
+    retryTimeoutAsIs: input.retryTimeoutAsIs,
+  };
+}
+
+export function providerCallPolicyFor(
+  phase: "manifest" | "batch" | "repair",
+  options: { previewBatch?: boolean; modelMaxTokens: number } = { modelMaxTokens: 24_000 },
+): ProviderCallPolicy {
+  if (phase === "manifest") {
+    return callPolicy({
+      timeoutMs: MANIFEST_TIMEOUT_MS,
+      maxTokens: Math.min(options.modelMaxTokens, MANIFEST_OUTPUT_TOKENS),
+      // The plan is small and cheap: one identical retry is worth it.
+      maxAttempts: 2,
+      retryTimeoutAsIs: true,
+    });
+  }
+  if (phase === "repair") {
+    return callPolicy({
+      timeoutMs: REPAIR_TIMEOUT_MS,
+      maxTokens: Math.min(
+        options.modelMaxTokens,
+        options.previewBatch ? PREVIEW_OUTPUT_TOKENS : BATCH_OUTPUT_TOKENS,
+      ),
+      // A repair re-asks for the SAME files; a second identical retry after a
+      // timeout would repeat the failure, so only transient errors retry.
+      maxAttempts: 2,
+      retryTimeoutAsIs: false,
+    });
+  }
+  return callPolicy({
+    timeoutMs: options.previewBatch ? PREVIEW_TIMEOUT_MS : BATCH_TIMEOUT_MS,
+    maxTokens: Math.min(
+      options.modelMaxTokens,
+      options.previewBatch ? PREVIEW_OUTPUT_TOKENS : BATCH_OUTPUT_TOKENS,
+    ),
+    maxAttempts: 2,
+    retryTimeoutAsIs: false,
+  });
+}
+
+/**
+ * ═══ PER-RUN PROVIDER-CALL CEILING ═════════════════════════════════════════
+ *
+ * A time budget alone bounds spend only when calls are slow. A ceiling bounds
+ * it when calls are fast and many: a run that keeps splitting batches cannot
+ * fan out into dozens of paid requests. Overridable per deployment; bounded to
+ * a sane range so a typo cannot disable the guard or make it useless.
+ */
+export const MAX_PROVIDER_ATTEMPTS_PER_RUN_ENV = "MAVLY_MAX_PROVIDER_ATTEMPTS_PER_RUN";
+export const DEFAULT_MAX_PROVIDER_ATTEMPTS_PER_RUN = 12;
+export const MIN_PROVIDER_ATTEMPTS_PER_RUN = 4;
+export const MAX_PROVIDER_ATTEMPTS_PER_RUN = 40;
+
+export function providerAttemptCeiling(env: NodeJS.ProcessEnv = process.env): number {
+  const raw = env[MAX_PROVIDER_ATTEMPTS_PER_RUN_ENV]?.trim();
+  const parsed = raw ? Number(raw) : Number.NaN;
+  if (!Number.isFinite(parsed)) return DEFAULT_MAX_PROVIDER_ATTEMPTS_PER_RUN;
+  return Math.max(
+    MIN_PROVIDER_ATTEMPTS_PER_RUN,
+    Math.min(MAX_PROVIDER_ATTEMPTS_PER_RUN, Math.floor(parsed)),
+  );
+}
+
 const RETRY_POLICY: Partial<RetryPolicy> = {
-  maxAttempts: 4,
+  maxAttempts: 2,
   baseDelayMs: 800,
   maxDelayMs: 15_000,
   /**
@@ -559,6 +676,12 @@ export const REQUIRED_CREATE_PATHS = [
 
 interface GenerationState {
   attempts: AgentProviderAttempt[];
+  /**
+   * ⚠️ TOTALS ARE ACCUMULATED, NOT DERIVED FROM `attempts`. The attempt list is
+   * capped for storage, so deriving totals from it would silently drop the
+   * tokens and cost of later calls while still reporting the total as known.
+   */
+  usage: AgentUsageTotals;
   completedPaths: Set<string>;
   generated: Map<string, string>;
   generatedBytes: number;
@@ -605,6 +728,7 @@ export async function generateApp(
 
   const state: GenerationState = {
     attempts: [],
+    usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0, reasoningTokens: 0, costUsd: 0, attempts: 0, retries: 0 },
     completedPaths,
     generated: new Map(),
     generatedBytes: resumedBytes,
@@ -612,6 +736,7 @@ export async function generateApp(
     nextBatchIndex: Math.max(0, Math.floor(input.resume?.nextBatchIndex ?? 0)),
     retries: 0,
   };
+  const attemptCeiling = providerAttemptCeiling();
 
   const fail = (code: AgentGenerationFailureCode, error: string): AgentGenerationFailure => ({
     ok: false,
@@ -801,7 +926,10 @@ export async function generateApp(
      */
     const previewBatch =
       profile === "website" && requestedPaths.includes(PREVIEW_ENTRY_PATH);
-    const batchTokenBudget = previewBatch ? PREVIEW_OUTPUT_TOKENS : BATCH_OUTPUT_TOKENS;
+    const batchPolicy = providerCallPolicyFor("batch", {
+      previewBatch,
+      modelMaxTokens: model.maxOutputTokens,
+    });
 
     const messages = buildBatchMessages(input, model, manifest, group, compact, state);
     const call = await callModel(
@@ -809,17 +937,19 @@ export async function generateApp(
       model,
       messages,
       {
-        timeoutMs: BATCH_TIMEOUT_MS,
-        maxTokens: Math.min(model.maxOutputTokens, batchTokenBudget),
-        // Leave each queued batch a minimum useful window. Clamped inside
-        // `planProviderCall` so this attempt always gets its own minimum.
-        reserveForOthersMs: pending.length * MIN_USEFUL_ATTEMPT_MS,
+        policy: batchPolicy,
+        // Leave each queued batch a minimum useful window for its OWN class.
+        // Clamped inside `planProviderCall` so this attempt always gets its own
+        // minimum, and so a slow first batch cannot starve the rest of the run.
+        reserveForOthersMs: pending.length * batchPolicy.minAttemptMs,
       },
       state,
       deps,
       deadlineAt,
       now,
       input.onProgress,
+      undefined,
+      attemptCeiling,
     );
 
     let parsed: ParseBatchOutcome;
@@ -828,14 +958,28 @@ export async function generateApp(
     if (isChatCompletionFailure(call) && call.code !== "EMPTY_COMPLETION") {
       const mapped = classifyProviderFailure(call);
 
-      if (call.code === "OUTPUT_LIMIT") {
-        // The response is truncated. Nothing from it is used.
+      /**
+       * ⚠️ A BATCH THAT DID NOT FIT IS ANSWERED WITH LESS WORK, NEVER THE SAME
+       * WORK AGAIN. A truncation and a timed-out/stalled batch are the same
+       * scheduling problem: the request was too large for the window it had.
+       * Repeating it identically reproduces the failure and pays for it again,
+       * so `providerCallPolicyFor("batch")` also refuses to retry a timeout
+       * as-is — the reduction below is the only bounded retry it gets.
+       */
+      const reducible = call.code === "OUTPUT_LIMIT" || call.code === "TIMEOUT";
+      if (reducible) {
+        const truncated = call.code === "OUTPUT_LIMIT";
+        const terminalCode = truncated ? "GENERATION_TRUNCATED" : "GENERATION_TIMEOUT";
+        const reason = truncated ? "truncated" : "timeout";
+
         if (requestedPaths.length > 1) {
           truncationRecoveries += 1;
           if (truncationRecoveries > truncationLimit) {
             return fail(
-              "GENERATION_TRUNCATED",
-              "The model repeatedly hit its output limit. Completed batches were saved; retry the remaining files with a narrower request.",
+              terminalCode,
+              truncated
+                ? "The model repeatedly hit its output limit. Completed batches were saved; retry the remaining files with a narrower request."
+                : "The model repeatedly ran out of time on these batches. Completed batches were saved and the run can be resumed.",
             );
           }
           const nextSize = Math.max(1, Math.floor(requestedPaths.length / 2));
@@ -846,7 +990,7 @@ export async function generateApp(
             phase: "batch",
             paths: requestedPaths,
             nextSize,
-            reason: "truncated",
+            reason,
           });
           continue;
         }
@@ -867,8 +1011,10 @@ export async function generateApp(
         }
 
         return fail(
-          "GENERATION_TRUNCATED",
-          `The model hit its output limit on ${singlePath ?? "a file"} even after a compact retry. Completed batches were saved; the project is incomplete.`,
+          terminalCode,
+          truncated
+            ? `The model hit its output limit on ${singlePath ?? "a file"} even after a compact retry. Completed batches were saved; the project is incomplete.`
+            : `The model ran out of time on ${singlePath ?? "a file"} even after a narrower retry. Completed batches were saved and the run can be resumed.`,
         );
       }
 
@@ -900,14 +1046,16 @@ export async function generateApp(
        * generic batch ceiling would silently truncate the document the preview
        * was given room to produce.
        */
-      const repairTokenBudget = previewBatch ? PREVIEW_OUTPUT_TOKENS : BATCH_OUTPUT_TOKENS;
+      const repairPolicy = providerCallPolicyFor("repair", {
+        previewBatch,
+        modelMaxTokens: model.maxOutputTokens,
+      });
       const repaired = await callModel(
         "repair",
         model,
         repairMessages(messages, previousContent, requestedPaths),
         {
-          timeoutMs: REPAIR_TIMEOUT_MS,
-          maxTokens: Math.min(model.maxOutputTokens, repairTokenBudget),
+          policy: repairPolicy,
           reserveForOthersMs: pending.length * MIN_USEFUL_ATTEMPT_MS,
         },
         state,
@@ -916,6 +1064,7 @@ export async function generateApp(
         now,
         input.onProgress,
         "batch",
+        attemptCeiling,
       );
       if (isChatCompletionFailure(repaired)) {
         const mapped = classifyProviderFailure(repaired);
@@ -1100,13 +1249,15 @@ async function planManifest(
   now: () => number,
 ): Promise<PlanOutcome> {
   const messages = buildManifestMessages(input, model);
+  const manifestPolicy = providerCallPolicyFor("manifest", {
+    modelMaxTokens: model.maxOutputTokens,
+  });
   const call = await callModel(
     "manifest",
     model,
     messages,
     {
-      timeoutMs: MANIFEST_TIMEOUT_MS,
-      maxTokens: Math.min(model.maxOutputTokens, MANIFEST_OUTPUT_TOKENS),
+      policy: manifestPolicy,
       // The plan is useless if it consumes the budget of the first batch.
       reserveForOthersMs: MIN_USEFUL_ATTEMPT_MS,
     },
@@ -1115,6 +1266,8 @@ async function planManifest(
     deadlineAt,
     now,
     input.onProgress,
+    "manifest",
+    attemptCeiling,
   );
 
   let parsed: ParseManifestOutcome;
@@ -1154,8 +1307,11 @@ async function planManifest(
       model,
       repairMessages(messages, previousContent),
       {
-        timeoutMs: REPAIR_TIMEOUT_MS,
-        maxTokens: Math.min(model.maxOutputTokens, MANIFEST_OUTPUT_TOKENS),
+        // The manifest is small, so its repair keeps the manifest ceiling
+        // rather than inheriting the larger batch budget.
+        policy: providerCallPolicyFor("manifest", {
+          modelMaxTokens: model.maxOutputTokens,
+        }),
         reserveForOthersMs: MIN_USEFUL_ATTEMPT_MS,
       },
       state,
@@ -1164,6 +1320,7 @@ async function planManifest(
       now,
       input.onProgress,
       "repair",
+      attemptCeiling,
     );
     if (isChatCompletionFailure(repair)) {
       const mapped = classifyProviderFailure(repair);
@@ -1552,25 +1709,48 @@ function deadlineFailure(model: AiModel): ChatCompletionFailure {
       "The run's time budget did not leave room for another provider attempt. Completed batches were saved and the run can be resumed.",
     retryable: false,
     retryAfterMs: null,
+    metadata: { ...baseMetadataForFailure(model), errorCode: "TIMEOUT" },
+  };
+}
+
+/**
+ * The run's provider-call ceiling was reached. Refused locally, so it is never
+ * recorded as a provider attempt and never counts toward usage or cost.
+ */
+function spendLimitFailure(model: AiModel, ceiling: number): ChatCompletionFailure {
+  return {
+    ok: false,
+    code: "SPEND_LIMIT",
+    error: `This run reached its limit of ${ceiling} provider request(s). Completed files were saved; the run can be resumed.`,
+    retryable: false,
+    retryAfterMs: null,
     metadata: {
-      status: null,
-      requestedModel: model.id,
-      model: model.id,
-      finishReason: null,
-      usage: {
-        promptTokens: null,
-        completionTokens: null,
-        totalTokens: null,
-        reasoningTokens: null,
-        cachedReadTokens: null,
-        cachedWriteTokens: null,
-        costUsd: null,
-      },
-      providerRequestId: null,
-      retryAfterMs: null,
-      errorCode: "TIMEOUT",
-      errorDetail: null,
+      ...baseMetadataForFailure(model),
+      errorCode: "SPEND_LIMIT",
     },
+  };
+}
+
+/** Metadata for a failure that never reached the provider. */
+function baseMetadataForFailure(model: AiModel): ChatCompletionMetadata {
+  return {
+    status: null,
+    requestedModel: model.id,
+    model: model.id,
+    finishReason: null,
+    usage: {
+      promptTokens: null,
+      completionTokens: null,
+      totalTokens: null,
+      reasoningTokens: null,
+      cachedReadTokens: null,
+      cachedWriteTokens: null,
+      costUsd: null,
+    },
+    providerRequestId: null,
+    retryAfterMs: null,
+    errorCode: null,
+    errorDetail: null,
   };
 }
 
@@ -1602,22 +1782,23 @@ async function callModel(
   phase: "manifest" | "batch" | "repair",
   model: AiModel,
   messages: ChatMessage[],
-  options: { timeoutMs: number; maxTokens: number; reserveForOthersMs?: number },
+  options: { policy: ProviderCallPolicy; reserveForOthersMs?: number },
   state: GenerationState,
   deps: AgentDependencies,
   deadlineAt: number,
   now: () => number,
   onProgress?: AgentGenerationInput["onProgress"],
   progressPhase: "manifest" | "batch" | "repair" = phase === "manifest" ? "manifest" : "batch",
+  attemptCeiling: number = DEFAULT_MAX_PROVIDER_ATTEMPTS_PER_RUN,
 ): Promise<ChatCompletionResult> {
   const complete = deps.complete ?? chatCompletion;
+  const policy = options.policy;
   /**
    * ⚠️ A REFUSED CALL NEVER REACHES THE PROVIDER. `callModel` still returns the
-   * typed, resumable deadline failure so the pipeline can classify it, but it
-   * must not be recorded as a provider attempt: `attempt_count` counts provider
-   * calls (migration 16), and a zero-request run that reports one attempt would
-   * overstate both the usage table and the operator's view. The refusal stays
-   * visible as `GENERATION_TIMEOUT` on the run and in its message.
+   * typed, resumable failure so the pipeline can classify it, but it must not be
+   * recorded as a provider attempt: `attempt_count` counts provider calls
+   * (migration 16), and a zero-request run that reports one attempt would
+   * overstate both the usage table and the operator's view.
    */
   let refusedBeforeSending = false;
   let providerAttemptId: string | null = null;
@@ -1625,18 +1806,34 @@ async function callModel(
   return retryWithBackoff(
     async (attemptNumber) => {
       /**
+       * ⚠️ THE RUN'S OWN PROVIDER-CALL CEILING. A wall-clock budget bounds spend
+       * only while calls are slow; a fast, fan-out-prone run needs a count. This
+       * is checked before planning so a throttled run stops with a typed,
+       * resumable failure instead of paying for one more request.
+       */
+      /**
+       * ⚠️ COUNTED FROM `usage.attempts`, NOT THE STORED ARRAY. The array is
+       * capped at `MAX_ATTEMPTS_RECORDED`, so using its length would let a long
+       * run slip past the ceiling exactly when it matters most.
+       */
+      if (state.usage.attempts >= attemptCeiling) {
+        refusedBeforeSending = true;
+        return spendLimitFailure(model, attemptCeiling);
+      }
+
+      /**
        * ⚠️ THE TIMEOUT IS DERIVED, NOT ASSUMED. `retryWithBackoff` re-runs this
        * closure for every attempt, so each retry is separately measured against
-       * the time that is actually left. A retry after two slow attempts gets the
+       * the time that is actually left. A retry after a slow attempt gets the
        * real remaining window — or no call at all when that window is too small
-       * to be useful.
+       * to be useful for this call CLASS.
        */
       const plan = planProviderCall({
         deadlineAt,
         now: now(),
-        configuredTimeoutMs: options.timeoutMs,
+        configuredTimeoutMs: policy.timeoutMs,
         reserveForOthersMs: options.reserveForOthersMs,
-        minAttemptMs: MIN_USEFUL_ATTEMPT_MS,
+        minAttemptMs: policy.minAttemptMs,
       });
       if (plan.ok === false) {
         refusedBeforeSending = true;
@@ -1654,7 +1851,8 @@ async function callModel(
 
       const result = await complete(model, messages, {
         timeoutMs: plan.timeoutMs,
-        maxTokens: options.maxTokens,
+        idleTimeoutMs: Math.min(policy.idleTimeoutMs, plan.timeoutMs),
+        maxTokens: policy.maxTokens,
       });
 
       /**
@@ -1668,12 +1866,20 @@ async function callModel(
       }
       return result;
     },
-    (result): RetryDecision =>
-      isChatCompletionFailure(result)
-        ? { retryable: result.retryable, retryAfterMs: result.retryAfterMs }
-        : { retryable: false },
+    (result): RetryDecision => {
+      if (!isChatCompletionFailure(result)) return { retryable: false };
+      /**
+       * ⚠️ A TIMEOUT IS NOT AUTOMATICALLY WORTH REPEATING. For a batch or a
+       * repair, an identical repeat reproduces the same oversized request; the
+       * caller answers it by REDUCING SCOPE instead. Classes that may retry a
+       * timeout as-is opt in explicitly.
+       */
+      const retryable =
+        result.retryable && (result.code !== "TIMEOUT" || policy.retryTimeoutAsIs);
+      return { retryable, retryAfterMs: result.retryAfterMs };
+    },
     {
-      policy: RETRY_POLICY,
+      policy: { ...RETRY_POLICY, maxAttempts: policy.maxAttempts },
       deadlineAt,
       now,
       sleep: deps.sleep,
@@ -1727,6 +1933,8 @@ function classifyProviderFailure(
       return { code: "GENERATION_PROVIDER_FAILED", error: failure.error };
     case "EMPTY_COMPLETION":
       return { code: "GENERATION_MALFORMED", error: failure.error };
+    case "SPEND_LIMIT":
+      return { code: "GENERATION_SPEND_LIMIT", error: failure.error };
     case "UNKNOWN":
     default:
       return { code: "GENERATION_PROVIDER_FAILED", error: failure.error };
@@ -1744,6 +1952,20 @@ function recordAttempt(
   const metadata = result.metadata;
   const attempt = attemptFromMetadata(phase, metadata, attemptNumber, providerAttemptId);
   if (state.attempts.length < MAX_ATTEMPTS_RECORDED) state.attempts.push(attempt);
+  /**
+   * Totals are accumulated here, once per real provider call, so the storage
+   * cap above can never understate the run's usage. A provider that reports no
+   * cost contributes nothing — `reportedCostOf` still marks the total unknown.
+   */
+  state.usage = {
+    promptTokens: state.usage.promptTokens + (metadata.usage.promptTokens ?? 0),
+    completionTokens: state.usage.completionTokens + (metadata.usage.completionTokens ?? 0),
+    totalTokens: state.usage.totalTokens + (metadata.usage.totalTokens ?? 0),
+    reasoningTokens: state.usage.reasoningTokens + (metadata.usage.reasoningTokens ?? 0),
+    costUsd: Math.round((state.usage.costUsd + (metadata.usage.costUsd ?? 0)) * 1_000_000) / 1_000_000,
+    attempts: state.usage.attempts + 1,
+    retries: state.retries,
+  };
   return attempt;
 }
 
@@ -1776,29 +1998,7 @@ function attemptFromMetadata(
 }
 
 function totalsFor(state: GenerationState): AgentUsageTotals {
-  let promptTokens = 0;
-  let completionTokens = 0;
-  let totalTokens = 0;
-  let reasoningTokens = 0;
-  let costUsd = 0;
-
-  for (const attempt of state.attempts) {
-    promptTokens += attempt.promptTokens ?? 0;
-    completionTokens += attempt.completionTokens ?? 0;
-    totalTokens += attempt.totalTokens ?? 0;
-    reasoningTokens += attempt.reasoningTokens ?? 0;
-    costUsd += attempt.costUsd ?? 0;
-  }
-
-  return {
-    promptTokens,
-    completionTokens,
-    totalTokens,
-    reasoningTokens,
-    costUsd,
-    attempts: state.attempts.length,
-    retries: state.retries,
-  };
+  return { ...state.usage, retries: state.retries };
 }
 
 async function emitProgress(

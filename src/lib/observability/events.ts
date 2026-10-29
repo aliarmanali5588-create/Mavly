@@ -31,6 +31,7 @@ export const GENERATION_EVENTS = [
   "generation.worker_empty",
   "generation.worker_unavailable",
   "generation.worker_error",
+  "orchestration.skipped",
   "credits.reserved",
   "credits.settled",
   "credits.released",

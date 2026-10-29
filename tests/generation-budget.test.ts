@@ -3,7 +3,12 @@ import assert from "node:assert/strict";
 
 import {
   GENERATION_FINALIZE_RESERVE_MS,
+  MAX_PROVIDER_IDLE_TIMEOUT_MS,
   MIN_USEFUL_ATTEMPT_MS,
+  MIN_PROVIDER_IDLE_TIMEOUT_MS,
+  WORKER_FUNCTION_LIMIT_MS,
+  idleTimeoutFor,
+  minUsefulAttemptFor,
   planProviderCall,
   remainingRunMs,
   remainingWorkMs,
@@ -11,7 +16,15 @@ import {
   runBudgetFor,
   runDeadlineAt,
   workDeadlineAt,
+  workerGenerationBudgetMs,
 } from "../src/lib/ai/budget";
+import {
+  BATCH_OUTPUT_TOKENS,
+  MANIFEST_OUTPUT_TOKENS,
+  PREVIEW_OUTPUT_TOKENS,
+  providerAttemptCeiling,
+  providerCallPolicyFor,
+} from "../src/lib/ai/agent";
 import { retryWithBackoff } from "../src/lib/ai/retry";
 
 /**
@@ -179,6 +192,96 @@ test("backoff cannot sleep past the deadline", async () => {
   assert.deepEqual(result, { kind: "failed" });
   assert.equal(attempts, 1);
   assert.deepEqual(sleeps, []);
+});
+
+// ── Streaming call policy ──────────────────────────────────────────────────
+
+test("the idle window stays well below the absolute cap and is bounded", () => {
+  assert.equal(idleTimeoutFor(150_000), MAX_PROVIDER_IDLE_TIMEOUT_MS);
+  assert.equal(idleTimeoutFor(30_000), MIN_PROVIDER_IDLE_TIMEOUT_MS);
+  assert.equal(idleTimeoutFor(60_000), 20_000);
+  // A productive stream is bounded by the absolute cap, never by its duration;
+  // a stalled one is stopped by the far shorter idle window.
+  assert.ok(idleTimeoutFor(180_000) < 180_000);
+  assert.ok(idleTimeoutFor(1_000) >= MIN_PROVIDER_IDLE_TIMEOUT_MS - 1);
+});
+
+test("the minimum useful attempt scales with the call class, not a fixed 20 s", () => {
+  // A 150 s batch needs more than a 20 s window to produce anything, so an
+  // attempt planned at 20 s would be a guaranteed charge with no result.
+  assert.ok(minUsefulAttemptFor(150_000) > MIN_USEFUL_ATTEMPT_MS);
+  assert.equal(minUsefulAttemptFor(150_000), 60_000);
+  assert.equal(minUsefulAttemptFor(4_000), 12_000);
+  for (const timeout of [1_000, 20_000, 90_000, 150_000, 600_000]) {
+    const min = minUsefulAttemptFor(timeout);
+    assert.ok(min <= Math.max(20_000, timeout), `floor ${min} exceeds ${timeout}`);
+  }
+});
+
+test("each call class keeps its own output ceiling and timeout", () => {
+  const manifest = providerCallPolicyFor("manifest", { modelMaxTokens: 24_000 });
+  assert.equal(manifest.maxTokens, MANIFEST_OUTPUT_TOKENS);
+  assert.equal(manifest.retryTimeoutAsIs, true);
+
+  const batch = providerCallPolicyFor("batch", { modelMaxTokens: 24_000 });
+  assert.equal(batch.maxTokens, BATCH_OUTPUT_TOKENS);
+  // A timeout on a large batch is answered by reducing scope, not by repeating it.
+  assert.equal(batch.retryTimeoutAsIs, false);
+  assert.equal(batch.maxAttempts, 2);
+
+  const preview = providerCallPolicyFor("batch", {
+    previewBatch: true,
+    modelMaxTokens: 24_000,
+  });
+  assert.equal(preview.maxTokens, PREVIEW_OUTPUT_TOKENS);
+  assert.ok(preview.timeoutMs >= batch.timeoutMs);
+
+  // A repair keeps the preview ceiling only for a preview batch.
+  const previewRepair = providerCallPolicyFor("repair", {
+    previewBatch: true,
+    modelMaxTokens: 24_000,
+  });
+  const smallRepair = providerCallPolicyFor("repair", { modelMaxTokens: 24_000 });
+  assert.equal(previewRepair.maxTokens, PREVIEW_OUTPUT_TOKENS);
+  assert.equal(smallRepair.maxTokens, BATCH_OUTPUT_TOKENS);
+
+  // The model's own cap always wins over a larger class ceiling.
+  const tiny = providerCallPolicyFor("batch", { modelMaxTokens: 500 });
+  assert.equal(tiny.maxTokens, 500);
+});
+
+test("the provider-attempt ceiling is bounded and configurable", () => {
+  assert.equal(providerAttemptCeiling({} as NodeJS.ProcessEnv), 12);
+  assert.equal(
+    providerAttemptCeiling({ MAVLY_MAX_PROVIDER_ATTEMPTS_PER_RUN: "6" } as unknown as NodeJS.ProcessEnv),
+    6,
+  );
+  // A typo can neither disable the guard nor make it useless.
+  assert.equal(
+    providerAttemptCeiling({ MAVLY_MAX_PROVIDER_ATTEMPTS_PER_RUN: "0" } as unknown as NodeJS.ProcessEnv),
+    4,
+  );
+  assert.equal(
+    providerAttemptCeiling({ MAVLY_MAX_PROVIDER_ATTEMPTS_PER_RUN: "1000" } as unknown as NodeJS.ProcessEnv),
+    40,
+  );
+  assert.equal(
+    providerAttemptCeiling({ MAVLY_MAX_PROVIDER_ATTEMPTS_PER_RUN: "nonsense" } as unknown as NodeJS.ProcessEnv),
+    12,
+  );
+});
+
+test("a worker tick budget fits inside the serverless function limit", () => {
+  const reserve = 50_000;
+  const budget = workerGenerationBudgetMs(reserve);
+  assert.ok(budget > 0);
+  assert.ok(
+    budget + reserve + 20_000 + 10_000 <= WORKER_FUNCTION_LIMIT_MS,
+    "generation + reviews + finalization must fit the function limit",
+  );
+  // The lease is a backstop and is allowed to be longer; the WORK budget is not.
+  assert.ok(budget < WORKER_FUNCTION_LIMIT_MS);
+  assert.ok(workerGenerationBudgetMs(0) <= WORKER_FUNCTION_LIMIT_MS);
 });
 
 test("a permanent decision is never retried even with time left", async () => {

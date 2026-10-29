@@ -734,3 +734,144 @@ test("no provider call starts when the remaining budget is below the minimum use
   assert.equal(outcome.usage.attempts, 0);
   assert.deepEqual(outcome.attempts, []);
 });
+
+// ── Timeout retry policy ───────────────────────────────────────────────────
+
+test("a timed-out multi-file batch is reduced in scope, never retried identically", async () => {
+  const batchCalls: string[][] = [];
+  const complete = provider((messages) => {
+    if (isPlanner(messages)) return success(manifestJson(["a.ts", "b.ts"]));
+    const paths = requestedPaths(messages);
+    batchCalls.push(paths);
+    // The oversized request does not fit its window; the smaller ones do.
+    if (paths.length > 1) return failure("TIMEOUT", { retryable: true });
+    return success(batchJson(paths.map((path) => [path, `content:${path}`])));
+  });
+
+  const outcome = await generateApp(
+    { prompt: "build it", mode: "update" },
+    { complete, sleep: noop },
+  );
+
+  assert.equal(isGenerationFailure(outcome), false);
+  /**
+   * One request for the whole batch, then two narrower ones. The old policy
+   * would have sent the SAME two-file request up to four times.
+   */
+  assert.deepEqual(batchCalls, [["a.ts", "b.ts"], ["a.ts"], ["b.ts"]]);
+});
+
+test("a timed-out single file gets exactly one narrower retry", async () => {
+  let batchCalls = 0;
+  const complete = provider((messages) => {
+    if (isPlanner(messages)) return success(manifestJson(["only.ts"]));
+    batchCalls += 1;
+    if (batchCalls === 1) return failure("TIMEOUT", { retryable: true });
+    return success(batchJson([["only.ts", "content"]]));
+  });
+
+  const outcome = await generateApp(
+    { prompt: "build it", mode: "update" },
+    { complete, sleep: noop },
+  );
+
+  assert.equal(isGenerationFailure(outcome), false);
+  assert.equal(batchCalls, 2);
+});
+
+test("a timed-out preview is never persisted as a completed artifact", async () => {
+  const persisted: string[] = [];
+  const complete = provider((messages) => {
+    if (isPlanner(messages)) return success(manifestJson(["preview.html"]));
+    return failure("TIMEOUT", { retryable: true });
+  });
+
+  const outcome = await generateApp(
+    {
+      prompt: "build it",
+      mode: "update",
+      onBatch: (batch) => {
+        persisted.push(...batch.files.map((file) => file.path));
+      },
+    },
+    { complete, sleep: noop },
+  );
+
+  assert.equal(isGenerationFailure(outcome), true);
+  if (!isGenerationFailure(outcome)) return;
+  assert.equal(outcome.code, "GENERATION_TIMEOUT");
+  assert.deepEqual(persisted, []);
+});
+
+test("a transient batch failure still gets one backoff retry", async () => {
+  let batchCalls = 0;
+  const complete = provider((messages) => {
+    if (isPlanner(messages)) return success(manifestJson(["a.ts"]));
+    batchCalls += 1;
+    if (batchCalls === 1) return failure("TRANSIENT", { retryable: true });
+    return success(batchJson([["a.ts", "content"]]));
+  });
+
+  const outcome = await generateApp(
+    { prompt: "build it", mode: "update" },
+    { complete, sleep: noop, random: () => 0 },
+  );
+
+  assert.equal(isGenerationFailure(outcome), false);
+  assert.equal(batchCalls, 2);
+});
+
+test("the provider-attempt ceiling stops the run before another paid call", async () => {
+  const original = process.env.MAVLY_MAX_PROVIDER_ATTEMPTS_PER_RUN;
+  process.env.MAVLY_MAX_PROVIDER_ATTEMPTS_PER_RUN = "4";
+  let calls = 0;
+  try {
+    const complete = provider((messages) => {
+      calls += 1;
+      if (isPlanner(messages)) return success(manifestJson(["a.ts", "b.ts", "c.ts", "d.ts"]));
+      return failure("TIMEOUT", { retryable: true });
+    });
+
+    const outcome = await generateApp(
+      { prompt: "build it", mode: "update" },
+      { complete, sleep: noop },
+    );
+
+    assert.equal(isGenerationFailure(outcome), true);
+    if (!isGenerationFailure(outcome)) return;
+    assert.equal(outcome.code, "GENERATION_SPEND_LIMIT");
+    // The plan plus three real batch calls: the fifth attempt is refused locally.
+    assert.equal(calls, 4);
+    assert.equal(outcome.usage.attempts, 4);
+  } finally {
+    if (original === undefined) delete process.env.MAVLY_MAX_PROVIDER_ATTEMPTS_PER_RUN;
+    else process.env.MAVLY_MAX_PROVIDER_ATTEMPTS_PER_RUN = original;
+  }
+});
+
+test("usage totals are accumulated even when the attempt list is capped", async () => {
+  // Each recorded attempt reports 11 prompt / 7 completion / 0.001 USD.
+  const complete = provider((messages) => {
+    if (isPlanner(messages)) return success(manifestJson(["a.ts", "b.ts"]));
+    const paths = requestedPaths(messages);
+    if (paths.length > 1) return failure("TIMEOUT", { retryable: true });
+    return success(batchJson(paths.map((path) => [path, `content:${path}`])));
+  });
+
+  const outcome = await generateApp(
+    { prompt: "build it", mode: "update" },
+    { complete, sleep: noop },
+  );
+
+  assert.equal(isGenerationFailure(outcome), false);
+  if (isGenerationFailure(outcome)) return;
+  /**
+   * Four real provider calls: the plan, the timed-out batch (which reported no
+   * usage) and the two narrower batches. Tokens come from the calls that
+   * reported them; the failed call contributes zero, not an invented value.
+   */
+  assert.equal(outcome.result.usage.attempts, 4);
+  assert.equal(outcome.result.usage.promptTokens, 33);
+  assert.equal(outcome.result.usage.completionTokens, 21);
+  assert.equal(outcome.result.usage.costUsd, 0.003);
+});

@@ -79,7 +79,12 @@ import {
 const PLANNER_TIMEOUT_MS = 45_000;
 const DESIGN_TIMEOUT_MS = 30_000;
 const REPAIR_TIMEOUT_MS = 45_000;
-const REVIEW_TIMEOUT_MS = 30_000;
+/**
+ * Post-coding reviews are small (1.5k tokens) and streamed, so their absolute
+ * cap is short. Together with the 10 s margin this IS the reserve the run keeps
+ * for them after the coding budget is spent.
+ */
+const REVIEW_TIMEOUT_MS = 20_000;
 export const POST_CODING_REVIEW_RESERVE_MS = REVIEW_TIMEOUT_MS * 2 + 10_000;
 const PLANNER_MAX_TOKENS = 2_000;
 const DESIGN_MAX_TOKENS = 1_500;
@@ -807,6 +812,32 @@ export interface CodingOutcome {
   changedPaths: readonly string[];
 }
 
+/**
+ * ═══ WHAT THE POST-CODING REVIEWS ACTUALLY CONCLUDED ═══════════════════════
+ *
+ * The reviews run AFTER the run row is already terminal, because moving them
+ * before it would let a review failure refund a completed generation — a
+ * credit-settlement change this task must not make. The honest compromise is to
+ * report their outcome to the caller so the run's own message can state it,
+ * instead of leaving the chat claiming success while the workflow says failed.
+ */
+export interface CodingReviewOutcome {
+  /** True when every required review task reached a non-failed terminal state. */
+  reviewsPassed: boolean;
+  /** Model-backed review calls that did not complete. */
+  reviewCallsFailed: number;
+  criticalFindings: number;
+  /** Bounded, user-safe descriptions of the failed required tasks. */
+  failedTasks: { key: string; title: string; summary: string }[];
+}
+
+const REVIEWS_PASSED: CodingReviewOutcome = {
+  reviewsPassed: true,
+  reviewCallsFailed: 0,
+  criticalFindings: 0,
+  failedTasks: [],
+};
+
 /** Mark the coding task as running before the existing pipeline executes it. */
 export async function markCodingStarted(handle: OrchestrationHandle): Promise<void> {
   await safeWorkflowState(handle, "executing");
@@ -816,7 +847,7 @@ export async function markCodingStarted(handle: OrchestrationHandle): Promise<vo
 export async function recordCodingCompleted(
   handle: OrchestrationHandle,
   outcome: CodingOutcome,
-): Promise<void> {
+): Promise<CodingReviewOutcome> {
   const implement = taskOf(handle, "implement");
   if (!implement || implement.status !== "completed") {
     const startedTask =
@@ -845,6 +876,45 @@ export async function recordCodingCompleted(
   await recordQa(handle, outcome);
   await recordDeploymentTask(handle);
   await finalizeState(handle);
+  return summarizeReviews(handle);
+}
+
+/**
+ * Read the persisted review tasks back so the caller can report them truthfully.
+ * Only required tasks count: the deployment proposal is advisory by design.
+ */
+function summarizeReviews(handle: OrchestrationHandle): CodingReviewOutcome {
+  const failed = handle.tasks.filter(
+    (task) =>
+      task.required &&
+      task.role !== "coding" &&
+      (task.status === "failed" || task.status === "cancelled"),
+  );
+  const criticalFindings = handle.tasks
+    .filter((task) => task.role === "security")
+    .flatMap((task) => task.output?.findings ?? [])
+    .filter((finding) => finding.severity === "critical").length;
+  const reviewCallsFailed = handle.tasks.filter(
+    (task) =>
+      task.role !== "coding" &&
+      task.role !== "deployment" &&
+      typeof task.errorClass === "string" &&
+      task.errorClass.length > 0,
+  ).length;
+
+  if (failed.length === 0 && criticalFindings === 0) return REVIEWS_PASSED;
+
+  return {
+    reviewsPassed: false,
+    reviewCallsFailed,
+    criticalFindings,
+    failedTasks: failed.map((task) => ({
+      key: task.key,
+      title: task.title,
+      summary: (task.output?.summary ?? task.errorSummary ?? "The review did not complete.")
+        .slice(0, 300),
+    })),
+  };
 }
 
 export async function recordCodingFailed(

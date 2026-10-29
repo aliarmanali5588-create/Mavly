@@ -2,18 +2,29 @@ import type { Metadata } from "next";
 import MarketingHome from "@/components/home/MarketingHome";
 
 export const metadata: Metadata = {
-  title: "Mavly — Build Websites with AI. No Coding Required.",
-  description:
-    "Mavly is an AI website builder that turns your ideas into beautiful, functional websites. We don't make websites. We make memories.",
-  icons: {
-    icon: "/logo/Mavly.ico",
-    shortcut: "/logo/Mavly.ico",
+  title: "Mavly — AI App Builder",
+  description: "Build your next website or app with Mavly AI.",
+  alternates: {
+    canonical: "https://mavly.xyz/",
   },
   openGraph: {
-    title: "Mavly — Build Websites with AI. No Coding Required.",
-    description:
-      "Mavly is an AI website builder that turns your ideas into beautiful, functional websites. We don't make websites. We make memories.",
-    images: ["/logo/Mavly.png"],
+    title: "Mavly — AI App Builder",
+    description: "Build your next website or app with Mavly AI.",
+    url: "https://mavly.xyz/",
+    type: "website",
+    images: [
+      {
+        url: "https://mavly.xyz/favicon-32x32.png",
+        secureUrl: "https://mavly.xyz/favicon-32x32.png",
+        type: "image/png",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary",
+    title: "Mavly — AI App Builder",
+    description: "Build your next website or app with Mavly AI.",
+    images: ["https://mavly.xyz/favicon-32x32.png"],
   },
 };
 
