@@ -1299,7 +1299,7 @@ async function planManifest(
     now,
     input.onProgress,
     "manifest",
-    attemptCeiling,
+    providerAttemptCeiling(),
   );
 
   let parsed: ParseManifestOutcome;
@@ -1352,7 +1352,7 @@ async function planManifest(
       now,
       input.onProgress,
       "repair",
-      attemptCeiling,
+      providerAttemptCeiling(),
     );
     if (isChatCompletionFailure(repair)) {
       const mapped = classifyProviderFailure(repair);
@@ -1436,7 +1436,7 @@ function parseManifest(
       images = validated.plan.images;
       imageSiteType = validated.plan.siteType;
     } else {
-      imagePlanIssue = validated.error.slice(0, 300);
+      imagePlanIssue = (validated as { error: string }).error.slice(0, 300);
     }
   }
 

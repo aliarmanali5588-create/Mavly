@@ -493,8 +493,8 @@ export async function runImageStage(input: ImageStageInput): Promise<ImageStageR
       recordCost(generated.usage.costUsd);
       await deps.fail(input.client, {
         assetId: claim.id,
-        errorCode: `${uploaded.code}_STORAGE_FAILED`,
-        errorReason: uploaded.error,
+        errorCode: `${(uploaded as { code: string }).code}_STORAGE_FAILED`,
+        errorReason: (uploaded as { error: string }).error,
         uncertain: false,
         actualCostUsd: generated.usage.costUsd,
       });

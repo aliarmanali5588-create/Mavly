@@ -94,13 +94,13 @@ function policyFor(
     projectId: input.projectId ?? "demo-site",
     projectType: input.projectType ?? "website",
     providerConfigured: input.providerConfigured ?? true,
-    env: input.env ?? {},
+    env: (input.env ?? {}) as unknown as NodeJS.ProcessEnv,
   });
 }
 
 function approvedPlanOf(raw: unknown) {
   const validated = validateImagePlan(raw);
-  assert.equal(validated.ok, true, validated.ok ? undefined : validated.error);
+  assert.equal(validated.ok, true, validated.ok ? undefined : (validated as { error: string }).error);
   if (!validated.ok) throw new Error("unreachable");
   return validated.plan;
 }
@@ -393,7 +393,7 @@ test("the coding block advertises only supplied URLs and forbids invented ones",
         url: "https://cdn.test/project-images/demo-site/run/hero-home.png",
       },
     ],
-    pending: [{ assetId: "about-portrait", pagePath: "/about", purpose: "team", alt: "Studio portrait", reason: "failed" }],
+    pending: [{ assetId: "about-portrait", pagePath: "/about", purpose: "team", alt: "Studio portrait" }],
   });
 
   assert.match(block, /https:\/\/cdn\.test\/project-images\/demo-site\/run\/hero-home\.png/);

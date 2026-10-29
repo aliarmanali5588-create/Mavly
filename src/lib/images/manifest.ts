@@ -161,7 +161,7 @@ export function validateImagePlan(
         issues: [{ code: "invalid_container", message: "`images` must be an array." }],
       };
     }
-    entries = rawEntries ?? [];
+    entries = (rawEntries ?? []) as unknown[];
     const version = record.schemaVersion ?? record.schema_version;
     if (typeof version === "number" && Number.isInteger(version) && version > 0) {
       schemaVersion = Math.min(version, IMAGE_PLAN_SCHEMA_VERSION);

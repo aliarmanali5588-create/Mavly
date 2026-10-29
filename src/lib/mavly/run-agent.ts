@@ -1049,7 +1049,7 @@ async function execute(
       images: manifest.images,
     });
     if (!validated.ok) {
-      imageStageSummary = `The saved image plan could not be re-validated (${validated.error}). No images were generated for this run.`;
+      imageStageSummary = `The saved image plan could not be re-validated (${(validated as { error: string }).error}). No images were generated for this run.`;
       return;
     }
 
