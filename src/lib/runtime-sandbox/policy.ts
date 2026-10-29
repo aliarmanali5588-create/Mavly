@@ -60,7 +60,6 @@ export const NEXT_CONFIG_FILES = [
  * reason instead of "package.json does not declare the vite dependency".
  */
 const NON_VITE_FRAMEWORKS: ReadonlyArray<{ dependency: string; label: string }> = [
-  { dependency: "next", label: "Next.js" },
   { dependency: "nuxt", label: "Nuxt" },
   { dependency: "@sveltejs/kit", label: "SvelteKit" },
   { dependency: "astro", label: "Astro" },
@@ -150,11 +149,36 @@ export function detectRuntimeProject(files: readonly SyncSourceFile[]): RuntimeP
     (framework) => Boolean(dependencies[framework.dependency]),
   );
   const hasNextConfig = NEXT_CONFIG_FILES.some((file) => byPath.has(file));
-  if (declaredFramework || hasNextConfig) {
-    const label = declaredFramework?.label ?? "Next.js";
-    const evidence = declaredFramework
-      ? `package.json declares ${label}`
-      : `the project contains a ${label} config file`;
+  const hasNextDependency = Boolean(dependencies.next);
+  if (hasNextDependency || hasNextConfig) {
+    // Next.js path
+    if (!dependencies.react) {
+      return unsupported("missing_react_dependency", "package.json does not declare the `react` dependency.");
+    }
+    if (byPath.has(LOCKFILES.yarn) || byPath.has(LOCKFILES.pnpm) || byPath.has(LOCKFILES.bun)) {
+      return unsupported("unsupported_package_manager", "Only npm projects are supported by the isolated runtime. yarn/pnpm/bun lockfiles are refused rather than converted.");
+    }
+    const scripts = dependencyMap(manifest.scripts);
+    const warnings: string[] = [];
+    for (const hook of ["preinstall", "install", "postinstall", "prepare"]) {
+      if (typeof scripts[hook] === "string" && scripts[hook].trim()) {
+        warnings.push(`package.json declares a \`${hook}\` lifecycle script; Mavly does not execute it.`);
+      }
+    }
+    return {
+      supported: true,
+      framework: "nextjs",
+      reason: null,
+      detail: null,
+      entryHtml: null,
+      hasLockfile: byPath.has(LOCKFILES.npm),
+      hasViteConfig: false,
+      scriptWarnings: warnings,
+    };
+  }
+  if (declaredFramework) {
+    const label = declaredFramework.label;
+    const evidence = `package.json declares ${label}`;
     return unsupported(
       "unsupported_framework",
       `${evidence}, and a live runtime preview runs a React + Vite dev server only. Use the static preview or the verification/deployment path for this framework.`,
@@ -255,7 +279,22 @@ export function devServerCommand(input: { port: number }): RuntimeCommand {
   };
 }
 
-export function buildCommand(): RuntimeCommand {
+/** Next.js dev server. Binds to 0.0.0.0 so the provider preview host can reach it. */
+export function nextDevServerCommand(input: { port: number }): RuntimeCommand {
+  if (!Number.isInteger(input.port) || input.port < 1024 || input.port > 65535) {
+    throw new Error("Invalid runtime port");
+  }
+  return {
+    command: "./node_modules/.bin/next",
+    args: ["dev", "--hostname", "0.0.0.0", "--port", String(input.port)],
+    cwd: RUNTIME_PROJECT_DIR,
+  };
+}
+
+export function buildCommand(framework?: string): RuntimeCommand {
+  if (framework === "nextjs") {
+    return { command: "./node_modules/.bin/next", args: ["build"], cwd: RUNTIME_PROJECT_DIR };
+  }
   return { command: "./node_modules/.bin/vite", args: ["build"], cwd: RUNTIME_PROJECT_DIR };
 }
 

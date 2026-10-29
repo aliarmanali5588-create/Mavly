@@ -187,7 +187,10 @@ export function planProjectSync(
  * This is what turns "package.json was 3 MB" into a specific failure instead of
  * a Vite error nobody can act on.
  */
-export function syncMissingRequiredFiles(plan: RuntimeSyncPlan): string[] {
+export function syncMissingRequiredFiles(
+  plan: RuntimeSyncPlan,
+  required: readonly string[] = ["package.json", "index.html"],
+): string[] {
   const present = new Set(plan.files.map((file) => file.path));
-  return ["package.json", "index.html"].filter((path) => !present.has(path));
+  return required.filter((path) => !present.has(path));
 }

@@ -33,6 +33,7 @@ import {
   buildCommand,
   detectRuntimeProject,
   devServerCommand,
+  nextDevServerCommand,
   installCommand,
   isReadyStatus,
   previewUrlFromProvider,
@@ -621,7 +622,7 @@ export async function startRuntimeSandbox(input: {
     projectId: input.projectId,
     runId: input.runId ?? null,
     provider: "e2b",
-    framework: "react_vite",
+    framework: support.framework ?? "react_vite",
     sourceHash,
     maxLifetimeSeconds: ctx.config.maxLifetimeSeconds,
     maxActivePerUser: ctx.config.maxActivePerUser,
@@ -712,7 +713,10 @@ export async function startRuntimeSandbox(input: {
     maxFileBytes: ctx.config.maxFileBytes,
     maxTotalBytes: ctx.config.maxTotalBytes,
   }, record.syncedPaths);
-  const missing = syncMissingRequiredFiles(plan);
+  const missing = syncMissingRequiredFiles(
+    plan,
+    (support.framework ?? "react_vite") === "nextjs" ? ["package.json"] : ["package.json", "index.html"],
+  );
   if (missing.length > 0) {
     const failed = await persistFailure(
       ctx,
@@ -830,9 +834,13 @@ export async function startRuntimeSandbox(input: {
   if (!starting) return failure("RUNTIME_SANDBOX_FAILED", "The lifecycle was rejected.", status);
   record = starting;
 
+  const devCommand =
+    (support.framework ?? "react_vite") === "nextjs"
+      ? nextDevServerCommand({ port: ctx.config.port })
+      : devServerCommand({ port: ctx.config.port });
   const started = await ctx.provider.startBackground(
     record.sandboxId as string,
-    { ...devServerCommand({ port: ctx.config.port }), timeoutMs: 0 },
+    { ...devCommand, timeoutMs: 0 },
     RUNTIME_DEV_LOG,
   );
   if (!isRuntimeProviderOk(started)) {
@@ -1052,7 +1060,7 @@ export async function stopRuntimeSandbox(input: {
         reason: ctx.config.ready ? null : "disabled",
         message: ctx.config.ready ? null : runtimeProblemSummary(ctx.config),
         provider: ctx.config.ready ? "e2b" : null,
-        framework: "react_vite",
+    framework: "react_vite",
       },
       support: { supported: true, reason: null, detail: null },
       session: runtimeSessionView(finalized.ok === true ? finalized.data : current),
@@ -1129,7 +1137,7 @@ export async function runRuntimeBuildCheck(input: {
   }
 
   const result = await ctx.provider.run(record.sandboxId, {
-    ...buildCommand(),
+    ...buildCommand(record.framework === "nextjs" ? "nextjs" : undefined),
     timeoutMs: Math.min(ctx.config.installTimeoutMs, 240_000),
   });
   if (!isRuntimeProviderOk(result)) {

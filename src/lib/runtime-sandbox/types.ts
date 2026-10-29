@@ -108,7 +108,7 @@ export function canTransitionRuntimeState(
  * member: claiming a broader matrix than the code supports is the failure mode
  * this union exists to prevent.
  */
-export const RUNTIME_FRAMEWORKS = ["react_vite"] as const;
+export const RUNTIME_FRAMEWORKS = ["react_vite", "nextjs"] as const;
 export type RuntimeFramework = (typeof RUNTIME_FRAMEWORKS)[number];
 
 export function isRuntimeFramework(value: unknown): value is RuntimeFramework {
