@@ -29,9 +29,17 @@ const noop = () => {};
 export function WorkspaceMore({
     project,
     onProjectChanged,
+    completionSoundsEnabled,
+    completionSoundError,
+    onEnableCompletionSounds,
+    onDisableCompletionSounds,
 }: {
     project: VcaasProject;
     onProjectChanged: () => void;
+    completionSoundsEnabled: boolean;
+    completionSoundError: string | null;
+    onEnableCompletionSounds: () => void | Promise<void>;
+    onDisableCompletionSounds: () => void;
 }) {
     const t = useT();
     const [section, setSection] = React.useState<MoreSection>("analytics");
@@ -58,6 +66,10 @@ export function WorkspaceMore({
                     open
                     onOpenChange={noop}
                     projectId={projectId}
+                    completionSoundsEnabled={completionSoundsEnabled}
+                    completionSoundError={completionSoundError}
+                    onEnableCompletionSounds={onEnableCompletionSounds}
+                    onDisableCompletionSounds={onDisableCompletionSounds}
                 />
             ) : section === "integrations" ? (
                 <ProjectPaymentsIntegration open onOpenChange={noop} projectId={projectId} />

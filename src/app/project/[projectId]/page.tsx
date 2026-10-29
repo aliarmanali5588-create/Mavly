@@ -41,6 +41,7 @@ import {
 import type { VcaasProject, ConversationMessage, ProjectVersion, AgentRunOptions, AgentInputFile, DeploymentStatus } from "@/lib/vcaas-types";
 import { loadAttachments, saveAttachments } from "@/lib/composer-attachments";
 import { useServerWake } from "@/components/workspace/use-server-wake";
+import { useAgentCompletionSounds } from "@/components/workspace/useAgentCompletionSounds";
 import { ServerWakeNotice } from "@/components/workspace/ServerWakeNotice";
 import { ServerBlockedDialog, useServerBlocked } from "@/components/workspace/ServerBlockedDialog";
 import { FigmaModal } from "@/components/workspace/FigmaModal";
@@ -215,6 +216,7 @@ export default function WorkspacePage() {
   const params = useParams();
   const router = useRouter();
   const projectId = params.projectId as string;
+  const completionSounds = useAgentCompletionSounds(projectId);
 
   /**
    * ═══⭐⭐ THE SLEEPING SANDBOX, AND THE ONE PLACE THAT EXPLAINS IT ═════════
@@ -656,13 +658,18 @@ export default function WorkspacePage() {
     const res = await githubApi.status(projectId);
     if (res.ok && res.data && mountedRef.current) setGithubConnected(!!res.data.connection);
   }
-  function startAgentPolling() { stopAgentPolling(); pollAgentOnce(); }
+  function startAgentPolling() {
+    stopAgentPolling();
+    void completionSounds.observeWorkflow();
+    pollAgentOnce();
+  }
   function stopAgentPolling() { if (pollingRef.current) { clearTimeout(pollingRef.current); pollingRef.current = null; } }
   async function pollAgentOnce() {
     if (!mountedRef.current) return;
     const res = await vcaasApi.agent.status(projectId);
     if (!mountedRef.current) return;
     if (res.ok && res.data) {
+      void completionSounds.observeWorkflow();
       const rt = res.data.realtimeConversation || [];
       if (rt.length > 0) {
         setMessages((prev) => {
@@ -1910,7 +1917,14 @@ export default function WorkspacePage() {
                 </LiveRuntimePreview>
               )}
               {activeTab === "code" && <CodePanel key={`${projectId}:${sourceRevision}`} projectId={projectId} sourceRevision={sourceRevision} darkMode={darkMode} onAskAiEdit={handleAskAiEdit} wake={serverWake} />}
-              {activeTab === "more" && <WorkspaceMore project={project} onProjectChanged={() => void fetchProject()}  />}
+              {activeTab === "more" && <WorkspaceMore
+                project={project}
+                onProjectChanged={() => void fetchProject()}
+                completionSoundsEnabled={completionSounds.enabled}
+                completionSoundError={completionSounds.error}
+                onEnableCompletionSounds={completionSounds.enable}
+                onDisableCompletionSounds={completionSounds.disable}
+              />}
             </div>
             {/* The unsaved-changes bar owns the whole batch: count, undo, discard and apply. */}
             <VisualChangesBar
@@ -2011,7 +2025,14 @@ export default function WorkspacePage() {
                 </LiveRuntimePreview>
               )}
               {activeTab === "code" && <CodePanel key={`${projectId}:${sourceRevision}`} projectId={projectId} sourceRevision={sourceRevision} darkMode={darkMode} onAskAiEdit={handleAskAiEdit} wake={serverWake} />}
-              {activeTab === "more" && <WorkspaceMore project={project} onProjectChanged={() => void fetchProject()}  />}
+              {activeTab === "more" && <WorkspaceMore
+                project={project}
+                onProjectChanged={() => void fetchProject()}
+                completionSoundsEnabled={completionSounds.enabled}
+                completionSoundError={completionSounds.error}
+                onEnableCompletionSounds={completionSounds.enable}
+                onDisableCompletionSounds={completionSounds.disable}
+              />}
             </div>
           )}
         </div>

@@ -7,6 +7,7 @@ import {
     RefreshCwIcon,
     RocketIcon,
     ShieldCheckIcon,
+    Volume2Icon,
     WorkflowIcon,
     XIcon,
 } from "lucide-react";
@@ -131,6 +132,10 @@ export function ProjectWorkflowPanel({
     projectId,
     onDeployWithApproval,
     deploying = false,
+    completionSoundsEnabled,
+    completionSoundError,
+    onEnableCompletionSounds,
+    onDisableCompletionSounds,
 }: {
     open: boolean;
     onOpenChange: (open: boolean) => void;
@@ -138,6 +143,10 @@ export function ProjectWorkflowPanel({
     /** The page owns the deploy; this panel only supplies the approved proposal id. */
     onDeployWithApproval?: (approvalId: string) => void | Promise<void>;
     deploying?: boolean;
+    completionSoundsEnabled: boolean;
+    completionSoundError: string | null;
+    onEnableCompletionSounds: () => void | Promise<void>;
+    onDisableCompletionSounds: () => void;
 }) {
     const [status, setStatus] = React.useState<AgentWorkflowStatus | null>(null);
     const [proposals, setProposals] = React.useState<DeploymentProposalList | null>(null);
@@ -252,6 +261,30 @@ export function ProjectWorkflowPanel({
                     <Skeleton className="h-48 w-full rounded-xl" />
                 ) : (
                     <div className="space-y-4 text-sm">
+                        <div className="flex flex-wrap items-center gap-2 rounded-lg border p-3">
+                            <Volume2Icon className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+                            <p className="min-w-0 flex-1 text-xs text-muted-foreground">
+                                {completionSoundError
+                                    ? "Task completion sounds need browser permission."
+                                    : `Task completion sounds are ${completionSoundsEnabled ? "on" : "off"} for this browser.`}
+                            </p>
+                            <Button
+                                size="sm"
+                                variant={completionSoundsEnabled && !completionSoundError ? "ghost" : "outline"}
+                                aria-pressed={completionSoundsEnabled && !completionSoundError}
+                                onClick={() => {
+                                    if (completionSoundsEnabled && !completionSoundError) onDisableCompletionSounds();
+                                    else void onEnableCompletionSounds();
+                                }}
+                            >
+                                {completionSoundsEnabled && !completionSoundError ? "Turn off" : "Enable sounds"}
+                            </Button>
+                            {completionSoundError ? (
+                                <p role="status" className="basis-full text-xs text-destructive">
+                                    {completionSoundError}
+                                </p>
+                            ) : null}
+                        </div>
                         <Callout>
                             Agent summaries are not proof. Only recorded checks count: a pending build or runtime check is not a
                             pass, and nothing here deploys automatically. Production requires a proposal bound to the exact source
