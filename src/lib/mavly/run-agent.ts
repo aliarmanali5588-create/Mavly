@@ -34,7 +34,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { chatCompletion } from "@/lib/ai/provider";
+import { chatCompletion, isAiConfigured } from "@/lib/ai/provider";
 import { resolveRoleModel } from "@/lib/ai/model-roles";
 import {
   GENERATION_BUDGET_MS,
@@ -107,6 +107,15 @@ import {
   type OrchestrationHandle,
 } from "@/lib/orchestration/engine";
 import { isProjectInMultiAgentCohort, multiAgentConfig } from "@/lib/orchestration/config";
+import { validateImagePlan } from "@/lib/images/manifest";
+import {
+  IMAGE_STAGE_MAX_MS,
+  IMAGE_STAGE_MIN_GENERATION_MS,
+  imagePlanningPolicyFor,
+  imageStageBudgetMs,
+} from "@/lib/images/policy";
+import { plannerImageAddendum } from "@/lib/images/prompt";
+import { runImageStage, type ImageStageResult } from "@/lib/images/service";
 import {
   cancelWorkflowForRun,
   failWorkflowForRun,
@@ -982,6 +991,160 @@ async function execute(
     if (generationInput) generationInput.managedBackendContext = managedBackendContext;
   };
 
+  /**
+   * The image stage runs ONCE per invocation, between the persisted plan and the
+   * first code batch, so the batches can reference real, persisted URLs.
+   *
+   * ⚠️ IT NEVER FAILS THE GENERATION. A provider, storage or database failure
+   * leaves those placements pending with a truthful summary; the website is
+   * still built (with placeholders) and the run reports the missing images.
+   */
+  let imageStageSummary: string | null = null;
+  let imageStageAttempted = false;
+
+  const prepareImageStage = async (manifest: AgentManifest): Promise<void> => {
+    if (projectType !== "website" || imageStageAttempted) return;
+    imageStageAttempted = true;
+
+    if (manifest.imagePlanIssue) {
+      imageStageSummary = `The planner proposed an image plan Mavly rejected (${manifest.imagePlanIssue}). No images were generated for this run.`;
+      emitGenerationEvent("image.plan", {
+        traceId: guard.traceId,
+        runId,
+        projectId: input.projectId,
+        workerId: guard.workerId,
+        status: "rejected",
+        reason: "planner_plan_invalid",
+      });
+      return;
+    }
+    if (!manifest.images || manifest.images.length === 0) return;
+
+    const policy = imagePlanningPolicyFor({
+      siteType: manifest.imageSiteType,
+      projectId: input.projectId,
+      projectType,
+      // The image API shares the server-only text-generation key, and
+      // `isAiConfigured` is the sanctioned check for it. The provider module is
+      // imported only through `@/lib/ai/provider`, never directly from a route
+      // or the run engine.
+      providerConfigured: isAiConfigured(),
+    });
+    if (!policy.enabled) {
+      imageStageSummary = `Image generation is not enabled for this run (${policy.disabledReason ?? "disabled"}): no images were generated and the plan's imagery is not available.`;
+      emitGenerationEvent("image.plan", {
+        traceId: guard.traceId,
+        runId,
+        projectId: input.projectId,
+        workerId: guard.workerId,
+        status: "disabled",
+        reason: policy.disabledReason ?? "disabled",
+        imageAssets: manifest.images.length,
+      });
+      return;
+    }
+
+    const validated = validateImagePlan({
+      siteType: manifest.imageSiteType,
+      images: manifest.images,
+    });
+    if (!validated.ok) {
+      imageStageSummary = `The saved image plan could not be re-validated (${validated.error}). No images were generated for this run.`;
+      return;
+    }
+
+    /**
+     * ⚠️ THE STAGE HAS ITS OWN SLICE OF THE RUN'S REMAINING BUDGET. It can never
+     * spend the batches' time, and when that slice is gone nothing is started.
+     */
+    const availableMs = Math.max(0, remainingRunMs(guard.budget, Date.now()));
+    const stageBudgetMs = imageStageBudgetMs({
+      remainingMs: availableMs,
+      maxMs: IMAGE_STAGE_MAX_MS,
+      minGenerationMs: IMAGE_STAGE_MIN_GENERATION_MS,
+    });
+
+    if (stageBudgetMs <= 0) {
+      imageStageSummary = `The run's remaining time was too short to generate the ${validated.plan.images.length} planned image(s); no images were generated for this run.`;
+      emitGenerationEvent("image.stage", {
+        traceId: guard.traceId,
+        runId,
+        projectId: input.projectId,
+        workerId: guard.workerId,
+        status: "skipped",
+        reason: "insufficient_time",
+        imageAssets: validated.plan.images.length,
+      });
+      return;
+    }
+
+    let result: ImageStageResult;
+    try {
+      result = await runImageStage({
+        client,
+        projectId: input.projectId,
+        runId,
+        policy,
+        plan: validated.plan,
+        deadlineAt: Date.now() + stageBudgetMs,
+        assertRunnable: () => assertRunOwned(input, guard),
+      });
+    } catch (error) {
+      console.warn(
+        `[mavly] run ${runId}: image stage failed:`,
+        error instanceof Error ? error.message : String(error),
+      );
+      imageStageSummary = `The image stage could not run (${error instanceof Error ? error.message.slice(0, 160) : "unknown error"}). The pages use placeholders for the planned imagery.`;
+      return;
+    }
+
+    const approved = result.counts.approved;
+    if (approved > 0) {
+      imageStageSummary =
+        result.status === "completed"
+          ? `${result.counts.ready} approved image${result.counts.ready === 1 ? "" : "s"} generated and saved for this site.`
+          : `${result.counts.ready} of ${approved} approved image${approved === 1 ? "" : "s"} are ready` +
+            (result.counts.failed > 0 ? `; ${result.counts.failed} failed` : "") +
+            (result.counts.pending > 0 ? `; ${result.counts.pending} still pending` : "") +
+            (result.counts.deferred > 0 ? `; ${result.counts.deferred} deferred by the image budget` : "") +
+            (result.requiredMissing > 0
+              ? `; ${result.requiredMissing} REQUIRED image${result.requiredMissing === 1 ? " is" : "s are"} missing`
+              : "") +
+            ". The pages use placeholders for the rest; they are not reported as ready.";
+    } else if (result.counts.deferred > 0) {
+      imageStageSummary = `All ${result.counts.deferred} planned image(s) were deferred by the run's image budget; the pages use placeholders.`;
+    }
+
+    emitGenerationEvent("image.stage", {
+      traceId: guard.traceId,
+      runId,
+      projectId: input.projectId,
+      workerId: guard.workerId,
+      status: result.status,
+      reason: result.reason ?? undefined,
+      model: policy.modelId,
+      imageAssets: approved,
+      imageReady: result.counts.ready,
+      costUsd: result.actualCostUsd ?? undefined,
+      costKnown: result.costKnown,
+    });
+
+    /**
+     * ⚠️ ONLY PERSISTED ASSETS REACH THE PROMPT. A deferred or failed placement
+     * is described as unavailable so the coding agent keeps its layout slot
+     * instead of inventing a URL.
+     */
+    if (generationInput) {
+      generationInput.imageAssets = result.references;
+      generationInput.imagePending = result.pending;
+      generationInput.imagePlanCounts = {
+        siteType: result.plan?.siteType ?? policy.siteType,
+        approved: result.counts.approved,
+        deferred: result.counts.deferred,
+      };
+    }
+  };
+
   const onManifest = async (manifest: AgentManifest): Promise<void> => {
     const saved = await setRunManifest(
       runId,
@@ -996,6 +1159,7 @@ async function execute(
     }
     resumeManifest = manifest;
     await prepareManagedBackend(manifest);
+    await prepareImageStage(manifest);
   };
 
   const onBatch = async (batch: AgentBatchCheckpoint): Promise<void> => {
@@ -1153,6 +1317,19 @@ async function execute(
     });
   }
 
+  /**
+   * The PLANNING policy (site type unknown yet) decides whether the planner is
+   * asked for images at all; the RUN policy is recomputed after the plan names a
+   * site category, because only an authorized large catalog may exceed the
+   * standard ceiling.
+   */
+  const planningPolicy = imagePlanningPolicyFor({
+    siteType: "other",
+    projectId: input.projectId,
+    projectType,
+    providerConfigured: isAiConfigured(),
+  });
+
   const nextGenerationInput: AgentGenerationInput = {
     projectId: input.projectId,
     prompt: input.prompt,
@@ -1171,6 +1348,15 @@ async function execute(
       : {}),
     requestedModel: codingRoleModel?.id ?? input.requestedModel,
     designContext: design.data,
+    /**
+     * The planner is asked for a structured image plan only when the feature is
+     * enabled for this deployment. The guidance quotes the STANDARD ceiling (the
+     * planner cannot know its own site category yet); the real policy is applied
+     * after the plan is validated.
+     */
+    ...(planningPolicy.enabled
+      ? { imagePlanning: { addendum: plannerImageAddendum(planningPolicy) } }
+      : {}),
     ...(generationPlanContext ? { planContext: generationPlanContext } : {}),
     ...(designDirectives ? { designDirectives } : {}),
     ...(resumeManifest || completedPaths.length > 0 || nextBatchIndex > 0
@@ -1187,6 +1373,13 @@ async function execute(
     onProgress,
   };
   generationInput = nextGenerationInput;
+  /**
+   * A resumed run reuses its persisted plan, so `onManifest` will not fire for
+   * it. The image stage still has to run once here — that is what retries a
+   * placement that was pending when the previous attempt ended, while leaving
+   * already-ready assets untouched (they are skipped, not regenerated).
+   */
+  if (resumeManifest) await prepareImageStage(resumeManifest);
   const generated = await generateApp(
     nextGenerationInput,
     {
@@ -1341,10 +1534,23 @@ async function execute(
     }
   }
 
+  /**
+   * ⚠️ THE IMAGE OUTCOME IS STATED SEPARATELY FROM THE GENERATION OUTCOME. A
+   * partial or deferred image set must never read as a complete website image
+   * set, and a failed image must not be hidden behind "built successfully".
+   */
+  const resultWithImages =
+    imageStageSummary === null
+      ? resultWithBackendBoundary
+      : {
+          ...resultWithBackendBoundary,
+          message: `${resultWithBackendBoundary.message}\n\n${imageStageSummary}`,
+        };
+
   return complete(
     input,
     guard,
-    resultWithBackendBoundary,
+    resultWithImages,
     before,
     baseline,
     writtenPaths.size,
@@ -2140,11 +2346,24 @@ function parseManifest(value: unknown): AgentManifest | null {
       ? rawBackendRequirement as Record<string, unknown>
       : null;
 
+  /**
+   * ⚠️ THE IMAGE PLAN SURVIVES A RESUME. Without this, a resumed run would
+   * silently lose its approved image plan and its pending placements would
+   * never be retried. The array is re-validated, never trusted as stored.
+   */
+  const resumeImages = validateImagePlan({
+    siteType: record.imageSiteType,
+    images: record.images,
+  });
+
   return {
     message:
       typeof record.message === "string"
         ? record.message.slice(0, 8_000)
         : "Updated the project.",
+    ...(resumeImages.ok && resumeImages.plan.images.length > 0
+      ? { images: resumeImages.plan.images, imageSiteType: resumeImages.plan.siteType }
+      : {}),
     ...(typeof record.plan === "string" && record.plan.trim()
       ? { plan: record.plan.trim().slice(0, 2_000) }
       : {}),

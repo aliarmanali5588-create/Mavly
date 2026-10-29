@@ -19,18 +19,20 @@ import { classifyVcaasRequest } from "../src/lib/vcaas-scope";
 import { POST as catchAllPost } from "../src/app/api/vcaas/[...path]/route";
 
 /**
- * ═══ FLUX IMAGE GENERATION — THE CONTRACT, NOT A LIVE CALL ═════════════════
+ * ═══ THE LOCKED IMAGE MODEL — THE CONTRACT, NOT A LIVE CALL ════════════════
  *
  * Every provider response here is mocked: the suite never spends a real
  * generation. What is asserted is what the integration itself owns — the exact
  * model slug, the dedicated `/api/v1/images` request shape, response validation,
  * failure classification, retry safety and the anonymous refusal at the route.
  *
- * ⚠️ There is no credit test because there is no credit engine in this build.
- * The feature is unbilled by construction; see `MAVLY_CLEAN_BASELINE.md`.
+ * ⚠️ THESE IMAGES ARE NOT BILLED TO CREDITS. Mavly's credit foundation prices a
+ * generation RUN; there is no image price, so the plan-driven website image
+ * stage records provider cost only (see `src/lib/images/policy.ts`). The
+ * planning/budget/persistence suite lives in `tests/image-planning.test.ts`.
  */
 
-const FLUX = "black-forest-labs/flux.2-klein-4b";
+const RECRAFT = "recraft/recraft-v4.1-flash";
 
 /** A real 1×1 PNG — the signature is what `sniffImageFormat` checks. */
 const PNG_BASE64 =
@@ -92,46 +94,55 @@ const request = {
 
 // ── the catalog ─────────────────────────────────────────────────────────────
 
-test("the image catalog uses the exact FLUX slug", () => {
-  assert.equal(DEFAULT_IMAGE_MODEL_ID, FLUX);
-  assert.equal(model.id, FLUX);
+test("the image catalog uses the exact locked Recraft slug and its verified capabilities", () => {
+  assert.equal(DEFAULT_IMAGE_MODEL_ID, RECRAFT);
+  assert.equal(model.id, RECRAFT);
   assert.deepEqual(
     AI_IMAGE_MODEL_CATALOG.map((entry) => entry.id),
-    [FLUX],
+    [RECRAFT],
   );
-  // The options are the model's own accepted values, never a superset.
+  /**
+   * Exactly the endpoint record's enum — not a superset. The verified record
+   * lists aspect_ratio and n (1..6) only, so the unsupported knobs stay off.
+   */
   assert.deepEqual(
     [...model.aspectRatios].sort(),
-    ["1:1", "16:9", "2:3", "21:9", "3:2", "3:4", "4:3", "9:16", "auto"].sort(),
+    ["1:1", "3:4", "4:3", "16:9", "9:16", "auto"].sort(),
   );
-  assert.deepEqual([...model.outputFormats], ["png", "jpeg"]);
+  assert.equal(model.supportsOutputFormat, false);
+  assert.equal(model.supportsSeed, false);
   assert.equal(model.maxImages, 1);
+  assert.equal(model.maxReferenceImages, 0);
+  assert.equal(model.providerUsdPerImage, 0.007);
 });
 
 test("the image model is not selectable as the website-generation model", () => {
   assert.equal(
-    AI_MODEL_CATALOG.some((entry) => entry.id === FLUX),
+    AI_MODEL_CATALOG.some((entry) => entry.id === RECRAFT),
     false,
   );
-  // An explicit request naming FLUX still resolves to a text model.
-  assert.notEqual(resolveModel(FLUX, "app-generation").id, FLUX);
+  // An explicit request naming the image model still resolves to a text model.
+  assert.notEqual(resolveModel(RECRAFT, "app-generation").id, RECRAFT);
 });
 
 test("MAVLY_IMAGE_MODEL selects a catalog entry, and only a catalog entry", () => {
   const previousImage = process.env.MAVLY_IMAGE_MODEL;
   const previousDefault = process.env.MAVLY_DEFAULT_MODEL;
   try {
-    // Unset → the built-in default, so an existing deployment is unchanged.
+    // Unset → the locked model.
     delete process.env.MAVLY_IMAGE_MODEL;
-    assert.equal(resolveImageModel().id, FLUX);
+    assert.equal(resolveImageModel().id, RECRAFT);
 
-    // A registered entry is honoured (today the only entry is the default).
-    process.env.MAVLY_IMAGE_MODEL = FLUX;
-    assert.equal(resolveImageModel().id, FLUX);
+    // A registered entry is honoured (today the only entry is the locked one).
+    process.env.MAVLY_IMAGE_MODEL = RECRAFT;
+    assert.equal(resolveImageModel().id, RECRAFT);
 
-    // An unregistered slug is never forwarded to the provider…
+    // An unregistered slug — including a text model — is never forwarded…
     process.env.MAVLY_IMAGE_MODEL = "deepseek/deepseek-v4.1-flash";
-    assert.equal(resolveImageModel().id, FLUX);
+    assert.equal(resolveImageModel().id, RECRAFT);
+    // …and there is no second image model to fall back to.
+    process.env.MAVLY_IMAGE_MODEL = "black-forest-labs/flux.2-klein-4b";
+    assert.equal(resolveImageModel().id, RECRAFT);
     // …so the resolved model is always an entry in the image catalog.
     assert.ok(
       AI_IMAGE_MODEL_CATALOG.some((entry) => entry.id === resolveImageModel().id),
@@ -140,7 +151,7 @@ test("MAVLY_IMAGE_MODEL selects a catalog entry, and only a catalog entry", () =
 
     // MAVLY_DEFAULT_MODEL stays the website/code-generation selector.
     process.env.MAVLY_DEFAULT_MODEL = "provider/unsupported-model";
-    assert.equal(resolveImageModel().id, FLUX);
+    assert.equal(resolveImageModel().id, RECRAFT);
     assert.equal(resolveModel(null, "app-generation").id, "deepseek/deepseek-v4.1-flash");
   } finally {
     if (previousImage === undefined) delete process.env.MAVLY_IMAGE_MODEL;
@@ -179,12 +190,16 @@ test("a generation calls the images endpoint with only supported parameters", as
       assert.equal(headers["Content-Type"], "application/json");
 
       const body = JSON.parse(String(calls[0].init?.body)) as Record<string, unknown>;
-      assert.equal(body.model, FLUX);
+      assert.equal(body.model, RECRAFT);
       assert.equal(body.prompt, request.prompt);
       assert.equal(body.aspect_ratio, "16:9");
-      assert.equal(body.output_format, "png");
       assert.equal(body.n, 1);
-      // Chat-shaped or unsupported fields must never be sent.
+      /**
+       * The verified endpoint record does not list `output_format`, so it must
+       * not be sent; chat-shaped and unsupported fields stay off the wire too.
+       */
+      assert.equal("output_format" in body, false);
+      assert.equal("seed" in body, false);
       assert.equal("messages" in body, false);
       assert.equal("resolution" in body, false);
       assert.equal("max_tokens" in body, false);
@@ -193,7 +208,7 @@ test("a generation calls the images endpoint with only supported parameters", as
       assert.equal(result.image.mediaType, "image/png");
       assert.equal(result.image.format, "png");
       assert.ok(result.image.bytes > 0);
-      assert.equal(result.model, FLUX);
+      assert.equal(result.model, RECRAFT);
       assert.equal(result.usage.totalTokens, 4175);
       assert.equal(result.usage.costUsd, 0.04);
 
@@ -205,19 +220,16 @@ test("a generation calls the images endpoint with only supported parameters", as
   }
 });
 
-test("a seed is forwarded only when given, and omitted otherwise", async () => {
+test("a seed is never sent to a model that does not support it", async () => {
   const calls: FetchCall[] = [];
   stubFetch(200, { data: [{ b64_json: PNG_BASE64 }] }, { calls });
 
   try {
     await withApiKey(async () => {
+      // Even if a caller supplies one, the adapter omits the unsupported key.
       await generateImage({ ...request, seed: 42, retry: { maxAttempts: 1 } });
-      const withSeed = JSON.parse(String(calls[0].init?.body)) as Record<string, unknown>;
-      assert.equal(withSeed.seed, 42);
-
-      await generateImage({ ...request, retry: { maxAttempts: 1 } });
-      const withoutSeed = JSON.parse(String(calls[1].init?.body)) as Record<string, unknown>;
-      assert.equal("seed" in withoutSeed, false);
+      const body = JSON.parse(String(calls[0].init?.body)) as Record<string, unknown>;
+      assert.equal("seed" in body, false);
     });
   } finally {
     restoreFetch();
@@ -423,6 +435,10 @@ test("only parameters the model accepts are validated in", () => {
   const format = parseImageGenerationRequest({ prompt: "x", outputFormat: "svg" }, model);
   assert.equal(format.ok, false);
 
+  // The endpoint decides the format, so asking for one is refused outright.
+  const fixedFormat = parseImageGenerationRequest({ prompt: "x", outputFormat: "png" }, model);
+  assert.equal(fixedFormat.ok, false);
+
   const many = parseImageGenerationRequest({ prompt: "x", n: 2 }, model);
   assert.equal(many.ok, false);
 
@@ -435,8 +451,8 @@ test("only parameters the model accepts are validated in", () => {
   );
   assert.equal(references.ok, false);
 
-  const fractionalSeed = parseImageGenerationRequest({ prompt: "x", seed: 1.5 }, model);
-  assert.equal(fractionalSeed.ok, false);
+  const anySeed = parseImageGenerationRequest({ prompt: "x", seed: 7 }, model);
+  assert.equal(anySeed.ok, false, "this model does not accept a seed");
 
   const valid = parseImageGenerationRequest({ prompt: "  a fox  " }, model);
   assert.equal(valid.ok, true);

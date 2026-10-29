@@ -1,9 +1,9 @@
 /**
  * ═══ OPENROUTER IMAGE CLIENT — SERVER ONLY ══════════════════════════════════
  *
- * The image API is NOT chat completions. `black-forest-labs/flux.2-klein-4b`
- * is served by `POST https://openrouter.ai/api/v1/images`, which returns
- * base64-encoded bytes:
+ * The image API is NOT chat completions. `recraft/recraft-v4.1-flash` is served
+ * by `POST https://openrouter.ai/api/v1/images`, which returns base64-encoded
+ * bytes:
  *
  *   { created, data: [{ b64_json, media_type }], usage: { ..., cost } }
  *
@@ -31,6 +31,13 @@
  * "nothing was generated" answers. A TIMEOUT or a dropped connection is NOT
  * retried: the provider may have completed and billed the first image, and a
  * second request would be a second charge that no client-side check can undo.
+ *
+ * ⚠️ ONLY SUPPORTED PARAMETERS ARE SENT. The verified endpoint record for
+ * `recraft/recraft-v4.1-flash` lists `aspect_ratio` and `n` (1..6) and nothing
+ * else; `output_format`, `seed`, `resolution`, `quality` and `stream` are not
+ * supported and are omitted here. The response carries no model field, so the
+ * requested slug cannot be proven from the body — the catalog gate plus the
+ * absence of any fallback are what keep the model fixed.
  */
 
 import type { AiImageModel } from "./image-models";
@@ -246,11 +253,13 @@ async function attemptImage(
   const body: Record<string, unknown> = {
     model: model.id,
     prompt: input.prompt,
-    n: model.maxImages,
     aspect_ratio: input.aspectRatio,
-    output_format: input.outputFormat,
+    // One asset per call: per-asset status, idempotency and cost stay exact.
+    n: model.maxImages,
   };
-  if (typeof input.seed === "number") body.seed = input.seed;
+  // Only the keys the endpoint record actually lists are ever sent.
+  if (model.supportsOutputFormat) body.output_format = input.outputFormat;
+  if (model.supportsSeed && typeof input.seed === "number") body.seed = input.seed;
 
   try {
     const response = await fetch(OPENROUTER_IMAGES_URL, {

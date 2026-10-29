@@ -1,5 +1,5 @@
 /**
- * ═══ IMAGE-GENERATION MODEL CATALOG ══════════════════════════════════════════
+ * ═══ IMAGE-GENERATION MODEL CATALOG — ONE LOCKED MODEL ═══════════════════════
  *
  * Server-side. Image models live in their OWN catalog, never in `models.ts`:
  * `resolveModel()` picks the model for website/code generation, and an image
@@ -11,22 +11,29 @@
  * parameters. A request with an unsupported key is a provider 400 — there is no
  * fallback and no "best effort" mapping.
  *
- * `black-forest-labs/flux.2-klein-4b` is the DEFAULT and the only registered
- * entry today; `MAVLY_IMAGE_MODEL` may select another entry once one is added
- * here (see `resolveImageModel`). Its parameters were verified against
- * `GET https://openrouter.ai/api/v1/images/models/black-forest-labs/flux.2-klein-4b/endpoints`:
+ * `recraft/recraft-v4.1-flash` is the ONLY registered entry and the default.
+ * Its parameters were verified against
+ * `GET https://openrouter.ai/api/v1/images/models/recraft/recraft-v4.1-flash/endpoints`
+ * (Image API, provider `recraft`):
  *
- *   aspect_ratio      1:1, 4:3, 3:4, 3:2, 2:3, 16:9, 9:16, 21:9, auto
- *   output_format     png, jpeg
- *   n                 1 (exactly; no multi-image)
- *   input_references  0..4 (image-to-image)
- *   seed              supported
- *   resolution        NOT supported — do not send it
- *   pricing           $0.014 per megapixel of output image
+ *   aspect_ratio       1:1, 4:3, 3:4, 16:9, 9:16, auto
+ *   n                  1..6 (Mavly always asks for exactly one asset per call)
+ *   output_format      NOT supported — do not send it (`meda_type` comes back
+ *                      on the response and the bytes are sniffed anyway)
+ *   seed               NOT supported — do not send it
+ *   resolution         NOT supported — do not send it
+ *   quality/background NOT supported — do not send it
+ *   stream             NOT supported (`supports_streaming: false`)
+ *   pricing            $0.007 per output image (billed per completed image)
  *
- * `input_references` is deliberately not exposed yet: it would need an existing
- * upload/asset path (uploads are unimplemented here) or a server-side URL
- * fetcher, which is an SSRF surface this integration must not open.
+ * `input_references` is deliberately not exposed: it would need an existing
+ * upload/asset path or a server-side URL fetcher, which is an SSRF surface this
+ * integration must not open.
+ *
+ * ⚠️ THERE IS NO SECOND IMAGE MODEL AND NO FALLBACK. A request naming another
+ * slug is refused before any network call; `MAVLY_IMAGE_MODEL` is a selector
+ * over this catalog, so an unregistered value resolves to the locked model
+ * rather than being forwarded.
  */
 
 import {
@@ -48,57 +55,65 @@ export interface AiImageModel {
   outputFormats: readonly ImageOutputFormat[];
   defaultAspectRatio: ImageAspectRatio;
   defaultOutputFormat: ImageOutputFormat;
+  /**
+   * Whether the endpoint record lists `output_format`. When false the field is
+   * never sent, and the real format is decided by the returned bytes.
+   */
+  supportsOutputFormat: boolean;
   /** Images accepted in one request. */
   maxImages: number;
   /** Reference images the endpoint accepts (0 = text-to-image only). */
   maxReferenceImages: number;
   supportsSeed: boolean;
   /**
-   * The provider's own price, in USD per output megapixel. Operator
-   * information only — NEVER a Mavly credit price. There is no credit engine in
-   * this build and this field must not be used to invent one.
+   * The provider's own price, in USD per completed image. Operator information
+   * only — NEVER a Mavly credit price.
+   */
+  providerUsdPerImage: number | null;
+  /**
+   * Kept for price-per-megapixel endpoints. `null` when the endpoint bills per
+   * image instead.
    */
   providerUsdPerMegapixel: number | null;
 }
 
-/**
- * Used whenever `MAVLY_IMAGE_MODEL` is unset or does not name a catalog entry.
- * Changing it changes the fallback for every deployment that has not set the
- * variable.
- */
-export const DEFAULT_IMAGE_MODEL_ID = "black-forest-labs/flux.2-klein-4b";
+/** The locked, single image model for this build. */
+export const DEFAULT_IMAGE_MODEL_ID = "recraft/recraft-v4.1-flash";
+
+/** Raw USD per completed output image, from the verified endpoint record. */
+export const IMAGE_PROVIDER_USD_PER_IMAGE = 0.007;
 
 export const AI_IMAGE_MODEL_CATALOG: readonly AiImageModel[] = [
   {
     id: DEFAULT_IMAGE_MODEL_ID,
-    label: "FLUX.2 Klein 4B",
+    label: "Recraft V4.1 Flash",
+    // Exactly the endpoint's enum — not a superset. Defined once in
+    // `image-generation-options.ts` and narrowed to this record.
     aspectRatios: IMAGE_ASPECT_RATIOS,
     outputFormats: IMAGE_OUTPUT_FORMATS,
-    defaultAspectRatio: "1:1",
+    defaultAspectRatio: "16:9",
     defaultOutputFormat: "png",
+    supportsOutputFormat: false,
     maxImages: IMAGE_MAX_PER_REQUEST,
-    maxReferenceImages: 4,
-    supportsSeed: true,
-    providerUsdPerMegapixel: 0.014,
+    maxReferenceImages: 0,
+    supportsSeed: false,
+    providerUsdPerImage: IMAGE_PROVIDER_USD_PER_IMAGE,
+    providerUsdPerMegapixel: null,
   },
 ];
 
 /**
  * The image model id this build uses: `MAVLY_IMAGE_MODEL` when it names a
- * catalog entry, otherwise the built-in default.
+ * catalog entry, otherwise the locked default.
  *
  * ⚠️ VALIDATED, NOT TRUSTED. The variable is a SELECTOR over
  * `AI_IMAGE_MODEL_CATALOG`, not a way to inject a slug. A value that is not
  * registered here (a typo, a chat-completions model, another provider's slug) is
  * never forwarded to OpenRouter; it resolves to the default, exactly as an unset
- * variable does. Validation is also what keeps the route honest: every
- * capability it enforces — aspect ratios, output formats, `n`, seed support,
- * price — comes from the catalog entry, so a model with no entry would be sent
- * options nobody verified against its endpoint record.
+ * variable does.
  *
  * ⚠️ IT IS NOT `MAVLY_DEFAULT_MODEL`. That variable selects the website/code
- * generation model in `src/lib/ai/models.ts` and is never read here. The two
- * catalogs share no entry, so neither variable can select the other's model.
+ * generation model in `src/lib/ai/models.ts` and is never read here.
  */
 export function configuredImageModelId(): string {
   const override = process.env.MAVLY_IMAGE_MODEL?.trim();
@@ -118,9 +133,18 @@ export function imageModelIds(): string[] {
   return AI_IMAGE_MODEL_CATALOG.map((model) => model.id);
 }
 
+/** True only for the exact locked slug. Used to refuse a mismatched request. */
+export function isLockedImageModel(id: string): boolean {
+  return id === DEFAULT_IMAGE_MODEL_ID;
+}
+
 export interface ImageGenerationRequest {
   prompt: string;
   aspectRatio: ImageAspectRatio;
+  /**
+   * The format Mavly would prefer. It is sent only when the endpoint lists
+   * `output_format`; the real format always comes from the returned bytes.
+   */
   outputFormat: ImageOutputFormat;
   seed: number | null;
 }
@@ -162,28 +186,20 @@ export function parseImageGenerationRequest(
     "background",
     "output_compression",
     "stream",
+    "input_references",
+    "referenceImages",
+    "references",
   ] as const) {
-    if (record[unsupported] !== undefined) {
+    if (record[unsupported] !== undefined && record[unsupported] !== null) {
       return {
         ok: false,
-        error: `This image model does not support \`${unsupported}\`. Supported options: aspect ratio, format and seed.`,
+        error: `This image model does not support \`${unsupported}\`. Supported options: prompt and aspect ratio.`,
       };
     }
   }
 
-  const references = record.input_references ?? record.referenceImages ?? record.references;
-  if (references !== undefined && references !== null) {
-    return {
-      ok: false,
-      error: "Reference images are not supported yet. Describe the image in the prompt instead.",
-    };
-  }
-
   if (record.n !== undefined && record.n !== null && record.n !== IMAGE_MAX_PER_REQUEST) {
-    return {
-      ok: false,
-      error: "This image model generates one image per request.",
-    };
+    return { ok: false, error: "Mavly requests one image per provider call." };
   }
 
   const rawAspect = record.aspectRatio ?? record.aspect_ratio;
@@ -207,6 +223,14 @@ export function parseImageGenerationRequest(
         error: `Unsupported image format. Choose one of: ${model.outputFormats.join(", ")}.`,
       };
     }
+    if (!model.supportsOutputFormat) {
+      // The endpoint decides the format; accepting the field and silently
+      // ignoring it would misreport what will actually be produced.
+      return {
+        ok: false,
+        error: `This image model chooses its own output format (PNG/JPEG); \`output_format\` is not supported.`,
+      };
+    }
     outputFormat = rawFormat;
   }
 
@@ -228,3 +252,10 @@ export function parseImageGenerationRequest(
 
   return { ok: true, request: { prompt, aspectRatio, outputFormat, seed } };
 }
+
+/**
+ * The aspect ratios the locked model accepts. The image plan validator imports
+ * THIS list, so a plan can never ask for a ratio the provider would reject.
+ */
+export const IMAGE_PLAN_ASPECT_RATIOS: readonly ImageAspectRatio[] =
+  AI_IMAGE_MODEL_CATALOG[0].aspectRatios;

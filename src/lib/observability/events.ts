@@ -32,6 +32,9 @@ export const GENERATION_EVENTS = [
   "generation.worker_unavailable",
   "generation.worker_error",
   "orchestration.skipped",
+  "image.plan",
+  "image.asset",
+  "image.stage",
   "credits.reserved",
   "credits.settled",
   "credits.released",
@@ -101,6 +104,8 @@ const ALLOWED_FIELDS = new Set([
   "repairAttempt",
   "repairStatus",
   "credits",
+  "imageAssets",
+  "imageReady",
 ]);
 
 const NUMERIC_FIELDS = new Set([
@@ -121,6 +126,8 @@ const NUMERIC_FIELDS = new Set([
   "healthHttpStatus",
   "repairAttempt",
   "credits",
+  "imageAssets",
+  "imageReady",
 ]);
 
 const BOOLEAN_FIELDS = new Set(["costKnown", "cleanupComplete"]);
@@ -194,6 +201,10 @@ export interface GenerationEventFields {
   costKnown?: boolean | null;
   /** Whole credits for a reservation/settlement/release event. */
   credits?: number | null;
+  /** Image assets approved/planned for one stage. */
+  imageAssets?: number | null;
+  /** Image assets durably persisted as ready. */
+  imageReady?: number | null;
 }
 
 /**

@@ -149,7 +149,7 @@ below are understood for the expected concurrency.
 ## 8. Code generation vs image generation
 
 Token Harbor is a **text** provider. Image generation keeps its existing
-OpenRouter image API path (`/api/v1/images`, `black-forest-labs/flux.2-klein-4b`)
+OpenRouter image API path (`/api/v1/images`, `recraft/recraft-v4.1-flash`)
 and is never routed to Token Harbor. A model's *input* modalities are not
 evidence that it can return image outputs; adding image generation to another
 provider would be a separate, independently verified change. `MAVLY_IMAGE_MODEL`

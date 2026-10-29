@@ -56,6 +56,14 @@ import {
   validateAndroidProject,
 } from "@/lib/android/contract";
 import { PREVIEW_ENTRY_PATH, previewDocumentProblem } from "@/lib/preview-document";
+import {
+  validateImagePlan,
+  type ImageAssetReference,
+  type PlannedImage,
+} from "@/lib/images/manifest";
+import type { PendingImagePlacement } from "@/lib/images/service";
+import type { ImageSiteType } from "@/lib/images/policy";
+import { batchImageBlock, imagePlanBlock } from "@/lib/images/prompt";
 
 export type AgentProjectType = "website" | "android";
 
@@ -77,6 +85,14 @@ export interface AgentManifest {
    * persisted manifests and small create runs remain valid.
    */
   plan?: string;
+  /**
+   * The Planning Agent's structured image plan, already schema-validated. It is
+   * NOT an authorization: the backend approves and trims it separately.
+   */
+  images?: PlannedImage[];
+  imageSiteType?: ImageSiteType;
+  /** Set when the planner proposed images that failed validation. */
+  imagePlanIssue?: string;
   backendRequirement?: {
     requiresDatabase: boolean;
     reason: string;
@@ -170,6 +186,17 @@ export interface AgentGenerationInput {
   designContext?: string | null;
   /** Overall wall-clock budget for planning + all batches. */
   budgetMs?: number;
+  /**
+   * Ask the planner for a structured image plan. The text is server-authored
+   * and already carries the backend ceiling; absent means no image planning.
+   */
+  imagePlanning?: { addendum: string };
+  /** Persisted assets the batches may reference (set by the run before batches). */
+  imageAssets?: readonly ImageAssetReference[];
+  /** Planned but unavailable placements, rendered as truthful placeholders. */
+  imagePending?: readonly PendingImagePlacement[];
+  /** Counts for the batch prompt's plan summary. */
+  imagePlanCounts?: { siteType: string; approved: number; deferred: number };
   /** Verified completed work from a previous interrupted attempt. */
   resume?: AgentResumeState;
   /** Persist ONE validated batch. The caller must make this idempotent. */
@@ -533,9 +560,14 @@ For a non-trivial update, also include:
   "plan": "2-6 ordered steps naming affected files, contracts, security/migration/test gates and rollback considerations."
 Keep it concise and consistent with the files list.`;
 
-function plannerSystemPrompt(planning: boolean | undefined, profile: AgentProjectType): string {
+function plannerSystemPrompt(
+  planning: boolean | undefined,
+  profile: AgentProjectType,
+  imageAddendum?: string,
+): string {
   const base = profile === "android" ? ANDROID_PLANNER_PROMPT : PLANNER_PROMPT_BASE;
-  return planning ? `${base}${PLANNER_PLAN_ADDENDUM}` : base;
+  const withPlan = planning ? `${base}${PLANNER_PLAN_ADDENDUM}` : base;
+  return imageAddendum ? `${withPlan}${imageAddendum}` : withPlan;
 }
 
 const ANDROID_SYSTEM_PROMPT = `You are Mavly's senior Android engineer. You build a complete, runnable native Android application with Kotlin and Jetpack Compose from a user's prompt.
@@ -1385,6 +1417,29 @@ function parseManifest(
     entries.set(entry.path, entry);
   }
 
+  /**
+   * ⚠️ THE IMAGE PLAN IS VALIDATED, NOT TRUSTED, AND IS NEVER FATAL HERE. A
+   * malformed `images` array rejects the IMAGE PLAN (recorded for the run to
+   * report) while the website plan itself stays usable; failing the whole
+   * generation because one optional image entry was malformed would be worse
+   * than building the site without imagery.
+   */
+  let images: AgentManifest["images"];
+  let imageSiteType: AgentManifest["imageSiteType"];
+  let imagePlanIssue: string | undefined;
+  if (profile === "website" && record.images !== undefined) {
+    const validated = validateImagePlan({
+      siteType: record.siteType ?? record.site_type,
+      images: record.images,
+    });
+    if (validated.ok) {
+      images = validated.plan.images;
+      imageSiteType = validated.plan.siteType;
+    } else {
+      imagePlanIssue = validated.error.slice(0, 300);
+    }
+  }
+
   if (mode === "create") {
     for (const required of requiredCreatePathsFor(profile, androidPackage)) {
       if (!entries.has(required)) {
@@ -1452,6 +1507,9 @@ function parseManifest(
       message,
       ...(plan ? { plan } : {}),
       ...(backendRequirement ? { backendRequirement } : {}),
+      ...(images ? { images } : {}),
+      ...(imageSiteType ? { imageSiteType } : {}),
+      ...(imagePlanIssue ? { imagePlanIssue } : {}),
       files: [...entries.values()],
       deletedPaths,
     },
@@ -2069,7 +2127,15 @@ function buildManifestMessages(input: AgentGenerationInput, model: AiModel): Cha
   ].join("\n");
 
   return [
-    { role: "system", content: plannerSystemPrompt(input.planning, profile) },
+    {
+      role: "system",
+      content: plannerSystemPrompt(
+        input.planning,
+        profile,
+        // Image planning is a website concern; an Android plan never adds it.
+        profile === "website" ? input.imagePlanning?.addendum : undefined,
+      ),
+    },
     { role: "user", content: user },
   ];
 }
@@ -2094,6 +2160,22 @@ function buildBatchMessages(
     .map((entry) => `- ${entry.path} (about ${entry.estimatedBytes} bytes)`)
     .join("\n");
   const completed = [...state.completedPaths].sort((a, b) => a.localeCompare(b));
+  /**
+   * ⚠️ ONLY PERSISTED ASSETS ARE ADVERTISED. A URL the model was never given
+   * must never appear in generated code, and a deferred/failed placement is
+   * listed as unavailable instead of being invented.
+   */
+  const imageAssetText = batchImageBlock({
+    assets: input.imageAssets ?? [],
+    pending: input.imagePending ?? [],
+  });
+  const imagePlanText = input.imagePlanCounts
+    ? imagePlanBlock({
+        siteType: input.imagePlanCounts.siteType,
+        approved: input.imagePlanCounts.approved,
+        deferred: input.imagePlanCounts.deferred,
+      })
+    : "";
   const user = [
     "Batch contract: the requested paths below are the complete allowlist for this response. Return no other files, even if a project-wide requirement mentions them.",
     "",
@@ -2110,6 +2192,8 @@ function buildBatchMessages(
     design ? `\nFigma design reference:\n${design}` : "",
     memory ? `\n${memory}` : "",
     specialist,
+    imagePlanText,
+    imageAssetText,
     context ? `\nCurrent project files (authoritative over memory):\n${context}` : "",
     completed.length > 0
       ? `\nAlready completed (do NOT return these):\n${completed.map((path) => `- ${path}`).join("\n")}`

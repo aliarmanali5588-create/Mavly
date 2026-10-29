@@ -125,7 +125,13 @@ and usage remain recoverable through worker/database paths. See `docs/runbooks/c
 Generation-level and per-role usage-metering failures are logged without changing the
 terminal generation outcome and without discarding an already-produced advisory role
 result; the missing usage row stays missing and no cost is claimed for it. Neither path
-changes credit settlement.
+changes credit settlement. Apply `33_project_image_assets.sql` after 32 and after 03
+(and after any migration that recreated `project_runs`) before setting
+`MAVLY_IMAGE_PLANNING_ENABLED`: it adds `project_image_plans`/`project_image_assets`,
+owner-checked SECURITY DEFINER sync/claim/complete/fail/finish RPCs, schema marker 33 and
+the public-read `project-images` Storage bucket. It is additive and non-destructive, does
+not alter any credit, payment or pricing table, and stores no image bytes in Postgres.
+With the flag off the planner is never asked for an image plan and the stage never runs.
 Project-secret encryption also
 requires the server-only `MAVLY_PROJECT_SECRETS_ENCRYPTION_KEY` (32 random bytes,
 base64-encoded); without it create/update fail closed. `npm test` covers the pure
@@ -137,7 +143,8 @@ rules, the business-integration registry/config/validation, Razorpay signature a
 provider-error mapping, the payment state machine, the gateway session exemptions, the
 Phase 7 durable rate-limit migration contracts, payment-event metadata/redaction, the
 admin surface gate, Phase 8 memory validation/retrieval/prompt framing/migration
-contracts, the Phase 9 Android source contract/profile/capability rules, the Android build
+contracts, the planning-driven image plan validator/approval/budget/prompt/stage rules,
+the Phase 9 Android source contract/profile/capability rules, the Android build
 config/policy/archive/artifact/migration contracts, the Phase 10 workflow transition/
 dependency/budget/output/config/approval/security/tool/parser rules and its static
 migration/catalog/deploy-gate invariants, the build-image reference/registry and
@@ -528,23 +535,36 @@ a delivered webhook, a container image build/publish, or the migrations against 
   and `POST /api/vcaas/projects/{id}/snapshots/{snapshotId}/restore` puts the project back
   to the state from BEFORE the run. The restore captures the pre-restore state first, so a
   restore is itself recoverable. It needs no GitHub connection.
-- **Image generation is implemented as a separate, unbilled path.**
-  `POST /api/vcaas/projects/{id}/images/generate` calls
-  `black-forest-labs/flux.2-klein-4b` on OpenRouter's dedicated image API
-  (`POST https://openrouter.ai/api/v1/images`), validates that the response is real
-  PNG/JPEG bytes, and returns them as base64 in the response. The workspace's More-menu
-  Image generation panel was removed, so no UI currently calls this route; the API and
-  its tests remain. The image
-  is **not persisted** (there is no binary asset pipeline; `project_files` is text) and
-  **no credits are charged** (the Phase 11 credit foundation covers generation runs
-  only, is off by default, and no image price exists). The image catalog is separate
-  from `src/lib/ai/models.ts` on purpose: `resolveModel()` must never select an image
-  model for website generation. Reference images are not supported, and a URL-only
-  provider response is refused rather than fetched. Admission is a best-effort,
-  per-instance request window (5 per user and 40 per instance per 10 minutes); a hard
-  cross-instance cap would need a persisted admission RPC, which does not exist. Images
-  are capped at 3 MB so the base64 JSON fits Vercel's 4.5 MB function response limit, and
-  the provider's cost stays server-side instead of being returned to the browser.
+- **Planning-driven website imagery is implemented but OFF BY DEFAULT (migration 33).**
+  The planner returns a structured `images` plan inside its existing plan JSON
+  (`siteType` + a bounded array); `src/lib/images/manifest.ts` validates every field and
+  `approveImagePlan` decides — deterministically, from backend policy only — how many
+  assets are paid for. The planner can never raise the ceiling: `MAVLY_IMAGE_MAX_ASSETS`
+  (default 40, clamped 1..40), `MAVLY_IMAGE_MAX_RUN_COST_USD` (default 0.30, clamped
+  0..1) and an explicit `MAVLY_IMAGE_LARGE_CATALOG_PROJECTS` cohort (80 assets, catalog
+  site type required) are the only sources of authority. Assets past the ceiling are
+  DEFERRED and named, never silently dropped and never reported ready. The stage runs
+  inside the existing durable run (`runImageStage` in `src/lib/images/service.ts`) between
+  the persisted plan and the first code batch, is bounded by its own slice of the run
+  deadline, and marks an asset `ready` only after the provider bytes were validated
+  (PNG/JPEG signature, size), uploaded to the `project-images` Storage bucket and written
+  through `complete_image_asset`. Each asset is CLAIMED in the database before the paid
+  call, so a retried run, a second worker or a concurrent resume cannot generate it twice;
+  a resumed run reuses finished rows and the coding prompt lists ONLY persisted URLs.
+  Every attempt records provider cost with `cost_known`; a timeout stays `uncertain` with
+  a NULL cost, never zero. **There is no image credit price and no credit reservation,
+  charge, refund or settlement for images** — provider spend is provider spend, and the
+  Phase 11 credit foundation still prices generation runs only. The model is locked to
+  `recraft/recraft-v4.1-flash` through OpenRouter's dedicated image API with no fallback;
+  `MAVLY_IMAGE_MODEL` is a selector over the one-entry catalog, and an unregistered value
+  resolves to that model rather than being forwarded. No UI surface calls the image stage:
+  it is a generation-path feature, and the standalone unbilled
+  `POST /api/vcaas/projects/{id}/images/generate` route remains (it returns bytes to the
+  caller, persists nothing, and has no UI caller). Reference images are not supported and
+  a URL-only provider response is refused rather than fetched. The standalone route keeps
+  its best-effort per-instance admission window (5 per user / 40 per instance per 10
+  minutes) and its 3 MB response cap; the plan-driven stage is bounded by its own count,
+  spend, concurrency, attempt and deadline limits instead.
 - **The GitHub integration is implemented** as a GitHub App used with user-to-server
   tokens: OAuth start, callback, status, repository/branch discovery, connect, disconnect,
   push and import under `/api/integrations/github/`; callback at `/auth/github/callback`.
@@ -606,11 +626,11 @@ a delivered webhook, a container image build/publish, or the migrations against 
   runtime for website and Android source generation; it also serves image generation. No
   Supabase Edge Function or worker reads it. `MAVLY_DEFAULT_MODEL` may select only a model
   in the OpenRouter catalog; an unsupported override is ignored rather than forwarded.
-  `MAVLY_IMAGE_MODEL` selects
-  the image model from the separate image catalog and defaults to
-  `black-forest-labs/flux.2-klein-4b`; a value that is not a catalog entry is ignored
-  (default) and never forwarded. `VERCEL_API_TOKEN` is also
-  server-only and is never stored in the database or returned to a browser.
+  `MAVLY_IMAGE_MODEL` is a selector over the separate image catalog, whose single entry
+  is `recraft/recraft-v4.1-flash`; any value that is not a catalog entry resolves to that
+  model and is never forwarded. There is no second image model and no fallback.
+  `VERCEL_API_TOKEN` is also server-only and is never stored in the database or returned
+  to a browser.
 - Obsolete operator secrets (`TOTALUM_VCAAS_API_KEY`, `VCAAS_API_KEY`, `TOTALUM_API_URL`)
   are not read. Their revocation/removal is a manual operator task; do not print, copy,
   commit, or request their values.
@@ -717,8 +737,16 @@ paths with `src/lib/vcaas-scope.ts`, so unknown shapes are refused before any wo
 | `supabase/migrations/26_android_builds.sql` | Durable Android build table, fenced lifecycle/recovery/cleanup RPCs, retention state, owner column grants, schema marker 26 and the private artifact bucket. |
 | `infra/android-build/` | Reproducible `android-debug-v1` image definition (digest-pinned base, checksum-verified JDK 17/Gradle 8.9/command-line tools, SDK 35 + `aapt`, seed-warmed offline Gradle cache), the seed project, pin templates, and `build.sh`/`verify.sh`/`publish.sh`. The repository never builds or publishes the image. |
 | `docs/architecture/phase-9-android.md`, `docs/runbooks/android.md` | Phase 9 Android profile, validation, isolation, artifact lifecycle, capability matrix, security boundaries and rollout. |
-| `src/lib/ai/image-models.ts` | Image-model catalog and image-request validation, kept apart from the text catalog. |
+| `src/lib/ai/image-models.ts` | The one-entry image-model catalog (locked `recraft/recraft-v4.1-flash`, its verified aspect-ratio enum and $0.007/image price) and image-request validation, kept apart from the text catalog. |
 | `src/lib/ai/openrouter-images.ts` | The separate OpenRouter image API client: response validation, size cap, bounded retry, server-only key. |
+| `src/lib/images/policy.ts` | Backend-owned image plan policy: site-type guidance, the effective asset ceiling, the large-catalog cohort, spend ceiling, concurrency/timeout/attempt bounds and the stage's deadline slice. Pure. |
+| `src/lib/images/manifest.ts` | The typed image plan: validation of the planner's `images` array (ids, paths, ratios, placements, bounds) and deterministic approval of required-first assets within the count and spend ceilings. Pure. |
+| `src/lib/images/prompt.ts` | Server-authored planner addendum and the coding block that lists only persisted asset URLs, names unavailable placements, and keeps `preview.html` self-contained. Pure. |
+| `src/lib/images/service.ts` | One bounded image stage per run: approve → persist → claim → generate → validate → upload → complete, with truthful partial/uncertain outcomes and cancellation. |
+| `src/lib/images/store.ts` | Typed wrappers for migration 33's owner-checked RPCs and the run's asset rows; no service-role client is created here. |
+| `src/lib/images/asset-store.ts` | Server-derived Storage path, public URL and bounded upload for generated imagery. |
+| `supabase/migrations/33_project_image_assets.sql` | Image plan/asset tables, owner-checked sync/claim/complete/fail/finish RPCs, column grants, schema marker 33 and the `project-images` bucket. Additive; apply after 32 and 03. |
+| `docs/architecture/phase-12-image-planning.md` | Phase 12 design: authority model, plan schema, budgets, execution/idempotency, storage, rollout and what is (not) verified. |
 | `src/lib/ai/chat-contract.ts` | Provider-neutral chat-completions contract used by OpenRouter: result types, response parsing and failure classification. Pure. |
 | `src/lib/ai/openrouter.ts` | The OpenRouter chat-completions call for website/Android generation and its catalog gate; server-only key, redacted failures. |
 | `src/lib/mavly/image-limits.ts` | Best-effort per-user/per-instance image-generation admission windows. |
@@ -852,6 +880,11 @@ paths with `src/lib/vcaas-scope.ts`, so unknown shapes are refused before any wo
    execution is the opt-in debug build inside the provider microVM (deny-all network, no
    credentials); there is no local fallback and no release-signing or AAB artifact.
    The preview is static HTML served with a CSP `sandbox` and no same-origin privileges.
+   Generated website IMAGERY is public website content: it lives in the public-read
+   `project-images` bucket at a server-derived, unguessable
+   `<project_id>/<run_id>/<asset_key>.<ext>` path (no listing), while the plan and asset
+   rows stay owner-only through `projects` RLS. No project file, secret, provider
+   credential or APK is ever written to that bucket, and no provider URL is fetched.
 7. **OAuth has two traps.** Do not send a custom `state` to Supabase (PKCE owns it), and
    the Mavly sign-in callback URL must be a bare `/auth/callback` with no query string. The
    destination rides in the `mavly_oauth_next` cookie. Keep Supabase's allowed-redirect

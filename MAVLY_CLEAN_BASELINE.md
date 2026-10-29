@@ -40,7 +40,7 @@ revocation or database mutation was performed while preparing this document.
 | Managed Neon databases (opt-in foundation) | Only worker-dispatched projects in an explicit cohort can provision one quota-bounded Neon project per Mavly project. Connection URIs are encrypted in an internal Supabase registry and never reach the browser or model. `provisioned` means only that Mavly's server-side `select 1` succeeded; no app schema, generated-app runtime binding, CRUD/auth, automatic cleanup or Mavly usage/billing attribution exists. Requires approved Neon Agent Plan access, migration 30, and explicit server configuration. No live provisioning has been verified. |
 | Project activity | Real run history aggregated from `project_runs`; visitor analytics are not collected. |
 | Project files | `project_files`; tree/content reads and content writes. |
-| Image generation | `POST …/images/generate` asks `black-forest-labs/flux.2-klein-4b` through OpenRouter's dedicated image API, validates the returned PNG/JPEG and returns it as base64 in the response. Nothing is persisted and nothing is billed. The workspace's More-menu panel for it was removed, so no UI calls the route. |
+| Image generation | The locked model is `recraft/recraft-v4.1-flash` on OpenRouter's dedicated image API. Planning-driven website imagery (off by default, migration 33) persists approved assets and gives the coding agent their URLs; the standalone `POST …/images/generate` route uses the same model, returns base64, persists nothing and has no UI caller. Nothing is charged to user credits. |
 | Source archive | ZIP built from `project_files`. |
 | Restore points | `project_snapshots` + `project_snapshot_files`; a "Restore Code" action in the chat. |
 | GitHub | A GitHub App with user-to-server tokens: connect, push, import. |
@@ -202,25 +202,26 @@ project storage, runs, snapshots, and worker state.
 
 ### Image generation
 
-`POST /api/vcaas/projects/{id}/images/generate` generates one image with
-`black-forest-labs/flux.2-klein-4b` on OpenRouter's **dedicated image API**
-(`POST https://openrouter.ai/api/v1/images`), which is a different contract from chat
-completions. The catalog lives in `src/lib/ai/image-models.ts` — deliberately separate
-from `models.ts`, so the website-generation model cannot resolve to an image model — and
-records only the parameters the provider's endpoint record accepts: `aspect_ratio`
-(1:1, 4:3, 3:4, 3:2, 2:3, 16:9, 9:16, 21:9, auto), `output_format` (png, jpeg), `n: 1`
-and `seed`. `resolution`, `quality`, `background`, streaming and reference images are
-refused rather than silently ignored; reference images would need an upload path (not
-implemented) or a server-side URL fetcher (an SSRF surface).
+The image catalog lives in `src/lib/ai/image-models.ts` — deliberately separate from
+`models.ts`, so the website-generation model cannot resolve to an image model — and has
+**one entry**: `recraft/recraft-v4.1-flash`, called on OpenRouter's **dedicated image
+API** (`POST https://openrouter.ai/api/v1/images`), which is a different contract from
+chat completions. Its parameters come from the provider's own endpoint record
+(`GET /api/v1/images/models/recraft/recraft-v4.1-flash/endpoints`, checked 2026-10-29):
+`aspect_ratio` is the enum 1:1, 4:3, 3:4, 16:9, 9:16, auto; `n` is 1..6 (Mavly always sends
+1); `supports_streaming` is false; billing is $0.007 per output image. The record lists no
+`output_format`, `seed`, `resolution`, `quality` or `background`, so none of those is ever
+sent. Mavly-specific request validation still refuses them rather than silently ignoring
+them; reference images would need an upload path (not implemented) or a server-side URL
+fetcher (an SSRF surface).
 
-`MAVLY_IMAGE_MODEL` selects which catalog entry the route uses. The built-in default is
-`black-forest-labs/flux.2-klein-4b`, so an unset variable changes nothing. The value is
-**validated against the catalog rather than forwarded**: a slug with no entry (a typo, a
-chat-completions model, another provider's model) resolves to the default and never
-reaches OpenRouter. Catalog validation is what makes the enforced options trustworthy —
-aspect ratios, formats, `n` and seed support all come from the entry. `MAVLY_DEFAULT_MODEL`
-is a different variable for the website/code-generation model and is never read by the
-image path; the two catalogs share no entry.
+`MAVLY_IMAGE_MODEL` is a **selector over that one-entry catalog, not an injection point**:
+a slug with no entry (a typo, a chat-completions model, another provider's model)
+resolves to the locked model and never reaches OpenRouter. There is no second image model
+and no fallback. Catalog validation is what makes the enforced options trustworthy —
+aspect ratios and format support all come from the entry. `MAVLY_DEFAULT_MODEL` is a
+different variable for the website/code-generation model and is never read by the image
+path; the two catalogs share no entry.
 
 The response is validated, not trusted: the base64 has to decode, be non-empty, be within
 **3,000,000 bytes**, and start with a PNG or JPEG signature. The size cap is set by the
@@ -238,12 +239,41 @@ Admission is a best-effort, per-instance request window: **5 per user per 10 min
 across serverless instances; a hard cap needs a persisted admission RPC and a migration,
 which is not implemented. Over-limit requests answer `429 RATE_LIMITED` with `retry-after`.
 
-The image is returned as base64 and is **not stored**: there is no binary asset pipeline
-(`project_files` is text served as text by the static preview), so the workspace shows it
-for the session and offers a download. Images are **not charged**: the credit foundation
-below covers generation runs only, it is off by default, and no image price was invented.
-The provider's own cost stays inside its server-side metadata and is deliberately **not**
-returned to the browser.
+On this standalone route the image is returned as base64 and is **not stored**, and no UI
+calls it. Images are **not charged**: the credit foundation below covers generation runs
+only, it is off by default, and no image price was invented. The provider's own cost stays
+inside its server-side metadata and is deliberately **not** returned to the browser.
+
+#### Planning-driven website imagery (off by default, migration 33)
+
+The generation path, not that route, is where images now come from. When
+`MAVLY_IMAGE_PLANNING_ENABLED` is truthy the planner returns `siteType` plus a bounded
+`images` array inside its existing plan JSON. `src/lib/images/manifest.ts` validates every
+entry (lowercase ids, unique ids, unique placements, site-relative paths, aspect ratios
+from the model's own enum, bounded prompts/alt text) and rejects the whole plan on any
+defect. `approveImagePlan` then decides **from backend policy only** how many assets are
+paid for: required assets first, then priority, then id; anything over the count or USD
+ceiling is recorded as **deferred** rather than dropped. The planner cannot raise either
+limit — `MAVLY_IMAGE_MAX_ASSETS` (default 40, clamped 1..40),
+`MAVLY_IMAGE_MAX_RUN_COST_USD` (default 0.30, clamped 0..1) and an explicit
+`MAVLY_IMAGE_LARGE_CATALOG_PROJECTS` cohort (80 assets, and only when the plan names a
+`catalog`) are the only sources of authority.
+
+`src/lib/images/service.ts` runs one bounded stage inside the existing durable run,
+between the persisted plan and the first code batch: it persists the approved plan and its
+asset rows, **claims** each asset in the database before the paid call, validates the
+returned bytes (PNG/JPEG signature, size), uploads them to the public-read
+`project-images` bucket at a server-derived `<project_id>/<run_id>/<asset_key>.<ext>`, and
+only then writes `ready` through `complete_image_asset`. A finished row is reused instead
+of regenerated on resume; a claim held by another worker yields no provider call; the
+stage stops at its own deadline slice, concurrency limit, attempt cap and approved count,
+and reports what is pending truthfully. Provider cost is recorded per attempt with
+`cost_known`; a timeout stays `uncertain` with a NULL cost. **No credit is reserved,
+charged, refunded or settled for an image** — this adds no charging policy and alters no
+credit, payment or pricing table. The coding prompt lists only persisted URLs, and a
+deferred or failed placement is named as unavailable so the generated page keeps its slot
+with a placeholder instead of inventing a URL; `preview.html` never references remote
+images at all.
 
 ### Credits (opt-in foundation)
 
@@ -492,7 +522,10 @@ with HTTP **503** and `cache-control: private, no-store, max-age=0`.
 5. Generated output is text. It is validated and stored; it is never imported, transpiled,
    evaluated or executed on a Mavly host. The only exception is the opt-in verification
    build, which runs only inside an isolated provider microVM on a validated immutable
-   snapshot with restricted egress and no project/service credentials.
+   snapshot with restricted egress and no project/service credentials. Generated website
+   imagery is public content in the public-read `project-images` bucket at a server-derived
+   path; its plan/asset rows stay owner-only through `projects` RLS, and no project file,
+   secret, provider credential or APK is ever written there.
 6. The preview has a CSP `sandbox` without `allow-same-origin`, plus `default-src 'none'`,
    inline-only scripts/styles and `frame-ancestors 'self'`. It cannot act as the signed-in
    user.
@@ -514,7 +547,11 @@ with HTTP **503** and `cache-control: private, no-store, max-age=0`.
 ## 6. Files involved in implemented features
 
 - `src/lib/ai/models.ts` — text-model catalog, default resolution, task routing scaffold.
-- `src/lib/ai/image-models.ts` — image-model catalog and image-request validation.
+- `src/lib/ai/image-models.ts` — the one-entry image-model catalog (locked Recraft slug,
+  verified aspect-ratio enum, $0.007/image) and image-request validation.
+- `src/lib/images/policy.ts`, `manifest.ts`, `prompt.ts`, `service.ts`, `store.ts`,
+  `asset-store.ts` — planning-driven website imagery: backend-owned limits and approval,
+  plan validation, prompts, the bounded stage, the migration-33 RPC wrappers and Storage.
 - `src/lib/ai/openrouter-images.ts` — the image API client (`/api/v1/images`), response
   validation and bounded retry. Server-only key.
 - `src/lib/mavly/image-limits.ts` — best-effort per-user/per-instance request admission.
@@ -664,9 +701,11 @@ The Totalum client `src/lib/vcaas-server.ts` remains deleted and must not be rec
 - Image generation is operator-cost-bearing but user-unbilled: it uses
   `OPENROUTER_API_KEY` and is outside the generation credit foundation. The active
   generation path reads the same server key, so both share one provider account. Pricing
-  images is a separate product decision; no image charge was invented. Generated images
-  are not saved to the project and are not available to the generated app; the workspace
-  panel that displayed them was removed, so the route currently has no caller.
+  images is a separate product decision; no image charge was invented. The standalone
+  `/images/generate` route persists nothing and has no caller. Planning-driven website
+  imagery is the persisted path: it needs `MAVLY_IMAGE_PLANNING_ENABLED`, migration 33 and
+  the model's verified provider price ($0.007/image) as an operator budget; nothing about
+  it is charged to user credits.
 - A real Supabase OAuth app is required. Scopes are app-level:
   `organizations:read` and `projects:read`.
 - Changing `MAVLY_INTEGRATION_ENCRYPTION_KEY`, the OAuth client ID or the OAuth app makes
