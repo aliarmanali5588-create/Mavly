@@ -107,6 +107,13 @@ import {
   type OrchestrationHandle,
 } from "@/lib/orchestration/engine";
 import { isProjectInMultiAgentCohort, multiAgentConfig } from "@/lib/orchestration/config";
+import { isProjectInRuntimeCohort, runtimeSandboxConfig } from "@/lib/runtime-sandbox/config";
+import {
+  runtimeEvidenceFromRecord,
+  runtimeEvidenceMatchesSource,
+  runtimeRepairSummary,
+} from "@/lib/runtime-sandbox/evidence";
+import { latestRuntimeSandbox } from "@/lib/runtime-sandbox/store";
 import { validateImagePlan } from "@/lib/images/manifest";
 import {
   IMAGE_STAGE_MAX_MS,
@@ -847,6 +854,24 @@ async function execute(
    * orchestration observability must never change the run's own outcome. The
    * existing `generateApp` pipeline still writes every file.
    */
+  /**
+   * ⚠️ QA/SECURITY READ RUNTIME EVIDENCE, THEY DO NOT CREATE IT. The provider
+   * reads this project's durable sandbox row only; it never starts, restarts or
+   * installs anything, so a review cannot spend provider time or change a run.
+   */
+  const runtimeConfig = runtimeSandboxConfig();
+  const runtimeEvidenceProvider =
+    input.worker &&
+    guard.client &&
+    runtimeConfig.ready &&
+    runtimeConfig.qaEvidence &&
+    isProjectInRuntimeCohort(input.projectId, runtimeConfig)
+      ? async () => {
+          const latest = await latestRuntimeSandbox(guard.client as SupabaseClient, input.projectId);
+          return latest.ok ? runtimeEvidenceFromRecord(latest.data) : null;
+        }
+      : undefined;
+
   let orchestration: OrchestrationHandle | null = null;
   try {
     orchestration = input.worker
@@ -862,6 +887,7 @@ async function execute(
           requestedModel: input.requestedModel,
           leaseToken: input.worker.leaseToken,
           trackProviderUsage: guard.trackProviderUsage,
+          runtimeEvidence: runtimeEvidenceProvider,
         })
       : null;
   } catch (error) {
@@ -1293,10 +1319,34 @@ async function execute(
     ? Math.max(0, remainingBudgetMs - POST_CODING_REVIEW_RESERVE_MS)
     : remainingBudgetMs;
   const repairContext = priorRepairContext(orchestration, resumeManifest);
+  /**
+   * A failed live sandbox is real runtime evidence for the coding context. It is
+   * read from the durable session only; this never starts a sandbox, and the
+   * block is explicitly subordinate advisory data.
+   */
+  let runtimeFailureContext: string | null = null;
+  if (
+    input.worker &&
+    guard.client &&
+    runtimeConfig.ready &&
+    isProjectInRuntimeCohort(input.projectId, runtimeConfig)
+  ) {
+    const latestRuntime = await latestRuntimeSandbox(guard.client, input.projectId);
+    if (latestRuntime.ok) {
+      const evidence = runtimeEvidenceFromRecord(latestRuntime.data);
+      /** Only a failure recorded for the source this run starts from is relevant. */
+      runtimeFailureContext = runtimeEvidenceMatchesSource(evidence, before)
+        ? runtimeRepairSummary(evidence)
+        : null;
+    }
+  }
   const generationPlanContext = [
     planContext,
     repairContext
       ? subordinateContextBlock("Prior repair findings", repairContext, 4_000)
+      : null,
+    runtimeFailureContext
+      ? subordinateContextBlock("Live sandbox failure", runtimeFailureContext, 2_500)
       : null,
   ]
     .filter((entry): entry is string => Boolean(entry))

@@ -17,6 +17,7 @@ import { toast } from "sonner";
 import { ChatPanel } from "@/components/workspace/ChatPanel";
 import { AndroidWorkspace } from "@/components/workspace/AndroidWorkspace";
 import { PreviewPanel } from "@/components/workspace/PreviewPanel";
+import { LiveRuntimePreview } from "@/components/workspace/LiveRuntimePreview";
 import { useRunProgress } from "@/components/workspace/RunActivity";
 import { isRunOver } from "@/lib/run-progress";
 import { WorkspaceMore } from "@/components/workspace/v2/WorkspaceMore";
@@ -1899,7 +1900,15 @@ export default function WorkspacePage() {
               </div>
             )}
             <div className={`flex-1 min-h-0 overflow-hidden ${activeTab === "preview" ? "rounded-none" : "m-2 sm:m-3 rounded-xl shadow-sm"}`} style={{ background: cardBg }}>
-              {activeTab === "preview" && <PreviewPanel key={previewKey} previewUrl={shownPreviewUrl} cached={previewCached} onRefresh={() => { fetchProject(); setPreviewKey((k) => k + 1); }} loading={showInitialGenerationLoader} buildStage={buildStage} buildRetrying={buildRetrying} previewReady={previewReady} emptyMessage={project?.previewUnavailableReason} previewState={project?.previewState} onResumeGeneration={handleResumeGeneration} resumingGeneration={resumingGeneration} mobilePreview={mobilePreview} iframePath={iframePath} frameRef={previewFrameRef} /* ⭐ Same-origin ONLY while the editor is open — and for the length of an apply, which outlives the panel: dropping the proxy mid-apply would reload the frame and throw away the preview-only edits the user is watching. */ proxiedSrc={visualEditorOpen || visualLocked ? `/api/preview/${encodeURIComponent(projectId)}` : null} />}
+              {activeTab === "preview" && (
+                <LiveRuntimePreview
+                  projectId={projectId}
+                  refreshKey={previewKey + sourceRevision}
+                  mobilePreview={mobilePreview}
+                >
+                  <PreviewPanel key={previewKey} previewUrl={shownPreviewUrl} cached={previewCached} onRefresh={() => { fetchProject(); setPreviewKey((k) => k + 1); }} loading={showInitialGenerationLoader} buildStage={buildStage} buildRetrying={buildRetrying} previewReady={previewReady} emptyMessage={project?.previewUnavailableReason} previewState={project?.previewState} onResumeGeneration={handleResumeGeneration} resumingGeneration={resumingGeneration} mobilePreview={mobilePreview} iframePath={iframePath} frameRef={previewFrameRef} /* ⭐ Same-origin ONLY while the editor is open — and for the length of an apply, which outlives the panel: dropping the proxy mid-apply would reload the frame and throw away the preview-only edits the user is watching. */ proxiedSrc={visualEditorOpen || visualLocked ? `/api/preview/${encodeURIComponent(projectId)}` : null} />
+                </LiveRuntimePreview>
+              )}
               {activeTab === "code" && <CodePanel key={`${projectId}:${sourceRevision}`} projectId={projectId} sourceRevision={sourceRevision} darkMode={darkMode} onAskAiEdit={handleAskAiEdit} wake={serverWake} />}
               {activeTab === "more" && <WorkspaceMore project={project} onProjectChanged={() => void fetchProject()}  />}
             </div>
@@ -1996,7 +2005,11 @@ export default function WorkspacePage() {
             </div>
           ) : (
             <div className="h-full min-h-0 overflow-hidden">
-              {activeTab === "preview" && <PreviewPanel key={previewKey} previewUrl={shownPreviewUrl} cached={previewCached} onRefresh={() => { fetchProject(); setPreviewKey((k) => k + 1); }} loading={showInitialGenerationLoader} buildStage={buildStage} buildRetrying={buildRetrying} previewReady={previewReady} emptyMessage={project?.previewUnavailableReason} previewState={project?.previewState} onResumeGeneration={handleResumeGeneration} resumingGeneration={resumingGeneration} mobilePreview={false} iframePath={iframePath} />}
+              {activeTab === "preview" && (
+                <LiveRuntimePreview projectId={projectId} refreshKey={previewKey + sourceRevision}>
+                  <PreviewPanel key={previewKey} previewUrl={shownPreviewUrl} cached={previewCached} onRefresh={() => { fetchProject(); setPreviewKey((k) => k + 1); }} loading={showInitialGenerationLoader} buildStage={buildStage} buildRetrying={buildRetrying} previewReady={previewReady} emptyMessage={project?.previewUnavailableReason} previewState={project?.previewState} onResumeGeneration={handleResumeGeneration} resumingGeneration={resumingGeneration} mobilePreview={false} iframePath={iframePath} />
+                </LiveRuntimePreview>
+              )}
               {activeTab === "code" && <CodePanel key={`${projectId}:${sourceRevision}`} projectId={projectId} sourceRevision={sourceRevision} darkMode={darkMode} onAskAiEdit={handleAskAiEdit} wake={serverWake} />}
               {activeTab === "more" && <WorkspaceMore project={project} onProjectChanged={() => void fetchProject()}  />}
             </div>

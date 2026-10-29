@@ -32,6 +32,7 @@ revocation or database mutation was performed while preparing this document.
 | AI generation | The active `src/lib/mavly/run-agent.ts` → `src/lib/ai/agent.ts` → `src/lib/ai/provider.ts` → `src/lib/ai/openrouter.ts` pipeline serves both websites (Next.js profile) and Android apps (Kotlin/Compose profile). The default execution path is still the inline `after()` run; a durable worker is available opt-in per project cohort. Worker execution rechecks the persisted project type before generation and does not enqueue the Next.js verification sandbox for an Android run. |
 | Durable generation worker (opt-in) | Off unless `MAVLY_GENERATION_WORKER_ENABLED`, a ≥32-char `MAVLY_GENERATION_WORKER_SECRET`, an explicit `MAVLY_GENERATION_WORKER_PROJECTS` cohort, `SUPABASE_SERVICE_ROLE_KEY` and the Supabase URL are all configured. Admission records `dispatch_mode`; only worker-dispatched runs are claimed. An operator-supplied scheduler calls `/api/generation/worker`, which executes one job per tick under a fenced lease, renews it, recovers expired leases into bounded retries or dead letters, and never deletes accepted work. Uncohort projects remain inline. See `docs/runbooks/generation-worker.md`. |
 | Verification sandbox (opt-in) | Off unless `MAVLY_VERIFICATION_SANDBOX_ENABLED`, an explicit `MAVLY_VERIFICATION_SANDBOX_PROJECTS` cohort, a Vercel provider credential, `SUPABASE_SERVICE_ROLE_KEY` and the Supabase URL are all configured, and migrations 17 then 19 are applied. Only worker-dispatched runs enqueue one verification per completed run and ready snapshot. Later worker ticks re-validate the snapshot, build it in an isolated Vercel Sandbox microVM, start the validated production server on loopback and run a sandbox-local health check. `passed` requires the build, the runtime start and a `2xx`/`3xx` health response; build-only success is never `passed`. Stages run detached and are polled across ticks; every terminal path destroys the sandbox. Unsupported formats return `unsupported_runtime`. A separately opt-in bounded AI repair (default 1, hard cap 2) may create a new immutable snapshot for a source-level failure and rerun the checks. Preview stays unavailable because there is no authenticated proxy. Status appears only in the existing authorized `agent/status` / `agent/stop` responses. See `docs/architecture/phase-4-runtime-verification.md`. |
+| Live runtime preview (opt-in) | Off unless `MAVLY_RUNTIME_SANDBOX_ENABLED`, an explicit `MAVLY_RUNTIME_SANDBOX_PROJECTS` cohort, server-only `E2B_API_KEY`, the Supabase URL and migration 34 are all configured. For a supported React + Vite website project, Mavly copies the authoritative `project_files` into an isolated E2B sandbox, installs with `npm ci|install --ignore-scripts`, starts the installed Vite binary with fixed arguments, and marks the session `ready` only after a server-side request to the validated `*.e2b.app` preview host returns 2xx/3xx. One durable row per project enforces a single active sandbox; ready sessions are reused, Restart rebuilds, Stop and expiry are idempotent. The sandbox never writes back to `project_files`. Unsupported frameworks keep the static preview. **Not verified against a live E2B account.** See `docs/architecture/phase-13-live-runtime-preview.md`. |
 | Generation preview | New-project plans always include `preview.html`; it is generated in its own batch. Batch parsing accepts only requested paths and refuses an incomplete HTML document. Progress stages use durable run state, manifest/checkpoints, and the static-preview resolver; the UI uses an indeterminate bar rather than estimated completion percentages. The workspace labels the preview `ready`/`stale`/`incomplete`/`unavailable` from the saved entry plus the latest durable run, and offers `agent/resume` when a failed run can be recovered. |
 | Text generation | `src/lib/ai/provider.ts` serves every website/Android generation request through OpenRouter (`src/lib/ai/openrouter.ts`). The production default is `deepseek/deepseek-v4.1-flash`; `cohere/north-mini-code:free` is selectable only when the project is in the server-configured `MAVLY_NORTH_MINI_CODE_PROJECTS` cohort. Models must pass the catalog and project-cohort checks before a request leaves the server; the shared chat contract lives in `src/lib/ai/chat-contract.ts`. Requests are **streamed**: each call class has one absolute cap plus a shorter idle-progress window (`src/lib/ai/budget.ts`), and the streamed-accumulation and completion rules live in `src/lib/ai/stream-contract.ts`. A cancelled, unknown-reason or prematurely closed stream is a failure even when text arrived; a timeout on a batch is answered by reducing scope, never by repeating the same request; and a run stops at its provider-attempt ceiling (`MAVLY_MAX_PROVIDER_ATTEMPTS_PER_RUN`, 4–40, default 12). |
 | Conversation and runs | Persisted in `project_messages` and `project_runs`, polled by the workspace. |
@@ -44,19 +45,21 @@ revocation or database mutation was performed while preparing this document.
 | Source archive | ZIP built from `project_files`. |
 | Restore points | `project_snapshots` + `project_snapshot_files`; a "Restore Code" action in the chat. |
 | GitHub | A GitHub App with user-to-server tokens: connect, push, import. |
-| Preview | Generated static `preview.html`, or an imported static `index.html` / `public/index.html` with local assets, served with a CSP sandbox. Framework entry points that need a build are reported as unsupported. |
+| Preview | Generated static `preview.html`, or an imported static `index.html` / `public/index.html` with local assets, served with a CSP sandbox. Framework entry points that need a build are reported as unsupported. For an enabled React + Vite project, the workspace may instead show the validated live E2B preview; the static panel stays mounted as the fallback. |
 | Supabase account connection | OAuth + PKCE, encrypted access/refresh tokens, organization/project discovery, one selected project. |
 | Customer publishing | Retired. The publish, unpublish, and deployment-status APIs fail closed with `BACKEND_NOT_CONFIGURED`; no provider is called and no deployment success is fabricated. Historical deployment rows/migrations remain untouched. |
 | Shared tenant hosting (opt-in) | Off unless `MAVLY_HOSTING_MODE=shared` and a project cohort is configured. A publish freezes an immutable `project_published_versions` / `project_published_files` artifact, then migration 15's `activate_shared_publication` atomically links it from `project_deployments.active_version_id` and marks the attempt `ready`. The public resolver serves from that active pointer, **not** the attempt status, so republishing or a failed attempt leaves the previous version live. It serves at `<project-id>.mavly.xyz` from Mavly's own tenant runtime, which re-checks the cohort after resolution. Public access is two published-only `SECURITY DEFINER` RPCs; drafts and `project_files` are never served publicly. Unpublish deactivates the mapping without deleting history. Wildcard DNS/TLS and provider eligibility remain operator prerequisites; see `MAVLY_SHARED_HOSTING.md`. |
 | `/api/config` | Still returns `{ ok: true, data: { configured: false } }`. |
 | Visual shell | Dashboard, workspace, chat, composer, dialogs and preview frame render. |
 
-Generated code is **never executed** on the Mavly server. The only execution anywhere is
-the opt-in verification build, loopback runtime start and sandbox-local health check inside
-an isolated provider microVM, which never runs on a
-Mavly host and exposes no public port or preview URL. The generated backend exists only as
-source files; the preview is the
-standalone `preview.html` the model also returns.
+Generated code is **never executed** on the Mavly server. Execution happens only inside an
+isolated provider microVM: the opt-in verification build, loopback runtime start and
+sandbox-local health check (which exposes no public port or preview URL), and the opt-in
+Phase 13 **live preview** (an E2B sandbox running `npm install --ignore-scripts` and the
+fixed Vite dev server, with a provider-hosted preview URL). Neither runs on a Mavly host,
+and neither makes generated code authoritative. The generated backend otherwise exists
+only as source files; the default preview is the standalone `preview.html` the model also
+returns.
 
 Publishing does not change that rule. When enabled, the server uploads `index.html` (the
 preview bytes) and Vercel serves it as a static site with `framework: null`. Each publish
@@ -164,6 +167,24 @@ preview and repair state:
 Apply `19` after `17` (and after `18` in file order) and before enabling runtime
 verification. It is additive and non-destructive.
 
+`supabase/migrations/34_runtime_sandboxes.sql` adds the opt-in Phase 13 live preview:
+
+- `project_runtime_sandboxes`, one durable lifecycle row per live preview sandbox, with
+  owner/project/run references, a server-only provider sandbox id, state, source hash,
+  synced path manifest, validated port and preview URL, bounded logs/diagnostics, timing
+  and expiry;
+- a partial unique index and advisory lock that allow exactly one active sandbox per
+  project, plus a database transition table (`ready` only from `starting`) and a `ready`
+  constraint requiring the provider id, port and preview URL;
+- owner-checked `SECURITY DEFINER` `begin_runtime_sandbox`,
+  `update_runtime_sandbox` and `stop_runtime_sandbox`, a `service_role`-only bounded
+  `expire_runtime_sandboxes` sweep, SELECT-only owner RLS and schema marker 34.
+
+Apply `34` after `33` and before setting `MAVLY_RUNTIME_SANDBOX_ENABLED`. It is additive
+and non-destructive; it does not alter generation runs, credits, images, verification,
+payments or deployment. With the flag off no sandbox is created and the static preview is
+unchanged. A real E2B sandbox, install and Vite server have **not** been exercised.
+
 The app still uses the caller's own RLS-scoped Supabase client everywhere except the
 durable worker. `SUPABASE_SERVICE_ROLE_KEY` is server-only and is confined to
 `src/lib/supabase/worker.ts`, the worker orchestrator, `/api/generation/worker` and the
@@ -195,6 +216,8 @@ The project routes run authentication → path scope → ownership → handler:
 | `POST /api/vcaas/projects/{id}/images/generate` | One image from the server-side image model; returned as base64, not stored. |
 | `GET /api/vcaas/source-code/{id}` | ZIP of the generated files. |
 | `GET/HEAD /api/preview/{id}/…` | Sandboxed static preview: `preview.html`, `index.html`, or `public/index.html` plus local assets. |
+| `GET /api/runtime/{id}` | Authenticated live-preview status and bounded diagnostics; never creates a sandbox. |
+| `POST /api/runtime/{id}` | Fixed `start` / `restart` / `stop` / `build` actions for an owned, cohort-enabled project. |
 
 The customer-owned Supabase OAuth connection is not implemented and no such routes are
 available. Mavly's own Supabase infrastructure remains required for authentication, RLS,

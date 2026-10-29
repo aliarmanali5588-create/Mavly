@@ -45,6 +45,16 @@ export type VcaasErrorCode =
     | "RATE_LIMITED"
     | "VALIDATION"
     | "UPLOAD_QUOTA_EXCEEDED"
+    /** Phase 13 live runtime previews: switched off, not configured or not migrated. */
+    | "RUNTIME_SANDBOX_NOT_CONFIGURED"
+    /** The persisted project is not a runnable React + Vite application. */
+    | "RUNTIME_SANDBOX_UNSUPPORTED"
+    /** A start/reconnect is already in flight for this project. */
+    | "RUNTIME_SANDBOX_BUSY"
+    /** The isolated runtime failed install, start or readiness. */
+    | "RUNTIME_SANDBOX_FAILED"
+    /** A required database migration is missing; nothing was attempted. */
+    | "MIGRATION_REQUIRED"
     | "UNKNOWN";
 
 /**
@@ -199,6 +209,11 @@ const STATUS_FOR: Record<VcaasErrorCode, number> = {
      */
     UPLOAD_QUOTA_EXCEEDED: 429,
     UNKNOWN: 502,
+    MIGRATION_REQUIRED: 503,
+    RUNTIME_SANDBOX_BUSY: 409,
+    RUNTIME_SANDBOX_NOT_CONFIGURED: 503,
+    RUNTIME_SANDBOX_UNSUPPORTED: 422,
+    RUNTIME_SANDBOX_FAILED: 500,
 };
 
 function classify(upstreamCode: string | undefined, httpStatus: number): VcaasErrorCode {

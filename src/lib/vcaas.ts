@@ -26,6 +26,7 @@ import type {
   ProjectMemoryList,
 } from "@/lib/memory/types";
 import type { AndroidCapability } from "@/lib/android/capability";
+import type { RuntimeSandboxStatus, RuntimeCheck } from "@/lib/runtime-sandbox/types";
 import type { DbRestorePoint } from "@/lib/undo-db-change";
 import type {
   ProjectGroup,
@@ -254,6 +255,11 @@ const proxy = {
 
 /** Root of the internal proxy. Everything below is relative to this. */
 const API = "/api/vcaas";
+/**
+ * The live runtime preview is a dedicated authenticated route, not the VCaaS
+ * catch-all: it carries a long-running sandbox operation, not an upstream path.
+ */
+const RUNTIME_API = "/api/runtime";
 /** Per-project path prefix, e.g. `/api/vcaas/projects/my-app`. */
 const project = (projectId: string) => `${API}/projects/${encodeURIComponent(projectId)}`;
 
@@ -1073,6 +1079,51 @@ export const vcaasApi = {
     ): Promise<VcaasResponse<{ status: "idle" | "rebuilding" | "success" | "error"; errorMessage?: string }>> =>
       proxy.get<{ status: "idle" | "rebuilding" | "success" | "error"; errorMessage?: string }>(
         `${project(projectId)}/rebuild/status`,
+      ),
+  },
+
+  // ─────────────────── Live runtime preview (Phase 13) ─────────────────────
+  //
+  // The isolated E2B sandbox runs a real Vite dev server for supported React
+  // projects. `status` NEVER creates a sandbox, and only the three actions below
+  // exist: the body carries no command, path or port.
+  runtime: {
+    /** GET /api/runtime/{id} — validated state and bounded diagnostics. */
+    status: (projectId: string, options?: { logs?: boolean }): Promise<VcaasResponse<RuntimeSandboxStatus>> =>
+      proxy.get<RuntimeSandboxStatus>(
+        `${RUNTIME_API}/${encodeURIComponent(projectId)}${options?.logs ? "?logs=1" : ""}`,
+      ),
+
+    /** POST /api/runtime/{id} — start or reconnect. Reuses a ready session. */
+    start: (projectId: string): Promise<VcaasResponse<{ outcome: string; status: RuntimeSandboxStatus | null }>> =>
+      proxy.post<{ outcome: string; status: RuntimeSandboxStatus | null }>(
+        `${RUNTIME_API}/${encodeURIComponent(projectId)}`,
+        { action: "start" },
+      ),
+
+    /** Stop the owned dev-server process and destroy the sandbox (idempotent). */
+    stop: (projectId: string): Promise<VcaasResponse<{ outcome: string; status: RuntimeSandboxStatus | null }>> =>
+      proxy.post<{ outcome: string; status: RuntimeSandboxStatus | null }>(
+        `${RUNTIME_API}/${encodeURIComponent(projectId)}`,
+        { action: "stop" },
+      ),
+
+    /** Restart a failed or stale sandbox without creating a second one. */
+    restart: (projectId: string): Promise<VcaasResponse<{ outcome: string; status: RuntimeSandboxStatus | null }>> =>
+      proxy.post<{ outcome: string; status: RuntimeSandboxStatus | null }>(
+        `${RUNTIME_API}/${encodeURIComponent(projectId)}`,
+        { action: "restart" },
+      ),
+
+    /**
+     * Run the one approved `vite build` in an existing ready sandbox. It is a
+     * fixed server-side operation (no arguments) and is off unless the operator
+     * enables `MAVLY_RUNTIME_SANDBOX_QA_BUILD`.
+     */
+    build: (projectId: string): Promise<VcaasResponse<{ check: RuntimeCheck }>> =>
+      proxy.post<{ check: RuntimeCheck }>(
+        `${RUNTIME_API}/${encodeURIComponent(projectId)}`,
+        { action: "build" },
       ),
   },
 

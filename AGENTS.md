@@ -6,8 +6,11 @@ a local, server-side AI implementation: OpenRouter generates frontend and backen
 files through its OpenAI-compatible chat-completions API, and the same server-only key
 serves the separate OpenRouter image-generation API. OpenRouter is the only supported
 text-generation provider. Supabase stores projects/files/messages/runs, and the workspace
-previews a generated static `preview.html`. Customer-owned Supabase account/project OAuth
-connections are not supported.
+previews a generated static `preview.html`. An opt-in Phase 13 runtime can instead run a
+supported React + Vite project's real Vite dev server inside an isolated E2B sandbox;
+that preview is off by default, uses a disposable copy of the persisted files, and never
+writes back to them. Customer-owned Supabase account/project OAuth connections are not
+supported.
 
 Read `MAVLY_CLEAN_BASELINE.md` before changing anything under `src/app/api/`,
 `src/lib/ai/`, `src/lib/mavly/` or `src/lib/vcaas*`. It records what was removed and what
@@ -132,6 +135,14 @@ owner-checked SECURITY DEFINER sync/claim/complete/fail/finish RPCs, schema mark
 the public-read `project-images` Storage bucket. It is additive and non-destructive, does
 not alter any credit, payment or pricing table, and stores no image bytes in Postgres.
 With the flag off the planner is never asked for an image plan and the stage never runs.
+Apply `34_runtime_sandboxes.sql` after 33 before setting
+`MAVLY_RUNTIME_SANDBOX_ENABLED`: it adds the `project_runtime_sandboxes` lifecycle
+table, owner-checked SECURITY DEFINER begin/update/stop RPCs, a service-role-only expiry
+sweep, the database transition table, SELECT-only owner RLS, schema marker 34 and the
+`E2B_API_KEY`-gated live preview runtime. It is additive and non-destructive, does not
+alter generation runs, credits, images, verification, payments or deployment, and stores
+no generated source or artifact. With the flag off no sandbox is created and the static
+preview is unchanged. It requires a separately managed E2B template with Node + npm.
 Project-secret encryption also
 requires the server-only `MAVLY_PROJECT_SECRETS_ENCRYPTION_KEY` (32 random bytes,
 base64-encoded); without it create/update fail closed. `npm test` covers the pure
@@ -144,6 +155,8 @@ provider-error mapping, the payment state machine, the gateway session exemption
 Phase 7 durable rate-limit migration contracts, payment-event metadata/redaction, the
 admin surface gate, Phase 8 memory validation/retrieval/prompt framing/migration
 contracts, the planning-driven image plan validator/approval/budget/prompt/stage rules,
+the Phase 13 live-runtime config/path/command/preview-host/log-redaction/lifecycle/
+evidence rules against a mocked provider and an in-memory store,
 the Phase 9 Android source contract/profile/capability rules, the Android build
 config/policy/archive/artifact/migration contracts, the Phase 10 workflow transition/
 dependency/budget/output/config/approval/security/tool/parser rules and its static
@@ -158,7 +171,8 @@ real Supabase session, OpenRouter, a live worker/queue, the Supabase OAuth conne
 publishing, a real Vercel Sandbox, a generated Android or website app, a real Gradle build,
 an APK/AAB artifact, a signed download, a repair model call, a real Vercel
 full-stack deployment, a real application database connection, a live Razorpay account,
-a delivered webhook, a container image build/publish, or the migrations against a database.
+a delivered webhook, a container image build/publish, a real E2B sandbox, a real npm
+install/Vite dev server/readiness probe/QA build, or the migrations against a database.
 
 ---
 
@@ -565,6 +579,35 @@ a delivered webhook, a container image build/publish, or the migrations against 
   its best-effort per-instance admission window (5 per user / 40 per instance per 10
   minutes) and its 3 MB response cap; the plan-driven stage is bounded by its own count,
   spend, concurrency, attempt and deadline limits instead.
+- **Live runtime previews are implemented but OFF BY DEFAULT (Phase 13).** For a
+  generated **React + Vite** website project, Mavly can materialize the authoritative
+  `project_files` into an isolated **E2B** sandbox, run `npm ci|install --ignore-scripts`,
+  start the installed Vite binary with fixed arguments and a validated port, and mark the
+  session `ready` only after a server-side request to the provider's preview host returns
+  2xx/3xx. Enabled only by `MAVLY_RUNTIME_SANDBOX_ENABLED` plus an explicit
+  `MAVLY_RUNTIME_SANDBOX_PROJECTS` cohort, server-only `E2B_API_KEY`,
+  `NEXT_PUBLIC_SUPABASE_URL` and migration 34. The pinned SDK is `e2b@2.62.0`, loaded
+  lazily behind the typed adapter in `src/lib/runtime-sandbox/`. One durable
+  `project_runtime_sandboxes` row per project (partial unique index + advisory lock) makes
+  concurrent starts reuse one sandbox; a ready row with the same source hash is reused, an
+  explicit Restart stops and rebuilds, Stop is idempotent, and provider/lifetime expiry is
+  reconciled on read and by the worker's bounded sweep. The sandbox never writes back to
+  `project_files`; only `generateApp` does. Generated lifecycle scripts never run, package
+  scripts are never executed, browser input cannot supply a command/path/port/env, log
+  output is bounded and redacted, and egress is denied after install. The preview URL is
+  validated on write **and on every read** against `https://<label>.e2b.app`; the iframe
+  has no top navigation, downloads or Mavly origin. **The preview host is public by URL
+  unless the provider project is configured otherwise — Mavly does not proxy it, so a
+  private preview is not claimed.** QA and Security read the durable row only when
+  `MAVLY_RUNTIME_SANDBOX_QA_EVIDENCE` is on, and a running dev server is never a build,
+  a QA pass or a deployment authorization; the separate owner-triggered
+  `vite build` requires `MAVLY_RUNTIME_SANDBOX_QA_BUILD`. Repair receives the recorded
+  failure as subordinate coding context; source changes still flow through
+  `generateApp`. Unsupported frameworks (Next.js/Android/anything else) keep the static
+  preview and fail closed with the exact reason. **Unverified:** no real E2B sandbox,
+  npm install, Vite server, readiness probe, build, migration 34 or workspace render has
+  been exercised. See `docs/architecture/phase-13-live-runtime-preview.md` and
+  `docs/runbooks/runtime-sandbox.md`.
 - **The GitHub integration is implemented** as a GitHub App used with user-to-server
   tokens: OAuth start, callback, status, repository/branch discovery, connect, disconnect,
   push and import under `/api/integrations/github/`; callback at `/auth/github/callback`.
@@ -597,8 +640,9 @@ a delivered webhook, a container image build/publish, or the migrations against 
   output are static, generated server code is not executed, and the UI says so. Do not
   claim generated apps can read saved secrets until a real server-side injection path and
   tests exist.
-- Anything not implemented (uploads, rebuild, dynamic hosting, domains,
-  versions, usage, visual-edit apply, Android release signing/AAB/store publishing, …)
+- Anything not implemented (uploads, rebuild, production dynamic hosting beyond the
+  opt-in React + Vite live preview, domains, versions, usage, visual-edit apply, Android
+  release signing/AAB/store publishing, …)
   still authenticates and authorizes, then returns:
 
   ```json
@@ -661,6 +705,7 @@ browser ── src/lib/vcaas.ts (client catalog, same-origin only)
    │                               public, token + signed raw body → payment state
    ├── /api/vcaas/source-code/{id} auth + ownership → ZIP from project_files
    ├── /api/preview/{id}/…         auth + ownership → sandboxed static site
+   ├── /api/runtime/{id}           auth + ownership → opt-in E2B live Vite preview
    ├── /api/vcaas/upload|env|git-diff
    │                               auth + ownership → 503
    ├── /api/visual-edit/.../apply  auth + ownership → 503
@@ -709,6 +754,18 @@ paths with `src/lib/vcaas-scope.ts`, so unknown shapes are refused before any wo
 | `docs/architecture/phase-3-verification-sandbox.md` | Phase 3 build-only baseline, provider decision and rollout. |
 | `docs/architecture/phase-4-runtime-verification.md` | Phase 4 runtime/health verification, preview security contract, bounded repair, budgets and rollout. |
 | `docs/runbooks/verification-sandbox.md` | Operator validation, alerting, pause/drain, rollback and capacity runbook. |
+| `src/lib/runtime-sandbox/types.ts` | Phase 13 shared, client-safe lifecycle vocabulary, the only legal transition table, the typed provider contract and the owner-visible session/status/evidence views. |
+| `src/lib/runtime-sandbox/config.ts` | Off-by-default live-runtime prerequisites, bounded limits, cohort parsing and the exact capability problem. Pure parse. |
+| `src/lib/runtime-sandbox/policy.ts` | React + Vite detection from persisted files, the fixed install/dev/build commands, provider-preview-host validation and bounded/redacted terminal output. Pure. |
+| `src/lib/runtime-sandbox/paths.ts` | Materialization policy: relative-path safety, secret/runtime exclusions, file/byte limits, stale-path removal and required-file checks. Pure. |
+| `src/lib/runtime-sandbox/e2b-provider.ts`, `provider.ts` | The only E2B SDK adapter (`e2b@2.62.0`) behind the typed surface, and the lazy factory that returns `null` unless configured. |
+| `src/lib/runtime-sandbox/store.ts` | Migration-34 RPC wrappers, row normalization and read-time preview-URL re-validation; caller-scoped client only. |
+| `src/lib/runtime-sandbox/service.ts` | One bounded lifecycle: status/reconcile → begin/reuse → sync → install → deny egress → start → readiness → ready; idempotent stop, owner log refresh, approved build and service-role expiry sweep. |
+| `src/lib/runtime-sandbox/evidence.ts` | Pure mapping from a durable runtime row to explicit install/dev-server/readiness/build checks and the subordinate QA/Security/Repair blocks. |
+| `src/app/api/runtime/[projectId]/route.ts` | Authenticated live-preview route: ownership check, status-only GET, and the fixed `start`/`restart`/`stop`/`build` actions. |
+| `src/components/workspace/LiveRuntimePreview.tsx` | Workspace live-preview surface with truthful states, start/restart/stop, logs and the opt-in build; the static preview stays mounted as fallback. |
+| `supabase/migrations/34_runtime_sandboxes.sql` | Runtime sandbox lifecycle table, active-session uniqueness, database transition table, owner-checked begin/update/stop RPCs, service-role expiry sweep, SELECT-only RLS and schema marker 34. Additive; apply after 33. |
+| `docs/architecture/phase-13-live-runtime-preview.md`, `docs/runbooks/runtime-sandbox.md` | Phase 13 design, authority, security model, residuals and the operator enable/smoke/rollback runbook. |
 | `supabase/migrations/16_durable_generation_worker.sql` | Queue columns/constraints/indexes, claim/lease/retry/recovery/resume RPCs, least-privilege grants and the worker schema marker. |
 | `docs/runbooks/generation-worker.md` | Operator runbook for the durable worker. |
 | `src/lib/ai/retry.ts` | Bounded exponential retry, jitter and `Retry-After` parsing. |
@@ -840,7 +897,7 @@ paths with `src/lib/vcaas-scope.ts`, so unknown shapes are refused before any wo
    `MAVLY_ANDROID_BUILD_ENABLED`, `MAVLY_ANDROID_BUILD_PROJECTS`,
    `MAVLY_ANDROID_BUILD_IMAGE`, `MAVLY_ANDROID_ARTIFACT_BUCKET`,
    `MAVLY_BUSINESS_INTEGRATIONS_ENABLED`,
-   `MAVLY_BUSINESS_INTEGRATIONS_RPC_SECRET`, `NEON_API_KEY`,
+   `MAVLY_BUSINESS_INTEGRATIONS_RPC_SECRET`, `NEON_API_KEY`, `E2B_API_KEY`,
    `MAVLY_MANAGED_BACKENDS_ENCRYPTION_KEY` and the worker's server-only configuration
    are server-only
    and must never be renamed with a `NEXT_PUBLIC_`
@@ -983,6 +1040,22 @@ paths with `src/lib/vcaas-scope.ts`, so unknown shapes are refused before any wo
     `reconciliation_status`/`uncertain` marker, never zero.     with the flag or cohort off, the application calls no credit/usage RPCs. An enabled
     database policy remains an independent fail-closed run-write guard until the project
     is drained and the policy explicitly disabled.
+17. **Live previews are isolated, disposable and never authoritative.** Only a fully
+    configured, explicit cohort may start one; the browser carries no command, path,
+    port, environment, provider key or sandbox id. Every lifecycle write is an
+    owner-checked SECURITY DEFINER RPC whose transition is validated in SQL as well as in
+    the service; the table is SELECT-only for its owner. The sandbox is materialized from
+    `project_files` only and never writes back; generated lifecycle/package scripts are
+    not executed; the adapter shell-quotes fixed arguments; files are path/secret/size
+    filtered; logs are bounded and redacted. The preview URL is derived from the
+    provider's host and re-validated on every read, and the iframe has no Mavly origin,
+    top navigation or downloads. `ready` requires an actual readiness response, never a
+    submitted command; a running preview is not a build, a QA pass, a verification
+    `passed` or a deployment approval. Expiry, stop and cleanup are idempotent, and a
+    provider failure is recorded truthfully without touching a run, checkpoint, image or
+    credit settlement. The E2B preview host is public by URL unless the provider project
+    configures otherwise; Mavly does not proxy it and must not describe a preview as
+    private.
 
 ## UI conventions
 

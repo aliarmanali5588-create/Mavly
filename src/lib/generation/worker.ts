@@ -146,6 +146,13 @@ export async function runGenerationWorkerOnce(
    */
   const credits = await maintainCreditsForWorker(client);
 
+  /**
+   * Bounded live-preview cleanup. Expired runtime sandboxes are marked and
+   * destroyed here; a failure is logged by the sweep and never affects a
+   * generation claim, a credit settlement or this tick's status.
+   */
+  await sweepRuntimeSandboxesSafely(client);
+
   const claim = await claimWorkerJob(client, {
     workerId: config.workerId,
     leaseSeconds: WORKER_LEASE_SECONDS,
@@ -291,9 +298,28 @@ export async function runGenerationWorkerOnce(
 }
 
 /**
- * Advance the verification queue, if it is configured at all. A verification
- * failure is never a generation failure, and never changes this tick's status.
+ * Expire live-preview sandboxes, if the runtime is configured at all. A sweep
+ * failure is never a generation failure, never affects a credit settlement and
+ * never changes this tick's status.
  */
+async function sweepRuntimeSandboxesSafely(client: SupabaseClient): Promise<void> {
+  try {
+    const { runtimeSandboxConfig } = await import("@/lib/runtime-sandbox/config");
+    const config = runtimeSandboxConfig();
+    if (!config.requested || !config.ready) return;
+    const { sweepExpiredRuntimeSandboxes } = await import("@/lib/runtime-sandbox/service");
+    const sweep = await sweepExpiredRuntimeSandboxes({ client, deps: { config }, limit: 5 });
+    if (sweep.error) {
+      console.warn(`[runtime-sandbox] expiry sweep: ${sweep.error}`);
+    }
+  } catch (error) {
+    console.warn(
+      "[runtime-sandbox] expiry sweep failed:",
+      error instanceof Error ? error.message : String(error),
+    );
+  }
+}
+
 async function runVerificationSafely(
   client: SupabaseClient,
   workerId: string,

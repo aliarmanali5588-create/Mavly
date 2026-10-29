@@ -69,6 +69,25 @@ export const VERIFICATION_EVENTS = [
 
 export type VerificationEventName = (typeof VERIFICATION_EVENTS)[number];
 
+/**
+ * Live runtime sandbox lifecycle events (Phase 13). Same allowlist, redaction
+ * and transport; a sandbox line can never contain more than a generation line.
+ */
+export const RUNTIME_SANDBOX_EVENTS = [
+  "sandbox.created",
+  "sandbox.sync.completed",
+  "sandbox.install.completed",
+  "sandbox.server.started",
+  "sandbox.ready",
+  "sandbox.command.failed",
+  "sandbox.start_failed",
+  "sandbox.expired",
+  "sandbox.stopped",
+  "sandbox.unavailable",
+] as const;
+
+export type RuntimeSandboxEventName = (typeof RUNTIME_SANDBOX_EVENTS)[number];
+
 /** Every field a log line may carry. Anything else is dropped. */
 const ALLOWED_FIELDS = new Set([
   "traceId",
@@ -106,6 +125,10 @@ const ALLOWED_FIELDS = new Set([
   "credits",
   "imageAssets",
   "imageReady",
+  "runtimeSandboxId",
+  "commandMs",
+  "fileCount",
+  "fileBytes",
 ]);
 
 const NUMERIC_FIELDS = new Set([
@@ -132,11 +155,17 @@ const NUMERIC_FIELDS = new Set([
 
 const BOOLEAN_FIELDS = new Set(["costKnown", "cleanupComplete"]);
 
+const RUNTIME_NUMERIC_FIELDS = new Set(["commandMs", "fileCount", "fileBytes"]);
+
 type EmitValue = string | number | boolean | null | undefined;
 
 function sanitize(name: string, value: EmitValue): string | number | boolean | null | undefined {
   if (value === undefined || value === null) return undefined;
 
+  if (RUNTIME_NUMERIC_FIELDS.has(name)) {
+    if (typeof value !== "number" || !Number.isFinite(value) || value < 0) return undefined;
+    return Math.round(value);
+  }
   if (NUMERIC_FIELDS.has(name)) {
     if (typeof value !== "number" || !Number.isFinite(value) || value < 0) return undefined;
     return Math.round(value * 1_000_000) / 1_000_000;
@@ -147,7 +176,7 @@ function sanitize(name: string, value: EmitValue): string | number | boolean | n
   if (typeof value !== "string") return undefined;
 
   if (name === "runId") return isUuid(value) ? value : undefined;
-  if (name === "verificationId" || name === "snapshotId") {
+  if (name === "verificationId" || name === "snapshotId" || name === "runtimeSandboxId") {
     return isUuid(value) ? value : undefined;
   }
   if (name === "provider") {
@@ -248,6 +277,50 @@ function serializeEvent(
   }
 
   return JSON.stringify(body);
+}
+
+export interface RuntimeSandboxEventFields {
+  traceId?: string | null;
+  runId?: string | null;
+  projectId?: string | null;
+  workerId?: string | null;
+  runtimeSandboxId?: string | null;
+  provider?: string | null;
+  stage?: string | null;
+  status?: string | null;
+  errorClass?: string | null;
+  reason?: string | null;
+  durationMs?: number | null;
+  commandMs?: number | null;
+  exitCode?: number | null;
+  runtimePort?: number | null;
+  fileCount?: number | null;
+  fileBytes?: number | null;
+}
+
+/** Emit one live-runtime sandbox line under the same allowlist. */
+export function emitRuntimeSandboxEvent(
+  event: RuntimeSandboxEventName,
+  fields: RuntimeSandboxEventFields = {},
+): void {
+  if (!(RUNTIME_SANDBOX_EVENTS as readonly string[]).includes(event)) return;
+
+  const line = serializeEvent(event, fields);
+  try {
+    if (
+      event === "sandbox.command.failed" ||
+      event === "sandbox.start_failed" ||
+      event === "sandbox.unavailable"
+    ) {
+      console.warn(`[runtime-sandbox] ${line}`);
+    } else if (event === "sandbox.expired") {
+      console.warn(`[runtime-sandbox] ${line}`);
+    } else {
+      console.info(`[runtime-sandbox] ${line}`);
+    }
+  } catch {
+    // A console transport failure is not a sandbox failure.
+  }
 }
 
 export interface VerificationEventFields {
