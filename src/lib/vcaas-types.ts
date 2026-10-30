@@ -13,6 +13,7 @@
 
 import type { AndroidCapability } from "@/lib/android/capability";
 import type { ManagedBackendStatusView } from "@/lib/managed-backend/status";
+import type { StaticVerification } from "@/lib/verification/static";
 
 export type ProjectType = "website" | "android";
 
@@ -705,6 +706,15 @@ export interface AgentStatus {
   };
   /** Present only when a verification exists for this run. */
   verification?: ProjectVerification;
+  /**
+   * Stages A/B of verification — file and structural checks — computed from the
+   * current files when no sandbox verification exists for a finished run.
+   *
+   * ⚠️ THIS IS NOT A VERIFICATION RESULT. `compiled`, `rendered` and `verified`
+   * are always false here; only the opt-in verification sandbox can report
+   * `verification.status === "passed"`.
+   */
+  staticVerification?: StaticVerification;
   /** Present only when this project has a managed-backend registry row. */
   managedBackend?: ManagedBackendStatusView;
 }

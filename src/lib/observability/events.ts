@@ -31,6 +31,10 @@ export const GENERATION_EVENTS = [
   "generation.worker_empty",
   "generation.worker_unavailable",
   "generation.worker_error",
+  /** An inline run that could not finish was moved onto the durable worker queue. */
+  "generation.handoff_scheduled",
+  /** A hand-off was considered and refused, with the exact reason. */
+  "generation.handoff_skipped",
   "orchestration.skipped",
   "image.plan",
   "image.asset",

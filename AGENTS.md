@@ -149,6 +149,13 @@ backend runtime: it extends the managed-backend lifecycle to
 sanitized migration mirror, the service-role configuration RPCs, the public
 `data_gateway_context`/`consume_app_gateway_rate` functions and schema marker 35. It is
 additive: `claim_managed_backend` keeps its signature, and no customer data is touched.
+Apply `36_generation_worker_handoff.sql` after 16 before relying on the
+inline→worker hand-off: it adds `handoff_generation_job(project_id, run_id, claimed_at)`, an
+owner-checked, claim-fenced SECURITY DEFINER function that moves a LIVE inline run to
+`retry_wait`/`dispatch_mode = 'worker'` only when it has a persisted manifest and at least
+one verified checkpoint, and cannot be repeated. It is additive: no column, table, policy,
+grant or existing RPC changes. Without it the hand-off is refused and the run fails exactly
+as before.
 Project-secret encryption also
 requires the server-only `MAVLY_PROJECT_SECRETS_ENCRYPTION_KEY` (32 random bytes,
 base64-encoded); without it create/update fail closed. `npm test` covers the pure
@@ -170,6 +177,8 @@ migration/catalog/deploy-gate invariants, the build-image reference/registry and
 offline-verification static contracts in `infra/android-build/`, the operator-doc coverage
 checks, the OpenRouter adapter contract, the model-catalog policy, the managed-backend
 requirement/model/compiler/lifecycle contracts, the data-gateway auth/query/origin rules,
+the inline→worker hand-off decision and the capped pending-work reserve, the static
+file/structure verification stage,
 the Phase 11
 credit configuration/lifecycle/RPC-error/migration contracts (pure and static),
 per-role model resolution, and static route/migration invariants.
@@ -340,6 +349,18 @@ install/Vite dev server/readiness probe/QA build, or the migrations against a da
   There is no built-in scheduler; see `docs/runbooks/generation-worker.md` for invocation,
   alerting, pause/drain, safe rollback and capacity limits. Do not raise the 2/user or
   8/global admission caps to claim support for 1,000 concurrent users.
+  **An inline run that cannot finish can be handed to the worker (migration 36).** When an
+  inline attempt reaches its terminal decision with a retryable failure and this deployment
+  dispatches the project to the worker, `fail()` persists its provider usage, then calls
+  `handoff_generation_job` and returns without a terminal write. The RPC re-verifies
+  ownership, the exact `claimed_at` fence, the persisted manifest and at least one verified
+  checkpoint; it refuses a run another attempt owns, a non-retryable failure (a rejected or
+  unsafe generation is not a scheduling problem), and any project outside the cohort —
+  cohort membership lives in the environment and cannot be checked in SQL, so a project the
+  worker would never claim must never be handed off. The transition is once-only because it
+  sets `dispatch_mode = 'worker'`, so a resume of that run also stays on the worker. Every
+  refusal falls through to the existing terminal failure, never to a claim of success.
+  Budget constants are not inflated to fake a longer inline window.
 - **The isolated verification sandbox is implemented but off by default.** It builds a
   generated project's source in a Vercel Sandbox microVM, starts the validated production
   server on loopback and runs a sandbox-local health request. It is enabled only when
@@ -797,6 +818,9 @@ paths with `src/lib/vcaas-scope.ts`, so unknown shapes are refused before any wo
 | `src/lib/runtime-sandbox/evidence.ts` | Pure mapping from a durable runtime row to explicit install/dev-server/readiness/build checks and the subordinate QA/Security/Repair blocks. |
 | `src/app/api/runtime/[projectId]/route.ts` | Authenticated live-preview route: ownership check, status-only GET, and the fixed `start`/`restart`/`stop`/`build` actions. |
 | `src/components/workspace/LiveRuntimePreview.tsx` | Workspace live-preview surface with truthful states, start/restart/stop, logs and the opt-in build; the static preview stays mounted as fallback. |
+| `src/lib/generation/dispatch.ts` | Pure inline→worker hand-off decision: which runs may leave the inline path, and the exact reason every other one may not. |
+| `supabase/migrations/36_generation_worker_handoff.sql` | `handoff_generation_job` — owner-checked, claim-fenced, once-only move of a LIVE inline run to `retry_wait`/worker, refused without a persisted manifest and a verified checkpoint. Additive; apply after 16. |
+| `src/lib/verification/static.ts` | Stages A/B of verification: required files, non-empty contents, package manifest, balanced source delimiters, local import resolution and the preview document. Pure; `compiled`/`rendered`/`verified` are always false. |
 | `supabase/migrations/34_runtime_sandboxes.sql` | Runtime sandbox lifecycle table, active-session uniqueness, database transition table, owner-checked begin/update/stop RPCs, service-role expiry sweep, SELECT-only RLS and schema marker 34. Additive; apply after 33. |
 | `docs/architecture/phase-13-live-runtime-preview.md`, `docs/runbooks/runtime-sandbox.md` | Phase 13 design, authority, security model, residuals and the operator enable/smoke/rollback runbook. |
 | `supabase/migrations/16_durable_generation_worker.sql` | Queue columns/constraints/indexes, claim/lease/retry/recovery/resume RPCs, least-privilege grants and the worker schema marker. |

@@ -133,6 +133,10 @@ import {
 import { runAgent } from "./run-agent";
 import { dispatchModeForProject } from "@/lib/generation/worker-config";
 import { emitGenerationEvent } from "@/lib/observability/events";
+import {
+  runStaticVerification,
+  type StaticVerification,
+} from "@/lib/verification/static";
 import { imageGenerationLimiter, type ImageGenerationLimitDecision } from "./image-limits";
 import {
   getDeploymentRow,
@@ -2075,7 +2079,21 @@ async function startAgentResponse(userId: string, projectId: string, body: unkno
     return fail(403, "FORBIDDEN", "The Cohere testing model is not enabled for this project.");
   }
   const model = resolveModel(requestedModel, "app-generation", process.env, projectId);
-  const dispatchMode = dispatchModeForProject(projectId);
+  /**
+   * ⚠️ THE DISPATCH DECISION IS RECORDED WITH ITS REASON. "This project ran
+   * inline and could not finish" must not be a mystery: the two ways to land on
+   * the inline path are a worker that is not configured for this deployment and a
+   * project outside `MAVLY_GENERATION_WORKER_PROJECTS`, and they need different
+   * operator actions.
+   */
+  const workerConfig = generationWorkerConfig();
+  const dispatchMode = dispatchModeForProject(projectId, workerConfig);
+  const inlineDispatchReason =
+    dispatchMode === "worker"
+      ? null
+      : workerConfig.ready
+        ? "not_in_worker_cohort"
+        : "worker_unavailable";
   const creditPolicy = creditAdmissionForProject(projectId);
   if (creditPolicy.kind === "misconfigured") {
     return fail(
@@ -2185,6 +2203,7 @@ async function startAgentResponse(userId: string, projectId: string, body: unkno
     projectId,
     model: run.model,
     dispatchMode: run.dispatch_mode,
+    ...(inlineDispatchReason ? { reason: inlineDispatchReason } : {}),
   });
 
   // A worker-dispatched run belongs to the scheduler's worker tick.
@@ -2344,6 +2363,17 @@ async function resumeAgentResponse(userId: string, projectId: string): Promise<N
         prompt: resumedRun.prompt,
         requestedModel: resumedRun.model,
         resume: true,
+      }).catch((error: unknown) => {
+        emitGenerationEvent("generation.worker_error", {
+          traceId: resumedRun.trace_id,
+          runId: resumedRun.id,
+          projectId,
+          dispatchMode: "inline",
+          reason: "inline_resume_failed",
+        });
+        console.error(
+          `[mavly] inline resume ${resumedRun.id} rejected: ${error instanceof Error ? error.message : String(error)}`,
+        );
       }),
     );
   }
@@ -2554,6 +2584,17 @@ async function agentStatusResponse(projectId: string): Promise<NextResponse> {
   const managedBackend = isRunActive(run)
     ? undefined
     : await readManagedBackend(projectId);
+  /**
+   * ⚠️ STATIC CHECKS ARE REPORTED SEPARATELY FROM `verification`, AND ONLY WHEN
+   * NO SANDBOX VERIFICATION EXISTS FOR THIS RUN. They answer "did the planned
+   * files materialise and are they structurally complete?" — never "does it
+   * build, start or render". A sandbox verification, when present, is the
+   * authority and is never overwritten or embellished by this.
+   */
+  const staticVerification =
+    !isRunActive(run) && !verification
+      ? await readStaticVerification(projectId, run)
+      : undefined;
   return ok({
     projectId,
     status,
@@ -2590,7 +2631,34 @@ async function agentStatusResponse(projectId: string): Promise<NextResponse> {
     },
     ...(verification ? { verification } : {}),
     ...(managedBackend ? { managedBackend } : {}),
+    ...(staticVerification ? { staticVerification } : {}),
   } satisfies AgentStatus);
+}
+
+/**
+ * Stages A/B over the project's CURRENT files, for a finished generation that has
+ * no sandbox verification. Returns `undefined` for anything it cannot honestly
+ * judge (an unfinished run, an unreadable file list, a project with no files).
+ *
+ * The manifest of the completed run is the expected file list: `complete()` only
+ * writes after every planned path is present, so a missing planned path here is a
+ * real finding (a file deleted afterwards), not a guess.
+ */
+async function readStaticVerification(
+  projectId: string,
+  run: { generation_manifest: unknown; stage: string | null },
+): Promise<StaticVerification | undefined> {
+  if (run.stage !== "completed") return undefined;
+  const files = await listFiles(projectId);
+  if (isStoreFailure(files) || files.data.length === 0) return undefined;
+
+  /** Kotlin is the only generated language outside the web profile. */
+  const android = files.data.some((file) => file.path.endsWith(".kt"));
+  return runStaticVerification({
+    files: files.data.map((file) => ({ path: file.path, content: file.content })),
+    projectType: android ? "android" : "website",
+    requiredPaths: manifestPaths(run.generation_manifest),
+  });
 }
 
 /**

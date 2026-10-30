@@ -178,7 +178,129 @@ Interpretation rules that keep the number honest:
   different budgets, different retry behaviour, and only the worker path enqueues
   verification.
 
-## 7. Unverified
+## 7. Dispatch: inline, worker, and the hand-off
+
+**Why eligible projects were not consistently dispatched:** dispatch is decided by
+`dispatchModeForProject` at admission, and it returns `worker` only when the whole worker
+configuration is valid **and** the project id is listed in
+`MAVLY_GENERATION_WORKER_PROJECTS`. There is no size heuristic anywhere — a project
+outside the cohort ran inline no matter how large its generation was, and once an inline
+run reached its deadline the only outcomes were one immediate continuation or a terminal
+failure. `resume_generation_job` (migration 16) deliberately preserves `dispatch_mode`, so
+even a manual resume put it back on the inline path.
+
+**What changed:** an inline run that cannot finish now hands the job to the worker.
+
+```
+inline attempt → failure classified
+   ├── inline continuation available (≥90 s left, class recoverable) → continue
+   └── no continuation left
+         ├── handoffDecision() says yes → persist usage → handoff_generation_job (36)
+         │        → run becomes retry_wait / worker, checkpoints intact, no terminal write
+         └── refused → existing terminal failure (unchanged)
+```
+
+The decision is pure and lives in `src/lib/generation/dispatch.ts`. It refuses when a
+worker attempt already owns the run (`lease_token`), when this invocation does not hold
+the inline claim, when the failure is not retryable, or when this deployment does not
+dispatch the project to the worker. The last refusal is load-bearing: the worker claims
+with `p_project_ids = cohort`, so handing off a project outside the cohort would park a
+live run on a queue no worker reads — than which a clean terminal failure is better.
+
+The database side (`36_generation_worker_handoff.sql`) re-verifies ownership, the exact
+`claimed_at` fence, a persisted manifest and at least one verified checkpoint, because a
+hand-off without progress would make the worker start from zero. The transition is
+once-only: it sets `dispatch_mode = 'worker'`, so a later resume also stays on the worker.
+
+Safety properties preserved: idempotency (admission key), lease fencing (the RPC's
+`claimed_at` check plus the worker's own `lease_token`), checkpoint recovery (the worker's
+existing `verifyCheckpointBatches` path), ownership (both sides re-check), and the rule
+that two workers never run one run (the queue claim is `FOR UPDATE SKIP LOCKED`, and the
+inline attempt has returned before the row is claimable).
+
+Observability: `generation.accepted` now carries the inline reason
+(`worker_unavailable` / `not_in_worker_cohort`), `generation.handoff_scheduled` records a
+successful hand-off with its checkpoint count, and `generation.handoff_skipped` records the
+exact refusal. `agent/status` already reports `dispatchMode`, `stage` and `jobAttempt`.
+
+⚠️ **NOT DONE, AND WHY:** there is no size-based pre-dispatch heuristic and no automatic
+"this prompt looks large" routing. Both would need a size estimate *before* the plan
+exists, which the current admission contract cannot provide, and guessing would move small
+generations onto a queue they do not need. The hand-off is the honest equivalent: the
+workload proves its size by not finishing, and is moved instead of being killed.
+
+## 8. Verification stages: what runs, what cannot
+
+The four states stay separate, and only one of them is produced by Mavly itself today:
+
+| Stage | Who can produce it | Status here |
+|---|---|---|
+| generated | `generateApp` + `complete()` | implemented |
+| structurally valid (A: files, B: syntax) | `src/lib/verification/static.ts` | implemented, pure, reported |
+| compiled (C: install + build) | verification sandbox (Vercel microVM) | **BLOCKED** — provider credentials + cohort |
+| rendered / verified (D/E: runtime, browser) | sandbox + a browser runtime | **BLOCKED** — no authenticated browser execution |
+
+Stages A and B run over the project's **current** files for a finished generation that has
+no sandbox verification, and are returned by `agent/status` as `staticVerification`:
+required/planned files present, no empty critical files, `package.json` parses, source
+delimiters balance (catches a truncated response), every local `./` / `../` / `@/` import
+resolves to a project file, and `preview.html` is a complete document. Every result carries
+`compiled: false`, `rendered: false`, `verified: false` so it cannot be mistaken for a
+verification pass, and a sandbox verification, when present, is never overridden.
+
+Deliberately **not** implemented: JSX/TypeScript parsing (a real compiler in Mavly's
+process is a liability and a partial one would produce false failures), and any form of
+browser automation. E2B, E2B's public preview URL and the Phase 13 live preview already
+cover the React + Vite case for a human to look at; Mavly-generated sites are Next.js App
+Router, which that runtime does not serve.
+
+**The exact unblockers for C/D/E** are already enumerated in AGENTS.md: for C/D, the
+`MAVLY_VERIFICATION_SANDBOX_*` flag, an explicit project cohort and Vercel Sandbox
+credentials (OIDC or team/project/token); for E, an authenticated browser runtime that
+Mavly does not currently have — the provider's preview URL is public and unauthenticated,
+which is why Phase 4 reports `preview.status = "unavailable"` on purpose.
+
+## 9. preview.html: why it stays
+
+The P1 ask is to build the preview deterministically instead of spending a 16k-token
+batch on it. For the projects Mavly generates, that is not possible, and the reason is
+structural rather than a matter of effort:
+
+- A generated website is a **Next.js App Router** project. `app/page.tsx` is a React
+  component tree with server/client boundaries; HTML only exists after `next build` and a
+  render. Producing it deterministically would mean running the build — exactly the
+  sandbox work that is blocked above.
+- The static preview is served from a sandboxed, opaque-origin document with
+  `connect-src 'none'`; it cannot execute the Next.js runtime.
+- A deterministic preview built by *statically interpreting* the generated JSX would be a
+  partial renderer: it would show something that is not the app, which is a worse outcome
+  than a real hand-written prototype, and it would silently disagree with the app the user
+  receives.
+
+The current design already avoids the two costs that *can* be avoided: `preview.html` is
+injected into the plan only for **create** mode (`requiredCreatePathsFor`), and the model is
+instructed to update it only when the user-visible UI changes. No separate AI batch exists
+to remove — the risk-shaped cost is the one 16k-token cap on that one file.
+
+Two honest ways to remove it later, both product decisions:
+
+1. unblock C (build in the sandbox), serve the built app, and drop `preview.html` for the
+   cohort where a build is available;
+2. ship a deliberately thinner preview document (a single screen, smaller cap) and accept
+   a less complete preview in exchange for the tokens.
+
+Neither was taken unilaterally here: the first is infrastructure-gated, and the second
+changes what every user sees.
+
+## 10. Measurements
+
+**None were taken.** No generation was executed, and the three changes are reasoned from
+the code. In particular no before/after figure exists for output tokens, provider calls,
+generation duration, file count or verification duration; the hand-off removes a *terminal
+failure* for large inline runs, and the static stage adds a bounded in-process check with no
+provider call, but neither claim is a measurement.
+
+## 11. Unverified
 
 No test, typecheck, build, live generation, provider call, worker tick or migration was
 run while producing this document. The fixes above are reasoned from the code and are

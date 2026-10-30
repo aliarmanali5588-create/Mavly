@@ -905,6 +905,108 @@ export async function resumeRun(
   return { ok: true, data: run };
 }
 
+export type HandoffStatus =
+  | "handed_off"
+  | "already_worker"
+  | "no_checkpoint_progress"
+  | "claim_mismatch"
+  | "not_handoffable"
+  | "cancelled"
+  | "not_found";
+
+export interface HandoffResult {
+  status: HandoffStatus;
+  checkpoints: number;
+}
+
+/**
+ * Hand a LIVE inline run to the durable worker queue (migration 36).
+ *
+ * ⚠️ THE CALLER MUST ALREADY KNOW THE PROJECT IS WORKER-ELIGIBLE. Cohort
+ * membership lives in this deployment's environment, not in the database, so the
+ * RPC cannot check it and the worker claims only cohort project ids. The only
+ * caller is `run-agent.ts`, which checks `dispatchModeForProject` first.
+ *
+ * ⚠️ THIS IS NOT A FAILURE AND NOT A TERMINAL WRITE. A `handed_off` answer means
+ * the run is now `retry_wait` for the worker, with its manifest and verified
+ * checkpoints intact; the worker resumes from them rather than from zero.
+ *
+ * Every other answer is a refusal reason, and the caller must fall back to its
+ * own terminal handling instead of pretending the hand-off happened.
+ */
+export async function handoffRunToWorker(input: {
+  projectId: string;
+  runId: string;
+  claimedAt: string;
+}): Promise<StoreResult<HandoffResult>> {
+  const supabase = await client();
+  if (!supabase) return { ok: false, error: "Supabase is not configured", code: "UNAVAILABLE" };
+
+  const { data, error } = await supabase.rpc("handoff_generation_job", {
+    p_project_id: input.projectId,
+    p_run_id: input.runId,
+    p_claimed_at: input.claimedAt,
+  });
+
+  if (error) {
+    const message = error.message ?? "hand-off failed";
+    if (
+      /function .*does not exist|Could not find the function/i.test(message) ||
+      error.code === "PGRST202" ||
+      error.code === "42883"
+    ) {
+      return {
+        ok: false,
+        error:
+          "The inline-to-worker hand-off needs migration 36. Apply supabase/migrations/36_generation_worker_handoff.sql.",
+        code: "MIGRATION_REQUIRED",
+      };
+    }
+    if (error.code === "28000" || /UNAUTHENTICATED/i.test(message)) {
+      return { ok: false, error: "You must be signed in to do that.", code: "UNAUTHENTICATED" };
+    }
+    if (error.code === "42501" || /FORBIDDEN/i.test(message)) {
+      return { ok: false, error: "You don't have access to this project.", code: "FORBIDDEN" };
+    }
+    /**
+     * A credit-enforced project cannot be written by an authenticated caller at
+     * all (migration 32's run-state guard). Those projects are worker-only, so a
+     * hand-off should never reach here — if it does, it is a refusal, not a bug to
+     * paper over.
+     */
+    if (/CREDIT_RUN_STATE_SERVER_ONLY|CREDIT_RESERVATION_REQUIRED/i.test(message)) {
+      return { ok: false, error: "This project's runs are managed by the worker.", code: "FORBIDDEN" };
+    }
+    return dbError("hand off run", message, error.code);
+  }
+
+  const record = data && typeof data === "object" && !Array.isArray(data)
+    ? (data as Record<string, unknown>)
+    : null;
+  const status = record?.status;
+  const checkpoints = Number(record?.checkpoints ?? 0);
+
+  if (
+    status === "handed_off" ||
+    status === "already_worker" ||
+    status === "no_checkpoint_progress" ||
+    status === "claim_mismatch" ||
+    status === "not_handoffable" ||
+    status === "cancelled" ||
+    status === "not_found"
+  ) {
+    return {
+      ok: true,
+      data: {
+        status,
+        checkpoints: Number.isFinite(checkpoints) && checkpoints > 0 ? Math.floor(checkpoints) : 0,
+      },
+    };
+  }
+
+  return { ok: false, error: "Unexpected hand-off response", code: "UNKNOWN" };
+}
+
 export interface RunProgressPatch {
   stage?: RunStage;
   /** When present, only the inline worker holding this claim may write progress. */

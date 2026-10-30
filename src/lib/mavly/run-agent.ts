@@ -73,6 +73,7 @@ import {
   finishRun,
   getProject,
   getRun,
+  handoffRunToWorker,
   heartbeatRun,
   insertMessage,
   isStoreFailure,
@@ -86,6 +87,11 @@ import {
   type RunFinishPatch,
   type RunRow,
 } from "./store";
+import {
+  dispatchModeForProject,
+  generationWorkerConfig,
+} from "@/lib/generation/worker-config";
+import { handoffDecision } from "@/lib/generation/dispatch";
 import {
   createSnapshot,
   diffPaths,
@@ -133,6 +139,7 @@ import {
   classifyGenerationFailure,
   hasRecoverableTruncationProgress,
   isInlineRecoverable,
+  type FailureClassification,
   type FailureSignals,
 } from "@/lib/generation/state-machine";
 import { retryDelaySeconds, WORKER_LEASE_SECONDS } from "@/lib/generation/leases";
@@ -2191,6 +2198,26 @@ async function fail(
     };
   }
 
+  /**
+   * ⚠️ AN INLINE RUN THAT CANNOT FINISH IS NOT AUTOMATICALLY A FAILED RUN.
+   *
+   * This is the last point before a terminal write, and it is reached only when
+   * the inline path has no continuation left to make (no window, or its single
+   * continuation already used). If this deployment's durable worker is configured
+   * for this project, the run is handed over instead: `retry_wait`, manifest and
+   * verified checkpoints intact, so the worker resumes the REMAINING paths. That
+   * is the whole reason the queue exists, and it is why the budget constants do
+   * not have to be inflated to fake a larger inline window.
+   */
+  const handedOff = await maybeHandoffToWorker(
+    input,
+    guard,
+    classification,
+    usage,
+    attempts,
+  );
+  if (handedOff) return handedOff;
+
   console.error(
     `[mavly] agent run ${input.runId} failed (${classification.errorClass}):`,
     classification.summary,
@@ -2423,6 +2450,118 @@ async function fail(
   }
 
   return { status: "failed", runId: input.runId, errorClass: classification.errorClass };
+}
+
+/**
+ * Move a live inline run onto the durable worker queue when, and only when, that
+ * is safe and useful. Returns the run outcome when the hand-off happened, and
+ * `null` when the caller must continue with its normal terminal handling.
+ *
+ * ⚠️ THE PRECONDITIONS ARE THE SAFETY PROPERTY, NOT POLITENESS:
+ *
+ *   · inline only — a worker attempt already owns the queue;
+ *   · retryable only — a rejected/unsafe/content-filtered generation is not a
+ *     scheduling problem, so the worker would reproduce the same failure;
+ *   · `dispatchModeForProject` says `worker` — the worker claims with
+ *     `p_project_ids = cohort`, so handing off a project outside the cohort would
+ *     park the run on a queue no worker ever reads. Cohort membership lives in
+ *     this deployment's environment and cannot be checked in SQL, which is why
+ *     this is checked HERE and the RPC takes no cohort argument;
+ *   · the RPC itself re-verifies ownership, the exact `claimed_at` fence, the
+ *     persisted manifest and at least one verified checkpoint.
+ *
+ * Every refusal falls through to the existing terminal behaviour, so a deployment
+ * without migration 36, or a run with nothing checkpointed, fails exactly as it
+ * did before.
+ */
+async function maybeHandoffToWorker(
+  input: RunAgentInput,
+  guard: RunGuard,
+  classification: FailureClassification,
+  usage: AgentUsageTotals,
+  attempts: readonly AgentProviderAttempt[],
+): Promise<RunAgentOutcome | null> {
+  const workerConfig = generationWorkerConfig();
+  const decision = handoffDecision({
+    leaseToken: guard.leaseToken,
+    claimedAt: guard.claimedAt,
+    retryable: classification.retryable,
+    workerOwnsProject: dispatchModeForProject(input.projectId, workerConfig) === "worker",
+  });
+  /** A refusal is the normal inline terminal path; the caller keeps failing honestly. */
+  if (!decision.handoff || !guard.claimedAt) return null;
+
+  /**
+   * ⚠️ PERSIST THE SPEND BEFORE THE QUEUE MOVE. A worker retry is a NEW
+   * invocation whose guard is seeded from the row; usage held only in this
+   * process would disappear from the run's totals and its reported cost. This
+   * write is also the last proof that this invocation still holds the claim —
+   * after the hand-off `claimed_at` is cleared on purpose.
+   */
+  const usagePersisted = await heartbeatRun(
+    input.runId,
+    {
+      attemptCount: usage.attempts,
+      promptTokens: usage.promptTokens,
+      completionTokens: usage.completionTokens,
+      totalTokens: usage.totalTokens,
+      reasoningTokens: usage.reasoningTokens,
+      providerAttempts: attempts,
+      providerRequestId: lastProviderRequestId(attempts),
+      expectedClaimedAt: guard.claimedAt,
+    },
+    guard.client,
+  );
+  if (!usagePersisted) {
+    emitGenerationEvent("generation.handoff_skipped", {
+      traceId: guard.traceId,
+      runId: input.runId,
+      projectId: input.projectId,
+      reason: "usage_persist_failed",
+      dispatchMode: "inline",
+    });
+    return null;
+  }
+
+  const handed = await handoffRunToWorker({
+    projectId: input.projectId,
+    runId: input.runId,
+    claimedAt: guard.claimedAt,
+  });
+
+  if (!handed.ok) {
+    emitGenerationEvent("generation.handoff_skipped", {
+      traceId: guard.traceId,
+      runId: input.runId,
+      projectId: input.projectId,
+      reason: (handed as { ok: false; code?: string }).code === "MIGRATION_REQUIRED" ? "migration_required" : "handoff_unavailable",
+      dispatchMode: "inline",
+    });
+    return null;
+  }
+
+  if (handed.data.status === "handed_off") {
+    emitGenerationEvent("generation.handoff_scheduled", {
+      traceId: guard.traceId,
+      runId: input.runId,
+      projectId: input.projectId,
+      attempt: guard.jobAttempt,
+      checkpoints: handed.data.checkpoints,
+      errorClass: classification.errorClass,
+      dispatchMode: "worker",
+      reason: "inline_deadline_handoff",
+    });
+    return { status: "skipped", runId: input.runId, reason: "handed_off_to_worker" };
+  }
+
+  emitGenerationEvent("generation.handoff_skipped", {
+    traceId: guard.traceId,
+    runId: input.runId,
+    projectId: input.projectId,
+    reason: handed.data.status,
+    dispatchMode: "inline",
+  });
+  return null;
 }
 
 function guardPatch(guard: RunGuard): Partial<RunFinishPatch> {
