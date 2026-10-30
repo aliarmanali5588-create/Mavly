@@ -802,7 +802,8 @@ paths with `src/lib/vcaas-scope.ts`, so unknown shapes are refused before any wo
 | `supabase/migrations/16_durable_generation_worker.sql` | Queue columns/constraints/indexes, claim/lease/retry/recovery/resume RPCs, least-privilege grants and the worker schema marker. |
 | `docs/runbooks/generation-worker.md` | Operator runbook for the durable worker. |
 | `src/lib/ai/retry.ts` | Bounded exponential retry, jitter and `Retry-After` parsing. |
-| `src/lib/ai/budget.ts` | Pure run-deadline policy: finalization reserve, per-attempt planning from the time actually left, and the minimum useful attempt. |
+| `src/lib/ai/budget.ts` | Pure run-deadline policy: finalization reserve, per-attempt planning from the time actually left, the minimum useful attempt, and the capped reserve for work still queued (`reserveForPendingWork`). |
+| `docs/architecture/generation-reliability.md` | Static audit of the generation pipeline: which of the seven roles really execute, the budget/timeout and parse-recovery defects that were found and fixed, and what remains unverified (nothing was executed to produce it). |
 | `src/lib/preview-document.ts` | Pure structural check that a generated `preview.html` is a complete document before it can be persisted. |
 | `src/lib/preview-status.ts` | Pure `ready`/`stale`/`incomplete`/`unavailable`/`none` preview state and generation state derived from saved files plus the durable run. |
 | `src/lib/mavly/checkpoints.ts` | Pure verification of resumed batch hashes. |

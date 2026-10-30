@@ -168,6 +168,8 @@ revoke all on public.app_gateway_rate_windows from public, anon, authenticated;
 
 -- ── Provisioning claim: reuse ready/configuring rows without re-creating ────
 
+drop function if exists public.claim_managed_backend(text, uuid, uuid, text, integer);
+
 create or replace function public.claim_managed_backend(
   p_project_id text,
   p_user_id uuid,

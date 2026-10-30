@@ -208,6 +208,41 @@ export function planProviderCall(input: CallPlanInput): CallPlan {
 }
 
 /**
+ * ═══ WHAT TO HOLD BACK FOR THE CALLS THAT ARE STILL QUEUED ══════════════════
+ *
+ * `planProviderCall` reserves exactly what it is told, and clamps that reserve
+ * so the CURRENT call always keeps its own minimum. That clamp is not enough by
+ * itself: a batch loop that reserves `pending * minAttemptMs` asks for several
+ * minutes, so the clamp hands the current batch its MINIMUM and nothing more.
+ *
+ * A minimum-sized attempt on a full batch is a request that is expected to time
+ * out, and a timeout is answered by SPLITTING the batch — which queues more
+ * calls and squeezes the next attempt further. One tight budget then degrades
+ * into a run that fails having produced almost nothing.
+ *
+ * The reserve is therefore capped at a fraction of what is actually left. The
+ * queued calls still get a share, and the call being made right now keeps enough
+ * room to plausibly finish, which is the whole reason to reserve anything.
+ */
+export const MAX_PENDING_RESERVE_FRACTION = 0.4;
+
+export function reserveForPendingWork(input: {
+  pendingCount: number;
+  minAttemptMs: number;
+  remainingMs: number;
+  maxFraction?: number;
+}): number {
+  const pending = Math.max(0, Math.floor(input.pendingCount));
+  const perCall = Math.max(0, Math.floor(input.minAttemptMs));
+  const remaining = Math.max(0, Math.floor(input.remainingMs));
+  const fraction = Math.min(
+    1,
+    Math.max(0, input.maxFraction ?? MAX_PENDING_RESERVE_FRACTION),
+  );
+  return Math.min(pending * perCall, Math.floor(remaining * fraction));
+}
+
+/**
  * Whether a backoff delay can still be waited out AND leave a useful attempt.
  * Mirrors the check inside `retryWithBackoff`, exposed so callers and tests can
  * reason about the same rule.

@@ -907,10 +907,23 @@ async function execute(
         })
       : null;
   } catch (error) {
-    console.warn(
-      `[mavly] run ${runId}: orchestration setup failed:`,
-      error instanceof Error ? error.message : String(error),
-    );
+    const detail = error instanceof Error ? error.message : String(error);
+    console.warn(`[mavly] run ${runId}: orchestration setup failed:`, detail);
+    /**
+     * ⚠️ A SWALLOWED SETUP FAILURE IS A SILENT ZERO-AGENT RUN. The console line
+     * is not part of the durable record, so an operator would see a cohort project
+     * with no workflow and no reason for it. It stays non-fatal (orchestration is
+     * observability, and `generateApp` still writes every file) but it is now
+     * reported where the run can be inspected.
+     */
+    emitGenerationEvent("orchestration.skipped", {
+      traceId: guard.traceId,
+      runId,
+      projectId: input.projectId,
+      workerId: guard.workerId,
+      reason: "setup_failed",
+      dispatchMode: input.worker ? "worker" : "inline",
+    });
   }
 
   /**
@@ -1515,11 +1528,17 @@ async function execute(
    * optional specialist calls have already consumed part of the invocation's
    * budget; handing the pipeline the original number would let the run overshoot
    * its own deadline (and, on inline recovery, its single permitted window).
+   *
+   * ⚠️ THE POST-CODING REVIEW RESERVE IS TAKEN ONCE, NOT TWICE. The worker's
+   * whole budget is already built by `workerGenerationBudgetMs(
+   * POST_CODING_REVIEW_RESERVE_MS)`, which subtracts the review reserve from the
+   * function limit before this point. Subtracting it again here (as an earlier
+   * version did) spent a second 50 s of the tick on a reserve that had already
+   * been taken, and since generation is the only consumer left, a multi-agent run
+   * started its first batch with ~95-160 s instead of ~145-210 s. Generation must
+   * simply receive the budget that remains.
    */
-  const remainingBudgetMs = Math.max(0, remainingRunMs(guard.budget, Date.now()));
-  const generationBudgetMs = orchestration
-    ? Math.max(0, remainingBudgetMs - POST_CODING_REVIEW_RESERVE_MS)
-    : remainingBudgetMs;
+  const generationBudgetMs = Math.max(0, remainingRunMs(guard.budget, Date.now()));
   const repairContext = priorRepairContext(orchestration, resumeManifest);
   /**
    * A failed live sandbox is real runtime evidence for the coding context. It is

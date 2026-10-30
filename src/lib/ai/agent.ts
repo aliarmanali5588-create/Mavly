@@ -46,6 +46,7 @@ import {
   idleTimeoutFor,
   minUsefulAttemptFor,
   planProviderCall,
+  reserveForPendingWork,
   runBudgetFor,
   workDeadlineAt,
 } from "./budget";
@@ -155,9 +156,12 @@ export type AgentProgressEvent =
       nextSize: number;
       /**
        * `timeout` is a scope reduction for the same reason as `truncated`: the
-       * batch did not fit, so the next request asks for less.
+       * batch did not fit, so the next request asks for less. `malformed` is the
+       * same kind of reduction for a different cause: a multi-file response that
+       * is still not valid JSON after its one repair is split so the healthy
+       * files are not discarded with the broken one.
        */
-      reason: "truncated" | "compact-retry" | "timeout";
+      reason: "truncated" | "compact-retry" | "timeout" | "malformed";
     };
 
 export interface AgentGenerationInput {
@@ -384,6 +388,14 @@ export const REPAIR_TIMEOUT_MS = 90_000;
 export const GENERATION_BUDGET_MS = 240_000;
 const MAX_TRUNCATION_RECOVERIES = 16;
 const MAX_ATTEMPTS_RECORDED = 60;
+/**
+ * How many times ONE planned path may be re-requested after the model omitted
+ * it from a batch response. Models routinely return most of a batch and drop a
+ * file; the response is not malformed and a repair would re-ask for everything
+ * again, so the honest answer is one more, smaller request for just that path.
+ * Three total attempts before the run fails naming the path.
+ */
+const MAX_MISSING_FILE_REQUESTS = 3;
 
 /**
  * ═══ ONE CALL POLICY FOR EVERY PROVIDER REQUEST ═════════════════════════════
@@ -1030,10 +1042,17 @@ export async function generateApp(
       messages,
       {
         policy: batchPolicy,
-        // Leave each queued batch a minimum useful window for its OWN class.
-        // Clamped inside `planProviderCall` so this attempt always gets its own
-        // minimum, and so a slow first batch cannot starve the rest of the run.
-        reserveForOthersMs: pending.length * batchPolicy.minAttemptMs,
+        /**
+         * Leave each queued batch a share of a useful window for its OWN class,
+         * without spending this batch's ceiling on the queue behind it:
+         * `reserveForPendingWork` caps the reserve at a fraction of what is
+         * actually left, so this attempt still gets more than its bare minimum.
+         */
+        reserveForOthersMs: reserveForPendingWork({
+          pendingCount: pending.length,
+          minAttemptMs: batchPolicy.minAttemptMs,
+          remainingMs: deadlineAt - now(),
+        }),
       },
       state,
       deps,
@@ -1148,7 +1167,11 @@ export async function generateApp(
         repairMessages(messages, previousContent, requestedPaths),
         {
           policy: repairPolicy,
-          reserveForOthersMs: pending.length * MIN_USEFUL_ATTEMPT_MS,
+          reserveForOthersMs: reserveForPendingWork({
+            pendingCount: pending.length,
+            minAttemptMs: MIN_USEFUL_ATTEMPT_MS,
+            remainingMs: deadlineAt - now(),
+          }),
         },
         state,
         deps,
@@ -1214,6 +1237,36 @@ export async function generateApp(
       return fail(parsed.code, parsed.error);
     }
     if (parsed.ok === false) {
+      /**
+       * ⚠️ ONE UNPARSEABLE RESPONSE MUST NOT DISCARD THE FILES AROUND IT.
+       *
+       * A single file with a broken envelope (an unescaped quote, a stray
+       * fence) fails `parseBatch` for the WHOLE batch, and the one repair asks
+       * for the same files again. When that also fails, the old code failed the
+       * entire run — every valid file in that batch was thrown away with it.
+       *
+       * Splitting here isolates the offending path: the healthy files are
+       * requested on their own and persisted, and the failure (if it still
+       * happens) names the single file that could not be produced. The split is
+       * bounded by the same recovery budget as a truncation.
+       */
+      if (
+        parsed.code === "GENERATION_MALFORMED" &&
+        requestedPaths.length > 1 &&
+        truncationRecoveries < truncationLimit
+      ) {
+        truncationRecoveries += 1;
+        const nextSize = Math.max(1, Math.floor(requestedPaths.length / 2));
+        pending = [...splitGroup(group, nextSize), ...pending];
+        await emitProgress(input.onProgress, {
+          type: "shrinking",
+          phase: "batch",
+          paths: requestedPaths,
+          nextSize,
+          reason: "malformed",
+        });
+        continue;
+      }
       return fail(parsed.code, parsed.error);
     }
 
@@ -1225,7 +1278,7 @@ export async function generateApp(
       for (const path of missing) {
         const count = (missingCounts.get(path) ?? 0) + 1;
         missingCounts.set(path, count);
-        if (count > 1 && !exhaustedPath) exhaustedPath = path;
+        if (count >= MAX_MISSING_FILE_REQUESTS && !exhaustedPath) exhaustedPath = path;
       }
     }
 
@@ -1261,7 +1314,7 @@ export async function generateApp(
     if (exhaustedPath) {
       return fail(
         "GENERATION_INCOMPLETE",
-        `The model did not return ${exhaustedPath} after two requests. Completed batches were saved; the project is incomplete.`,
+        `The model did not return ${exhaustedPath} after ${MAX_MISSING_FILE_REQUESTS} requests. Completed batches were saved; the project is incomplete.`,
       );
     }
 
@@ -2383,11 +2436,64 @@ function parseJsonObject(raw: string): ParsedJson {
   return { ok: true, value: value as Record<string, unknown> };
 }
 
+/**
+ * The index of the brace that closes the object opened at `start`.
+ *
+ * String- and escape-aware, because a generated file's CONTENT routinely
+ * contains braces, quotes and escaped quotes: a naive depth count would close
+ * the object on a `}` inside a string literal and hand `JSON.parse` a fragment
+ * of the answer. Returns `null` for an unterminated object, which is a
+ * truncation rather than a parse we should guess at.
+ */
+function balancedObjectEnd(text: string, start: number): number | null {
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+
+  for (let index = start; index < text.length; index += 1) {
+    const char = text[index];
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+      } else if (char === "\\") {
+        escaped = true;
+      } else if (char === '"') {
+        inString = false;
+      }
+      continue;
+    }
+    if (char === '"') {
+      inString = true;
+    } else if (char === "{") {
+      depth += 1;
+    } else if (char === "}") {
+      depth -= 1;
+      if (depth === 0) return index;
+    }
+  }
+  return null;
+}
+
+/**
+ * The JSON object inside a model response.
+ *
+ * ⚠️ THE PREVIOUS SLICE WAS FIRST-BRACE TO LAST-BRACE. A model that closed its
+ * JSON and then added one line of commentary containing a `}` (or returned two
+ * objects) produced a slice that could not parse, which then cost a repair call
+ * — or failed the batch outright. The balanced object is tried first, and the
+ * old outermost slice is kept only as a fallback so nothing that parsed before
+ * stops parsing.
+ */
 function extractJson(raw: string): string | null {
   const text = raw.trim().replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/, "");
   const start = text.indexOf("{");
+  if (start === -1) return null;
+
+  const balanced = balancedObjectEnd(text, start);
+  if (balanced !== null) return text.slice(start, balanced + 1);
+
   const end = text.lastIndexOf("}");
-  if (start === -1 || end <= start) return null;
+  if (end <= start) return null;
   return text.slice(start, end + 1);
 }
 

@@ -2189,6 +2189,14 @@ async function startAgentResponse(userId: string, projectId: string, body: unkno
 
   // A worker-dispatched run belongs to the scheduler's worker tick.
   if (run.dispatch_mode !== "worker") {
+    /**
+     * ⚠️ AN ESCAPING INLINE ERROR MUST NOT BE SILENT. `runAgent` handles its own
+     * typed failures, but a rejection that escapes it (an unexpected throw in a
+     * module it calls) previously became an unhandled rejection the response had
+     * already returned from: the run stayed in `validating` with no message until
+     * the 10-minute stale interrupt, and nothing recorded why. It is reported
+     * here instead, and the run remains resumable/recoverable.
+     */
     after(() =>
       runAgent({
         userId,
@@ -2196,6 +2204,17 @@ async function startAgentResponse(userId: string, projectId: string, body: unkno
         runId: run.id,
         prompt,
         requestedModel: run.model,
+      }).catch((error: unknown) => {
+        emitGenerationEvent("generation.worker_error", {
+          traceId: run.trace_id,
+          runId: run.id,
+          projectId,
+          dispatchMode: "inline",
+          reason: "inline_dispatch_failed",
+        });
+        console.error(
+          `[mavly] inline run ${run.id} rejected: ${error instanceof Error ? error.message : String(error)}`,
+        );
       }),
     );
   }
