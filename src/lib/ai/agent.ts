@@ -44,9 +44,11 @@ import { retryWithBackoff, type RetryDecision, type RetryPolicy } from "./retry"
 import {
   MIN_USEFUL_ATTEMPT_MS,
   idleTimeoutFor,
+  MAX_SCALED_ATTEMPT_MS,
+  MIN_SCALED_ATTEMPT_MS,
   minUsefulAttemptFor,
   planProviderCall,
-  reserveForPendingWork,
+  reserveForPendingFloors,
   runBudgetFor,
   workDeadlineAt,
 } from "./budget";
@@ -429,12 +431,21 @@ function callPolicy(input: {
   maxTokens: number;
   maxAttempts: number;
   retryTimeoutAsIs: boolean;
+  /** Overrides the class default; clamped to the scaled-attempt bounds. */
+  minAttemptMs?: number;
 }): ProviderCallPolicy {
+  const minAttemptMs =
+    input.minAttemptMs === undefined
+      ? minUsefulAttemptFor(input.timeoutMs)
+      : Math.max(
+          MIN_SCALED_ATTEMPT_MS,
+          Math.min(MAX_SCALED_ATTEMPT_MS, Math.floor(input.minAttemptMs)),
+        );
   return {
     timeoutMs: input.timeoutMs,
     idleTimeoutMs: idleTimeoutFor(input.timeoutMs),
     maxTokens: input.maxTokens,
-    minAttemptMs: minUsefulAttemptFor(input.timeoutMs),
+    minAttemptMs,
     maxAttempts: input.maxAttempts,
     retryTimeoutAsIs: input.retryTimeoutAsIs,
   };
@@ -442,7 +453,17 @@ function callPolicy(input: {
 
 export function providerCallPolicyFor(
   phase: "manifest" | "batch" | "repair",
-  options: { previewBatch?: boolean; modelMaxTokens: number } = { modelMaxTokens: 24_000 },
+  options: {
+    previewBatch?: boolean;
+    modelMaxTokens: number;
+    /**
+     * The smallest window this SPECIFIC call is worth starting in. A batch group
+     * of eight large files and a 2 KB single-file compact retry are not the same
+     * request, so they must not share one floor: the class floor (60 s for a
+     * 150 s batch) refuses a retry that would have finished in 15 s.
+     */
+    minAttemptMs?: number;
+  } = { modelMaxTokens: 24_000 },
 ): ProviderCallPolicy {
   if (phase === "manifest") {
     return callPolicy({
@@ -451,6 +472,7 @@ export function providerCallPolicyFor(
       // The plan is small and cheap: one identical retry is worth it.
       maxAttempts: 2,
       retryTimeoutAsIs: true,
+      minAttemptMs: options.minAttemptMs,
     });
   }
   if (phase === "repair") {
@@ -464,6 +486,7 @@ export function providerCallPolicyFor(
       // timeout would repeat the failure, so only transient errors retry.
       maxAttempts: 2,
       retryTimeoutAsIs: false,
+      minAttemptMs: options.minAttemptMs,
     });
   }
   return callPolicy({
@@ -474,6 +497,7 @@ export function providerCallPolicyFor(
     ),
     maxAttempts: 2,
     retryTimeoutAsIs: false,
+    minAttemptMs: options.minAttemptMs,
   });
 }
 
@@ -1011,8 +1035,16 @@ export async function generateApp(
      * a few seconds left can only time out and spend credits, and it would also
      * eat the reserve finalization needs. Fail with a resumable deadline error
      * while completed batches are safely persisted.
+     *
+     * ⚠️ AND THE CHECK IS THE NEXT GROUP'S OWN FLOOR, NOT A GENERIC 20 s. A fixed
+     * floor here contradicted the scaled one the call itself uses: it refused a
+     * 2 KB file with 15 s left (which the call would have accepted) and started a
+     * full 48 KB batch with 30 s left (which the call then refused).
      */
-    if (now() + MIN_USEFUL_ATTEMPT_MS > deadlineAt) {
+    const upcomingFloor = pending[0]
+      ? batchGroupFloorFor(pending[0], profile)
+      : MIN_USEFUL_ATTEMPT_MS;
+    if (now() + upcomingFloor > deadlineAt) {
       return fail(
         "GENERATION_TIMEOUT",
         "The run reached its time budget before every file was generated. Completed batches were saved and the run can be resumed.",
@@ -1030,9 +1062,11 @@ export async function generateApp(
      */
     const previewBatch =
       profile === "website" && requestedPaths.includes(PREVIEW_ENTRY_PATH);
+    const groupBytes = batchGroupBytes(group);
     const batchPolicy = providerCallPolicyFor("batch", {
       previewBatch,
       modelMaxTokens: model.maxOutputTokens,
+      minAttemptMs: batchGroupFloorFor(group, profile),
     });
 
     const messages = buildBatchMessages(input, model, manifest, group, compact, state);
@@ -1043,13 +1077,15 @@ export async function generateApp(
       {
         policy: batchPolicy,
         /**
-         * Leave each queued batch a share of a useful window for its OWN class,
-         * without spending this batch's ceiling on the queue behind it:
-         * `reserveForPendingWork` caps the reserve at a fraction of what is
-         * actually left, so this attempt still gets more than its bare minimum.
+         * ⚠️ EVERY QUEUED GROUP KEEPS ITS OWN MINIMUM. Reserving a fraction of
+         * the window (the old 40 % cap) let this call take its whole 150 s
+         * ceiling out of a ~200 s run and leave the tail — including any group a
+         * split just created — below the floor, where it was shortened to a
+         * doomed timeout or refused. The queue's scaled floors are reserved and
+         * everything else stays with this call.
          */
-        reserveForOthersMs: reserveForPendingWork({
-          pendingCount: pending.length,
+        reserveForOthersMs: reserveForPendingFloors({
+          pendingFloorsMs: pending.map((queued) => batchGroupFloorFor(queued, profile)),
           minAttemptMs: batchPolicy.minAttemptMs,
           remainingMs: deadlineAt - now(),
         }),
@@ -1160,6 +1196,8 @@ export async function generateApp(
       const repairPolicy = providerCallPolicyFor("repair", {
         previewBatch,
         modelMaxTokens: model.maxOutputTokens,
+        // Same rule as the original request: a small document gets a small floor.
+        minAttemptMs: batchAttemptFloorMs(REPAIR_TIMEOUT_MS, groupBytes),
       });
       const repaired = await callModel(
         "repair",
@@ -1167,9 +1205,9 @@ export async function generateApp(
         repairMessages(messages, previousContent, requestedPaths),
         {
           policy: repairPolicy,
-          reserveForOthersMs: reserveForPendingWork({
-            pendingCount: pending.length,
-            minAttemptMs: MIN_USEFUL_ATTEMPT_MS,
+          reserveForOthersMs: reserveForPendingFloors({
+            pendingFloorsMs: pending.map((queued) => batchGroupFloorFor(queued, profile)),
+            minAttemptMs: repairPolicy.minAttemptMs,
             remainingMs: deadlineAt - now(),
           }),
         },
@@ -1895,6 +1933,52 @@ function deadlineFailure(model: AiModel): ChatCompletionFailure {
     retryAfterMs: null,
     metadata: { ...baseMetadataForFailure(model), errorCode: "TIMEOUT" },
   };
+}
+
+/**
+ * ═══ A GROUP'S OWN SIZE DECIDES ITS MINIMUM USEFUL WINDOW ═════════════════
+ *
+ * `minUsefulAttemptFor` answers "how long does a FULL batch need" (60 s of a
+ * 150 s ceiling). Reusing that floor for a single 2 KB file is how the compact
+ * retry of `app/globals.css` or `components/ui/icon.tsx` was refused — or given a
+ * hopeless 60 s window — at the very end of a run. The floor scales with the
+ * estimated bytes this specific group asks for, bounded by the class floor so it
+ * can never exceed it.
+ */
+export function batchGroupBytes(group: readonly AgentManifestEntry[]): number {
+  let total = 0;
+  for (const entry of group) total += Math.max(1, entry.estimatedBytes);
+  return total;
+}
+
+export function batchAttemptFloorMs(
+  configuredTimeoutMs: number,
+  groupBytes: number,
+): number {
+  const base = minUsefulAttemptFor(configuredTimeoutMs);
+  const ratio = Math.max(0, Math.min(1, groupBytes / MAX_BATCH_ESTIMATED_BYTES));
+  return Math.max(
+    MIN_SCALED_ATTEMPT_MS,
+    Math.min(base, Math.floor(base * ratio)),
+  );
+}
+
+/** The class timeout one group would use: the preview has its own ceiling. */
+function batchGroupTimeoutFor(
+  group: readonly AgentManifestEntry[],
+  profile: AgentProjectType,
+): number {
+  const preview =
+    profile === "website" && group.some((entry) => entry.path === PREVIEW_ENTRY_PATH);
+  return preview ? PREVIEW_TIMEOUT_MS : BATCH_TIMEOUT_MS;
+}
+
+/** One group's scaled minimum useful attempt. */
+function batchGroupFloorFor(
+  group: readonly AgentManifestEntry[],
+  profile: AgentProjectType,
+): number {
+  return batchAttemptFloorMs(batchGroupTimeoutFor(group, profile), batchGroupBytes(group));
 }
 
 /**

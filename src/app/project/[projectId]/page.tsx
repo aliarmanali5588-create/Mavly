@@ -1652,6 +1652,21 @@ export default function WorkspacePage() {
   /** New engine: the live run timeline (`agent/progress`) for the chat and the preview loader. */
   const isV2 = isV2Project(project);
   const runProgress = useRunProgress(projectId, isBuilding, isV2);
+  /**
+   * ⚠️ A FINISHED GENERATION CHANGES THE SOURCE, AND THE LIVE-PREVIEW STATUS IS A
+   * ONE-SHOT READ. `LiveRuntimePreview` fetches `/api/runtime/{id}` on mount and
+   * whenever its `refreshKey` changes; before this counter existed, a generation
+   * that completed while the preview tab was open never re-read it, so a status
+   * captured when `project_files` was still empty ("This project has no
+   * package.json…") stayed on screen after the files existed. Bumping once per
+   * finished run re-reads the status; it never starts a sandbox.
+   */
+  const [runtimeStatusKey, setRuntimeStatusKey] = useState(0);
+  const finishedRunKey = runProgress && isRunOver(runProgress.stage) ? runProgress.runId : null;
+  useEffect(() => {
+    if (!finishedRunKey) return;
+    setRuntimeStatusKey((value) => value + 1);
+  }, [finishedRunKey]);
   const buildStage = runProgress && !isRunOver(runProgress.stage) ? runProgress.stage : null;
   const buildRetrying = runProgress?.retrying ?? false;
   const previewReady = runProgress?.previewReady ?? false;
@@ -1910,7 +1925,7 @@ export default function WorkspacePage() {
               {activeTab === "preview" && (
                 <LiveRuntimePreview
                   projectId={projectId}
-                  refreshKey={previewKey + sourceRevision}
+                  refreshKey={previewKey + sourceRevision + runtimeStatusKey}
                   mobilePreview={mobilePreview}
                 >
                   <PreviewPanel key={previewKey} previewUrl={shownPreviewUrl} cached={previewCached} onRefresh={() => { fetchProject(); setPreviewKey((k) => k + 1); }} loading={showInitialGenerationLoader} buildStage={buildStage} buildRetrying={buildRetrying} previewReady={previewReady} emptyMessage={project?.previewUnavailableReason} previewState={project?.previewState} onResumeGeneration={handleResumeGeneration} resumingGeneration={resumingGeneration} mobilePreview={mobilePreview} iframePath={iframePath} frameRef={previewFrameRef} /* ⭐ Same-origin ONLY while the editor is open — and for the length of an apply, which outlives the panel: dropping the proxy mid-apply would reload the frame and throw away the preview-only edits the user is watching. */ proxiedSrc={visualEditorOpen || visualLocked ? `/api/preview/${encodeURIComponent(projectId)}` : null} />
@@ -2020,7 +2035,7 @@ export default function WorkspacePage() {
           ) : (
             <div className="h-full min-h-0 overflow-hidden">
               {activeTab === "preview" && (
-                <LiveRuntimePreview projectId={projectId} refreshKey={previewKey + sourceRevision}>
+                <LiveRuntimePreview projectId={projectId} refreshKey={previewKey + sourceRevision + runtimeStatusKey}>
                   <PreviewPanel key={previewKey} previewUrl={shownPreviewUrl} cached={previewCached} onRefresh={() => { fetchProject(); setPreviewKey((k) => k + 1); }} loading={showInitialGenerationLoader} buildStage={buildStage} buildRetrying={buildRetrying} previewReady={previewReady} emptyMessage={project?.previewUnavailableReason} previewState={project?.previewState} onResumeGeneration={handleResumeGeneration} resumingGeneration={resumingGeneration} mobilePreview={false} iframePath={iframePath} />
                 </LiveRuntimePreview>
               )}

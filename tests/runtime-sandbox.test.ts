@@ -538,6 +538,60 @@ test("yarn/pnpm/bun projects are refused rather than converted", () => {
   assert.equal(support.reason, "unsupported_package_manager");
 });
 
+/**
+ * ═══ AN ABSENT ROOT package.json IS FOUR DIFFERENT FACTS ════════════════════
+ *
+ * The workspace used to be told "This project has no package.json at its root"
+ * for every one of these, including a project that simply had not been generated
+ * yet and a static site that must never have a manifest. Each case below pins the
+ * reason AND the absence of the old defect phrasing in the states where nothing
+ * is actually wrong.
+ */
+
+test("a project with no saved files is reported as empty, not as a missing manifest", () => {
+  const support = detectRuntimeProject([]);
+  assert.equal(support.supported, false);
+  assert.equal(support.reason, "no_project_files");
+  assert.match(support.detail ?? "", /no saved files yet/i);
+  assert.doesNotMatch(support.detail ?? "", /no package\.json/i);
+});
+
+test("a static HTML project is not a Node project that lost its manifest", () => {
+  const support = detectRuntimeProject([
+    { path: "index.html", content: "<!doctype html><html><body>Hello</body></html>" },
+    { path: "styles.css", content: "body{margin:0}" },
+  ]);
+  assert.equal(support.supported, false);
+  assert.equal(support.reason, "static_site");
+  assert.match(support.detail ?? "", /static HTML project/i);
+  assert.doesNotMatch(support.detail ?? "", /at its root/i);
+});
+
+test("a manifest that exists only in a subdirectory is named, not denied", () => {
+  const support = detectRuntimeProject([
+    {
+      path: "web/package.json",
+      content: JSON.stringify({ dependencies: { react: "19", vite: "7" } }),
+    },
+    { path: "web/index.html", content: '<script type="module" src="./src/main.tsx"></script>' },
+    { path: "web/src/main.tsx", content: "console.log('x');\n" },
+  ]);
+  assert.equal(support.supported, false);
+  assert.equal(support.reason, "nested_package_json");
+  assert.match(support.detail ?? "", /web\/package\.json/);
+});
+
+test("a Node-shaped project without a root manifest keeps an accurate report", () => {
+  const support = detectRuntimeProject([
+    { path: "app/page.tsx", content: "export default function Page() { return null; }\n" },
+  ]);
+  assert.equal(support.supported, false);
+  assert.equal(support.reason, "missing_package_json");
+  assert.match(support.detail ?? "", /project root/i);
+  // The remedy is stated, and the promise is that Mavly does not create one.
+  assert.match(support.detail ?? "", /never generates or overwrites/i);
+});
+
 test("an index.html that references a missing module is refused", () => {
   const support = detectRuntimeProject(
     projectFiles({

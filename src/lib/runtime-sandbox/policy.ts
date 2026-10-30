@@ -121,7 +121,52 @@ export function detectRuntimeProject(files: readonly SyncSourceFile[]): RuntimeP
 
   const packageJson = byPath.get("package.json");
   if (!packageJson) {
-    return unsupported("missing_package_json", "This project has no package.json at its root.");
+    /**
+     * ⚠️ FOUR DIFFERENT STATES MUST NOT SHARE ONE SENTENCE.
+     *
+     * This branch used to answer "This project has no package.json at its root"
+     * for every one of them. That sentence is a DEFECT REPORT, and it was shown
+     * for a project that simply had not been generated yet, for a static HTML
+     * project (which must never have a manifest) and for an imported project whose
+     * app lives in a subdirectory. Each is a different fact with a different
+     * remedy, so each gets its own reason and detail. The lookup above is exact
+     * (`project_files.path`), and no path here is rewritten — this only changes
+     * what the workspace is TOLD.
+     */
+    if (byPath.size === 0) {
+      return unsupported(
+        "no_project_files",
+        "This project has no saved files yet, so there is nothing to preview live. Generate or import the project first; the live preview reads the saved source.",
+      );
+    }
+
+    /** A root HTML entry means this is a static site, not a Node application. */
+    if (byPath.has("index.html") || byPath.has("public/index.html")) {
+      return unsupported(
+        "static_site",
+        "This is a static HTML project, so it has no package.json — none is missing. The static preview serves these pages directly; the live runtime preview runs Node frameworks only.",
+      );
+    }
+
+    /**
+     * A manifest that exists under a subdirectory is an imported project layout,
+     * not a lost file. Naming the path is the whole remedy: the runtime requires
+     * the manifest at the project root and never moves files to find it.
+     */
+    const nestedManifest = [...byPath.keys()]
+      .filter((path) => path.endsWith("/package.json"))
+      .sort()[0];
+    if (nestedManifest) {
+      return unsupported(
+        "nested_package_json",
+        `The only package.json is at ${nestedManifest}. A live runtime preview needs it at the project root; Mavly does not move or rewrite project files.`,
+      );
+    }
+
+    return unsupported(
+      "missing_package_json",
+      "This project has no root package.json, and a live runtime preview needs one. Add it at the project root (Mavly never generates or overwrites a manifest on its own).",
+    );
   }
 
   let manifest: Record<string, unknown>;

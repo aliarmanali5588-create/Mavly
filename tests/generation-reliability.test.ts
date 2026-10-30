@@ -779,6 +779,126 @@ test("a timed-out single file gets exactly one narrower retry", async () => {
   assert.equal(batchCalls, 2);
 });
 
+function manifestWithSizes(files: ReadonlyArray<[string, number]>): string {
+  return JSON.stringify({
+    message: "Built the requested app.",
+    files: files.map(([path, estimatedBytes]) => ({ path, estimatedBytes })),
+    deletedPaths: [],
+  });
+}
+
+/**
+ * ═══ CROSS-FILE TIMEOUTS ARE A BUDGET POSITION, NOT A FILE ═════════════════
+ *
+ * One run has one ~200 s provider window. These tests pin the scheduling rule
+ * that made two unrelated SMALL files (`components/ui/icon.tsx`, `app/globals.css`)
+ * fail with the same message: whichever file sat at the end of the queue was
+ * scheduled inside a window smaller than its own floor.
+ */
+test("the first of three batches cannot spend the whole run budget", async () => {
+  // 17 files at 6 KB each: 8 + 8 + 1 with MAX_BATCH_FILES/MAX_BATCH_ESTIMATED_BYTES.
+  const paths = Array.from({ length: 17 }, (_, index) => `f${index + 1}.ts`);
+  const batchTimeouts: number[] = [];
+  const clock = { now: 1_000_000 };
+
+  const complete: NonNullable<AgentDependencies["complete"]> = async (
+    _model,
+    messages,
+    options,
+  ) => {
+    if (isPlanner(messages)) {
+      return success(manifestWithSizes(paths.map((path) => [path, 6_000] as [string, number])));
+    }
+    const requested = requestedPaths(messages);
+    const timeoutMs = typeof options === "number" ? 0 : options.timeoutMs ?? 0;
+    batchTimeouts.push(timeoutMs);
+    // The provider uses the window it was given, so the run clock really moves.
+    clock.now += timeoutMs;
+    return success(batchJson(requested.map((path) => [path, `content:${path}`] as [string, string])));
+  };
+
+  const outcome = await generateApp(
+    { prompt: "build it", mode: "update" },
+    { complete, sleep: noop, now: () => clock.now },
+  );
+
+  assert.equal(isGenerationFailure(outcome), false);
+  assert.equal(batchTimeouts.length, 3);
+  /**
+   * 220 s of provider work (240 s budget − the 20 s finalization reserve). The
+   * previous schedule gave the first batch 132 s, the second 60 s and then
+   * REFUSED the third: the run failed having written 2 of 3 groups. Reserving each
+   * queued group's own floor makes all three fit.
+   */
+  assert.equal(batchTimeouts[0], 148_000);
+  assert.ok(batchTimeouts.every((timeout) => timeout >= 12_000));
+  assert.ok(
+    batchTimeouts.reduce((total, timeout) => total + timeout, 0) <= 220_000,
+    "the schedules must fit the window they were planned in",
+  );
+});
+
+test("a 2 KB file is still attempted when only ~25 s of the run remain", async () => {
+  const clock = { now: 1_000_000 };
+  const batchTimeouts: number[] = [];
+
+  const complete: NonNullable<AgentDependencies["complete"]> = async (
+    _model,
+    messages,
+    options,
+  ) => {
+    if (isPlanner(messages)) {
+      // A slow plan consumes most of the window, as it does in production.
+      clock.now += 195_000;
+      return success(manifestWithSizes([["app/globals.css", 2_000]]));
+    }
+    batchTimeouts.push(typeof options === "number" ? 0 : options.timeoutMs ?? 0);
+    return success(batchJson([["app/globals.css", "body{margin:0}"]]));
+  };
+
+  const outcome = await generateApp(
+    { prompt: "make the theme darker", mode: "update" },
+    { complete, sleep: noop, now: () => clock.now },
+  );
+
+  // The full-batch 60 s floor used to refuse this call outright.
+  assert.equal(isGenerationFailure(outcome), false);
+  assert.deepEqual(batchTimeouts, [25_000]);
+});
+
+test("a full-size group is not started when its own floor cannot fit, and nothing is spent", async () => {
+  const clock = { now: 1_000_000 };
+  let batchCalls = 0;
+
+  const complete: NonNullable<AgentDependencies["complete"]> = async (
+    _model,
+    messages,
+  ) => {
+    if (isPlanner(messages)) {
+      // Leave 45 s: below this 48 KB group's own 60 s floor, so no usable attempt
+      // exists. The loop must say so instead of starting a doomed request and
+      // then blaming the model for "running out of time twice".
+      clock.now += 175_000;
+      return success(manifestWithSizes([["only.ts", 48_000]]));
+    }
+    batchCalls += 1;
+    throw new Error("the provider must not be called when the budget refuses the request");
+  };
+
+  const outcome = await generateApp(
+    { prompt: "build it", mode: "update" },
+    { complete, sleep: noop, now: () => clock.now },
+  );
+
+  assert.equal(batchCalls, 0);
+  assert.equal(isGenerationFailure(outcome), true);
+  if (!isGenerationFailure(outcome)) return;
+  assert.equal(outcome.usage.attempts, 1, "only the plan was a provider request");
+  assert.equal(outcome.code, "GENERATION_TIMEOUT");
+  assert.match(outcome.error, /reached its time budget/);
+  assert.doesNotMatch(outcome.error, /narrower retry/);
+});
+
 test("a timed-out preview is never persisted as a completed artifact", async () => {
   const persisted: string[] = [];
   const complete = provider((messages) => {

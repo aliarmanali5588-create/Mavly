@@ -118,6 +118,12 @@ export function isRuntimeFramework(value: unknown): value is RuntimeFramework {
 /** Why a project cannot be previewed live. Each reason has its own copy in the UI. */
 export type RuntimeUnsupportedReason =
   | "android_project"
+  /** No saved files at all: nothing has been generated/imported yet. */
+  | "no_project_files"
+  /** A static HTML project. It has no package.json BY DESIGN, so none is missing. */
+  | "static_site"
+  /** A manifest exists, but only under a subdirectory (an imported monorepo/folder). */
+  | "nested_package_json"
   | "missing_package_json"
   | "invalid_package_json"
   | "missing_react_dependency"

@@ -11,6 +11,7 @@ import {
   minUsefulAttemptFor,
   planProviderCall,
   remainingRunMs,
+  reserveForPendingFloors,
   remainingWorkMs,
   retryFitsBefore,
   runBudgetFor,
@@ -20,8 +21,12 @@ import {
 } from "../src/lib/ai/budget";
 import {
   BATCH_OUTPUT_TOKENS,
+  BATCH_TIMEOUT_MS,
   MANIFEST_OUTPUT_TOKENS,
+  MAX_BATCH_ESTIMATED_BYTES,
   PREVIEW_OUTPUT_TOKENS,
+  batchAttemptFloorMs,
+  batchGroupBytes,
   providerAttemptCeiling,
   providerCallPolicyFor,
 } from "../src/lib/ai/agent";
@@ -248,6 +253,153 @@ test("each call class keeps its own output ceiling and timeout", () => {
   // The model's own cap always wins over a larger class ceiling.
   const tiny = providerCallPolicyFor("batch", { modelMaxTokens: 500 });
   assert.equal(tiny.maxTokens, 500);
+});
+
+/**
+ * ═══ BATCH SCHEDULING: A SIZE-AWARE FLOOR PER GROUP ════════════════════════
+ *
+ * These pin the cross-file timeout root cause. A run has ONE ~200 s work window;
+ * reserving a FRACTION of it for the queued groups let the first batch take
+ * 120–150 s and left the tail below the batch floor, so whichever file sat at the
+ * end of the queue reported "the model ran out of time ... even after a narrower
+ * retry".
+ */
+test("the old fraction reserve arithmetically cannot fit the queue; the floor reserve can", () => {
+  const remaining = 200_000;
+  const minAttempt = minUsefulAttemptFor(BATCH_TIMEOUT_MS);
+  assert.equal(minAttempt, 60_000);
+
+  // What the loop used to ask for with two groups still queued: 40 % of the
+  // window goes to the two behind, everything else to this call.
+  const greedyReserve = Math.min(2 * minAttempt, Math.floor(remaining * 0.4));
+  const greedy = planProviderCall({
+    deadlineAt: START + remaining,
+    now: START,
+    configuredTimeoutMs: BATCH_TIMEOUT_MS,
+    reserveForOthersMs: greedyReserve,
+    minAttemptMs: minAttempt,
+  });
+  assert.equal(greedy.ok, true);
+  if (!greedy.ok) return;
+  assert.equal(greedy.timeoutMs, 120_000);
+  // The first call alone plus the minimum for the other two exceeds the run.
+  assert.ok(greedy.timeoutMs + 2 * minAttempt > remaining);
+
+  // Reserving each queued group's own minimum makes the same queue fit exactly.
+  const reserve = reserveForPendingFloors({
+    pendingFloorsMs: [minAttempt, minAttempt],
+    minAttemptMs: minAttempt,
+    remainingMs: remaining,
+  });
+  assert.equal(reserve, 120_000);
+  const floored = planProviderCall({
+    deadlineAt: START + remaining,
+    now: START,
+    configuredTimeoutMs: BATCH_TIMEOUT_MS,
+    reserveForOthersMs: reserve,
+    minAttemptMs: minAttempt,
+  });
+  assert.equal(floored.ok, true);
+  if (!floored.ok) return;
+  assert.equal(floored.timeoutMs, 80_000);
+  // Every group, including the ones behind, is now scheduled inside the window.
+  assert.equal(floored.timeoutMs + 2 * minAttempt, remaining);
+});
+
+test("only the queue's real minimum is reserved, so a fitting batch is not shortened", () => {
+  // A preview group needs far less than a full batch: that is all it takes.
+  assert.equal(
+    reserveForPendingFloors({
+      pendingFloorsMs: [25_000],
+      minAttemptMs: 60_000,
+      remainingMs: 220_000,
+    }),
+    25_000,
+  );
+  // Nothing queued → nothing reserved → this call may still use its full ceiling.
+  assert.equal(
+    reserveForPendingFloors({ pendingFloorsMs: [], minAttemptMs: 60_000, remainingMs: 220_000 }),
+    0,
+  );
+  // The current call's own minimum is never given away to the queue.
+  assert.equal(
+    reserveForPendingFloors({
+      pendingFloorsMs: [60_000, 60_000],
+      minAttemptMs: 60_000,
+      remainingMs: 100_000,
+    }),
+    40_000,
+  );
+  assert.equal(
+    reserveForPendingFloors({ pendingFloorsMs: [60_000], minAttemptMs: 60_000, remainingMs: -5_000 }),
+    0,
+  );
+});
+
+test("a group's own size sets its floor, not the full-batch class floor", () => {
+  assert.equal(batchGroupBytes([{ path: "a.ts", estimatedBytes: 2_000 }]), 2_000);
+  assert.equal(
+    batchGroupBytes([
+      { path: "a.ts", estimatedBytes: 2_000 },
+      { path: "b.ts", estimatedBytes: 3_000 },
+    ]),
+    5_000,
+  );
+
+  // A full 48 KB batch keeps the class floor of a 150 s call.
+  assert.equal(batchAttemptFloorMs(BATCH_TIMEOUT_MS, MAX_BATCH_ESTIMATED_BYTES), 60_000);
+  // `app/globals.css` or `components/ui/icon.tsx` do not need 60 s to emit 2 KB.
+  assert.equal(batchAttemptFloorMs(BATCH_TIMEOUT_MS, 2_000), 12_000);
+  assert.equal(batchAttemptFloorMs(BATCH_TIMEOUT_MS, 24_000), 30_000);
+  for (const bytes of [0, 1, 5_000, 48_000, 2_000_000]) {
+    const floor = batchAttemptFloorMs(BATCH_TIMEOUT_MS, bytes);
+    assert.ok(floor >= 12_000 && floor <= 60_000, `floor ${floor} out of bounds`);
+  }
+});
+
+test("a 2 KB retry is dispatched in a 25 s window that the class floor would refuse", () => {
+  const deadlineAt = START + 25_000;
+  const scaled = planProviderCall({
+    deadlineAt,
+    now: START,
+    configuredTimeoutMs: BATCH_TIMEOUT_MS,
+    minAttemptMs: batchAttemptFloorMs(BATCH_TIMEOUT_MS, 2_000),
+  });
+  assert.equal(scaled.ok, true);
+  if (!scaled.ok) return;
+  assert.equal(scaled.timeoutMs, 25_000);
+
+  // The same window is refused for the full-batch floor: no request is sent.
+  const classFloor = planProviderCall({
+    deadlineAt,
+    now: START,
+    configuredTimeoutMs: BATCH_TIMEOUT_MS,
+    minAttemptMs: minUsefulAttemptFor(BATCH_TIMEOUT_MS),
+  });
+  assert.equal(classFloor.ok, false);
+});
+
+test("an explicit floor override is clamped to the scaled bounds", () => {
+  assert.equal(
+    providerCallPolicyFor("batch", { modelMaxTokens: 24_000, minAttemptMs: 12_000 })
+      .minAttemptMs,
+    12_000,
+  );
+  assert.equal(
+    providerCallPolicyFor("batch", { modelMaxTokens: 24_000, minAttemptMs: 1 })
+      .minAttemptMs,
+    12_000,
+  );
+  assert.equal(
+    providerCallPolicyFor("batch", { modelMaxTokens: 24_000, minAttemptMs: 999_999 })
+      .minAttemptMs,
+    60_000,
+  );
+  // Omitting it keeps the class default, so existing callers are unchanged.
+  assert.equal(
+    providerCallPolicyFor("batch", { modelMaxTokens: 24_000 }).minAttemptMs,
+    minUsefulAttemptFor(BATCH_TIMEOUT_MS),
+  );
 });
 
 test("the provider-attempt ceiling is bounded and configurable", () => {

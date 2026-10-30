@@ -178,6 +178,26 @@ make a project eligible. A project that needs Vite must already declare it and
 commit a consistent manifest; otherwise it is reported honestly and keeps the
 static preview.
 
+### The four states an absent root `package.json` can mean
+
+A single "this project has no package.json at its root" sentence used to cover all
+of them, which turned a transient or by-design state into a defect report. They
+are now separate reasons, each with its own copy:
+
+| State | Reason | Remedy |
+|---|---|---|
+| nothing saved yet (mid-generation, new project) | `no_project_files` | generate or import first |
+| a static HTML project (`index.html` / `public/index.html`, no manifest) | `static_site` | use the static preview; no manifest is missing |
+| a manifest that exists only under a subdirectory | `nested_package_json` (names the path) | move it to the root yourself; Mavly never moves files |
+| a Node-shaped project with no root manifest | `missing_package_json` | add one; Mavly never generates or overwrites a manifest |
+
+Detection reads exactly `project_files.path` and never rewrites a path, so an
+absent root manifest really is absent from the saved files — the previous message
+was a misdiagnosis of *which* state the project was in, not a wrong-root or
+lost-write bug. Status was also a one-shot read: the workspace now re-reads it once
+per finished run, so a status captured while the project was still empty can no
+longer outlive the generation that filled it.
+
 Unsupported projects return `RUNTIME_SANDBOX_UNSUPPORTED` with the exact reason;
 the static preview remains.
 

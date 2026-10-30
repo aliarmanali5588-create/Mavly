@@ -86,6 +86,21 @@ Consequences worth stating plainly:
    next attempt further — a tight budget degraded into a run that failed with almost
    nothing written. Fixed with `reserveForPendingWork`, which caps the reserve at 40 % of
    the time actually left.
+
+   **Still greedy, and this was the cross-file timeout.** A 40 % cap is not a fair share:
+   with three groups left the current call could take 60 % and the two behind it 20 % each
+   (a 200 s window became 120 s / 40 s / 40 s), and 40 s is below the batch class's own
+   60 s floor. The tail of every multi-batch run was therefore starved, and the file named
+   in the failure was simply whichever one sat at the end of the queue — which is why two
+   unrelated small files (`components/ui/icon.tsx`, `app/globals.css`) reported the same
+   error. A further defect made it worse: the loop applied the FULL-batch floor (60 s of a
+   150 s call) to a single 2 KB file, so its compact retry was refused rather than sent and
+   the loop's generic 20 s pre-check contradicted the scaled floor the call itself used.
+   Fixed: `reserveForPendingFloors` reserves each queued group's own minimum (so the call
+   being made keeps every millisecond the queue does not need — a slow but fitting batch is
+   never shortened), `batchAttemptFloorMs`/`batchGroupFloorFor` scale a group's floor by its
+   own estimated bytes, and the pre-check uses the next group's floor instead of 20 s. The
+   same deadline is divided, never extended: no timeout, model or total budget changed.
 3. **One unparseable file discarded its whole batch.** A multi-file response that was
    still not valid JSON after its single repair failed the entire run, throwing away every
    valid file in that batch. Fixed: it is **split** under the same bounded recovery budget,

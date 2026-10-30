@@ -243,6 +243,45 @@ export function reserveForPendingWork(input: {
 }
 
 /**
+ * ═══ EVERY QUEUED CALL KEEPS ITS OWN MINIMUM ═══════════════════════════════
+ *
+ * `reserveForPendingWork` above is still a GREEDY schedule: it caps the reserve
+ * at 40 % of what is left, so with THREE groups left the call being made may
+ * legitimately take 60 % and the two behind it 20 % each. On a ~200 s work
+ * window that is 120 s / 40 s / 40 s, and 40 s is below the batch class's own
+ * floor — the tail is shortened to a doomed timeout or refused outright.
+ *
+ * The tail of such a run therefore ALWAYS fails, and the file named in the
+ * failure is simply whichever one sits at the end of the queue. That is why two
+ * unrelated SMALL files (`components/ui/icon.tsx`, `app/globals.css`) can produce
+ * an identical "ran out of time" error: the defect is positional, not
+ * file-specific.
+ *
+ * This reserves exactly what each queued group needs to be worth starting at
+ * all, and no more: the call being planned keeps every millisecond the queue
+ * does not need, so a slow-but-fitting batch is never shortened (unlike an
+ * equal-split policy). The current call's own minimum is never spent on the
+ * queue, and nothing is added to the run: the same deadline is divided.
+ */
+export function reserveForPendingFloors(input: {
+  /** One scaled minimum per group that still has to run. */
+  pendingFloorsMs: readonly number[];
+  /** The minimum for the call being planned right now. */
+  minAttemptMs: number;
+  remainingMs: number;
+}): number {
+  const remaining = Math.max(0, Math.floor(input.remainingMs));
+  const current = Math.max(1_000, Math.floor(input.minAttemptMs));
+  let required = 0;
+  for (const floor of input.pendingFloorsMs) {
+    if (Number.isFinite(floor) && floor > 0) required += Math.floor(floor);
+  }
+  if (required <= 0) return 0;
+  /** Never reserve the window the current call needs for its own minimum. */
+  return Math.min(required, Math.max(0, remaining - current));
+}
+
+/**
  * Whether a backoff delay can still be waited out AND leave a useful attempt.
  * Mirrors the check inside `retryWithBackoff`, exposed so callers and tests can
  * reason about the same rule.
