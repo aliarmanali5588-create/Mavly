@@ -27,15 +27,11 @@
  * the payload (`src/app/api/config/route.ts`). The dashboard no longer calls it,
  * but the public compatibility contract is retained.
  *
- * `/api/generation/worker` has no user session by design: it is the durable
- * generation worker's internal invocation endpoint. Exempting it here does not
- * make it public — the route performs its own constant-time bearer-secret check
- * and answers 404 when disabled (`src/app/api/generation/worker/route.ts`).
- * Both exceptions are exact-path matches; a near-miss under either is gated.
+ * The generation worker is invoked directly by its Cloudflare Cron handler and
+ * does not have a public application route.
  */
 export const PUBLIC_API_PATHS: readonly string[] = [
   "/api/config",
-  "/api/generation/worker",
 ];
 
 /**

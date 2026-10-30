@@ -39,10 +39,7 @@ VERCEL_PROJECT_ID=<project id>
 # Worker and database (required; builds are not claimed without these)
 SUPABASE_SERVICE_ROLE_KEY=<server-only service role key>
 NEXT_PUBLIC_SUPABASE_URL=https://<project>.supabase.co
-MAVLY_GENERATION_WORKER_ENABLED=1
-MAVLY_GENERATION_WORKER_SECRET=<>=32 random characters, shared with the scheduler>
-MAVLY_GENERATION_WORKER_PROJECTS=<explicit cohort for generation>
-MAVLY_GENERATION_WORKER_ID=<optional log-safe instance name>
+# Deploy the platform-wide Cloudflare Cron Worker once; no project worker settings are needed.
 ```
 
 Semantics, all read by `src/lib/android/build-config.ts`:
@@ -57,11 +54,11 @@ Semantics, all read by `src/lib/android/build-config.ts`:
 | `VERCEL_OIDC_TOKEN` or the access-token triple | yes | Presence only is checked. Mavly does not probe the provider during admission; a rejected token surfaces as a typed provider error. |
 | `SUPABASE_SERVICE_ROLE_KEY` | yes | Worker and private storage only. Never `NEXT_PUBLIC_*`. |
 | `NEXT_PUBLIC_SUPABASE_URL` | yes | Project URL. |
-| generation-worker variables | yes | The worker claims builds; if it is not ready, `POST …/mobile/builds` fails closed. |
+| Cloudflare Cron Worker | yes | The platform scheduler advances build jobs when no generation job is ready. |
 
 **Only a presence check happens at request time.** Nothing in the API proves that
-the credentials work, that the image exists, that the bucket is private, or that a
-scheduler is calling the worker. The acceptance checklist below is the proof.
+the credentials work, that the image exists, that the bucket is private, or that Cron is
+calling the worker. Confirm scheduler operation in Cloudflare Worker logs.
 
 **Provider plan.** The worker creates each sandbox with the 24-hour session timeout
 in `ANDROID_BUILD_SESSION_TIMEOUT_MS` and a 22-minute build deadline. Vercel
@@ -132,13 +129,10 @@ sandbox to paper over a cache miss.
 
 ## Durable worker and scheduler
 
-Android builds do not have their own scheduler. They are advanced by the existing
-generation-worker tick (`src/lib/generation/worker.ts`,
-`POST|GET /api/generation/worker`):
+Android builds do not have their own scheduler. They are advanced by the Cloudflare
+Cron Worker through the existing `src/lib/generation/worker.ts` tick. The scheduled
+runtime is trusted; there is no public worker route or worker-specific bearer secret.
 
-- **Authentication:** `Authorization: Bearer $MAVLY_GENERATION_WORKER_SECRET`,
-  compared in constant time. The route has no user session. Disabled → `404`;
-  enabled but incomplete → `503`; wrong secret → `401`.
 - **Ordering:** one invocation first recovers expired leases, then claims at most
   one generation job. Only when the generation queue is empty does it advance
   **either** verification **or** one Android build — never both. A busy generation
@@ -148,13 +142,12 @@ generation-worker tick (`src/lib/generation/worker.ts`,
   build lease (renewed while the tick runs) and 2 attempts for provider/storage
   failures. Concurrency is capped at 1 active build per project, 2 per user and 4
   globally, enforced in SQL.
-- **Scheduling:** the code does not self-schedule. External cadence is the
-  operator's choice; a one-minute interval is sufficient to react quickly without
-  creating load. Overlapping invocations are safe (`FOR UPDATE SKIP LOCKED` and
-  fenced leases prevent double execution) but they do consume the small global
-  admission caps, so prefer one scheduler per deployment. The route's
-  `maxDuration` is 300 seconds; the generation lease is 420 seconds (renewed every
-  120 s), and an Android build holds a shorter, separately fenced build lease.
+- **Scheduling:** Cloudflare Cron is configured once per minute. Overlapping
+  invocations are safe (`FOR UPDATE SKIP LOCKED` and fenced leases prevent
+  double claims) but consume the small global admission caps. The generation
+  lease is 420 seconds (renewed every 120 s), and an Android build holds a
+  shorter, separately fenced build lease. Cloudflare's default Cron CPU limit is
+  30 seconds on Paid; no limit increase is configured.
 - **Pause/drain:** disabling the Android flag stops new claims but the tick still
   runs DB-only recovery and retention. Stopping the scheduler entirely stops both,
   so cancel or finish active builds first; otherwise a `running` row stays
@@ -195,9 +188,8 @@ limit and `application/vnd.android.package-archive`. Do not make it public.
 5. Enable the generation worker and confirm one empty tick returns `200` with a
    real status (for example `empty`), not `503`.
 6. Build/verify/publish the image and set its digest.
-7. Add **one** disposable project to both cohorts
-   (`MAVLY_ANDROID_BUILD_PROJECTS` and, if that project also uses a
-   worker-dispatched generation run, `MAVLY_GENERATION_WORKER_PROJECTS`).
+7. Add **one** disposable project only to `MAVLY_ANDROID_BUILD_PROJECTS`.
+   Production generation dispatch is platform-wide and needs no matching worker cohort.
 8. Run the acceptance checklist below before widening the cohort.
 
 Do not apply migrations to production without explicit authorization.
@@ -257,10 +249,10 @@ queued → preparing → uploading → building → validating_artifact → uplo
 - **Storage authorization.** `artifact_storage_failed` means the upload was
   refused. Confirm the bucket exists, is private, and the service-role key is the
   one for this Supabase project. The build row never fabricates a download.
-- **Build never leaves `queued`.** The worker/scheduler is not ticking, or the
-  project is not in `MAVLY_ANDROID_BUILD_PROJECTS`. Check the worker's `200`
-  response and its `androidBuild` summary. A disabled Android flag still recovers
-  DB-only state, but will not claim new builds.
+- **Build never leaves `queued`.** Check that the Cloudflare Cron Worker is deployed
+  and ticking, and that the project is in `MAVLY_ANDROID_BUILD_PROJECTS`. Review its
+  structured logs; there is no public worker HTTP response. A disabled Android flag
+  still recovers DB-only state, but will not claim new builds.
 - **Build stuck in `running`.** Stop the scheduler only after cancelling. A pause
   stops recovery too. On resume, recovery settles an expired lease and a
   cancel-requested row.
@@ -291,10 +283,9 @@ Run these as the human developer; agents must not run them under `AGENTS.md`.
 3. Set `OPENROUTER_API_KEY`, Vercel Sandbox credentials, `SUPABASE_SERVICE_ROLE_KEY`,
    `NEXT_PUBLIC_SUPABASE_URL`, the generation-worker variables, and the Android
    build variables above.
-4. Confirm the worker end to end: call `POST /api/generation/worker` with the
-   bearer secret and observe `200` plus a real status. Configure your scheduler to
-   call it about once a minute with one invocation at a time, and confirm it keeps
-   firing after a redeploy.
+4. Deploy `npm run deploy:generation-worker`, confirm the `* * * * *` Cron trigger,
+   and observe scheduler heartbeat/outcome events in Cloudflare Worker logs. Confirm
+   the trigger keeps firing after a Worker redeploy.
 5. `npm install`; `npm run dev`; create an Android project from the dashboard and
    generate source. Confirm the source contract passes.
 6. Edit/save a Kotlin file; reload and confirm persistence. Try an `.env`, `.apk`

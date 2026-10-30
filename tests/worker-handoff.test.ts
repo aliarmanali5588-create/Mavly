@@ -18,7 +18,7 @@ const eligible = {
   leaseToken: null as string | null,
   claimedAt: "2026-01-01T00:00:00.000Z" as string | null,
   retryable: true,
-  workerOwnsProject: true,
+  workerDispatchSelected: true,
 };
 
 test("an eligible inline run is handed off", () => {
@@ -42,13 +42,13 @@ test("a non-retryable failure is not a scheduling problem", () => {
 });
 
 /**
- * ⚠️ THE LOAD-BEARING REFUSAL. The worker claims with `p_project_ids = cohort`,
- * so a hand-off for a project outside `MAVLY_GENERATION_WORKER_PROJECTS` would
+ * ⚠️ THE LOAD-BEARING REFUSAL. A hand-off is allowed only when the production
+ * dispatch path assigns this run to the platform worker; otherwise it would
  * park a live run on a queue no worker reads.
  */
-test("a project the worker does not dispatch stays on the inline path", () => {
-  const decision = handoffDecision({ ...eligible, workerOwnsProject: false });
-  assert.equal(decision.handoff === false && decision.reason, "worker_not_configured_for_project");
+test("a run not assigned to the platform worker stays on the inline path", () => {
+  const decision = handoffDecision({ ...eligible, workerDispatchSelected: false });
+  assert.equal(decision.handoff === false && decision.reason, "worker_not_selected_for_runtime");
 });
 
 /**

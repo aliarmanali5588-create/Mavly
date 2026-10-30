@@ -34,9 +34,10 @@ MAVLY_APP_GATEWAY_ORIGIN=https://app.example.com                 # absolute http
 MAVLY_MANAGED_BACKENDS_RPC_SECRET=<>=32 chars, no whitespace>     # keep stable
 ```
 
-Plus a fully configured durable worker (`MAVLY_GENERATION_WORKER_ENABLED`, its secret, its
-cohort, `SUPABASE_SERVICE_ROLE_KEY`, `NEXT_PUBLIC_SUPABASE_URL`). The same project ids must be
-in both the worker cohort and `MAVLY_MANAGED_BACKENDS_PROJECTS`.
+Plus a deployed Cloudflare Cron Worker and the existing server-side worker prerequisites
+(`SUPABASE_SERVICE_ROLE_KEY`, `NEXT_PUBLIC_SUPABASE_URL`, `OPENROUTER_API_KEY`). Managed
+backend provisioning remains limited to the explicit `MAVLY_MANAGED_BACKENDS_PROJECTS`
+cohort; production generation dispatch itself has no project allowlist.
 
 Notes:
 

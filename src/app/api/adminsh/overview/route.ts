@@ -10,6 +10,7 @@ import type {
   AdminOverviewQueue,
 } from "@/lib/admin/types";
 import { OPENROUTER_MODEL_CATALOG } from "@/lib/ai/models";
+import { generationWorkerConfig } from "@/lib/generation/worker-config";
 
 export const dynamic = "force-dynamic";
 
@@ -138,9 +139,7 @@ export async function GET(request: NextRequest) {
     oldestQueuedAt: null,
   };
   const queueStatus = queueHealthStatus(queue);
-  const workerConfigured =
-    flagEnabled("MAVLY_GENERATION_WORKER_ENABLED") &&
-    Boolean((process.env.MAVLY_GENERATION_WORKER_SECRET ?? "").trim());
+  const workerConfigured = generationWorkerConfig().ready;
   const queueDetail = `${num(queue.queued)} queued · ${num(queue.running)} running · ${num(
     queue.staleLeases
   )} stale lease(s)`;
@@ -178,13 +177,11 @@ export async function GET(request: NextRequest) {
         queueStatus === "degraded"
           ? "degraded"
           : workerConfigured
-            ? queueStatus === "operational"
-              ? "operational"
-              : "unknown"
+            ? "unknown"
             : "not_configured",
       detail: workerConfigured
-        ? queueDetail
-        : `${queueDetail} · durable worker disabled (inline dispatch)`,
+        ? `${queueDetail} · check Cloudflare Worker logs for scheduler heartbeat and outcomes`
+        : `${queueDetail} · server-side worker credentials are not configured`,
       latencyMs: null,
     },
     {

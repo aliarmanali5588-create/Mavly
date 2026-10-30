@@ -164,7 +164,7 @@ where started_at > now() - interval '30 days'
 group by 1, 2
 order by runs desc;
 
--- success rate, and the same restricted to the durable worker cohort
+-- success rate, and the same restricted to durable-worker-dispatched runs
 select dispatch_mode,
        count(*) filter (where stage = 'completed') as completed,
        count(*) filter (where stage = 'failed') as failed,
@@ -193,18 +193,16 @@ Interpretation rules that keep the number honest:
   different budgets, different retry behaviour, and only the worker path enqueues
   verification.
 
-## 7. Dispatch: inline, worker, and the hand-off
+## 7. Dispatch: platform-wide production worker and legacy hand-off
 
-**Why eligible projects were not consistently dispatched:** dispatch is decided by
-`dispatchModeForProject` at admission, and it returns `worker` only when the whole worker
-configuration is valid **and** the project id is listed in
-`MAVLY_GENERATION_WORKER_PROJECTS`. There is no size heuristic anywhere — a project
-outside the cohort ran inline no matter how large its generation was, and once an inline
-run reached its deadline the only outcomes were one immediate continuation or a terminal
-failure. `resume_generation_job` (migration 16) deliberately preserves `dispatch_mode`, so
-even a manual resume put it back on the inline path.
+Production website and Android admissions now write `dispatch_mode = 'worker'` for every
+project; no worker-specific flag or project allowlist gates dispatch. Local development and
+Vercel previews retain the inline `after()` path. The Cloudflare Cron Worker directly
+invokes the existing durable worker once per minute; it uses the existing Supabase queue,
+atomic claim, lease and checkpoint machinery. The code/configuration change does not
+establish that Cloudflare has been deployed or that Cron is running.
 
-**What changed:** an inline run that cannot finish now hands the job to the worker.
+Migration 36 remains useful for legacy inline runs that cannot finish:
 
 ```
 inline attempt → failure classified
@@ -217,10 +215,9 @@ inline attempt → failure classified
 
 The decision is pure and lives in `src/lib/generation/dispatch.ts`. It refuses when a
 worker attempt already owns the run (`lease_token`), when this invocation does not hold
-the inline claim, when the failure is not retryable, or when this deployment does not
-dispatch the project to the worker. The last refusal is load-bearing: the worker claims
-with `p_project_ids = cohort`, so handing off a project outside the cohort would park a
-live run on a queue no worker reads — than which a clean terminal failure is better.
+the inline claim, when the failure is not retryable, or when the current runtime uses
+inline dispatch. Production has no worker project cohort; the worker claims across all
+projects with `p_project_ids = NULL`.
 
 The database side (`36_generation_worker_handoff.sql`) re-verifies ownership, the exact
 `claimed_at` fence, a persisted manifest and at least one verified checkpoint, because a
@@ -233,8 +230,7 @@ existing `verifyCheckpointBatches` path), ownership (both sides re-check), and t
 that two workers never run one run (the queue claim is `FOR UPDATE SKIP LOCKED`, and the
 inline attempt has returned before the row is claimable).
 
-Observability: `generation.accepted` now carries the inline reason
-(`worker_unavailable` / `not_in_worker_cohort`), `generation.handoff_scheduled` records a
+Observability: `generation.accepted` carries the dispatch mode, `generation.handoff_scheduled` records a
 successful hand-off with its checkpoint count, and `generation.handoff_skipped` records the
 exact refusal. `agent/status` already reports `dispatchMode`, `stage` and `jobAttempt`.
 

@@ -4,21 +4,21 @@
  * This module is the durable worker's orchestration boundary. It performs one
  * bounded unit of work per invocation:
  *
- *   1. PREFLIGHT  — the worker must be configured and schema marker 32 installed.
+ *   1. PREFLIGHT  — platform credentials and schema marker 32 must be installed.
  *   2. RECOVER    — expired leases become bounded retries or dead letters.
  *   3. CLAIM      — one ready job, atomically, with `FOR UPDATE SKIP LOCKED`.
- *   4. VERIFY     — re-read the project and re-check its owner and cohort.
+ *   4. VERIFY     — re-read the project and re-check its owner.
  *   5. EXECUTE    — `runAgent` with the lease token and service-role client.
  *   6. RENEW      — a timer keeps the lease alive during long provider calls.
  *
- * ⚠️ THE SERVICE-ROLE CLIENT IS CONFINED TO THIS MODULE AND THE ROUTE. The
- * worker re-verifies ownership itself; a claim answer is never treated as
- * proof. RLS is unchanged for every user-facing path.
+ * ⚠️ THE SERVICE-ROLE CLIENT IS CONFINED TO THIS MODULE AND THE SCHEDULED
+ * WORKER. The worker re-verifies ownership itself; a claim answer is never
+ * treated as proof. RLS is unchanged for every user-facing path.
  *
  * ⚠️ ONE JOB PER TICK. The existing admission cap (2 per user, 8 global
  * unfinished runs) is the concurrency control. A loop here would multiply the
- * work an invocation performs and make the route's wall-clock budget
- * unpredictable; the scheduler's parallelism is the scale knob.
+ * work an invocation performs and make its execution budget unpredictable;
+ * scheduler parallelism is the scale knob.
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -104,10 +104,7 @@ export async function runGenerationWorkerOnce(
   options: WorkerTickOptions = {},
 ): Promise<WorkerTickResult> {
   const config = options.config ?? generationWorkerConfig();
-  if (!config.requested) {
-    return { status: "unavailable", reason: "disabled" };
-  }
-  if (!config.ready || !config.secret) {
+  if (!config.ready) {
     emitGenerationEvent("generation.worker_unavailable", {
       workerId: config.workerId,
       reason: config.problems[0] ?? "misconfigured",
@@ -156,7 +153,6 @@ export async function runGenerationWorkerOnce(
   const claim = await claimWorkerJob(client, {
     workerId: config.workerId,
     leaseSeconds: WORKER_LEASE_SECONDS,
-    projectIds: config.cohort,
   });
   if (isStoreFailure(claim)) {
     emitGenerationEvent("generation.worker_error", {
@@ -217,7 +213,7 @@ export async function runGenerationWorkerOnce(
   /**
    * ⚠️ A CLAIM IS NOT PROOF OF OWNERSHIP. Re-read the project with the service
    * client and refuse to execute unless the claim's owner is still the owner
-   * and this deployment's cohort still covers the project.
+   * before any execution.
    */
   const project = await getProject(job.userId, job.projectId, client);
   if (isStoreFailure(project)) {
@@ -234,7 +230,6 @@ export async function runGenerationWorkerOnce(
   const verification = verifyClaimedProject({
     job,
     ownerId: project.data?.user_id ?? null,
-    cohort: config.cohort,
   });
   /**
    * `=== false`, not `!verification.ok`: with this project's
@@ -393,7 +388,7 @@ async function abandonClaim(
   const summary =
     reason === "owner_mismatch"
       ? "The project owner changed while the job was queued."
-      : "The project is no longer in the generation-worker cohort.";
+      : "The claimed project could not be verified.";
 
   const scheduled = await scheduleGenerationRetry(client, {
     runId: job.runId,

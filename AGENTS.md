@@ -111,7 +111,8 @@ role-level AI usage metering: it adds the credit accounts, append-only ledger,
 reservations, per-attempt usage tables, the database-owned `credit_project_policies`
 cohort/cost mirror, service-role-only credit admission/resume/release/terminal RPCs and
 the service-role metering RPC. It is additive and does not alter migration 16's
-queue/fencing RPCs. Credit-enforced projects must also be in the durable worker cohort;
+queue/fencing RPCs. Credit-enforced production projects use the platform-wide durable
+worker dispatch; local and preview paths remain inline and do not bypass the database guard.
 the database run-state guard blocks authenticated legacy create/resume paths and permits
 service-role insert/resume only through the credit-aware transaction-local markers.
 Synchronize enabled policy rows with `MAVLY_CREDITS_PROJECTS` and
@@ -327,38 +328,41 @@ install/Vite dev server/readiness probe/QA build, or the migrations against a da
   limits on resume). `agent/resume` and `agent/stop` are user-authenticated. Run,
   manifest and heartbeat writes carry the run's `claimed_at` lease (checkpoints are
   written between lease checks), so a resumed run cannot be finalized by a stale worker.
-- **The durable generation worker is implemented but off by default.** It is enabled only
-  when `MAVLY_GENERATION_WORKER_ENABLED` is truthy AND
-  `MAVLY_GENERATION_WORKER_SECRET` (≥32 characters),
-  `MAVLY_GENERATION_WORKER_PROJECTS` (an explicit cohort, never `*` or empty),
-  `SUPABASE_SERVICE_ROLE_KEY` and `NEXT_PUBLIC_SUPABASE_URL` are all present. Admission
-  records `dispatch_mode` before the run exists: cohort projects are `worker`, everything
-  else (and every misconfiguration) keeps the existing `after()` inline path, so the two
-  mechanisms never compete for the same job. The scheduler calls
-  `POST|GET /api/generation/worker` with `Authorization: Bearer <secret>`; one invocation
-  recovers expired leases, claims one ready job with `FOR UPDATE SKIP LOCKED`, re-verifies
-  the owner and cohort with a service-role client, executes the unchanged generation
+- **The durable generation worker is platform-wide in production.** Production website
+  and Android generation admissions use `dispatch_mode = 'worker'`; there is no worker
+  enable flag, shared worker secret, project allowlist or public invocation route. Local
+  development and Vercel previews retain the inline `after()` path. The app admission path
+  and the Cloudflare Cron Worker require only the existing server-side
+  `SUPABASE_SERVICE_ROLE_KEY` and `NEXT_PUBLIC_SUPABASE_URL`. The dedicated Cloudflare
+  Worker runs `workers/generation-scheduler.ts` on `* * * * *` and calls the existing
+  worker tick directly. Each invocation recovers expired leases, claims one ready job with
+  `FOR UPDATE SKIP LOCKED`, re-verifies
+  the owner with a service-role client, executes the unchanged generation
   pipeline under a 420 s fenced `lease_token`, and renews it every 120 s. Retries reuse
   only verified checkpoints and back off 15 s→300 s with jitter; exhaustion dead-letters
   the run without deleting it. Expired leases become retries or dead letters, never
   duplicates. Cancellation is persisted and fences the worker at safe checkpoints; a
   provider request already sent cannot be undone. **The service-role client is confined to
-  `src/lib/supabase/worker.ts`, the worker orchestrator and its route; the managed-backend
-  provisioning service only receives that client from the worker. RLS is unchanged,
+  `src/lib/supabase/worker.ts`, the worker orchestrator and scheduled Cloudflare
+  entrypoint; the managed-backend provisioning service only receives that client from the
+  worker. RLS is unchanged,
   and the authenticated role's UPDATE grant explicitly excludes all worker-owned columns.**
-  There is no built-in scheduler; see `docs/runbooks/generation-worker.md` for invocation,
-  alerting, pause/drain, safe rollback and capacity limits. Do not raise the 2/user or
-  8/global admission caps to claim support for 1,000 concurrent users.
+  The Cloudflare Cron configuration is `wrangler.jsonc`; scheduler heartbeats and outcomes
+  are emitted through structured generation logs. Deployment, Cloudflare runtime
+  compatibility and actual Cron operation remain unverified; see
+  `docs/runbooks/generation-worker.md` for deployment, monitoring, pause/drain,
+  safe rollback and capacity limits. Do not raise the 2/user or 8/global admission caps to
+  claim support for 1,000 concurrent users.
   **An inline run that cannot finish can be handed to the worker (migration 36).** When an
   inline attempt reaches its terminal decision with a retryable failure and this deployment
-  dispatches the project to the worker, `fail()` persists its provider usage, then calls
+  dispatches the run to the worker, `fail()` persists its provider usage, then calls
   `handoff_generation_job` and returns without a terminal write. The RPC re-verifies
   ownership, the exact `claimed_at` fence, the persisted manifest and at least one verified
-  checkpoint; it refuses a run another attempt owns, a non-retryable failure (a rejected or
-  unsafe generation is not a scheduling problem), and any project outside the cohort —
-  cohort membership lives in the environment and cannot be checked in SQL, so a project the
-  worker would never claim must never be handed off. The transition is once-only because it
-  sets `dispatch_mode = 'worker'`, so a resume of that run also stays on the worker. Every
+  checkpoint; it refuses a run another attempt owns and a non-retryable failure (a rejected
+  or unsafe generation is not a scheduling problem). Production dispatch is platform-wide,
+  so there is no project cohort to drift from the queue claim. The transition is once-only
+  because it sets `dispatch_mode = 'worker'`, so a resume of that run also stays on the
+  worker. Every
   refusal falls through to the existing terminal failure, never to a claim of success.
   Budget constants are not inflated to fake a longer inline window.
 - **The isolated verification sandbox is implemented but off by default.** It builds a
@@ -564,7 +568,7 @@ install/Vite dev server/readiness probe/QA build, or the migrations against a da
 - **The credit foundation is implemented but OFF BY DEFAULT (Phase 11).** It is
   enabled only when `MAVLY_CREDITS_ENABLED` is truthy, an explicit
   `MAVLY_CREDITS_PROJECTS` cohort exists and `MAVLY_CREDITS_GENERATION_COST` is a whole
-  number between 1 and 100000, the project is in the worker cohort, and a service-managed
+  number between 1 and 100000, the project is in the credit cohort, and a service-managed
   `credit_project_policies` row matches the project and fixed cost. Credits are whole
   `bigint` units; USD uses `numeric(20,9)`. The service-role-only
   `create_generation_job_with_credits` RPC calls the existing `create_generation_job`
@@ -748,10 +752,9 @@ browser ── src/lib/vcaas.ts (client catalog, same-origin only)
    │      └── src/lib/deployments/*      opt-in static publish/unpublish
    │             ├── store.ts            project_deployments (RLS)
    │             └── service.ts → src/lib/vercel/provider.ts → api.vercel.com
-   ├── /api/generation/worker      Bearer secret → service-role worker tick
-   │      ├── src/lib/generation/worker.ts → run-agent (worker mode)
-   │      │      └── src/lib/managed-backend/service.ts → Neon API + encrypted Supabase registry
-   │      │             └── migrations.ts/runner.ts → additive schema + read-back verify
+   ├── Cloudflare Cron Worker      scheduled trusted runtime → service-role worker tick
+   │      ├── workers/generation-scheduler.ts → src/lib/generation/worker.ts
+   │      └── run-agent → OpenRouter + durable checkpoints
    ├── /api/app/v1/apps/{id}/data|auth/*  public, project id + end-user session
    │      └── src/lib/app-data/gateway.ts → parameterized SQL → customer Neon database
    ├── /api/app/v1/payments/*      public, project API key (integrations:*) → Razorpay
@@ -786,12 +789,12 @@ paths with `src/lib/vcaas-scope.ts`, so unknown shapes are refused before any wo
 | `src/lib/mavly/store.ts` | Project, file, message and run persistence through the caller's client. |
 | `src/lib/mavly/run-agent.ts` | Generation execution in both modes: inline claim, or worker execution under a fenced lease; baseline → checkpointed atomic batches → complete/fail/retry; cooperative cancellation. |
 | `src/lib/generation/state-machine.ts` | Pure stage set/transitions and conservative failure classification with redaction. |
-| `src/lib/generation/leases.ts` | Lease bounds, retry backoff, timing-safe secret comparison and worker-id sanitation. |
-| `src/lib/generation/worker-config.ts` | Opt-in worker prerequisites, cohort parsing and the admission dispatch mode. |
-| `src/lib/generation/verification.ts` | Claim parsing plus owner/cohort re-verification for the service-role worker. |
+| `src/lib/generation/leases.ts` | Lease bounds, retry backoff and worker-id sanitation. |
+| `src/lib/generation/worker-config.ts` | Platform credential readiness and production/local admission dispatch mode. |
+| `src/lib/generation/verification.ts` | Claim parsing plus owner re-verification for the service-role worker. |
 | `src/lib/generation/worker.ts` | One bounded worker tick: preflight → recover → claim → verify → execute → renew. |
-| `src/app/api/generation/worker/route.ts` | Internal worker invocation endpoint; bearer secret, no user session, 404 when disabled. |
-| `src/lib/supabase/worker.ts` | The confined service-role client factory (worker only). |
+| `workers/generation-scheduler.ts`, `wrangler.jsonc` | Cloudflare Cron `* * * * *`; direct worker invocation and structured heartbeat/outcome logs. |
+| `src/lib/supabase/worker.ts` | The confined service-role client factory (scheduled worker, credit accounting, and owner-checked Android artifact download only). |
 | `src/lib/observability/` | Correlation ids, structured generation events, redaction and reported-cost accounting. |
 | `src/lib/runtime/` | Generated-project runtime detection (App Router only), package-manifest validation, the bounded `next build` plan and the fixed loopback runtime start. |
 | `src/lib/sandbox/adapter.ts` | Provider-neutral verification adapter contract: create, upload, execute, poll, destroy, reconnect, with typed failures. |
@@ -959,7 +962,7 @@ paths with `src/lib/vcaas-scope.ts`, so unknown shapes are refused before any wo
    `NEXT_PUBLIC_SUPABASE_ANON_KEY` are public. `OPENROUTER_API_KEY`
    (text generation and images), `VERCEL_API_TOKEN`,
    `VERCEL_OIDC_TOKEN`, `VERCEL_TOKEN`, `VERCEL_TEAM_ID`, `VERCEL_PROJECT_ID`,
-   `SUPABASE_SERVICE_ROLE_KEY`, `MAVLY_GENERATION_WORKER_SECRET`,
+   `SUPABASE_SERVICE_ROLE_KEY`,
    `MAVLY_VERIFICATION_SANDBOX_ENABLED`, `MAVLY_VERIFICATION_REPAIR_ENABLED`,
    `MAVLY_ANDROID_BUILD_ENABLED`, `MAVLY_ANDROID_BUILD_PROJECTS`,
    `MAVLY_ANDROID_BUILD_IMAGE`, `MAVLY_ANDROID_ARTIFACT_BUCKET`,
@@ -972,7 +975,8 @@ paths with `src/lib/vcaas-scope.ts`, so unknown shapes are refused before any wo
    prefix. Razorpay credentials are **never** environment variables on Mavly: they are
    entered per project, encrypted as project secrets, and decrypted only inside the
    owner test or gateway request. Never commit `.env*` files. The service-role client is
-   confined to `src/lib/supabase/worker.ts`, the worker orchestrator and route, the
+   confined to `src/lib/supabase/worker.ts`, the worker orchestrator and scheduled
+   Cloudflare entrypoint, the
    verification sandbox tick, the Android build worker, the managed-backend provisioning
    service that receives it from the worker, and the owner-checked Android
    artifact-download handler that mints a short-lived signed URL (it re-reads the build

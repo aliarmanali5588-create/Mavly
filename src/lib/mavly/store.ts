@@ -922,10 +922,9 @@ export interface HandoffResult {
 /**
  * Hand a LIVE inline run to the durable worker queue (migration 36).
  *
- * ⚠️ THE CALLER MUST ALREADY KNOW THE PROJECT IS WORKER-ELIGIBLE. Cohort
- * membership lives in this deployment's environment, not in the database, so the
- * RPC cannot check it and the worker claims only cohort project ids. The only
- * caller is `run-agent.ts`, which checks `dispatchModeForProject` first.
+ * Production dispatch is platform-wide: the worker claims across all projects,
+ * with no project allowlist. The only caller is `run-agent.ts`, which checks
+ * `dispatchModeForProject` before handing an inline run to the queue.
  *
  * ⚠️ THIS IS NOT A FAILURE AND NOT A TERMINAL WRITE. A `handed_off` answer means
  * the run is now `retry_wait` for the worker, with its manifest and verified
@@ -1283,7 +1282,7 @@ export async function listRunBatches(
 //
 // These wrappers are called only by the generation worker with the service-role
 // client. They are declared here so every database shape stays in one module;
-// the route and the worker never build PostgREST calls of their own.
+// the scheduled entrypoint and worker never build PostgREST calls of their own.
 
 function isMissingFunction(error: { message?: string; code?: string } | null): boolean {
   if (!error) return false;
@@ -1311,12 +1310,12 @@ export async function generationWorkerSchemaVersion(
 /** One atomic claim. The raw answer is verified by `parseClaimResult`. */
 export async function claimWorkerJob(
   supabase: SupabaseClient,
-  input: { workerId: string; leaseSeconds: number; projectIds: readonly string[] },
+  input: { workerId: string; leaseSeconds: number },
 ): Promise<StoreResult<unknown>> {
   const { data, error } = await supabase.rpc("claim_generation_job", {
     p_worker_id: input.workerId,
     p_lease_seconds: input.leaseSeconds,
-    p_project_ids: [...input.projectIds],
+    p_project_ids: null,
   });
   if (error) {
     if (isMissingFunction(error)) {

@@ -15,7 +15,7 @@ the baseline and provider decision. Where they disagree, Phase 4 and migration
 
 ## 1. Prerequisites
 
-- Phase 2 durable generation worker is enabled and healthy.
+- The platform-wide Cloudflare Cron Worker is deployed and its scheduled tick is healthy.
 - A human has run `npm install`, so `@vercel/sandbox` is present in
   `node_modules` and the lockfile. It is declared in `package.json` but has not
   been installed by the agent that wrote this code.
@@ -61,12 +61,9 @@ VERCEL_TOKEN=...
 VERCEL_TEAM_ID=...
 VERCEL_PROJECT_ID=...
 
-# already required by the Phase 2 worker:
+# already required by the production application and scheduled worker:
 SUPABASE_SERVICE_ROLE_KEY=...
 NEXT_PUBLIC_SUPABASE_URL=...
-MAVLY_GENERATION_WORKER_ENABLED=1
-MAVLY_GENERATION_WORKER_SECRET=...                # >= 32 chars
-MAVLY_GENERATION_WORKER_PROJECTS=...
 ```
 
 Configuration is all-or-nothing. If any prerequisite is missing the tick emits
@@ -77,23 +74,17 @@ and never implies verification. `MAVLY_VERIFICATION_MAX_REPAIRS` is clamped to
 `0..2`, defaults to `1` when repair is enabled, and `0` disables repair even if
 the flag is on.
 
-**Order matters:** enable the Phase 2 worker first, confirm one generation
-completes, then enable verification for the same cohort. Verification only
-enqueues after a *worker* run completes.
+**Order matters:** deploy and observe the Cloudflare Cron Worker first, confirm
+one production generation completes, then enable verification for the desired
+verification cohort. Verification only enqueues after a *worker-dispatched* run
+completes.
 
 ---
 
 ## 3. Verify the first run
 
-Run the worker endpoint once (the scheduler's usual call):
-
-```bash
-curl -sS -X POST "$MAVLY_APP_URL/api/generation/worker" \
-  -H "Authorization: Bearer $MAVLY_GENERATION_WORKER_SECRET"
-```
-
-Expected progression across several calls (verification runs only when no
-generation job is ready):
+Observe the scheduled Cloudflare Worker logs. Verification runs only when no
+generation job is ready; expected progression spans several Cron ticks:
 
 1. `{"ok":true,"status":"empty","verification":{"status":"advanced","reason":"installing"}}`
 2. `... "reason":"building"`

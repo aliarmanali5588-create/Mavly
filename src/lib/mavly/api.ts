@@ -410,7 +410,7 @@ export async function handleMavlyVcaasRequest(input: MavlyRequest): Promise<Next
    * ═══ ANDROID BUILDS ════════════════════════════════════════════════════════
    *
    * Source generation is real. Isolated debug builds are real too, but OFF by
-   * default: they need migration 26, the generation worker, a digest-pinned
+   * default: they need migration 26, the scheduled generation worker, a digest-pinned
    * sandbox image, a private artifact bucket and an explicit project cohort.
    * These routes never fabricate a build row or artifact. When a prerequisite
    * is missing, GET reports the truthful capability and POST refuses with the
@@ -775,6 +775,14 @@ async function launchProjectResponse(userId: string, body: unknown): Promise<Nex
   if (!isAiConfigured()) {
     return fail(503, "BACKEND_NOT_CONFIGURED", generationConfigurationError());
   }
+  const workerConfig = generationWorkerConfig();
+  if (workerConfig.production && !workerConfig.ready) {
+    return fail(
+      503,
+      "BACKEND_NOT_CONFIGURED",
+      "Production generation requires the existing server-side Supabase service-role configuration.",
+    );
+  }
 
   const prompt = (stringOf(record.prompt)?.trim() ?? "").slice(0, 32_000);
   if (!prompt) return fail(400, "VALIDATION", "A prompt is required.");
@@ -830,7 +838,7 @@ async function launchProjectResponse(userId: string, body: unknown): Promise<Nex
       });
     }
   }
-  const dispatchMode = dispatchModeForProject(created.data.project_id);
+  const dispatchMode = dispatchModeForProject(created.data.project_id, workerConfig);
   const creditPolicy = creditAdmissionForProject(created.data.project_id);
   if (creditPolicy.kind === "misconfigured") {
     if (!mayReuseExistingProject) await deleteProject(userId, created.data.project_id);
@@ -1472,7 +1480,7 @@ async function androidBuildStartResponse(
     return fail(
       503,
       "ANDROID_BUILD_NOT_CONFIGURED",
-      "The durable generation worker is not enabled, so Android builds cannot be claimed.",
+      "The durable generation worker's Supabase credentials are not configured, so Android builds cannot be claimed.",
     );
   }
   if (config.provider !== "vercel") {
@@ -2066,6 +2074,14 @@ async function startAgentResponse(userId: string, projectId: string, body: unkno
   if (!isAiConfigured()) {
     return fail(503, "BACKEND_NOT_CONFIGURED", generationConfigurationError());
   }
+  const workerConfig = generationWorkerConfig();
+  if (workerConfig.production && !workerConfig.ready) {
+    return fail(
+      503,
+      "BACKEND_NOT_CONFIGURED",
+      "Production generation requires the existing server-side Supabase service-role configuration.",
+    );
+  }
 
   const record = recordOf(body);
   const prompt = (stringOf(record.prompt)?.trim() ?? "").slice(0, 32_000);
@@ -2079,21 +2095,7 @@ async function startAgentResponse(userId: string, projectId: string, body: unkno
     return fail(403, "FORBIDDEN", "The Cohere testing model is not enabled for this project.");
   }
   const model = resolveModel(requestedModel, "app-generation", process.env, projectId);
-  /**
-   * ⚠️ THE DISPATCH DECISION IS RECORDED WITH ITS REASON. "This project ran
-   * inline and could not finish" must not be a mystery: the two ways to land on
-   * the inline path are a worker that is not configured for this deployment and a
-   * project outside `MAVLY_GENERATION_WORKER_PROJECTS`, and they need different
-   * operator actions.
-   */
-  const workerConfig = generationWorkerConfig();
   const dispatchMode = dispatchModeForProject(projectId, workerConfig);
-  const inlineDispatchReason =
-    dispatchMode === "worker"
-      ? null
-      : workerConfig.ready
-        ? "not_in_worker_cohort"
-        : "worker_unavailable";
   const creditPolicy = creditAdmissionForProject(projectId);
   if (creditPolicy.kind === "misconfigured") {
     return fail(
@@ -2203,7 +2205,7 @@ async function startAgentResponse(userId: string, projectId: string, body: unkno
     projectId,
     model: run.model,
     dispatchMode: run.dispatch_mode,
-    ...(inlineDispatchReason ? { reason: inlineDispatchReason } : {}),
+    ...(dispatchMode === "inline" ? { reason: "non_production_dispatch" } : {}),
   });
 
   // A worker-dispatched run belongs to the scheduler's worker tick.
@@ -2242,6 +2244,14 @@ async function startAgentResponse(userId: string, projectId: string, body: unkno
 }
 
 async function resumeAgentResponse(userId: string, projectId: string): Promise<NextResponse> {
+  const workerConfig = generationWorkerConfig();
+  if (workerConfig.production && !workerConfig.ready) {
+    return fail(
+      503,
+      "BACKEND_NOT_CONFIGURED",
+      "Production generation requires the existing server-side Supabase service-role configuration.",
+    );
+  }
   if (!isAiConfigured()) {
     return fail(503, "BACKEND_NOT_CONFIGURED", generationConfigurationError());
   }
@@ -2276,11 +2286,14 @@ async function resumeAgentResponse(userId: string, projectId: string): Promise<N
   let reopenedRun: RunRow | null = null;
 
   if (creditCost !== null) {
-    if (run.dispatch_mode !== "worker" || dispatchModeForProject(projectId) !== "worker") {
+    if (
+      run.dispatch_mode !== "worker" ||
+      dispatchModeForProject(projectId, workerConfig) !== "worker"
+    ) {
       return fail(
         503,
         "CREDIT_CONFIGURATION",
-        "Credit-enabled runs require the durable worker to be enabled for this project before resuming.",
+        "Credit-enabled runs require platform-wide durable worker dispatch before resuming.",
       );
     }
     const resumed = await resumeGenerationJobWithCredits(userId, projectId, run.id, creditCost);

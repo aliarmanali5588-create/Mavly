@@ -31,6 +31,9 @@ export const GENERATION_EVENTS = [
   "generation.worker_empty",
   "generation.worker_unavailable",
   "generation.worker_error",
+  "generation.scheduler.heartbeat",
+  "generation.scheduler.completed",
+  "generation.scheduler.failed",
   /** An inline run that could not finish was moved onto the durable worker queue. */
   "generation.handoff_scheduled",
   /** A hand-off was considered and refused, with the exact reason. */
@@ -118,6 +121,7 @@ const ALLOWED_FIELDS = new Set([
   "cleaned",
   "exitCode",
   "cleanupComplete",
+  "scheduledTime",
   "model",
   "promptTokens",
   "completionTokens",
@@ -140,6 +144,7 @@ const NUMERIC_FIELDS = new Set([
   "attempt",
   "maxAttempts",
   "durationMs",
+  "scheduledTime",
   "queueLagMs",
   "retryAfterSeconds",
   "filesWritten",
@@ -223,6 +228,7 @@ export interface GenerationEventFields {
   errorClass?: string | null;
   reason?: string | null;
   durationMs?: number | null;
+  scheduledTime?: number | null;
   queueLagMs?: number | null;
   retryAfterSeconds?: number | null;
   filesWritten?: number | null;
@@ -254,7 +260,12 @@ export function emitGenerationEvent(
 
   const line = serializeEvent(event, fields);
   try {
-    if (event === "generation.failed" || event === "generation.dead_letter" || event === "generation.worker_error") {
+    if (
+      event === "generation.failed" ||
+      event === "generation.dead_letter" ||
+      event === "generation.worker_error" ||
+      event === "generation.scheduler.failed"
+    ) {
       console.error(`[generation] ${line}`);
     } else if (event === "generation.retry_scheduled" || event === "generation.lease_lost" || event === "generation.heartbeat_failed") {
       console.warn(`[generation] ${line}`);

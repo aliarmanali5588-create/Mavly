@@ -153,11 +153,11 @@ MAVLY_ANDROID_BUILD_IMAGE=<vcr-image>@sha256:...
 MAVLY_ANDROID_ARTIFACT_BUCKET=android-artifacts
 MAVLY_ANDROID_BUILD_VCPUS=2
 # Vercel Sandbox credentials + SUPABASE_SERVICE_ROLE_KEY + NEXT_PUBLIC_SUPABASE_URL
-# The generation worker must be enabled and scheduled.
+# The platform-wide Cloudflare Cron generation worker must be deployed and scheduled.
 ```
 
 A tag-only image, an external registry, a non-numeric vCPU value, a missing bucket,
-missing credentials, an empty cohort or a missing worker is reported as not ready;
+missing credentials, an empty build cohort or missing worker credentials is reported as not ready;
 `POST …/mobile/builds` fails closed and no row/log/artifact is fabricated. Before
 migration 26 is applied, `GET …/mobile/builds` returns `503 MIGRATION_REQUIRED`; once it
 is applied, that request returns the persisted builds plus the exact capability,
@@ -174,15 +174,16 @@ not prove a scheduler is invoking the worker. Those remain operator acceptance s
 
 Android builds are advanced by the ordinary generation-worker tick: generation claims
 come first, and only an otherwise-empty tick advances **either** verification **or** one
-Android build. The route is authenticated by
-`Authorization: Bearer $MAVLY_GENERATION_WORKER_SECRET` (constant-time compare), has no
-user session, returns `404` when disabled, and is bounded to one claim per invocation.
+Android build. The Cloudflare scheduled runtime invokes the worker directly; there is no
+public HTTP endpoint or bearer-secret authentication. The tick is bounded to one claim per
+invocation.
 Leases are fenced and concurrency caps (1/project, 2/user, 4/global) are enforced in SQL.
 
-There is no built-in scheduler. The operator runs one invocation about once a minute;
-overlapping invocations are safe but consume the small global caps. Disabling the Android
-flag leaves DB-only recovery/retention running, but stopping the scheduler stops recovery
-too, so active builds must be cancelled or allowed to finish first.
+The dedicated Cloudflare Worker is scheduled once per minute; no manual tick or
+project-specific worker configuration is required. Overlapping invocations are safe but
+consume the small global caps. Disabling the Android flag leaves DB-only recovery/retention
+running, but stopping the scheduler stops recovery too, so active builds must be cancelled
+or allowed to finish first.
 
 ### Enforced bounds
 
@@ -234,7 +235,7 @@ too, so active builds must be cancelled or allowed to finish first.
 2. Build, verify and publish the pinned toolchain image from `infra/android-build/` in a
    disposable Vercel account, including an offline Gradle cache hit and `aapt`.
 3. Create/confirm the private artifact bucket and lifecycle policy.
-4. Enable the generation worker with a small cohort and confirm a real scheduler tick.
+4. Deploy the platform-wide Cloudflare Cron Worker and confirm a real scheduler tick.
 5. Set `MAVLY_ANDROID_BUILD_ENABLED` and the same small `MAVLY_ANDROID_BUILD_PROJECTS`
    cohort.
 6. Run the human acceptance checklist in `docs/runbooks/android.md`.

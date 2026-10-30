@@ -2,7 +2,6 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  isProjectInCohort,
   isWorkerSchemaReady,
   parseClaimResult,
   verifyClaimedProject,
@@ -12,7 +11,7 @@ import {
 /**
  * The worker runs with a service-role client, so this pure module is the second
  * wall around its claim. These tests prove that a malformed, foreign or
- * non-worker claim is refused before any file is touched.
+ * non-worker-dispatched claim is refused before any file is touched.
  */
 
 const RUN_ID = "22222222-2222-2222-2222-222222222222";
@@ -134,33 +133,19 @@ test("the attempt budget is checked before the job runs", () => {
   );
 });
 
-// ── Ownership and cohort ───────────────────────────────────────────────────
+// ── Ownership ──────────────────────────────────────────────────────────────
 
-test("the worker re-checks the owner and the configured cohort", () => {
+test("the worker re-checks the owner for every claimed project", () => {
   const job = { projectId: "my-project", userId: USER_ID };
+  assert.deepEqual(verifyClaimedProject({ job, ownerId: USER_ID }), { ok: true });
   assert.deepEqual(
-    verifyClaimedProject({ job, ownerId: USER_ID, cohort: ["my-project"] }),
-    { ok: true },
-  );
-  assert.deepEqual(
-    verifyClaimedProject({ job, ownerId: "99999999-9999-9999-9999-999999999999", cohort: ["my-project"] }),
+    verifyClaimedProject({ job, ownerId: "99999999-9999-9999-9999-999999999999" }),
     { ok: false, reason: "owner_mismatch" },
   );
-  assert.deepEqual(verifyClaimedProject({ job, ownerId: null, cohort: ["my-project"] }), {
+  assert.deepEqual(verifyClaimedProject({ job, ownerId: null }), {
     ok: false,
     reason: "owner_mismatch",
   });
-  assert.deepEqual(verifyClaimedProject({ job, ownerId: USER_ID, cohort: ["other-project"] }), {
-    ok: false,
-    reason: "not_in_cohort",
-  });
-});
-
-test("cohort comparison is case-insensitive and does not prefix-match", () => {
-  assert.equal(isProjectInCohort("my-project", ["my-project"]), true);
-  assert.equal(isProjectInCohort("MY-PROJECT", ["my-project"]), true);
-  assert.equal(isProjectInCohort("my-project", ["my-project-2"]), false);
-  assert.equal(isProjectInCohort("my-project", []), false);
 });
 
 // ── Schema preflight ───────────────────────────────────────────────────────

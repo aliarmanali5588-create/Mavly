@@ -722,10 +722,7 @@ test("operator docs cover image publication, scheduler, bucket and safe enableme
     "MAVLY_ANDROID_BUILD_IMAGE",
     "MAVLY_ANDROID_ARTIFACT_BUCKET",
     "MAVLY_ANDROID_BUILD_VCPUS",
-    "MAVLY_GENERATION_WORKER_ENABLED",
-    "MAVLY_GENERATION_WORKER_SECRET",
-    "MAVLY_GENERATION_WORKER_PROJECTS",
-    "MAVLY_GENERATION_WORKER_ID",
+    "Cloudflare Cron",
     "SUPABASE_SERVICE_ROLE_KEY",
     "NEXT_PUBLIC_SUPABASE_URL",
   ]) {

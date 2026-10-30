@@ -69,7 +69,7 @@ export const ANDROID_BUILD_REQUIREMENTS: readonly string[] = [
   "An operator-pinned Vercel Container Registry image digest containing JDK 17, Gradle 8.9, Android SDK 35 and aapt.",
   "Migration 26_android_builds.sql.",
   "A private artifact bucket with short-lived, owner-authorized downloads and retention cleanup.",
-  "The generation worker enabled and scheduled; only its cohort projects may build.",
+  "The platform generation worker is scheduled; Android builds remain limited to their configured project cohort.",
 ];
 
 export function androidCapability(
@@ -88,7 +88,7 @@ export function androidCapability(
   const notConfiguredReason = !config.ready
     ? androidBuildProblemMessage(config.problems[0] ?? "disabled")
     : !workerReady
-      ? "The durable generation worker is not enabled, so Android builds cannot be claimed."
+      ? "The durable generation worker's Supabase credentials are not configured, so Android builds cannot be claimed."
       : projectId
         ? "This project is outside the Android build cohort."
         : "Android builds are cohort-scoped.";

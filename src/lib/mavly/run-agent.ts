@@ -13,7 +13,7 @@
  *
  * ⚠️ TWO EXECUTION MODES, ONE STATE MACHINE.
  *
- *   · Inline (`after()`) still exists for projects outside the worker cohort.
+ *   · Inline (`after()`) remains for local development and preview deployments.
  *     It claims with `claimed_at` and writes with the caller's session client.
  *   · The worker claims with a random `lease_token` and runs with the verified
  *     service-role client. Every write presents the token, so a worker whose
@@ -214,8 +214,8 @@ export interface RunAgentInput {
 
 /**
  * A truthful account of what this invocation did. The inline path ignores it;
- * the worker route returns it, so an operator can tell "worked", "scheduled a
- * retry" and "wrote nothing because another owner took over" apart.
+ * the scheduled worker records it in structured outcome logs, so an operator
+ * can distinguish completed work, a scheduled retry and a fenced no-op.
  */
 export type RunAgentOutcome =
   | { status: "completed"; runId: string }
@@ -2462,11 +2462,9 @@ async function fail(
  *   · inline only — a worker attempt already owns the queue;
  *   · retryable only — a rejected/unsafe/content-filtered generation is not a
  *     scheduling problem, so the worker would reproduce the same failure;
- *   · `dispatchModeForProject` says `worker` — the worker claims with
- *     `p_project_ids = cohort`, so handing off a project outside the cohort would
- *     park the run on a queue no worker ever reads. Cohort membership lives in
- *     this deployment's environment and cannot be checked in SQL, which is why
- *     this is checked HERE and the RPC takes no cohort argument;
+ *   · `dispatchModeForProject` says `worker` — local development and previews
+ *     stay inline, so handing off from those runtimes would park a run on a
+ *     queue they do not drain;
  *   · the RPC itself re-verifies ownership, the exact `claimed_at` fence, the
  *     persisted manifest and at least one verified checkpoint.
  *
@@ -2486,7 +2484,7 @@ async function maybeHandoffToWorker(
     leaseToken: guard.leaseToken,
     claimedAt: guard.claimedAt,
     retryable: classification.retryable,
-    workerOwnsProject: dispatchModeForProject(input.projectId, workerConfig) === "worker",
+    workerDispatchSelected: dispatchModeForProject(input.projectId, workerConfig) === "worker",
   });
   /** A refusal is the normal inline terminal path; the caller keeps failing honestly. */
   if (!decision.handoff || !guard.claimedAt) return null;

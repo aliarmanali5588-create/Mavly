@@ -12,11 +12,9 @@
  *     content-filtered generation would fail identically on the worker;
  *   · the caller must still hold its inline claim (`claimed_at`), because the
  *     hand-off is a write to a run this invocation may no longer own;
- *   · this deployment must actually dispatch this project to the worker.
- *     ⚠️ THIS IS THE LOAD-BEARING CHECK. Cohort membership lives in the server
- *     environment, not the database, and the worker claims with
- *     `p_project_ids = cohort`. Handing off a project outside the cohort parks a
- *     live run on a queue no worker will ever read.
+ *   · this runtime must dispatch the run to the worker. Production dispatch is
+ *     platform-wide; local development and previews stay inline. Handing off
+ *     from those inline runtimes would park a run on a queue they do not drain.
  *
  * Pure: no database, no environment, no clock. `run-agent.ts` supplies the facts
  * and performs the fenced write.
@@ -26,7 +24,7 @@ export type HandoffRefusal =
   | "worker_attempt_owns_run"
   | "no_inline_claim"
   | "not_retryable"
-  | "worker_not_configured_for_project";
+  | "worker_not_selected_for_runtime";
 
 export type HandoffDecision =
   | { handoff: true }
@@ -39,16 +37,16 @@ export interface HandoffDecisionInput {
   claimedAt: string | null;
   /** Whether the failure classification can plausibly behave differently later. */
   retryable: boolean;
-  /** Whether `dispatchModeForProject` says the worker owns new work here. */
-  workerOwnsProject: boolean;
+  /** Whether `dispatchModeForProject` selects the worker in this runtime. */
+  workerDispatchSelected: boolean;
 }
 
 export function handoffDecision(input: HandoffDecisionInput): HandoffDecision {
   if (input.leaseToken) return { handoff: false, reason: "worker_attempt_owns_run" };
   if (!input.claimedAt) return { handoff: false, reason: "no_inline_claim" };
   if (!input.retryable) return { handoff: false, reason: "not_retryable" };
-  if (!input.workerOwnsProject) {
-    return { handoff: false, reason: "worker_not_configured_for_project" };
+  if (!input.workerDispatchSelected) {
+    return { handoff: false, reason: "worker_not_selected_for_runtime" };
   }
   return { handoff: true };
 }

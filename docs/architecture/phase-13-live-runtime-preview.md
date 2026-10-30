@@ -66,9 +66,9 @@ A malformed limit is **rejected** (fallback used, `invalid_limit` reported), not
 silently clamped to a different value. A half-configured deployment fails closed
 with `RUNTIME_SANDBOX_NOT_CONFIGURED` and the workspace keeps the static preview.
 
-The project itself must also be in `MAVLY_GENERATION_WORKER_PROJECTS` for worker
-QA/Security evidence to read the row; the runtime route works without the worker,
-but no orchestration runs inline.
+Production runs are dispatched to the platform-wide durable worker, which is the
+execution context for QA/Security evidence. Local and preview runs remain inline;
+the runtime route itself does not depend on a worker project allowlist.
 
 Migration **34** creates the table, RPCs, RLS and schema marker. It is additive
 and safe to apply while the previous application version is live.

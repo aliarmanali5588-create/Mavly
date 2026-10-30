@@ -15,13 +15,11 @@ import {
 
 // ── The public exceptions are exact paths ───────────────────────────────────
 
-test("the public API paths are the config probe and the internal worker", () => {
+test("only the config probe is an exact public API path", () => {
   assert.deepEqual([...PUBLIC_API_PATHS], [
     "/api/config",
-    "/api/generation/worker",
   ]);
   assert.equal(isPublicApiPath("/api/config"), true);
-  assert.equal(isPublicApiPath("/api/generation/worker"), true);
 });
 
 test("the exceptions are exact matches, not prefixes", () => {
@@ -34,8 +32,9 @@ test("the exceptions are exact matches, not prefixes", () => {
   assert.equal(isPublicApiPath(""), false);
 });
 
-test("the worker exception does not leak to neighbouring paths", () => {
+test("generation worker paths stay protected from unauthenticated callers", () => {
   assert.equal(isPublicApiPath("/api/generation/workerx"), false);
+  assert.equal(isPublicApiPath("/api/generation/worker"), false);
   assert.equal(isPublicApiPath("/api/generation/worker/"), false);
   assert.equal(isPublicApiPath("/api/generation/worker/run"), false);
   assert.equal(isPublicApiPath("/api/generation"), false);
@@ -80,10 +79,8 @@ test("/api/config is allowed even without a session", () => {
   assert.equal(apiSessionDecision("/api/config", false), "allow");
 });
 
-test("the internal worker passes the session gate but authenticates itself", () => {
-  // The gate answers "is anybody home?", not "may this caller run work?". The
-  // worker route requires a server-only bearer secret of its own.
-  assert.equal(apiSessionDecision("/api/generation/worker", false), "allow");
+test("generation worker invocation is not exposed as a public route", () => {
+  assert.equal(apiSessionDecision("/api/generation/worker", false), "unauthenticated");
   assert.equal(apiSessionDecision("/api/generation/worker/run", false), "unauthenticated");
 });
 

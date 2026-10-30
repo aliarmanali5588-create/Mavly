@@ -13,18 +13,17 @@ import {
   leaseExpiresAt,
   retryDelaySeconds,
   sanitizeWorkerId,
-  timingSafeStringEqual,
 } from "../src/lib/generation/leases";
 
 /**
- * Lease timing, retry backoff and secret comparison are pure. The SQL clamps
- * the same 60–900 s range and mirrors the 15 s-doubling/300 s-cap schedule, so
- * these assertions describe the contract the worker and migration share.
+ * Lease timing and retry backoff are pure. The SQL clamps the same 60–900 s
+ * range and mirrors the 15 s-doubling/300 s-cap schedule, so these assertions
+ * describe the contract the worker and migration share.
  */
 
 // ── Lease bounds ───────────────────────────────────────────────────────────
 
-test("the default lease outlives the generation budget and the route", () => {
+test("the default lease outlives the generation budget and a worker tick", () => {
   assert.equal(WORKER_LEASE_SECONDS, 420);
   assert.equal(WORKER_LEASE_SECONDS > 300, true);
   assert.equal(LEASE_RENEW_INTERVAL_MS, 120_000);
@@ -73,19 +72,6 @@ test("jitter is bounded to 25 % and never exceeds the cap", () => {
   assert.equal(retryDelaySeconds(1, () => -1), 15);
   assert.equal(retryDelaySeconds(1, () => 4), 18);
   assert.equal(retryDelaySeconds(20, () => 1), 300);
-});
-
-// ── Worker secret ──────────────────────────────────────────────────────────
-
-test("the bearer secret uses a constant-time comparison", () => {
-  const secret = "a".repeat(32);
-  assert.equal(timingSafeStringEqual(secret, secret), true);
-  assert.equal(timingSafeStringEqual(secret, `${"a".repeat(31)}b`), false);
-  assert.equal(timingSafeStringEqual(secret, "a".repeat(31)), false);
-  assert.equal(timingSafeStringEqual("", ""), false);
-  assert.equal(timingSafeStringEqual(null, secret), false);
-  assert.equal(timingSafeStringEqual(secret, undefined), false);
-  assert.equal(timingSafeStringEqual(123, secret), false);
 });
 
 // ── Worker identity ────────────────────────────────────────────────────────

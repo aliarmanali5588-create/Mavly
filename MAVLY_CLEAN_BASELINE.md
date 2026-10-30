@@ -1,7 +1,7 @@
 # Mavly — Clean Backend Baseline
 
 **Status:** local AI builder, no customer-owned Supabase integration, an off-by-default
-static-publishing path, an off-by-default durable generation worker, and an off-by-default
+static-publishing path, a platform-wide production durable generation worker, and an off-by-default
 isolated verification sandbox implemented; the
 rest of the platform backend remains unavailable.
 **Scope:** the Totalum VCaaS integration stays removed. Supabase authentication, OAuth,
@@ -29,8 +29,8 @@ revocation or database mutation was performed while preparing this document.
 | Project ownership | `public.projects`, RLS, `registerProjectOwnership`, `checkProjectAccess`, `enforceProjectScope`. |
 | Project CRUD | Create/list/launch/get/update/delete, stored in Supabase. |
 | Project type and Android workspace | `public.projects.project_type` (migration 22) distinguishes `website` and `android`. Android projects are created idempotently (migration 25), appear as Android in dashboard cards, and open a Kotlin/Compose source workspace using the same authorized `/project/{id}` route. Android prompts use the same durable generation pipeline with a native profile; the resulting complete source is re-validated by `src/lib/android/contract.ts`. Optional, cohort-gated isolated debug builds are implemented in migration 26 and the generation worker: a pinned toolchain image builds an immutable snapshot offline, validates the APK and stores it privately for an owner-authorized short-lived download. The reproducible image definition lives in `infra/android-build/` (digest-pinned base, checksum-verified JDK 17/Gradle 8.9/SDK 35, seed-warmed offline Gradle cache); the repository does not build or publish it. Release signing, AABs, store publishing and emulator/device preview remain unavailable and are reported as such. |
-| AI generation | The active `src/lib/mavly/run-agent.ts` → `src/lib/ai/agent.ts` → `src/lib/ai/provider.ts` → `src/lib/ai/openrouter.ts` pipeline serves both websites (Next.js profile) and Android apps (Kotlin/Compose profile). The default execution path is still the inline `after()` run; a durable worker is available opt-in per project cohort. Worker execution rechecks the persisted project type before generation and does not enqueue the Next.js verification sandbox for an Android run. |
-| Durable generation worker (opt-in) | Off unless `MAVLY_GENERATION_WORKER_ENABLED`, a ≥32-char `MAVLY_GENERATION_WORKER_SECRET`, an explicit `MAVLY_GENERATION_WORKER_PROJECTS` cohort, `SUPABASE_SERVICE_ROLE_KEY` and the Supabase URL are all configured. Admission records `dispatch_mode`; only worker-dispatched runs are claimed. An operator-supplied scheduler calls `/api/generation/worker`, which executes one job per tick under a fenced lease, renews it, recovers expired leases into bounded retries or dead letters, and never deletes accepted work. Uncohort projects remain inline. See `docs/runbooks/generation-worker.md`. |
+| AI generation | The active `src/lib/mavly/run-agent.ts` → `src/lib/ai/agent.ts` → `src/lib/ai/provider.ts` → `src/lib/ai/openrouter.ts` pipeline serves both websites (Next.js profile) and Android apps (Kotlin/Compose profile). Production admissions use the durable worker; local development and Vercel previews retain the inline `after()` path. Worker execution rechecks the persisted project type before generation and does not enqueue the Next.js verification sandbox for an Android run. |
+| Durable generation worker (Cloudflare Cron) | Every production generation admission is written to the existing `project_runs` queue and dispatched without a project allowlist or worker-specific enable/secret configuration. The dedicated Cloudflare Worker runs `workers/generation-scheduler.ts` on `* * * * *`, directly invokes one existing worker tick, and preserves atomic claims, fenced leases, verified checkpoints, bounded retry/recovery, cancellation and ownership checks. Local development and Vercel previews remain inline. No new migration is needed; the worker preflight requires schema marker 32 and migration 36's handoff remains unchanged. Cloudflare deployment, runtime compatibility and Cron operation are not verified; see `docs/runbooks/generation-worker.md`. |
 | Verification sandbox (opt-in) | Off unless `MAVLY_VERIFICATION_SANDBOX_ENABLED`, an explicit `MAVLY_VERIFICATION_SANDBOX_PROJECTS` cohort, a Vercel provider credential, `SUPABASE_SERVICE_ROLE_KEY` and the Supabase URL are all configured, and migrations 17 then 19 are applied. Only worker-dispatched runs enqueue one verification per completed run and ready snapshot. Later worker ticks re-validate the snapshot, build it in an isolated Vercel Sandbox microVM, start the validated production server on loopback and run a sandbox-local health check. `passed` requires the build, the runtime start and a `2xx`/`3xx` health response; build-only success is never `passed`. Stages run detached and are polled across ticks; every terminal path destroys the sandbox. Unsupported formats return `unsupported_runtime`. A separately opt-in bounded AI repair (default 1, hard cap 2) may create a new immutable snapshot for a source-level failure and rerun the checks. Preview stays unavailable because there is no authenticated proxy. Status appears only in the existing authorized `agent/status` / `agent/stop` responses. See `docs/architecture/phase-4-runtime-verification.md`. |
 | Live runtime preview (opt-in) | Off unless `MAVLY_RUNTIME_SANDBOX_ENABLED`, server-only `E2B_API_KEY`, the Supabase URL and migration 34 are all configured. There is no per-project allowlist: `MAVLY_RUNTIME_SANDBOX_PROJECTS` is an optional temporary restriction and empty/`*` means every eligible project. For a supported React + Vite website project, Mavly copies the authoritative `project_files` into an isolated E2B sandbox, installs with `npm ci|install --ignore-scripts`, starts the installed Vite binary with fixed arguments, and marks the session `ready` only after a server-side request to the validated `*.e2b.app` preview host returns 2xx/3xx. One durable row per project enforces a single active sandbox; ready sessions are reused, Restart rebuilds, Stop and expiry are idempotent. The sandbox never writes back to `project_files`. Unsupported frameworks (including the Next.js sites Mavly generates) get an exact reason and keep the static preview. **Not verified against a live E2B account.** See `docs/architecture/phase-13-live-runtime-preview.md`. |
 | Generation preview | New-project plans always include `preview.html`; it is generated in its own batch. Batch parsing accepts only requested paths and refuses an incomplete HTML document. Progress stages use durable run state, manifest/checkpoints, and the static-preview resolver; the UI uses an indeterminate bar rather than estimated completion percentages. The workspace labels the preview `ready`/`stale`/`incomplete`/`unavailable` from the saved entry plus the latest durable run, and offers `agent/resume` when a failed run can be recovered. |
@@ -187,9 +187,9 @@ unchanged. A real E2B sandbox, install and Vite server have **not** been exercis
 
 The app still uses the caller's own RLS-scoped Supabase client everywhere except the
 durable worker. `SUPABASE_SERVICE_ROLE_KEY` is server-only and is confined to
-`src/lib/supabase/worker.ts`, the worker orchestrator, `/api/generation/worker` and the
-verification tick the worker invokes; the
-worker re-verifies the project owner and cohort itself. RLS is unchanged. Sandbox provider
+`src/lib/supabase/worker.ts`, the worker orchestrator, the scheduled Cloudflare entrypoint
+and the verification tick it invokes; the worker re-verifies the project owner itself.
+RLS is unchanged. Sandbox provider
 credentials are used only by the server-side adapter and are never uploaded into a sandbox.
 
 `supabase/migrations/04_supabase_integration.sql` is retained as historical customer-
@@ -495,7 +495,7 @@ the explicit 503. No mock data, fabricated id or fake success is returned.
 | Versions / visual edits | versions, Git diff, `/api/visual-edit/.../apply` |
 | Data platform | database browsing, arbitrary SQL execution, manual schema editing, backups, backup download. Managed additive migrations for generated apps are implemented server-side (Phase 14), but no dashboard exposes them and no destructive change is supported. |
 | Integrations | customer-owned domains/DNS, environment files. Project secrets are stored and managed (see above) but not injected into generated sites. |
-| Account/product | usage, credits, payments, an included scheduler (the durable worker requires an operator-provided one), mobile builds, visitor analytics, webhooks |
+| Account/product | usage, credits, payments, the platform-wide Cloudflare Cron generation scheduler, mobile builds, visitor analytics, webhooks |
 | Project transfer | export, import, duplicate |
 
 Those routes return:
@@ -554,7 +554,7 @@ with HTTP **503** and `cache-control: private, no-store, max-age=0`.
    user.
 7. Child-table RLS requires an owned `public.projects` row. The only privileged client is
    the durable worker's (`src/lib/supabase/worker.ts`), confined to the worker orchestrator,
-   `/api/generation/worker` and the verification tick it invokes. `project_verifications`
+   scheduled Cloudflare entrypoint and the verification tick it invokes. `project_verifications`
    exposes only an owner SELECT policy and owner cancellation; all other mutations are
    service-role RPCs.
 8. Mavly sign-in OAuth still sends no custom `state`, and its callback stays a bare

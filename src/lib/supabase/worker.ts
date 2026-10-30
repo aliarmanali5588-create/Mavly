@@ -2,8 +2,8 @@
  * ═══ THE ONE SERVER-ONLY SERVICE-ROLE CLIENT ════════════════════════════════
  *
  * ⚠️ SERVICE-ROLE CLIENTS ARE SERVER-ONLY. The worker client is used by the
- * durable generation worker. The credit client is used only for the narrow
- * credit admission and owner-checked terminal RPCs in `credits/store.ts`.
+ * scheduled generation worker and the owner-checked Android artifact download.
+ * The credit client is used only for narrow credit RPCs in `credits/store.ts`.
  * Neither client relaxes any RLS policy:
  *
  *   · user-facing reads and writes keep using the caller's session client;
@@ -11,7 +11,8 @@
  *   · the worker re-verifies the claimed project's owner before running.
  *
  * ⚠️ NEVER IMPORT THIS FROM A CLIENT COMPONENT OR A PAGE. Only the worker,
- * its route, and the server-side credit store may import it.
+ * scheduled entrypoint, credit store and owner-checked artifact handler may
+ * import it.
  * `SUPABASE_SERVICE_ROLE_KEY` must never carry a `NEXT_PUBLIC_` prefix, never
  * be returned to the browser and never be logged.
  */

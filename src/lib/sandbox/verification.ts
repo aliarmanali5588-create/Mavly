@@ -104,8 +104,8 @@ import {
 export const VERIFICATION_SCHEMA_VERSION = 19;
 
 /**
- * One tick never spends more than this. The worker route's wall-clock budget is
- * 300 s; the remainder covers the HTTP layer and the generation probe.
+ * One verification tick never spends more than this. The remaining invocation
+ * budget is reserved for orchestration and the generation worker.
  */
 const TICK_BUDGET_MS = 200_000;
 /** A cleanup needs headroom for its own provider call. */

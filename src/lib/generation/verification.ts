@@ -4,7 +4,7 @@
  * The worker runs with a service-role client, so RLS cannot protect it from a
  * malformed or unexpected RPC answer. This module is the second wall: only a
  * claim with a real UUID run id and lease token, a routable project id, a
- * verifying owner and a worker dispatch mode is allowed to execute.
+ * verified owner and a worker dispatch mode is allowed to execute.
  *
  * ⚠️ THE SERVICE-ROLE WORKER MUST VERIFY OWNERSHIP ITSELF. `claim_generation_job`
  * joins `public.projects` and returns the owner, but this module re-checks that
@@ -134,29 +134,20 @@ export function parseClaimResult(raw: unknown): ClaimParseResult {
 
 export type ProjectVerification =
   | { ok: true }
-  | { ok: false; reason: "owner_mismatch" | "not_in_cohort" };
+  | { ok: false; reason: "owner_mismatch" };
 
 /**
- * Re-check the claim against a fresh project row and the server-configured
- * cohort. `ownerId` comes from `public.projects`, never from the request.
+ * Re-check the claim against a fresh project row. `ownerId` comes from
+ * `public.projects`, never from the request.
  */
 export function verifyClaimedProject(input: {
   job: Pick<ClaimedGenerationJob, "projectId" | "userId">;
   ownerId: string | null | undefined;
-  cohort: readonly string[];
 }): ProjectVerification {
   if (!input.ownerId || input.ownerId !== input.job.userId) {
     return { ok: false, reason: "owner_mismatch" };
   }
-  if (!isProjectInCohort(input.job.projectId, input.cohort)) {
-    return { ok: false, reason: "not_in_cohort" };
-  }
   return { ok: true };
-}
-
-export function isProjectInCohort(projectId: string, cohort: readonly string[]): boolean {
-  const target = projectId.toLowerCase();
-  return cohort.some((entry) => entry.toLowerCase() === target);
 }
 
 /** Migration 32 or newer is required before a worker may claim anything. */

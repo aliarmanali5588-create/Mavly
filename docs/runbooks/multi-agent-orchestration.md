@@ -10,10 +10,9 @@ approval gate disabled.
 |---|---|
 | Migrations 10, 16 | The durable run/worker lease model this layer reuses. |
 | Migration 29 | Workflows, tasks, events, proposals, RPCs and the schema marker. |
-| Durable worker enabled and scheduled | The only execution context with a confined service-role client. |
 | `SUPABASE_SERVICE_ROLE_KEY`, `NEXT_PUBLIC_SUPABASE_URL` | Worker persistence. |
 | `OPENROUTER_API_KEY` | Planner/UI-UX/repair model calls. |
-| A scheduled `POST|GET /api/generation/worker` invocation | See `docs/runbooks/generation-worker.md`. |
+| Cloudflare Cron Worker deployed and observed | Required for worker-only workflows; see `docs/runbooks/generation-worker.md`. |
 
 A half-configured deployment stays off. `GET …/agent/workflow` reports `enabled:
 false` and an exact `note`, and a generation keeps the existing pipeline.

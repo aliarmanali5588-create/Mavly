@@ -17,9 +17,9 @@ to production hosting.
   `package.json` (react + vite), a root `index.html` with a local module entry,
   and that entry module. Android, Next.js, SvelteKit and other frameworks return
   `RUNTIME_SANDBOX_UNSUPPORTED` with an exact reason.
-- For QA/Security evidence and the worker expiry sweep, the project must also be
-  in the durable worker cohort and the deployment must have
-  `SUPABASE_SERVICE_ROLE_KEY`.
+- For QA/Security evidence and the worker expiry sweep, the run must be
+  production-dispatched to the durable worker and the deployment must have
+  `SUPABASE_SERVICE_ROLE_KEY`. Production dispatch has no project allowlist.
 
 There is **no per-project allowlist**. Ownership/RLS, the deployment flag, the
 framework detector, the per-user sandbox cap and the lifetime/install limits are

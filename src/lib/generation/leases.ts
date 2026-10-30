@@ -5,7 +5,7 @@
  * stores a random `lease_token`; every worker write presents that token, so a
  * worker whose lease expired cannot finish a run another worker now owns.
  *
- * ⚠️ WHY IT IS LONGER THAN THE ROUTE. The generation budget is 240 s and one
+ * ⚠️ WHY IT IS LONGER THAN A TICK. The generation budget is 240 s and one
  * provider call may take 120 s. A 420 s lease covers a full attempt plus
  * scheduling and persistence, so a healthy worker is never recovered out from
  * under itself. The worker still renews it periodically; the length is a
@@ -16,8 +16,6 @@
  * one side without the other would make the row's state disagree with the
  * worker's expectations.
  */
-
-import { timingSafeEqual } from "node:crypto";
 
 export const WORKER_LEASE_SECONDS = 420;
 export const MIN_LEASE_SECONDS = 60;
@@ -56,20 +54,6 @@ export function retryDelaySeconds(attempt: number, random: () => number = Math.r
   const base = Math.min(RETRY_MAX_SECONDS, RETRY_BASE_SECONDS * 2 ** exponent);
   const jitter = Math.floor(base * 0.25 * Math.min(1, Math.max(0, random())));
   return Math.min(RETRY_MAX_SECONDS, base + jitter);
-}
-
-/**
- * A constant-time comparison for the worker bearer secret. The length check is
- * unavoidable (timingSafeEqual throws on different lengths), but a length
- * mismatch alone reveals nothing usable for a high-entropy secret.
- */
-export function timingSafeStringEqual(provided: unknown, expected: unknown): boolean {
-  if (typeof provided !== "string" || typeof expected !== "string") return false;
-  if (provided.length === 0 || expected.length === 0) return false;
-  const left = Buffer.from(provided, "utf8");
-  const right = Buffer.from(expected, "utf8");
-  if (left.length !== right.length) return false;
-  return timingSafeEqual(left, right);
 }
 
 /** A log-safe worker identity: bounded, printable, no whitespace or secrets. */

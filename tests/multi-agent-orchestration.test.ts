@@ -165,9 +165,6 @@ function proposal(overrides: Partial<DeploymentProposalRow> = {}): DeploymentPro
 const READY_ENV = {
   [MULTI_AGENT_ENABLED_ENV]: "1",
   [MULTI_AGENT_PROJECTS_ENV]: "demo-project",
-  MAVLY_GENERATION_WORKER_ENABLED: "1",
-  MAVLY_GENERATION_WORKER_SECRET: "x".repeat(40),
-  MAVLY_GENERATION_WORKER_PROJECTS: "demo-project",
   SUPABASE_SERVICE_ROLE_KEY: "service-role",
   NEXT_PUBLIC_SUPABASE_URL: "https://example.supabase.co",
   OPENROUTER_API_KEY: "test-key",
@@ -479,7 +476,7 @@ test("multi-agent config requires the durable worker and an explicit cohort", ()
 
   const noWorker = parseMultiAgentConfig({
     ...READY_ENV,
-    MAVLY_GENERATION_WORKER_ENABLED: "",
+    SUPABASE_SERVICE_ROLE_KEY: "",
   });
   assert.equal(noWorker.ready, false);
   assert.ok(noWorker.problems.includes("worker_not_ready"));

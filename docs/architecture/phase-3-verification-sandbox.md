@@ -99,7 +99,7 @@ instead of silently falling back.
 ## 3. Component map
 
 ```
-generation worker tick (/api/generation/worker)
+Cloudflare Cron generation worker tick
   └─ runGenerationWorkerOnce
        ├─ generation queue (unchanged Phase 2)
        └─ when the generation claim is EMPTY:
@@ -128,7 +128,7 @@ generation worker tick (/api/generation/worker)
 | `src/lib/runtime/*` | The one supported runtime profile (Next.js App Router), manifest/lockfile validation, the build plan and the fixed loopback runtime start. |
 | `supabase/migrations/17_verification_sandbox.sql` | Table, RLS, grants, queue/lease/recovery/cleanup/cancel RPCs, schema marker 17. |
 | `supabase/migrations/19_runtime_verification.sql` | Phase 4 build/runtime/health/preview/repair state, the runtime-enforced `passed` rule and schema marker 19. |
-| `src/app/api/generation/worker/route.ts` | Returns the non-sensitive verification tick summary. |
+| `workers/generation-scheduler.ts`, `wrangler.jsonc` | Schedules the existing worker tick and emits structured outcomes. |
 | `src/lib/mavly/api.ts` | `agent/status` verification block; `agent/stop` cancels an in-flight verification. |
 
 ---
@@ -221,7 +221,7 @@ closed. See the Phase 4 document for the repair sequence and preview contract.
 | One health request | 5 s | Sandbox-local request, clamped 1–10 s |
 | Verification deadline | 26 min from first claim | Recovery stops a row even if a sandbox lives |
 | Lease | 120 s per tick | Renewed before long provider calls |
-| Worker tick budget | 200 s | Inside the route's 300 s `maxDuration` |
+| Worker tick budget | 200 s | Bounded below the 420 s generation lease |
 | Cleanup attempts | 5 | Durable, bounded orphan queue |
 | Deadline extension per applied repair | 20 min | Bounded repair gets its own rebuild window |
 
