@@ -144,6 +144,32 @@ const DEPLOY_POLL_INTERVAL_MS = 10_000;
 const DEPLOY_POLL_MAX_ATTEMPTS = 90;
 
 /**
+ * ⭐ A PERMANENT "THERE IS NO PROVIDER" IS NOT A TRANSIENT FAILURE.
+ *
+ * `GET …/deployments/status` answers `503 BACKEND_NOT_CONFIGURED` when customer
+ * publishing is not configured for this deployment. Retrying that is pure noise:
+ * nothing about the next attempt differs from this one. When that exact refusal is
+ * seen the watcher stops at once and the user is told there is no provider.
+ *
+ * ⚠️ THE STATUS CODE ALONE IS NOT THAT REFUSAL. A gateway or origin failure also
+ * answers 503, and `proxyRequest` reports it as `code: "UNKNOWN"` (the body is an
+ * HTML error page, not the app's JSON envelope). Treating every 503 as permanent
+ * would abandon a genuinely transient failure on its first attempt AND tell the
+ * user "no deployment provider is configured" — a claim that response cannot
+ * support. Everything except the exact refusal keeps the existing bounded retry
+ * budget (90 × 10 s), because a 502, a 429, a timeout or a dropped connection can
+ * all genuinely clear.
+ */
+function isPublishingUnavailable(response: {
+  ok?: boolean;
+  code?: string;
+  status?: number;
+}): boolean {
+  if (response.ok) return false;
+  return response.code === "BACKEND_NOT_CONFIGURED";
+}
+
+/**
  * One shared empty list, so "this project has no attachments" is always the SAME
  * array. A fresh `[]` per render would change identity every time and re-run every
  * effect and memo downstream of it.
@@ -313,6 +339,16 @@ export default function WorkspacePage() {
    * screen.
    */
   const [deploymentStatus, setDeploymentStatus] = useState<DeploymentStatus | null>(null);
+  /**
+   * ⭐ THE BACKEND HAS NO DEPLOYMENT PROVIDER — AND SAYS SO. `deployments/status`
+   * answers `503 BACKEND_NOT_CONFIGURED` on every deployment where customer publishing
+   * is not configured. That is an accurate answer, not a failure to retry: polling it
+   * (the mount fallback and the ten-second watcher both did) spent the whole bounded
+   * retry budget on a permanent condition and then told the user "refresh in a moment
+   * to see the current state". This flag records the once-read answer so nothing polls
+   * it again and no publish/status UI claims a deployment state it cannot know.
+   */
+  const [publishingUnavailable, setPublishingUnavailable] = useState(false);
   const [unpublishing, setUnpublishing] = useState(false);
   const [publishDialogOpen, setPublishDialogOpen] = useState(false);
   const restoringVersion = operation.kind === "restoreVersion";
@@ -742,6 +778,25 @@ export default function WorkspacePage() {
     deployPollAttemptsRef.current += 1;
     const res = await vcaasApi.deployments.status(projectId);
     if (!mountedRef.current || generation !== deployPollGenerationRef.current) return;
+
+    /**
+     * ⚠️ A PERMANENT REFUSAL ENDS THE WATCH IMMEDIATELY. Before this, a 503 fell
+     * through to the bottom of this function and scheduled another attempt, so one
+     * publish on a deployment without a provider produced up to 90 requests over
+     * fifteen minutes and then said "refresh in a moment to see the current state".
+     * There is no state to see: the provider is not configured.
+     */
+    if (isPublishingUnavailable(res)) {
+      setPublishingUnavailable(true);
+      setDeploying(false);
+      setUnpublishing(false);
+      operation.end("publish");
+      toast.error("Publishing is not available on this deployment.", {
+        description: "No deployment provider is configured, so there is no live site to watch.",
+      });
+      return;
+    }
+
     if (res.ok && res.data) {
       const next = res.data;
       setDeploymentStatus(next);
@@ -890,6 +945,15 @@ export default function WorkspacePage() {
           setDeploying(false);
           setUnpublishing(false);
         }
+      } else if (isPublishingUnavailable(deployment)) {
+        /**
+         * ⚠️ NOT A TRANSIENT FAILURE, SO NO FALLBACK POLL. This deployment has no
+         * deployment provider; the project document's `deploying` flag (if any) is a
+         * leftover row, and watching it would poll a permanent 503 for fifteen minutes.
+         */
+        setPublishingUnavailable(true);
+        setDeploying(false);
+        setUnpublishing(false);
       } else if (proj?.deployment?.status === "deploying") {
         setDeploying(true);
         startDeployPolling();
@@ -1455,6 +1519,18 @@ export default function WorkspacePage() {
   const handleDeploy = async (options: boolean | { approvalId?: string } = false) => {
     if (deploying || unpublishing) return;
     if (refuseWhileBusy()) return;
+    /**
+     * ⚠️ DON'T ASK A ROUTE THAT ALREADY SAID NO. When the status read above reported
+     * `BACKEND_NOT_CONFIGURED`, the deploy route answers the same permanent 503 —
+     * sending it only produces another failed request. Nothing is claimed either way:
+     * "no provider is configured" is the whole truth.
+     */
+    if (publishingUnavailable) {
+      toast.error("Publishing is not available on this deployment.", {
+        description: "No deployment provider is configured, so this project cannot be published from Mavly.",
+      });
+      return;
+    }
     setDeploying(true);
     const res = await vcaasApi.deployments.deploy(
       projectId,
@@ -1499,6 +1575,17 @@ export default function WorkspacePage() {
         description: "Create a deployment proposal in More → Agents & approvals, approve it, then deploy that approval.",
       });
       setDeploying(false);
+    }
+    else if (isPublishingUnavailable(res)) {
+      /**
+       * ⚠️ THE DEPLOY ROUTE AGREES WITH THE STATUS ROUTE. Record it so the next press
+       * refuses locally instead of sending the same permanently-refused request.
+       */
+      setPublishingUnavailable(true);
+      setDeploying(false);
+      toast.error("Publishing is not available on this deployment.", {
+        description: res.error || "No deployment provider is configured.",
+      });
     }
     else { toast.error(res.error || "Failed to deploy"); setDeploying(false); }
   };

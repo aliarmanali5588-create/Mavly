@@ -1405,6 +1405,11 @@ export const vcaasApi = {
    * explicit intent, so the two defaults never actually meet.
    *
    * ⚠️ EITHER INTENT COSTS 1 CREDIT (`VCAAS_CREDIT_COSTS.GET_SOURCE_CODE`).
+   *
+   * ⚠️ IN THIS BACKEND BOTH INTENTS RETURN THE SAME ARCHIVE. The paid-only
+   * `download` gate above belongs to totalum-backend and is not implemented here;
+   * the Mavly route accepts either value and refuses anything else as a malformed
+   * request. Do not describe the download as paid-only until a gate exists.
    */
   sourceCode: (projectId: string, intent: "view" | "download" = "view"): Promise<Response> =>
     fetch(`${API}/source-code/${encodeURIComponent(projectId)}?intent=${intent}`, {

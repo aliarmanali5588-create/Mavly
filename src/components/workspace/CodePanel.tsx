@@ -70,18 +70,30 @@ const byteCacheByProject: Map<string, Map<string, Uint8Array>> = new Map();
 type ArchiveResult = { files: { [path: string]: Uint8Array }; sha: string; count: number };
 const inflightByProject: Map<string, Promise<ArchiveResult>> = new Map();
 
+/**
+ * Raised when the project exists but has no generated files yet.
+ *
+ * ⚠️ NOT A FAILURE. The route answers `409 PROJECT_EMPTY` for an owned project whose
+ * first generation has not written a checkpoint (or whose run produced nothing).
+ * Rendering that as "Failed to load source code" made an empty project look broken.
+ */
+class ProjectEmptyError extends Error {}
+
 async function downloadAndDecompress(projectId: string): Promise<ArchiveResult> {
   const res = await vcaasApi.sourceCode(projectId);
   const contentType = res.headers.get("content-type") || "";
   if (!res.ok || !contentType.includes("application/zip")) {
-    // Error path: the route returns JSON { ok:false, error }.
+    // Error path: the route returns JSON { ok:false, error, code }.
     let message = `Request failed (HTTP ${res.status})`;
+    let code = "";
     try {
-      const j = (await res.json()) as { ok?: boolean; error?: unknown };
+      const j = (await res.json()) as { ok?: boolean; error?: unknown; code?: unknown };
       if (j && j.error) message = typeof j.error === "string" ? j.error : JSON.stringify(j.error);
+      if (j && typeof j.code === "string") code = j.code;
     } catch {
       // response wasn't JSON — keep the generic message
     }
+    if (code === "PROJECT_EMPTY") throw new ProjectEmptyError(message);
     throw new Error(message);
   }
   const sha = res.headers.get("x-commit-sha") || "";
@@ -464,6 +476,8 @@ export function CodePanel({ projectId, darkMode, onAskAiEdit, wake, sourceRevisi
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  /** Owned project, no generated files yet — rendered as an empty state, not a failure. */
+  const [empty, setEmpty] = useState(false);
   const [paths, setPaths] = useState<string[]>([]);
   const [textFiles, setTextFiles] = useState<{ [path: string]: string }>({});
   const [filesCount, setFilesCount] = useState(0);
@@ -629,6 +643,7 @@ export function CodePanel({ projectId, darkMode, onAskAiEdit, wake, sourceRevisi
     async (bypassCache: boolean) => {
       setLoading(true);
       setError(null);
+      setEmpty(false);
 
       // Try the 3-minute localStorage cache first.
       if (!bypassCache) {
@@ -661,7 +676,13 @@ export function CodePanel({ projectId, darkMode, onAskAiEdit, wake, sourceRevisi
         autoExpand(filtered);
         setLoading(false);
       } catch (e) {
-        setError(e instanceof Error ? e.message : String(e));
+        if (e instanceof ProjectEmptyError) {
+          // Not a failure: the project is owned and readable, it just has no files yet.
+          setEmpty(true);
+          setError(null);
+        } else {
+          setError(e instanceof Error ? e.message : String(e));
+        }
         setLoading(false);
       }
     },
@@ -815,6 +836,25 @@ export function CodePanel({ projectId, darkMode, onAskAiEdit, wake, sourceRevisi
       <div className="h-full flex flex-col items-center justify-center gap-3">
         <Loader2 className="w-6 h-6 animate-spin text-foreground" />
         <p className="text-sm text-gray-400">{"Loading source code..."}</p>
+      </div>
+    );
+  }
+
+  if (empty) {
+    return (
+      <div className="h-full flex flex-col items-center justify-center gap-4 px-6 text-center">
+        <div className="w-14 h-14 rounded-2xl bg-gray-50 dark:bg-white/5 flex items-center justify-center">
+          <FileCode2 className="w-6 h-6 text-gray-400" />
+        </div>
+        <div>
+          <p className="text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">{"No files yet"}</p>
+          <p className="text-xs text-gray-400 max-w-sm">
+            {"This project has no generated files. Send a prompt to generate the source, then refresh this tab."}
+          </p>
+        </div>
+        <Button variant="outline" onClick={() => fetchCode(true)} className="gap-1.5">
+          <RefreshCw className="w-3.5 h-3.5" /> {"Refresh"}
+        </Button>
       </div>
     );
   }

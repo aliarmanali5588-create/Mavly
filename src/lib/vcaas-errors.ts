@@ -42,6 +42,12 @@ export type VcaasErrorCode =
     | "PLAN_REQUIRED"
     | "PROJECT_LIMIT_REACHED"
     | "PROJECT_NOT_FOUND"
+    /**
+     * The project exists and the caller owns it, but it has no generated files
+     * yet — the normal state before a first checkpoint is written. Distinct from
+     * `PROJECT_NOT_FOUND` on purpose: "nothing generated yet" is not "no project".
+     */
+    | "PROJECT_EMPTY"
     | "RATE_LIMITED"
     | "VALIDATION"
     | "UPLOAD_QUOTA_EXCEEDED"
@@ -198,6 +204,8 @@ const STATUS_FOR: Record<VcaasErrorCode, number> = {
     PLAN_REQUIRED: 403,
     PROJECT_LIMIT_REACHED: 403,
     PROJECT_NOT_FOUND: 404,
+    /* An empty project is a state conflict, not a missing resource. */
+    PROJECT_EMPTY: 409,
     RATE_LIMITED: 429,
     VALIDATION: 400,
     /**
@@ -305,6 +313,9 @@ export function isVcaasErrorCode(value: unknown): value is VcaasErrorCode {
         value === "PLAN_REQUIRED" ||
         value === "PROJECT_LIMIT_REACHED" ||
         value === "PROJECT_NOT_FOUND" ||
+        /* Unlike `UPLOAD_QUOTA_EXCEEDED` below, this one really does travel in the
+           envelope: the source-code route answers `409 PROJECT_EMPTY` itself. */
+        value === "PROJECT_EMPTY" ||
         value === "RATE_LIMITED" ||
         value === "VALIDATION" ||
         value === "UNKNOWN"

@@ -32,9 +32,26 @@ export function RunawayNotice({
 }) {
     const t = useT();
     const { locale } = useLocale();
-    const [confirming, setConfirming] = React.useState(
-        () => !viewOnly && typeof window !== "undefined" && new URLSearchParams(window.location.search).get("runaway") === "resume",
-    );
+    /**
+     * ⚠️ THE URL IS READ AFTER HYDRATION, NEVER DURING THE FIRST RENDER.
+     *
+     * `?runaway=resume` is a deep link into the confirmation step. Reading
+     * `window.location.search` in a `useState` initializer made the server render
+     * `false` and the client (on that URL) `true`, which is a hydration mismatch —
+     * React #418 — on the one page the link exists to open. Starting at `false` and
+     * adopting the link in an effect is the same behaviour without the mismatch.
+     */
+    const [confirming, setConfirming] = React.useState(false);
+    /** Adopted once, like the initializer it replaced — a later `viewOnly` change or a
+     *  cancelled confirmation must not re-impose the deep link. */
+    const linkAdopted = React.useRef(false);
+    React.useEffect(() => {
+        if (linkAdopted.current) return;
+        linkAdopted.current = true;
+        if (viewOnly) return;
+        if (new URLSearchParams(window.location.search).get("runaway") !== "resume") return;
+        setConfirming(true);
+    }, [viewOnly]);
     const [busy, setBusy] = React.useState(false);
     const n = (v?: number) => (v ?? 0).toLocaleString(locale, { maximumFractionDigits: 1 });
     const what = t(`engineV2.runaway.${METRICS.has(pause.metric) ? pause.metric : "other"}` as TranslationKey, {

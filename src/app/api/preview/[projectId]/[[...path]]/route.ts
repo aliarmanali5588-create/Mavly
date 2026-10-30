@@ -84,6 +84,19 @@ function notFound(message = "Not found"): NextResponse {
  * Session and ownership are checked before any file is read. Only static files
  * already stored for the project are served; there is no upstream proxy and no
  * generated server code runs here.
+ *
+ * ⚠️ `{projectId}` IS A PROJECT SLUG, NOT A FEATURE NAME — READ A BARE 404 HERE
+ * ACCORDINGLY. This route is the ONLY thing under `/api/preview/`, so a request
+ * whose last segment is a prompt-derived project slug is not a missing endpoint:
+ * that segment is taken as the project id, and the 404 that comes back means
+ * "that project has no previewable static site" (no `preview.html`/`index.html`
+ * yet, or a native Android project) — the same empty-project condition the
+ * source-code route used to mislabel as `PROJECT_NOT_FOUND`. There is no
+ * per-feature endpoint here to restore, and inventing one would fabricate a
+ * preview that was never generated. A caller with no session gets 401, a malformed
+ * slug 400, and a project the caller does not own the non-enumerating 403, all
+ * before any file is read — so a 404 always means "owned, readable, nothing to
+ * serve".
  */
 async function handle(
   request: NextRequest,

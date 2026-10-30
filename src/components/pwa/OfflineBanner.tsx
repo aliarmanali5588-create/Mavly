@@ -15,16 +15,22 @@ import { WifiOff } from "lucide-react";
  */
 
 export function OfflineBanner() {
-  // `navigator` is unavailable during server-side render; default to online
-  // until the client hydrates and the real connectivity state is read.
-  const [offline, setOffline] = useState(
-    typeof navigator !== "undefined" && !navigator.onLine
-  );
+  /**
+   * ⚠️ ALWAYS `false` ON THE FIRST RENDER — THE REAL ANSWER ARRIVES AFTER HYDRATION.
+   *
+   * `navigator` does not exist during the server render, so the previous initializer
+   * returned `false` there and `true` in an offline browser: two different trees for
+   * the same commit, i.e. a React #418 hydration mismatch. The connectivity state is
+   * client-only, so it is read in the effect below, which already subscribes to the
+   * online/offline events.
+   */
+  const [offline, setOffline] = useState(false);
 
   const handleOnline = useCallback(() => setOffline(false), []);
   const handleOffline = useCallback(() => setOffline(true), []);
 
   useEffect(() => {
+    setOffline(!navigator.onLine);
     window.addEventListener("online", handleOnline);
     window.addEventListener("offline", handleOffline);
     return () => {
