@@ -500,6 +500,18 @@ export default function WorkspacePage() {
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; }; }, []);
+  useEffect(() => {
+    const html = document.documentElement;
+    const body = document.body;
+    const prevHtmlOverflow = html.style.overflow;
+    const prevBodyOverflow = body.style.overflow;
+    html.style.overflow = "hidden";
+    body.style.overflow = "hidden";
+    return () => {
+      html.style.overflow = prevHtmlOverflow;
+      body.style.overflow = prevBodyOverflow;
+    };
+  }, []);
 
   // Global dark mode
   useEffect(() => {
@@ -1798,7 +1810,7 @@ export default function WorkspacePage() {
   };
 
   return (
-    <div className="h-screen flex flex-col overflow-hidden dark:text-gray-200" style={{ background: pageBg }} onClickCapture={markWorkspaceTouched}>
+    <div className="h-[100dvh] flex flex-col overflow-hidden dark:text-gray-200" style={{ background: pageBg }} onClickCapture={markWorkspaceTouched}>
       {isResizing && <div className="fixed inset-0 z-50 cursor-col-resize" />}
 
       {/* ═══ DESKTOP LAYOUT ═══ */}
