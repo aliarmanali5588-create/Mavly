@@ -42,8 +42,11 @@ export const PUBLIC_API_PATHS: readonly string[] = [
  * Phase 6 public prefixes. Both are server-to-server only and authenticate
  * themselves OUTSIDE a Supabase session:
  *
- *   · `/api/app/v1/` — the generated application's payment gateway, which
- *     requires a hashed project API key with the `integrations:*` scope;
+ *   · `/api/app/v1/` — the generated application's own server-facing API:
+ *     `payments/*` requires a hashed project API key with the `integrations:*`
+ *     scope, and `apps/{projectId}/data|auth/*` resolves one READY managed
+ *     backend through the server-only RPC proof and authorizes user rows by
+ *     the END USER's own app session token (never a Mavly session);
  *   · `/api/integrations/webhooks/` — provider webhooks, which resolve an
  *     unguessable per-integration token and verify the provider signature over
  *     the exact raw body before parsing anything.

@@ -196,6 +196,21 @@ function carrySessionCookies(target: NextResponse, session: NextResponse): NextR
  * sign-in is not configured.
  */
 export async function proxy(request: NextRequest) {
+  /**
+   * ⚠️ THE GENERATED-APP DATA GATEWAY OWNS ITS OWN ORIGIN RULE.
+   *
+   * `https://<project>.mavly.xyz/api/...` is a tenant origin, which is
+   * deliberately never in the app-origin allowlist. The data gateway at
+   * `/api/app/v1/apps/` is called BY that tenant origin, so the generic
+   * preflight short-circuit and the generic cross-origin mutation refusal would
+   * both break it. Those routes enforce their own rule: the allowed origin is
+   * derived from the public project id, mutations from any other origin are
+   * refused, and every request still needs a project-scoped end-user session.
+   * The proxy must let the preflight reach the route so the correct
+   * `Access-Control-Allow-Origin` is returned.
+   */
+  const appDataGateway = request.nextUrl.pathname.startsWith("/api/app/v1/apps/");
+
   // 1. Tenant hosting (public, static, no session).
   const tenant = tenantResponse(request);
   if (tenant) return tenant;
@@ -208,7 +223,7 @@ export async function proxy(request: NextRequest) {
   }
 
   // 3. CORS preflight.
-  if (request.method === "OPTIONS") {
+  if (request.method === "OPTIONS" && !appDataGateway) {
     const response = new NextResponse(null, { status: 204 });
     addCorsHeaders(response, request);
     addCspHeaders(response, request);
@@ -224,7 +239,7 @@ export async function proxy(request: NextRequest) {
    * `https://mavly.xyz/api/...`. Origin/Sec-Fetch checks are the boundary; the
    * API routes keep their own session and ownership checks behind it.
    */
-  if (request.nextUrl.pathname.startsWith("/api/")) {
+  if (request.nextUrl.pathname.startsWith("/api/") && !appDataGateway) {
     const reason = crossOriginMutationReason({
       method: request.method,
       origin: request.headers.get("origin"),

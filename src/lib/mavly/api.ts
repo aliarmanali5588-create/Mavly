@@ -73,6 +73,11 @@ import {
   isAndroidBuildStoreFailure,
   listAndroidBuilds,
 } from "@/lib/android/build-store";
+import { managedBackendStatus } from "@/lib/managed-backend/store";
+import {
+  managedBackendStatusView,
+  type ManagedBackendStatusView,
+} from "@/lib/managed-backend/status";
 import { generationWorkerConfig } from "@/lib/generation/worker-config";
 import {
   creditAdmissionForProject,
@@ -2527,6 +2532,9 @@ async function agentStatusResponse(projectId: string): Promise<NextResponse> {
   const verification = isRunActive(run)
     ? undefined
     : await readVerification(projectId, run.id);
+  const managedBackend = isRunActive(run)
+    ? undefined
+    : await readManagedBackend(projectId);
   return ok({
     projectId,
     status,
@@ -2562,7 +2570,34 @@ async function agentStatusResponse(projectId: string): Promise<NextResponse> {
       reasoningTokens: run.reasoning_tokens,
     },
     ...(verification ? { verification } : {}),
+    ...(managedBackend ? { managedBackend } : {}),
   } satisfies AgentStatus);
+}
+
+/**
+ * Owner-visible managed-backend state. The RPC checks ownership itself, returns
+ * no ciphertext, and reports a missing migration as an absence rather than a
+ * fabricated status. A project that never needed a backend has no row.
+ */
+async function readManagedBackend(
+  projectId: string,
+): Promise<ManagedBackendStatusView | undefined> {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) return undefined;
+  const result = await managedBackendStatus({ client: supabase, projectId });
+  if (result.ok === false || !result.data) return undefined;
+  const row = result.data;
+  return managedBackendStatusView({
+    state: row.status,
+    dataModel: row.dataModel,
+    authRequired: row.authRequired,
+    connectionVerified: row.connectionVerified,
+    schemaVerified: row.schemaVerified,
+    gatewayConfigured: row.gatewayConfigured,
+    errorCode: row.errorCode,
+    lastStep: row.lastStep,
+    updatedAt: row.updatedAt || null,
+  });
 }
 
 function parseManifestFileCount(manifest: unknown): number | null {

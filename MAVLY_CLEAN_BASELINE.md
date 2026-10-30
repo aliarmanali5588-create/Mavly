@@ -38,7 +38,7 @@ revocation or database mutation was performed while preparing this document.
 | Conversation and runs | Persisted in `project_messages` and `project_runs`, polled by the workspace. |
 | Project settings | Owner-editable name/description through `PATCH /projects/{id}`; the derived Mavly address is read-only. |
 | Project secrets | Write-only AES-256-GCM ciphertext per project/environment; API responses carry metadata only. Values are not injected into the static output. |
-| Managed Neon databases (opt-in foundation) | Only worker-dispatched projects in an explicit cohort can provision one quota-bounded Neon project per Mavly project. Connection URIs are encrypted in an internal Supabase registry and never reach the browser or model. `provisioned` means only that Mavly's server-side `select 1` succeeded; no app schema, generated-app runtime binding, CRUD/auth, automatic cleanup or Mavly usage/billing attribution exists. Requires approved Neon Agent Plan access, migration 30, and explicit server configuration. No live provisioning has been verified. |
+| Managed Neon databases + app data API (opt-in) | Only worker-dispatched projects in an explicit cohort can provision one quota-bounded Neon project per Mavly project. A validated `dataModel` is compiled into additive, idempotent steps and applied by a ledgered, advisory-locked runner that reads the schema back before anything is called ready. `ready` separately requires a verified connection, a verified schema and a configured data gateway; `provisioned` alone is only "a database exists". Generated apps call `/api/app/v1/apps/{projectId}/data|auth/*`, which executes only Mavly-authored parameterized SQL and scopes user rows by the end user's own session; no connection credential ever reaches the model, browser or project files. End-user accounts (scrypt + hashed opaque sessions) live in the customer database. Requires approved Neon Agent Plan access, migrations 30 and 35, and explicit server configuration. **Not implemented:** a hosting runtime for generated server code, password reset, automatic database deletion/cleanup, backup/restore and Mavly credit pricing for databases. No live provisioning, schema run or gateway request has been verified. |
 | Project activity | Real run history aggregated from `project_runs`; visitor analytics are not collected. |
 | Project files | `project_files`; tree/content reads and content writes. |
 | Image generation | The locked model is `recraft/recraft-v4.1-flash` on OpenRouter's dedicated image API. Planning-driven website imagery (off by default, migration 33) persists approved assets and gives the coding agent their URLs; the standalone `POST …/images/generate` route uses the same model, returns base64, persists nothing and has no UI caller. Nothing is charged to user credits. |
@@ -493,7 +493,7 @@ the explicit 503. No mock data, fabricated id or fake success is returned.
 | Rebuild / runtime | `rebuild`, `rebuild/status`, server wake, agent stop/clear-context |
 | Dynamic deploy / hosting | building generated source, server/API hosting, customer custom domains, deployment logs. Static preview publishing with a Mavly-owned address is implemented behind an operator flag. |
 | Versions / visual edits | versions, Git diff, `/api/visual-edit/.../apply` |
-| Data platform | database browsing, SQL execution, application schema changes/migrations, backups, backup download. Neon provisioning infrastructure alone does not provide any of these. |
+| Data platform | database browsing, arbitrary SQL execution, manual schema editing, backups, backup download. Managed additive migrations for generated apps are implemented server-side (Phase 14), but no dashboard exposes them and no destructive change is supported. |
 | Integrations | customer-owned domains/DNS, environment files. Project secrets are stored and managed (see above) but not injected into generated sites. |
 | Account/product | usage, credits, payments, an included scheduler (the durable worker requires an operator-provided one), mobile builds, visitor analytics, webhooks |
 | Project transfer | export, import, duplicate |
@@ -677,9 +677,11 @@ The Totalum client `src/lib/vcaas-server.ts` remains deleted and must not be rec
   `17_verification_sandbox.sql` (after 16) and then `19_runtime_verification.sql` (after
   17) before enabling verification, and
   `08_figma_integration.sql` before using Figma. Apply
-  `30_managed_backends.sql` after `29_multi_agent_orchestration.sql` before enabling
-  managed Neon provisioning; provisioning also requires the approved Neon Agent Plan
-  enrollment and server-only operator configuration.
+  `30_managed_backends.sql` after `29_multi_agent_orchestration.sql`, and
+  `35_managed_backend_runtime.sql` after 34 and 30, before enabling managed Neon
+  provisioning and the generated-app data API; both also require the approved Neon Agent
+  Plan enrollment and server-only operator configuration (including
+  `MAVLY_APP_GATEWAY_ORIGIN` and `MAVLY_MANAGED_BACKENDS_RPC_SECRET`).
 - The verification sandbox is off by default, applies only to worker-dispatched runs, and
   is not proven against a live provider by this document. `passed` means the production
   build exited `0`, the validated runtime started on loopback, and a sandbox-local health

@@ -143,6 +143,12 @@ sweep, the database transition table, SELECT-only owner RLS, schema marker 34 an
 alter generation runs, credits, images, verification, payments or deployment, and stores
 no generated source or artifact. With the flag off no sandbox is created and the static
 preview is unchanged. It requires a separately managed E2B template with Node + npm.
+Apply `35_managed_backend_runtime.sql` after 34 and after 30 before enabling the managed
+backend runtime: it extends the managed-backend lifecycle to
+`configuring`/`ready`/`cleanup_pending`, adds the verified-schema and gateway columns, a
+sanitized migration mirror, the service-role configuration RPCs, the public
+`data_gateway_context`/`consume_app_gateway_rate` functions and schema marker 35. It is
+additive: `claim_managed_backend` keeps its signature, and no customer data is touched.
 Project-secret encryption also
 requires the server-only `MAVLY_PROJECT_SECRETS_ENCRYPTION_KEY` (32 random bytes,
 base64-encoded); without it create/update fail closed. `npm test` covers the pure
@@ -162,7 +168,9 @@ config/policy/archive/artifact/migration contracts, the Phase 10 workflow transi
 dependency/budget/output/config/approval/security/tool/parser rules and its static
 migration/catalog/deploy-gate invariants, the build-image reference/registry and
 offline-verification static contracts in `infra/android-build/`, the operator-doc coverage
-checks, the OpenRouter adapter contract, the model-catalog policy, the Phase 11
+checks, the OpenRouter adapter contract, the model-catalog policy, the managed-backend
+requirement/model/compiler/lifecycle contracts, the data-gateway auth/query/origin rules,
+the Phase 11
 credit configuration/lifecycle/RPC-error/migration contracts (pure and static),
 per-role model resolution, and static route/migration invariants.
 It does not
@@ -191,22 +199,41 @@ install/Vite dev server/readiness probe/QA build, or the migrations against a da
   scope, never by repeating the same request, and each run has a provider-attempt ceiling
   (`MAVLY_MAX_PROVIDER_ATTEMPTS_PER_RUN`, 4–40, default 12). Do not add another model provider or
   hosted builder backend without approval.
-- **Managed Neon database provisioning is an opt-in foundation only.** A website planner
-  can signal that persistent data is required; only a worker-dispatched project in the
-  explicit `MAVLY_MANAGED_BACKENDS_PROJECTS` cohort may ask the orchestrator to provision
-  one Neon project. It requires `MAVLY_MANAGED_BACKENDS_ENABLED`,
-  `MAVLY_NEON_AGENT_PLAN_APPROVED`, `NEON_API_KEY`, `NEON_ORG_ID`, `NEON_REGION_ID`, the
-  server-only `MAVLY_MANAGED_BACKENDS_ENCRYPTION_KEY`, migration 30, and a Neon Agent Plan
-  enrollment approved by Neon (active Scale plan + team approval). It sets bounded
-  project quotas and reconciles ambiguous creates by a deterministic server-derived name
-  rather than repeating a potentially non-idempotent POST. The Neon connection URI is
-  AES-256-GCM encrypted in an owner-readable-metadata-only registry; only the worker
-  service client can access ciphertext. `provisioned` means only that Mavly's server-side
-  `select 1` succeeded. No application schema is migrated, generated server code is not
-  executed or bound to the URI, and generated CRUD/auth is not live. Do not claim managed
-  backend readiness until a separately reviewed runtime and controlled migration path
-  exist. Project deletion does not automatically delete the Neon resource, and Mavly usage
-  or billing attribution is not wired. No live Neon provisioning has been verified.
+- **Managed Neon backends are implemented end-to-end server-side but OFF BY DEFAULT
+  (Phase 14).** A website planner proposes a bounded `dataModel`; the trusted server
+  validates it (`src/lib/managed-backend/model.ts`), and a deterministic compiler turns it
+  into additive, idempotent steps (`migrations.ts`) applied by a ledgered, advisory-locked
+  runner (`runner.ts`) that reads the resulting schema back from `information_schema`. Only
+  then can the run reach `ready`, which also requires the data gateway's origin and
+  server-only RPC proof. `provisioned` still means only "a Neon project exists and Mavly
+  connected once"; it is never CRUD readiness. It requires
+  `MAVLY_MANAGED_BACKENDS_ENABLED`, `MAVLY_NEON_AGENT_PLAN_APPROVED`, `NEON_API_KEY`,
+  `NEON_ORG_ID`, `NEON_REGION_ID`, `MAVLY_MANAGED_BACKENDS_ENCRYPTION_KEY`,
+  `MAVLY_APP_GATEWAY_ORIGIN`, `MAVLY_MANAGED_BACKENDS_RPC_SECRET`, migrations 30 and 35,
+  the durable worker, and a Neon Agent Plan enrollment approved by Neon (active Scale plan +
+  team approval). A static product never provisions; a prompt that needs persistence but
+  has no valid data model gets no database and an explicit message, never an empty database
+  or in-memory storage presented as persistence. The compiler contains no destructive
+  statement: it never drops, truncates, retypes or deletes customer data, and a column added
+  to a populated table is nullable so an additive step can never fail on existing rows
+  (`required` stays a gateway input rule; verification checks presence and type everywhere
+  and exact nullability only for tables the run created). A backend failure never discards
+  the user's generation: the stage reports a sanitized `blocked` reason, forces a labelled
+  prototype, keeps any existing database/schema/rows, and lets the code batches finish, so a
+  later run can retry without starting over. Generated apps
+  use Mavly's data API (`/api/app/v1/apps/{projectId}/data|auth/...`), which executes only
+  Mavly-authored parameterized SQL against the customer database, scopes every user-owned
+  row by the session user, and never returns a connection credential. End-user accounts
+  live in the customer database (scrypt passwords, hashed opaque sessions on
+  `_mavly_auth_users`/`_mavly_auth_sessions`) and are unrelated to Mavly auth. The Neon
+  connection URI stays AES-256-GCM ciphertext bound to `(user, project, registry)`.
+  Project deletion and `cleanup_pending` do not delete the Neon resource; there is no
+  automatic backup/restore and no credit pricing for managed databases. **A hosting runtime
+  for generated Next.js server code is still absent** (customer Vercel publishing is
+  retired, Phase 5 is off by default, Phase 13 is a React + Vite dev preview), so the data
+  API is real but cannot be exercised from a published generated app in this repository.
+  Password reset is not implemented (no email transport). No live Neon provisioning, schema
+  run, gateway request or end-to-end generated app has been verified.
 - **Native Android source generation is implemented (Phase 9).** Project types persist in
   `public.projects.project_type` (migration 22) and Android creation is idempotent through
   migration 25. An Android prompt flows through the same durable run, OpenRouter provider, batch
@@ -703,8 +730,9 @@ browser ── src/lib/vcaas.ts (client catalog, same-origin only)
    ├── /api/generation/worker      Bearer secret → service-role worker tick
    │      ├── src/lib/generation/worker.ts → run-agent (worker mode)
    │      │      └── src/lib/managed-backend/service.ts → Neon API + encrypted Supabase registry
-   │      │             (opt-in provisioning only; no generated-app runtime)
-   │      └── src/lib/sandbox/verification.ts → provider microVM (build + runtime)
+   │      │             └── migrations.ts/runner.ts → additive schema + read-back verify
+   ├── /api/app/v1/apps/{id}/data|auth/*  public, project id + end-user session
+   │      └── src/lib/app-data/gateway.ts → parameterized SQL → customer Neon database
    ├── /api/app/v1/payments/*      public, project API key (integrations:*) → Razorpay
    ├── /api/integrations/webhooks/razorpay/{token}
    │                               public, token + signed raw body → payment state
@@ -814,7 +842,16 @@ paths with `src/lib/vcaas-scope.ts`, so unknown shapes are refused before any wo
 | `src/lib/mavly/image-limits.ts` | Best-effort per-user/per-instance image-generation admission windows. |
 | `src/lib/ai/provider.ts` | The fixed OpenRouter boundary for completion calls and configuration errors. |
 | `src/lib/ai/models.ts` | OpenRouter model catalog and default-model resolution. |
-| `src/lib/managed-backend/` | Off-by-default Neon configuration, fixed-origin API client, encrypted connection-URI storage, worker-only idempotent provisioning and connectivity probe. Infrastructure status is not application runtime readiness. |
+| `src/lib/managed-backend/config.ts`, `neon.ts`, `crypto.ts` | Off-by-default Neon configuration (including the gateway origin and server-only RPC proof hash), fixed-origin API client, encrypted connection-URI storage. |
+| `src/lib/managed-backend/requirement.ts` | Pure backend-requirement policy: static products never provision; a missing data model blocks provisioning truthfully. |
+| `src/lib/managed-backend/lifecycle.ts`, `status.ts`, `prompt.ts` | The only lifecycle/transition vocabulary, the capability projection used by `agent/status`, and the server-authored data API contract placed in the coding prompt. |
+| `src/lib/managed-backend/model.ts` | Validation of the planner's `dataModel`: bounded tables/columns, closed type allowlist, reserved names, declarative resources and ownership. |
+| `src/lib/managed-backend/migrations.ts`, `runner.ts` | Deterministic additive SQL compiler, plus the bounded ledgered runner that applies steps under an advisory lock and verifies the schema read-back. |
+| `src/lib/managed-backend/service.ts`, `store.ts` | Provision/reconcile → configure → verify orchestration, fenced migration-35 RPC wrappers and the owner status read. |
+| `src/lib/app-data/` | Generated-app data gateway: scrypt/hashed-session auth primitives, parameterized CRUD query builder, app resolution, durable rate admission, CORS policy and the auth/CRUD handlers. |
+| `src/app/api/app/v1/apps/[projectId]/` | The public, self-authenticating data and end-user auth routes for a generated app. |
+| `supabase/migrations/35_managed_backend_runtime.sql` | Configuration lifecycle, verified-schema/gateway columns, sanitized migration mirror, fenced configuration RPCs, data-gateway context, durable rate windows and schema marker 35. Additive; apply after 34 and 30. |
+| `docs/architecture/phase-14-managed-backend-runtime.md`, `docs/runbooks/managed-backends.md` | Phase 14 design, authority, security residuals, blocked runtime dependency and the operator enable/smoke/rollback runbook. |
 | `supabase/migrations/30_managed_backends.sql` | Owner-readable Neon lifecycle metadata, service-role-only provisioning RPCs, encrypted-URI column grants and a fenced per-project provisioning claim. It does not apply generated application SQL. |
 | `src/lib/credits/config.ts` | Opt-in flag/cohort/fixed whole-credit cost; a half-configured deployment charges nothing and reports the exact problem. |
 | `src/lib/credits/state.ts` | Pure balance, settle/release eligibility, resume and insufficient-credits rules. |
@@ -903,6 +940,7 @@ paths with `src/lib/vcaas-scope.ts`, so unknown shapes are refused before any wo
    `MAVLY_ANDROID_BUILD_IMAGE`, `MAVLY_ANDROID_ARTIFACT_BUCKET`,
    `MAVLY_BUSINESS_INTEGRATIONS_ENABLED`,
    `MAVLY_BUSINESS_INTEGRATIONS_RPC_SECRET`, `NEON_API_KEY`, `E2B_API_KEY`,
+   `MAVLY_MANAGED_BACKENDS_RPC_SECRET`,
    `MAVLY_MANAGED_BACKENDS_ENCRYPTION_KEY` and the worker's server-only configuration
    are server-only
    and must never be renamed with a `NEXT_PUBLIC_`
@@ -966,11 +1004,13 @@ paths with `src/lib/vcaas-scope.ts`, so unknown shapes are refused before any wo
    `cancel_verification`; every other mutation, including repair begin/finish, is a
    `service_role`-only RPC. `project_integrations`, `project_integration_payments` and
    `project_integration_events` are SELECT-only for their owner; every write goes through
-   an owner or gateway SECURITY DEFINER RPC.
-10. **Two public API prefixes authenticate themselves.** `/api/app/v1/` requires a
-   hashed project API key carrying `integrations:*` AND the server-only RPC hash on the
-   gateway DB RPCs, and every RPC re-checks that the key belongs to the payment order's
-   project; `/api/integrations/webhooks/` resolves an
+   an owner or gateway SECURITY DEFINER RPC.10. **Two public API prefixes authenticate themselves.** `/api/app/v1/` carries two
+different contracts: `/payments/*` requires a hashed project API key carrying
+    `integrations:*` AND the server-only RPC hash on the gateway DB RPCs, and every RPC
+    re-checks that the key belongs to the payment order's project; `/apps/{id}/*` (the
+    generated-app data API) resolves one `ready` managed backend through the server-only
+    managed-backend RPC hash, then authorizes rows by the end user's own session and never
+    by a client-supplied user or owner id; `/api/integrations/webhooks/` resolves an
    unguessable per-integration token, requires the server-only
    `MAVLY_BUSINESS_INTEGRATIONS_RPC_SECRET` hash on its write RPCs, and verifies the
    provider HMAC-SHA256 over the **exact raw body before parsing**. Never add a route under either prefix that trusts
@@ -1026,8 +1066,17 @@ paths with `src/lib/vcaas-scope.ts`, so unknown shapes are refused before any wo
     service-role RPCs and re-check `(project_id, user_id)` ownership. The encrypted URI
     is not selectable by authenticated users. Ambiguous project-create outcomes are
     reconciled by the unique server-derived project name; the code does not blindly
-    retry a non-idempotent create. No automatic provider deletion, application SQL
-    migration, generated-app connection, or app-ready claim is implemented.
+    retry a non-idempotent create. Application schema changes are additive only: the
+    AI returns a validated data model, Mavly compiles it, and no `drop`/`truncate`/
+    `alter column` exists in the compiler. `ready` requires a verified schema AND a
+    verified connection AND a configured data gateway; a database alone is never ready.
+    The public data gateway resolves one `ready` project through a server-only RPC
+    proof, parameterizes every value, binds a user-owned row to the session's user id,
+    and rejects a query builder call without an owner. Its residual risk is documented:
+    the RPC proof is stored as a SHA-256 hash that an `anon`-key holder can present, so a
+    database read compromise exposes that hash (not the encrypted URI's key). No
+    automatic provider deletion, backup/restore, password reset, or generated-app
+    hosting runtime is implemented.
 16. **Credit accounting is authoritative, append-only and server-only.** Supabase is the
     source of truth. Authenticated users can read their own account, ledger,
     reservations and usage rows; they have no INSERT/UPDATE/DELETE grant and cannot

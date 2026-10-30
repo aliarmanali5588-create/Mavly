@@ -15,12 +15,20 @@ import {
   type NeonFailure,
 } from "./neon";
 import {
+  beginManagedBackendConfiguration,
   claimManagedBackend,
   completeManagedBackend,
+  completeManagedBackendConfiguration,
   failManagedBackend,
+  failManagedBackendConfiguration,
+  managedBackendLifecycle,
   markManagedBackendCreateStarted,
+  recordManagedBackendMigration,
   type ManagedBackendStoreFailureCode,
 } from "./store";
+import { appDataModelFingerprint, type AppDataModel } from "./model";
+import { buildSchemaPlan } from "./migrations";
+import { applySchemaPlan } from "./runner";
 
 const DATABASE_PROBE_TIMEOUT_MS = 5_000;
 
@@ -129,6 +137,195 @@ async function saveFailure(input: {
     outcomeUnknown: input.outcomeUnknown,
   });
   return saved.ok ? input.failure : storeError((saved as { code: ManagedBackendStoreFailureCode }).code);
+}
+
+// ── Configuration: verified schema + data gateway ───────────────────────────
+
+export type ManagedBackendConfigureResult =
+  | {
+      ok: true;
+      status: "ready" | "already_ready";
+      appliedSteps: number;
+      tableCount: number;
+      authRequired: boolean;
+      gatewayOrigin: string;
+    }
+  | ManagedBackendFailure;
+
+/**
+ * Apply the compiled schema and record readiness.
+ *
+ * ⚠️ `ready` REQUIRES ALL THREE FACTS. The runner must have applied every step
+ * AND read the resulting schema back successfully, and Mavly must be able to
+ * reach the database after migrating. Otherwise the configuration is recorded
+ * as failed and the caller cannot claim persistent CRUD.
+ *
+ * ⚠️ A MIGRATION IS NEVER DESTRUCTIVE. The compiler has no `drop`, the ledger
+ * makes a retry a no-op, and customer rows are never deleted here.
+ */
+export async function configureManagedBackend(input: {
+  client: SupabaseClient;
+  userId: string;
+  projectId: string;
+  config: ManagedBackendConfig;
+  model: AppDataModel;
+  /** A bounded slice of the run's remaining wall clock, in milliseconds. */
+  timeBudgetMs?: number;
+}): Promise<ManagedBackendConfigureResult> {
+  const { config } = input;
+  if (
+    !config.ready ||
+    !config.encryptionKey ||
+    !config.gatewayOrigin ||
+    !config.rpcSecretHash
+  ) {
+    return failure(
+      "MANAGED_BACKEND_CONFIGURATION_REQUIRED",
+      "Managed database configuration is enabled for this project but its platform prerequisites are incomplete.",
+    );
+  }
+
+  const fingerprint = appDataModelFingerprint(input.model);
+  const lifecycle = await managedBackendLifecycle({
+    client: input.client,
+    projectId: input.projectId,
+    userId: input.userId,
+  });
+  if (lifecycle.ok === false) return storeError(lifecycle.code);
+  if (
+    lifecycle.data?.status === "ready" &&
+    lifecycle.data.schemaVerified &&
+    lifecycle.data.dataModel !== null &&
+    appDataModelFingerprint(lifecycle.data.dataModel) === fingerprint
+  ) {
+    return {
+      ok: true,
+      status: "already_ready",
+      appliedSteps: 0,
+      tableCount: input.model.tables.length,
+      authRequired: input.model.auth.required,
+      gatewayOrigin: config.gatewayOrigin,
+    };
+  }
+
+  const leaseToken = randomUUID();
+  const claim = await beginManagedBackendConfiguration({
+    client: input.client,
+    projectId: input.projectId,
+    userId: input.userId,
+    leaseToken,
+  });
+  if (claim.ok === false) return storeError(claim.code);
+  if (claim.data.claimStatus === "busy") {
+    return failure(
+      "MANAGED_BACKEND_BUSY",
+      "The managed database is already being configured. Retry the generation shortly.",
+    );
+  }
+
+  const connectionUri = decryptManagedBackendConnection(
+    config.encryptionKey,
+    claim.data.connectionUriCiphertext,
+    {
+      userId: input.userId,
+      projectId: input.projectId,
+      registryId: claim.data.registryId,
+    },
+  );
+  if (!connectionUri) {
+    await failManagedBackendConfiguration({
+      client: input.client,
+      projectId: input.projectId,
+      projectCreatedAt: claim.data.projectCreatedAt,
+      leaseToken,
+      code: "MANAGED_BACKEND_CREDENTIALS_UNREADABLE",
+      step: "connection",
+    });
+    return failure(
+      "MANAGED_BACKEND_CREDENTIALS_UNREADABLE",
+      "The stored database configuration could not be decrypted. The database was not changed.",
+    );
+  }
+
+  const plan = buildSchemaPlan(input.model);
+  const applied = await applySchemaPlan({
+    connectionUri,
+    plan,
+    timeBudgetMs: input.timeBudgetMs,
+  });
+  if (applied.ok === false) {
+    await failManagedBackendConfiguration({
+      client: input.client,
+      projectId: input.projectId,
+      projectCreatedAt: claim.data.projectCreatedAt,
+      leaseToken,
+      code: applied.code,
+      step: applied.step ?? "schema",
+    });
+    return failure(
+      applied.code === "SCHEMA_CONNECTION_FAILED"
+        ? "NEON_CONNECTION_UNAVAILABLE"
+        : applied.code,
+      applied.code === "SCHEMA_VERIFICATION_FAILED"
+        ? `The database schema did not match the plan: ${applied.problems.join("; ")}`
+        : "The application schema could not be applied. No existing data was deleted.",
+    );
+  }
+
+  /**
+   * The migration ledger in the customer database is authoritative. These rows
+   * are a sanitized mirror for the owner/operator; a mirror failure does not
+   * undo a committed migration and is never reported as schema success.
+   */
+  for (const name of applied.applied) {
+    const step = plan.steps.find((entry) => entry.name === name);
+    if (!step) continue;
+    const recorded = await recordManagedBackendMigration({
+      client: input.client,
+      projectId: input.projectId,
+      projectCreatedAt: claim.data.projectCreatedAt,
+      leaseToken,
+      stepName: step.name,
+      checksum: step.checksum,
+    });
+    if (recorded.ok === false) {
+      console.warn(
+        `[managed-backend] could not mirror migration ${step.name} (${recorded.code})`,
+      );
+    }
+  }
+
+  const runtimeVerified = await probeConnection(connectionUri);
+  const completed = await completeManagedBackendConfiguration({
+    client: input.client,
+    projectId: input.projectId,
+    projectCreatedAt: claim.data.projectCreatedAt,
+    leaseToken,
+    dataModel: input.model,
+    dataModelChecksum: fingerprint,
+    stepCount: applied.appliedSteps,
+    authRequired: input.model.auth.required,
+    gatewayOrigin: config.gatewayOrigin,
+    gatewaySecretHash: config.rpcSecretHash,
+    schemaVerified: applied.verified,
+    runtimeVerified,
+  });
+  if (completed.ok === false) return storeError(completed.code);
+  if (!runtimeVerified) {
+    return failure(
+      "NEON_CONNECTION_UNAVAILABLE",
+      "The application schema was applied, but the managed database could not be reached afterwards. The backend is not ready.",
+    );
+  }
+
+  return {
+    ok: true,
+    status: "ready",
+    appliedSteps: applied.applied.length,
+    tableCount: plan.tableCount,
+    authRequired: input.model.auth.required,
+    gatewayOrigin: config.gatewayOrigin,
+  };
 }
 
 export async function ensureManagedBackend(input: {

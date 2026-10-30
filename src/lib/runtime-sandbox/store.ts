@@ -14,6 +14,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import {
   isRuntimeFramework,
+  type RuntimeFramework,
   isRuntimeSandboxState,
   type RuntimeSandboxRecord,
   type RuntimeSandboxState,
@@ -233,7 +234,7 @@ export interface BeginRuntimeSandboxInput {
   projectId: string;
   runId: string | null;
   provider: "e2b";
-  framework: "react_vite";
+  framework: RuntimeFramework;
   sourceHash: string | null;
   maxLifetimeSeconds: number;
   maxActivePerUser: number;

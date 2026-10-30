@@ -1,10 +1,16 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import type { ManagedBackendState } from "./lifecycle";
+import type { AppDataModel } from "./model";
+
 export type ManagedBackendLifecycle =
   | "provisioning"
   | "provisioned"
+  | "configuring"
+  | "ready"
   | "failed"
-  | "outcome_unknown";
+  | "outcome_unknown"
+  | "cleanup_pending";
 
 export interface ManagedBackendClaim {
   claimStatus: "claimed" | "busy" | "provisioned";
@@ -170,4 +176,250 @@ export async function failManagedBackend(input: {
   if (error) return { ok: false, code: mapError("fail", error) };
   if (data !== true) return { ok: false, code: "conflict" };
   return { ok: true, data: undefined };
+}
+
+// ── Configuration phase (migration 35) ──────────────────────────────────────
+
+export interface ManagedBackendConfigClaim {
+  claimStatus: "claimed" | "busy";
+  registryId: string;
+  projectCreatedAt: string;
+  neonProjectId: string;
+  regionId: string;
+  connectionUriCiphertext: string;
+}
+
+/** The owner-visible registry projection. Never contains ciphertext. */
+export interface ManagedBackendStatusRow {
+  status: ManagedBackendState;
+  registryId: string;
+  projectCreatedAt: string;
+  regionId: string;
+  dataModel: AppDataModel | null;
+  authRequired: boolean;
+  /** The stored connection was verified at least once. */
+  connectionVerified: boolean;
+  schemaVerified: boolean;
+  migrationStepCount: number;
+  gatewayConfigured: boolean;
+  /** The origin stored when the gateway was configured, or null. */
+  gatewayOrigin: string | null;
+  errorCode: string | null;
+  lastStep: string | null;
+  updatedAt: string;
+}
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function configClaimFrom(value: unknown): ManagedBackendConfigClaim | null {
+  const record = recordOf(Array.isArray(value) ? value[0] : value);
+  if (!record) return null;
+  if (record.claim_status !== "claimed" && record.claim_status !== "busy") {
+    return null;
+  }
+  if (record.claim_status === "busy") {
+    return {
+      claimStatus: "busy",
+      registryId:
+        typeof record.registry_id === "string" ? record.registry_id : "",
+      projectCreatedAt:
+        typeof record.project_created_at === "string"
+          ? record.project_created_at
+          : new Date(0).toISOString(),
+      neonProjectId: "",
+      regionId: "",
+      connectionUriCiphertext: "",
+    };
+  }
+  if (
+    typeof record.registry_id !== "string" ||
+    !UUID.test(record.registry_id) ||
+    typeof record.neon_project_id !== "string" ||
+    typeof record.region_id !== "string" ||
+    typeof record.connection_uri_ciphertext !== "string" ||
+    typeof record.project_created_at !== "string"
+  ) {
+    return null;
+  }
+  return {
+    claimStatus: "claimed",
+    registryId: record.registry_id,
+    projectCreatedAt: record.project_created_at,
+    neonProjectId: record.neon_project_id,
+    regionId: record.region_id,
+    connectionUriCiphertext: record.connection_uri_ciphertext,
+  };
+}
+
+export async function beginManagedBackendConfiguration(input: {
+  client: SupabaseClient;
+  projectId: string;
+  userId: string;
+  leaseToken: string;
+}): Promise<ManagedBackendStoreResult<ManagedBackendConfigClaim>> {
+  const { data, error } = await input.client.rpc(
+    "begin_managed_backend_configuration",
+    {
+      p_project_id: input.projectId,
+      p_user_id: input.userId,
+      p_lease_token: input.leaseToken,
+    },
+  );
+  if (error) return { ok: false, code: mapError("config_claim", error) };
+  const claim = configClaimFrom(data);
+  if (!claim) return { ok: false, code: "error" };
+  return { ok: true, data: claim };
+}
+
+export async function recordManagedBackendMigration(input: {
+  client: SupabaseClient;
+  projectId: string;
+  projectCreatedAt: string;
+  leaseToken: string;
+  stepName: string;
+  checksum: string;
+}): Promise<ManagedBackendStoreResult<void>> {
+  const { data, error } = await input.client.rpc(
+    "record_managed_backend_migration",
+    {
+      p_project_id: input.projectId,
+      p_project_created_at: input.projectCreatedAt,
+      p_lease_token: input.leaseToken,
+      p_step_name: input.stepName,
+      p_checksum: input.checksum,
+    },
+  );
+  if (error) return { ok: false, code: mapError("migration_record", error) };
+  if (data !== true) return { ok: false, code: "conflict" };
+  return { ok: true, data: undefined };
+}
+
+export async function completeManagedBackendConfiguration(input: {
+  client: SupabaseClient;
+  projectId: string;
+  projectCreatedAt: string;
+  leaseToken: string;
+  dataModel: AppDataModel;
+  dataModelChecksum: string;
+  stepCount: number;
+  authRequired: boolean;
+  gatewayOrigin: string;
+  gatewaySecretHash: string;
+  schemaVerified: boolean;
+  runtimeVerified: boolean;
+}): Promise<ManagedBackendStoreResult<void>> {
+  const { data, error } = await input.client.rpc(
+    "complete_managed_backend_configuration",
+    {
+      p_project_id: input.projectId,
+      p_project_created_at: input.projectCreatedAt,
+      p_lease_token: input.leaseToken,
+      p_data_model: input.dataModel,
+      p_data_model_checksum: input.dataModelChecksum,
+      p_step_count: input.stepCount,
+      p_auth_required: input.authRequired,
+      p_gateway_origin: input.gatewayOrigin,
+      p_gateway_secret_hash: input.gatewaySecretHash,
+      p_schema_verified: input.schemaVerified,
+      p_runtime_verified: input.runtimeVerified,
+    },
+  );
+  if (error) return { ok: false, code: mapError("config_complete", error) };
+  if (data !== true) return { ok: false, code: "conflict" };
+  return { ok: true, data: undefined };
+}
+
+export async function failManagedBackendConfiguration(input: {
+  client: SupabaseClient;
+  projectId: string;
+  projectCreatedAt: string;
+  leaseToken: string;
+  code: string;
+  step: string;
+}): Promise<ManagedBackendStoreResult<void>> {
+  const { data, error } = await input.client.rpc(
+    "fail_managed_backend_configuration",
+    {
+      p_project_id: input.projectId,
+      p_project_created_at: input.projectCreatedAt,
+      p_lease_token: input.leaseToken,
+      p_error_code: input.code,
+      p_step: input.step,
+    },
+  );
+  if (error) return { ok: false, code: mapError("config_fail", error) };
+  if (data !== true) return { ok: false, code: "conflict" };
+  return { ok: true, data: undefined };
+}
+
+function parseDataModel(value: unknown): AppDataModel | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as AppDataModel)
+    : null;
+}
+
+function statusRowFrom(value: unknown): ManagedBackendStatusRow | null {
+  const record = recordOf(Array.isArray(value) ? value[0] : value);
+  if (!record) return null;
+  const status = record.status;
+  if (typeof status !== "string") return null;
+  if (
+    typeof record.registry_id !== "string" ||
+    typeof record.project_created_at !== "string" ||
+    typeof record.region_id !== "string"
+  ) {
+    return null;
+  }
+  return {
+    status: status as ManagedBackendState,
+    registryId: record.registry_id,
+    projectCreatedAt: record.project_created_at,
+    regionId: record.region_id,
+    dataModel: parseDataModel(record.data_model),
+    authRequired: record.auth_required === true,
+    connectionVerified:
+      typeof record.connection_verified_at === "string" &&
+      Number.isFinite(Date.parse(record.connection_verified_at)),
+    schemaVerified:
+      typeof record.schema_verified_at === "string" &&
+      Number.isFinite(Date.parse(record.schema_verified_at)),
+    migrationStepCount:
+      typeof record.migration_step_count === "number"
+        ? record.migration_step_count
+        : 0,
+    gatewayConfigured:
+      typeof record.gateway_origin === "string" &&
+      typeof record.gateway_configured_at === "string",
+    gatewayOrigin:
+      typeof record.gateway_origin === "string" ? record.gateway_origin : null,
+    errorCode: typeof record.error_code === "string" ? record.error_code : null,
+    lastStep: typeof record.last_step === "string" ? record.last_step : null,
+    updatedAt: typeof record.updated_at === "string" ? record.updated_at : "",
+  };
+}
+
+/** Owner-scoped read used by the authenticated status surface. */
+export async function managedBackendStatus(input: {
+  client: SupabaseClient;
+  projectId: string;
+}): Promise<ManagedBackendStoreResult<ManagedBackendStatusRow | null>> {
+  const { data, error } = await input.client.rpc("managed_backend_status", {
+    p_project_id: input.projectId,
+  });
+  if (error) return { ok: false, code: mapError("status", error) };
+  return { ok: true, data: statusRowFrom(data) };
+}
+
+/** Service-role read used by the generation worker before configuring. */
+export async function managedBackendLifecycle(input: {
+  client: SupabaseClient;
+  projectId: string;
+  userId: string;
+}): Promise<ManagedBackendStoreResult<ManagedBackendStatusRow | null>> {
+  const { data, error } = await input.client.rpc("managed_backend_lifecycle", {
+    p_project_id: input.projectId,
+    p_user_id: input.userId,
+  });
+  if (error) return { ok: false, code: mapError("lifecycle", error) };
+  return { ok: true, data: statusRowFrom(data) };
 }

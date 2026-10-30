@@ -34,6 +34,7 @@ export const GENERATION_EVENTS = [
   "orchestration.skipped",
   "image.plan",
   "image.asset",
+  "managed_backend.stage",
   "image.stage",
   "credits.reserved",
   "credits.settled",

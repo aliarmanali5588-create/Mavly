@@ -12,6 +12,7 @@
  */
 
 import type { AndroidCapability } from "@/lib/android/capability";
+import type { ManagedBackendStatusView } from "@/lib/managed-backend/status";
 
 export type ProjectType = "website" | "android";
 
@@ -704,6 +705,8 @@ export interface AgentStatus {
   };
   /** Present only when a verification exists for this run. */
   verification?: ProjectVerification;
+  /** Present only when this project has a managed-backend registry row. */
+  managedBackend?: ManagedBackendStatusView;
 }
 
 /**

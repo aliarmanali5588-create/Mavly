@@ -156,7 +156,23 @@ import { buildAgentMemoryContext } from "@/lib/memory/context";
 import { recordRunFailureMemory } from "@/lib/memory/outcomes";
 import type { MemoryRunOutcome } from "@/lib/memory/types";
 import { managedBackendConfig } from "@/lib/managed-backend/config";
-import { ensureManagedBackend } from "@/lib/managed-backend/service";
+import {
+  parseAppDataModel,
+  type AppDataModel,
+} from "@/lib/managed-backend/model";
+import {
+  dataApiContractBlock,
+  managedBackendReadySummary,
+} from "@/lib/managed-backend/prompt";
+import { detectBackendRequirement } from "@/lib/managed-backend/requirement";
+import {
+  managedBackendLifecycle,
+  managedBackendStatus,
+} from "@/lib/managed-backend/store";
+import {
+  configureManagedBackend,
+  ensureManagedBackend,
+} from "@/lib/managed-backend/service";
 
 /**
  * Present only when the durable worker claimed this run. The worker has no user
@@ -973,35 +989,187 @@ async function execute(
   const writtenPaths = new Set<string>(completedPaths);
   let latestProviderRequestId: string | null = null;
   let managedBackendContext: AgentGenerationInput["managedBackendContext"];
+  let backendContract: string | null = null;
+  let managedBackendSummary: string | null = null;
   let generationInput: AgentGenerationInput | null = null;
   let managedBackendPrepared = false;
 
+  const emitManagedBackendStage = (
+    status: string,
+    reason: string | null,
+  ): void => {
+    emitGenerationEvent("managed_backend.stage", {
+      traceId: guard.traceId,
+      runId,
+      projectId: input.projectId,
+      workerId: guard.workerId,
+      status,
+      ...(reason ? { reason } : {}),
+    });
+  };
+
+  /**
+   * ═══ MANAGED BACKEND STAGE ═══════════════════════════════════════════════
+   *
+   * Runs ONCE per invocation, after the plan is persisted and before the first
+   * code batch. A database is created only when the trusted requirement policy
+   * says the product needs one AND the planner produced a data model the server
+   * validated. A static site never reaches the provisioning call.
+   *
+   * ⚠️ `ready` IS EARNED IN THIS ORDER: provision → apply + verify schema →
+   * configure the data gateway. Any failure stops the run with a sanitized
+   * message and leaves the existing database, schema and rows in place.
+   */
   const prepareManagedBackend = async (manifest: AgentManifest): Promise<void> => {
     if (managedBackendPrepared) return;
     managedBackendPrepared = true;
-    if (
-      projectType !== "website" ||
-      manifest.backendRequirement?.requiresDatabase !== true
-    ) {
+    if (projectType !== "website") return;
+
+    const decision = detectBackendRequirement({
+      prompt: input.prompt,
+      planner: manifest.backendRequirement ?? null,
+      projectType,
+    });
+    const config = managedBackendConfig();
+
+    /**
+     * ⚠️ AN UPDATE MUST NOT LOSE AN EXISTING BACKEND CONTRACT.
+     *
+     * A follow-up prompt like "make the header blue" usually plans no database
+     * change. Without this lookup the model would be told the app has no
+     * backend and could delete the data layer it built earlier. A READY row's
+     * validated model is reused as the contract (and as the migration input when
+     * the plan does not carry a new model).
+     */
+    let existingModel: AppDataModel | null = null;
+    let existingGatewayOrigin: string | null = null;
+    if (config.requested && input.worker && guard.client) {
+      const lifecycle = await managedBackendLifecycle({
+        client: guard.client,
+        projectId: input.projectId,
+        userId: input.userId,
+      });
+      if (
+        lifecycle.ok &&
+        lifecycle.data?.status === "ready" &&
+        lifecycle.data.dataModel
+      ) {
+        const parsedExisting = parseAppDataModel(lifecycle.data.dataModel);
+        if (parsedExisting.ok) {
+          existingModel = parsedExisting.model;
+          existingGatewayOrigin = lifecycle.data.gatewayOrigin;
+        }
+      }
+    } else if (config.requested && client) {
+      /** Inline runs use the caller's RLS client and the owner-checked RPC. */
+      const status = await managedBackendStatus({
+        client,
+        projectId: input.projectId,
+      });
+      if (status.ok && status.data?.status === "ready" && status.data.dataModel) {
+        const parsedExisting = parseAppDataModel(status.data.dataModel);
+        if (parsedExisting.ok) {
+          existingModel = parsedExisting.model;
+          existingGatewayOrigin = status.data.gatewayOrigin;
+        }
+      }
+    }
+
+    const syncContext = (): void => {
+      if (!generationInput) return;
+      generationInput.managedBackendContext = managedBackendContext;
+      generationInput.backendContract = backendContract;
+    };
+
+    if (!decision.required) {
+      if (existingModel) {
+        const origin = config.gatewayOrigin ?? existingGatewayOrigin;
+        if (origin) {
+          managedBackendContext = "ready";
+          backendContract = dataApiContractBlock({
+            origin,
+            projectId: input.projectId,
+            model: existingModel,
+          });
+          syncContext();
+          managedBackendSummary =
+            "This project already has a ready managed backend. The update kept using its verified data API; no new schema was applied.";
+          emitManagedBackendStage("reused", null);
+          return;
+        }
+      }
+      if (decision.overridden) {
+        managedBackendSummary =
+          "Mavly treated this request as a static site, so no managed database was created.";
+      }
+      emitManagedBackendStage(
+        "not_required",
+        decision.overridden ? "static_site_policy" : null,
+      );
       return;
     }
 
     managedBackendContext = "not_provisioned";
-    if (generationInput) generationInput.managedBackendContext = managedBackendContext;
-    const config = managedBackendConfig();
-    const inCohort = config.cohort.includes(input.projectId.toLowerCase());
-    if (!config.requested || !inCohort) return;
+    syncContext();
 
-    if (!input.worker) return;
+    /**
+     * ⚠️ NO MODEL, NO DATABASE. A prompt that asks for saved records is not
+     * permission to create an empty database, and the run must not pretend the
+     * app has a backend. An already-ready model is a valid plan input; anything
+     * else keeps the app an explicitly labelled prototype.
+     */
+    const model = manifest.dataModel ?? existingModel;
+    if (!model) {
+      managedBackendSummary = `This request needs stored data, but the plan did not produce a valid data model (${manifest.dataModelIssue ?? "missing"}). No database was created; the generated app is a labelled prototype, and persistent data, sign-in and per-user records are not live.`;
+      emitManagedBackendStage("blocked", "invalid_data_model");
+      return;
+    }
+
+    const inCohort = config.cohort.includes(input.projectId.toLowerCase());
+    if (!config.requested || !inCohort) {
+      managedBackendSummary =
+        "This request needs stored data, but Mavly's managed database is not enabled for this project. No database was created; the generated app is a labelled prototype and persistent data is not live.";
+      emitManagedBackendStage("blocked", "not_enabled_for_project");
+      return;
+    }
+
+    if (!input.worker) {
+      managedBackendSummary =
+        "This request needs stored data, but managed provisioning runs only on the durable generation worker. No database was created; the generated app is a labelled prototype and persistent data is not live.";
+      emitManagedBackendStage("blocked", "requires_worker_dispatch");
+      return;
+    }
+    /**
+     * ⚠️ A BLOCKED BACKEND NEVER DISCARDS THE USER'S WORK.
+     *
+     * Operator misconfiguration, a provider outage, a refused quota or a
+     * schema that failed verification all end the same way: the run continues
+     * as an explicitly labelled prototype (`not_provisioned` + `blocked`), the
+     * exact sanitized reason is reported, and whatever database/schema already
+     * exists is left untouched for a later retry. Only an unexpected exception
+     * propagates, because that is a bug in this stage, not a backend decision.
+     */
+    const blockBackend = (reason: string, detail: string): void => {
+      managedBackendContext = "not_provisioned";
+      backendContract = null;
+      managedBackendSummary = `${detail} The generated app is a labelled prototype: persistent data, per-user records and end-user sign-in are not live. Existing database data was not deleted or changed.`;
+      syncContext();
+      emitManagedBackendStage("blocked", reason);
+    };
+
     if (!config.ready) {
-      throw new AgentGenerationSetupError(
-        "Neon provisioning is enabled for this project but its approved platform configuration is incomplete. No database was created.",
+      blockBackend(
+        "platform_configuration_incomplete",
+        "Managed database provisioning is enabled for this project but its approved platform configuration is incomplete, so no database was created.",
       );
+      return;
     }
     if (!guard.client) {
-      throw new AgentGenerationSetupError(
-        "The managed database worker has no authorized Supabase client. No database was created.",
+      blockBackend(
+        "worker_client_unavailable",
+        "The managed database worker has no authorized Supabase client, so no database was created.",
       );
+      return;
     }
 
     const backend = await ensureManagedBackend({
@@ -1011,10 +1179,44 @@ async function execute(
       config,
     });
     if (backend.ok === false) {
-      throw new AgentGenerationSetupError(backend.error);
+      blockBackend(
+        `provisioning_${backend.code.toLowerCase().slice(0, 48)}`,
+        `${backend.error} The managed database is therefore not ready for this run.`,
+      );
+      return;
     }
-    managedBackendContext = "provisioned_without_runtime";
-    if (generationInput) generationInput.managedBackendContext = managedBackendContext;
+
+    const remaining = remainingRunMs(guard.budget, Date.now());
+    const configured = await configureManagedBackend({
+      client: guard.client,
+      userId: input.userId,
+      projectId: input.projectId,
+      config,
+      model,
+      timeBudgetMs: Math.max(5_000, Math.min(60_000, remaining - 20_000)),
+    });
+    if (configured.ok === false) {
+      blockBackend(
+        `configuration_${configured.code.toLowerCase().slice(0, 48)}`,
+        `${configured.error} The backend is therefore not ready for this run.`,
+      );
+      return;
+    }
+
+    managedBackendContext = "ready";
+    backendContract = dataApiContractBlock({
+      origin: configured.gatewayOrigin,
+      projectId: input.projectId,
+      model,
+    });
+    syncContext();
+    managedBackendSummary = managedBackendReadySummary({
+      model,
+      tableCount: configured.tableCount,
+      origin: configured.gatewayOrigin,
+      projectId: input.projectId,
+    });
+    emitManagedBackendStage("ready", null);
   };
 
   /**
@@ -1389,6 +1591,7 @@ async function execute(
     existingFiles: before,
     budgetMs: generationBudgetMs,
     managedBackendContext,
+    ...(backendContract ? { backendContract } : {}),
     ...(memory.used
       ? {
           contextFiles: memory.contextFiles,
@@ -1546,18 +1749,17 @@ async function execute(
 
   await assertRunOwned(input, guard);
 
-  const resultWithBackendBoundary =
-    managedBackendContext === "provisioned_without_runtime"
-      ? {
-          ...generated.result,
-          message: `${generated.result.message}\n\nA Neon database was provisioned for this project, but Mavly does not yet provide a secure runtime binding or apply application schema migrations. Persistent database features, CRUD and authentication are not live.`,
-        }
-      : managedBackendContext === "not_provisioned"
-        ? {
-            ...generated.result,
-            message: `${generated.result.message}\n\nMavly did not provision a Neon database for this generation. Persistent database features, CRUD and authentication are not live.`,
-          }
-        : generated.result;
+  /**
+   * The backend outcome is stated separately from the generation outcome. A
+   * ready backend, a blocked request and a static site are three different
+   * facts, and none of them may read as "CRUD works" when it does not.
+   */
+  const resultWithBackendBoundary = managedBackendSummary
+    ? {
+        ...generated.result,
+        message: `${generated.result.message}\n\n${managedBackendSummary}`,
+      }
+    : generated.result;
 
   if (generated.result.deletedPaths.length > 0) {
     const deleted = await writeFiles(
@@ -2406,6 +2608,19 @@ function parseManifest(value: unknown): AgentManifest | null {
     images: record.images,
   });
 
+  /**
+   * A resumed run must keep the validated data model it was planned with;
+   * otherwise the managed-backend stage would block a run that already has a
+   * usable plan. It is re-validated, never trusted as stored.
+   */
+  const resumeModel = parseAppDataModel(record.dataModel);
+  const resumeModelFields =
+    backendRecord?.requiresDatabase === true && resumeModel.ok
+      ? { dataModel: resumeModel.model }
+      : backendRecord?.requiresDatabase === true
+        ? { dataModelIssue: (resumeModel as { ok: false; error: string }).error }
+        : {};
+
   return {
     message:
       typeof record.message === "string"
@@ -2428,6 +2643,7 @@ function parseManifest(value: unknown): AgentManifest | null {
           },
         }
       : {}),
+    ...resumeModelFields,
     files,
     deletedPaths,
   };
