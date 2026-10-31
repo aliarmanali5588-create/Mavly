@@ -271,7 +271,7 @@ export function LiveRuntimePreview({
 
   return (
     <div className="h-full min-h-0 flex flex-col">
-      <div className="flex flex-wrap items-center gap-2 border-b border-gray-200/70 bg-white/90 px-2.5 py-1.5 text-[11px] dark:border-gray-700/60 dark:bg-[#222]">
+      <div className="flex flex-wrap items-center gap-2 border-b border-[var(--neu-line)] bg-card/90 px-2.5 py-1.5 text-[11px]">
         <span className={`h-2 w-2 rounded-full ${stateTone(session)}`} aria-hidden="true" />
         <span className="font-medium text-gray-700 dark:text-gray-200">
           {unsupported && !session ? "Static preview" : stateLabel(session)}

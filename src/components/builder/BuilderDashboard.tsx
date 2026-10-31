@@ -1049,8 +1049,8 @@ export default function DashboardPage({ profile }: { profile: ProfileSummary }) 
                   disabled={buildCreating}
                   className={`inline-flex h-10 min-w-[100px] items-center justify-center gap-1.5 rounded-lg border px-3 text-sm font-medium transition-[box-shadow,background-color,color] duration-200 outline-none focus-visible:shadow-[var(--neu-focus)] sm:min-w-[116px] ${
                     promptMode === "website"
-                      ? "border-black/[0.06] bg-white text-gray-900 shadow-sm"
-                      : "border-transparent bg-transparent text-gray-500 hover:bg-white/70 hover:text-gray-800"
+                      ? "border-[var(--neu-line)] bg-card text-foreground shadow-[var(--neu-elev-1)]"
+                      : "border-transparent bg-transparent text-muted-foreground hover:bg-[var(--neu-sunken)] hover:text-foreground hover:shadow-[var(--neu-inset-1)]"
                   }`}
                 >
                   <Globe className="h-4 w-4 shrink-0" aria-hidden="true" />
@@ -1063,8 +1063,8 @@ export default function DashboardPage({ profile }: { profile: ProfileSummary }) 
                   disabled={buildCreating}
                   className={`inline-flex h-10 min-w-[100px] items-center justify-center gap-1.5 rounded-lg border px-3 text-sm font-medium transition-[box-shadow,background-color,color] duration-200 outline-none focus-visible:shadow-[var(--neu-focus)] sm:min-w-[116px] ${
                     promptMode === "android"
-                      ? "border-black/[0.06] bg-white text-gray-900 shadow-sm"
-                      : "border-transparent bg-transparent text-gray-500 hover:bg-white/70 hover:text-gray-800"
+                      ? "border-[var(--neu-line)] bg-card text-foreground shadow-[var(--neu-elev-1)]"
+                      : "border-transparent bg-transparent text-muted-foreground hover:bg-[var(--neu-sunken)] hover:text-foreground hover:shadow-[var(--neu-inset-1)]"
                   }`}
                 >
                   <Smartphone className="h-4 w-4 shrink-0" aria-hidden="true" />

@@ -57,7 +57,7 @@ export function FeaturesSection() {
   ];
 
   return (
-    <section id="features" className="py-24 sm:py-32 bg-white border-t border-black/[0.06]">
+    <section id="features" className="py-24 sm:py-32 bg-[var(--neu-base)]">
       <div className="max-w-6xl mx-auto px-4 sm:px-6">
         {/* Section Header */}
         <div className="text-center max-w-2xl mx-auto mb-16 sm:mb-20">
@@ -82,7 +82,7 @@ export function FeaturesSection() {
                 className="p-8 sm:p-10 rounded-3xl bg-card border border-[var(--neu-line)] shadow-[var(--neu-elev-2)] hover:shadow-[var(--neu-elev-4)] hover:border-[var(--neu-line-strong)] hover:-translate-y-1 active:translate-y-0 active:shadow-[var(--neu-elev-1)] transition-[box-shadow,transform,border-color] duration-300 flex flex-col justify-between"
               >
                 <div>
-                  <div className="w-12 h-12 rounded-2xl bg-white border border-black/[0.08] shadow-[0_2px_8px_rgba(0,0,0,0.04)] flex items-center justify-center text-black mb-6 transition-transform duration-200 group-hover:scale-105">
+                  <div className="w-12 h-12 rounded-2xl bg-card border border-[var(--neu-line)] shadow-[var(--neu-elev-2)] flex items-center justify-center text-foreground mb-6 transition-[transform,box-shadow] duration-200 group-hover:scale-105 group-hover:shadow-[var(--neu-elev-3)]">
                     <Icon className="w-6 h-6" />
                   </div>
                   <span className="text-[11px] font-bold uppercase tracking-wider text-stone-500">

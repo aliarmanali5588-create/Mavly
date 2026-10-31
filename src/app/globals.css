@@ -60,19 +60,19 @@
      Derived from the canonical Mavly palette: Warm White #FFFCFB canvas,
      Pure White #FFFFFF raised surfaces, Pure Black ink, Royal Blue accent,
      Soft Peach recess tint, Ember for destructive. */
-  --background: #fffcfb;
+  --background: #eeeae7;
   --foreground: #0b0908;
-  --card: #ffffff;
+  --card: #fffcfb;
   --card-foreground: #0b0908;
-  --popover: #ffffff;
+  --popover: #fffcfb;
   --popover-foreground: #0b0908;
   --primary: #0b0908;
   --primary-foreground: #fffcfb;
-  --secondary: #f7f1ee;
+  --secondary: #e6e0db;
   --secondary-foreground: #0b0908;
-  --muted: #f7f1ee;
+  --muted: #e6e0db;
   --muted-foreground: #6d605a;
-  --accent: #f7f1ee;
+  --accent: #e6e0db;
   --accent-foreground: #0b0908;
   --destructive: #ed3500;
   --border: rgba(28, 20, 17, 0.07);
@@ -83,11 +83,11 @@
   --chart-3: #6d605a;
   --chart-4: #ffd8d8;
   --chart-5: #0b0908;
-  --sidebar: #fffcfb;
+  --sidebar: #eeeae7;
   --sidebar-foreground: #0b0908;
   --sidebar-primary: #0b0908;
   --sidebar-primary-foreground: #fffcfb;
-  --sidebar-accent: #f7f1ee;
+  --sidebar-accent: #e6e0db;
   --sidebar-accent-foreground: #0b0908;
   --sidebar-border: rgba(28, 20, 17, 0.07);
   --sidebar-ring: #093fb4;
@@ -200,8 +200,8 @@ button {
 
 /* Chat panel custom properties */
 :root {
-  --user-bubble: #f7f1ee;
-  --textarea-bg: #f7f1ee;
+  --user-bubble: #e6e0db;
+  --textarea-bg: #e6e0db;
 }
 .dark {
   --user-bubble: #241d1b;

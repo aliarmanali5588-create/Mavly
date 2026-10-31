@@ -17,7 +17,7 @@ export function HomeFooter() {
           {/* Brand Column */}
           <div className="lg:col-span-4 max-w-sm space-y-4">
             <Link href="/" className="inline-flex items-center gap-2.5 group select-none">
-              <div className="w-8 h-8 rounded-xl overflow-hidden bg-white shadow-xs p-0.5 border border-black/[0.08] flex items-center justify-center transition-transform group-hover:scale-105 active:scale-95">
+              <div className="w-8 h-8 rounded-xl overflow-hidden bg-card shadow-[var(--neu-elev-1)] p-0.5 border border-[var(--neu-line)] flex items-center justify-center transition-[transform,box-shadow] group-hover:scale-105 group-hover:shadow-[var(--neu-elev-2)] active:scale-95">
                 <Image
                   src="/logo/Mavly.png"
                   alt="Mavly Logo"

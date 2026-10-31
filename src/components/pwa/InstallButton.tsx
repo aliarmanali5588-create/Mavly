@@ -124,7 +124,7 @@ export function InstallButton({ label = "Install Mavly" }: InstallButtonProps = 
       type="button"
       onClick={handleInstall}
       disabled={promptRef.current !== null}
-      className="inline-flex items-center gap-2 rounded-full border border-black/[0.08] bg-white px-3.5 py-1.5 text-xs font-medium text-gray-900 shadow-[0_2px_10px_rgba(28,25,23,0.08)] hover:bg-stone-50 active:scale-95 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-400/70 focus-visible:ring-offset-2"
+      className="inline-flex items-center gap-2 rounded-full border border-[var(--neu-line)] bg-card px-3.5 py-1.5 text-xs font-medium text-foreground shadow-[var(--neu-elev-1)] hover:shadow-[var(--neu-elev-2)] active:shadow-[var(--neu-inset-1)] active:scale-95 transition-[box-shadow,transform] outline-none focus-visible:shadow-[var(--neu-focus)]"
       aria-label={label}
     >
       <Download className="h-3.5 w-3.5" aria-hidden="true" />

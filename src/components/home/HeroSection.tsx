@@ -418,7 +418,7 @@ export function HeroSection() {
       <div className="relative max-w-3xl mx-auto px-4 sm:px-6 text-center z-20 pointer-events-auto">
         {/* Official Mavly Logo */}
         <div className="flex items-center justify-center mb-6 sm:mb-8">
-          <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl sm:rounded-3xl overflow-hidden bg-white shadow-[0_8px_24px_rgba(0,0,0,0.06),0_2px_6px_rgba(0,0,0,0.02)] p-1.5 border border-black/[0.08] flex items-center justify-center shrink-0 transition-transform duration-300 hover:scale-105 select-none">
+          <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl sm:rounded-3xl overflow-hidden bg-card shadow-[var(--neu-elev-3)] p-1.5 border border-[var(--neu-line)] flex items-center justify-center shrink-0 transition-[transform,box-shadow] duration-300 hover:scale-105 hover:shadow-[var(--neu-elev-4)] select-none">
             <Image
               src="/logo/Mavly.png"
               alt="Mavly Logo"
@@ -477,7 +477,7 @@ export function HeroSection() {
             href="/login?provider=github"
             onClick={(event) => void handleProviderClick(event, "github")}
             aria-busy={loadingProvider === "github"}
-            className="w-full h-12 rounded-full bg-white hover:bg-neutral-50 text-gray-900 border border-black/[0.1] font-medium text-sm flex items-center justify-center gap-3 shadow-[0_2px_8px_rgba(0,0,0,0.04)] hover:shadow-[0_4px_14px_rgba(0,0,0,0.08)] hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] active:shadow-[inset_0_1px_3px_rgba(0,0,0,0.06)] transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black focus-visible:ring-offset-2 select-none"
+            className="w-full h-12 rounded-full bg-card text-foreground border border-[var(--neu-line)] font-medium text-sm flex items-center justify-center gap-3 shadow-[var(--neu-elev-2)] hover:shadow-[var(--neu-elev-3)] hover:-translate-y-0.5 active:translate-y-0 active:shadow-[var(--neu-inset-2)] transition-[box-shadow,transform] duration-200 outline-none focus-visible:shadow-[var(--neu-focus)] select-none"
           >
             <svg className="w-4 h-4 shrink-0 fill-current text-gray-900" viewBox="0 0 24 24" aria-hidden="true">
               <path

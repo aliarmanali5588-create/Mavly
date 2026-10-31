@@ -66,7 +66,7 @@ export function AnimatedPlaceholder({
   return (
     <div
       aria-hidden="true"
-      className="absolute inset-x-0 top-0 min-h-[90px] sm:min-h-[110px] bg-white px-5 pt-5 text-[15px] leading-normal text-gray-400 pointer-events-none select-none"
+      className="absolute inset-x-0 top-0 min-h-[90px] sm:min-h-[110px] bg-card px-5 pt-5 text-[15px] leading-normal text-muted-foreground pointer-events-none select-none"
     >
       <span>{visibleText}</span>
       {!reduceMotion && (

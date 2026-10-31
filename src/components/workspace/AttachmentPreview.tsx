@@ -175,7 +175,7 @@ function AttachmentChip({
     );
 
     const shell =
-        "flex items-center gap-2 rounded-lg border border-black/5 bg-white/70 p-1.5 pr-2 dark:border-white/10 dark:bg-white/5";
+        "flex items-center gap-2 rounded-lg border border-[var(--neu-line)] bg-card/70 p-1.5 pr-2 shadow-[var(--neu-elev-1)]";
     const width = compact ? "max-w-[190px]" : "max-w-[220px]";
 
     // In history there is nothing to remove, and the whole chip opens the file.
@@ -186,7 +186,7 @@ function AttachmentChip({
                 target="_blank"
                 rel="noopener noreferrer"
                 title={item.name}
-                className={cn(shell, width, "transition-colors hover:bg-white dark:hover:bg-white/10")}
+                className={cn(shell, width, "transition-[box-shadow] hover:shadow-[var(--neu-elev-2)]")}
             >
                 {body}
             </a>

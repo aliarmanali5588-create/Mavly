@@ -15,7 +15,7 @@ import { HomeFooter } from "@/components/home/HomeFooter";
  */
 export default function MarketingHome() {
   return (
-    <div className="min-h-screen bg-white text-gray-950 mavly-page-enter">
+    <div className="min-h-screen bg-[var(--neu-base)] text-foreground mavly-page-enter">
       {/* Top Edge Neon Scroll Progress Indicator */}
       <ScrollProgressIndicator />
 

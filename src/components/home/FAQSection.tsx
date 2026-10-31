@@ -56,7 +56,7 @@ export function FAQSection() {
   ];
 
   return (
-    <section id="faqs" className="py-24 sm:py-32 bg-white border-t border-black/[0.06] relative">
+    <section id="faqs" className="py-24 sm:py-32 bg-[var(--neu-base)] relative">
       <div className="max-w-4xl mx-auto px-4 sm:px-6">
         {/* Section Header */}
         <div className="text-center max-w-2xl mx-auto mb-16">
@@ -99,7 +99,7 @@ export function FAQSection() {
                     <span className="pr-2">{faq.q}</span>
                     <div
                       aria-hidden="true"
-                      className={`p-1.5 sm:p-2 rounded-xl bg-white border transition-all duration-300 ease-out shrink-0 flex items-center justify-center motion-reduce:transition-none pointer-events-none shadow-xs ${
+                      className={`p-1.5 sm:p-2 rounded-xl bg-card border transition-[box-shadow,border-color] duration-300 ease-out shrink-0 flex items-center justify-center motion-reduce:transition-none pointer-events-none ${
                         isOpen
                           ? "rotate-180 text-gray-950 border-black/[0.16] shadow-sm"
                           : "rotate-0 text-gray-400 border-black/[0.08]"

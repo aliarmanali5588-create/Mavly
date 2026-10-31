@@ -170,7 +170,7 @@ export function PreviewPanel({ previewUrl, onRefresh, loading, mobilePreview = f
             </div>
           )
         ) : (
-          <div className={`preview-panel-enter bg-white transition-all duration-300 relative ${
+          <div className={`preview-panel-enter bg-card transition-all duration-300 relative ${
             mobilePreview ? "w-[375px] h-[667px] rounded-[2rem] border-[8px] border-gray-800 overflow-hidden shadow-2xl" : "w-full h-full"
           }`}>
             <div className="absolute inset-0">
@@ -202,7 +202,7 @@ export function PreviewPanel({ previewUrl, onRefresh, loading, mobilePreview = f
                   aria-live="polite"
                   aria-atomic="true"
                   aria-hidden={!iframeLoading}
-                  className={`preview-frame-loading absolute inset-0 z-10 flex items-center justify-center bg-white ${
+                  className={`preview-frame-loading absolute inset-0 z-10 flex items-center justify-center bg-card ${
                     iframeLoading ? "opacity-100" : "pointer-events-none opacity-0"
                   }`}
                 >

@@ -77,7 +77,7 @@ export function AuthNav({ profile }: { profile: ProfileSummary | null }) {
     return (
       <Link
         href="/login"
-        className="text-xs text-gray-900 font-medium px-3.5 py-1.5 rounded-full bg-white border border-black/[0.08] shadow-xs hover:bg-neutral-50 active:scale-95 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-400/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#faf9f6]"
+        className="text-xs text-foreground font-medium px-3.5 py-1.5 rounded-full bg-card border border-[var(--neu-line)] shadow-[var(--neu-elev-1)] hover:shadow-[var(--neu-elev-2)] active:shadow-[var(--neu-inset-1)] active:scale-95 transition-[box-shadow,transform] outline-none focus-visible:shadow-[var(--neu-focus)]"
       >
         Sign in
       </Link>
@@ -96,7 +96,7 @@ export function AuthNav({ profile }: { profile: ProfileSummary | null }) {
             type="button"
             aria-label={`Open account menu for ${accountLabel}`}
             title={accountLabel}
-            className="group flex h-9 w-9 items-center justify-center rounded-full border border-black/[0.08] bg-white p-0.5 shadow-[0_2px_10px_rgba(28,25,23,0.08),inset_0_1px_0_rgba(255,255,255,0.8)] transition-all hover:border-black/[0.14] hover:shadow-[0_4px_16px_rgba(28,25,23,0.1),inset_0_1px_0_rgba(255,255,255,0.8)] active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-400/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#faf9f6]"
+            className="group flex h-9 w-9 items-center justify-center rounded-full border border-[var(--neu-line)] bg-card p-0.5 shadow-[var(--neu-elev-2)] transition-[box-shadow,border-color] hover:border-[var(--neu-line-strong)] hover:shadow-[var(--neu-elev-3)] active:shadow-[var(--neu-inset-1)] active:scale-95 outline-none focus-visible:shadow-[var(--neu-focus)]"
           >
             <ProfileAvatar
               profile={profile}
@@ -108,7 +108,7 @@ export function AuthNav({ profile }: { profile: ProfileSummary | null }) {
         <DropdownMenuContent
           align="end"
           sideOffset={8}
-          className="w-72 max-w-[calc(100vw-2rem)] rounded-2xl border border-black/[0.08] bg-white p-1.5 text-gray-950 shadow-[0_18px_50px_-12px_rgba(28,25,23,0.24),0_2px_8px_rgba(28,25,23,0.06)]"
+          className="w-72 max-w-[calc(100vw-2rem)] rounded-2xl border border-[var(--neu-line)] bg-card p-1.5 text-foreground shadow-[var(--neu-float)]"
         >
           <DropdownMenuLabel className="p-0 font-normal">
             <div className="flex items-center gap-3 px-2.5 py-2">

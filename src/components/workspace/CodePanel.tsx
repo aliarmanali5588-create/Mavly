@@ -843,7 +843,7 @@ export function CodePanel({ projectId, darkMode, onAskAiEdit, wake, sourceRevisi
   if (empty) {
     return (
       <div className="h-full flex flex-col items-center justify-center gap-4 px-6 text-center">
-        <div className="w-14 h-14 rounded-2xl bg-gray-50 dark:bg-white/5 flex items-center justify-center">
+        <div className="w-14 h-14 rounded-2xl bg-[var(--neu-sunken)] border border-[var(--neu-line)] shadow-[var(--neu-inset-2)] flex items-center justify-center">
           <FileCode2 className="w-6 h-6 text-gray-400" />
         </div>
         <div>
@@ -925,7 +925,7 @@ export function CodePanel({ projectId, darkMode, onAskAiEdit, wake, sourceRevisi
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder={"Search by file name or content..."}
-                className="w-full h-8 pl-8 pr-7 rounded-lg text-xs bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-200 placeholder:text-gray-400 outline-none focus:ring-2 focus:ring-neutral-200 dark:focus:ring-neutral-700 transition-shadow"
+                className="w-full h-8 pl-8 pr-7 rounded-lg text-xs bg-[var(--neu-sunken)] border border-[var(--neu-line)] text-foreground placeholder:text-muted-foreground shadow-[var(--neu-inset-1)] outline-none focus-visible:shadow-[var(--neu-inset-1),var(--neu-focus)] transition-shadow"
               />
               {search && (
                 <button
