@@ -31,8 +31,8 @@ export default function AboutPage() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-20">
         {/* Hero */}
         <div className="max-w-3xl mx-auto text-center space-y-5 pt-6 sm:pt-12">
-          <div className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-stone-600 bg-stone-100 px-3 py-1 rounded-full border border-[var(--neu-line)]">
-            <Heart className="w-3.5 h-3.5 text-stone-800" />
+          <div className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-muted-foreground bg-[var(--neu-sunken)] px-3 py-1 rounded-full border border-[var(--neu-line)]">
+            <Heart className="w-3.5 h-3.5 text-foreground" />
             <span>ABOUT MAVLY</span>
           </div>
 

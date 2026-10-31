@@ -33,7 +33,7 @@ interface AdminHeaderProps {
 const STATUS_DOT: Record<NonNullable<AdminHeaderProps["statusTone"]>, string> = {
   ok: "bg-emerald-500",
   warn: "bg-amber-500",
-  unknown: "bg-gray-400",
+  unknown: "bg-muted-foreground",
 };
 
 const STATUS_TEXT: Record<NonNullable<AdminHeaderProps["statusTone"]>, string> = {

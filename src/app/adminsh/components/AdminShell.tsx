@@ -73,7 +73,7 @@ export function AdminShell({
                 <span className="font-bold text-foreground tracking-tight shrink-0">
                   {live ? "Live Admin Console" : "Visual Admin Console"}
                 </span>
-                <span className="text-gray-300 hidden sm:inline">|</span>
+                <span className="text-muted-foreground hidden sm:inline">|</span>
                 <span className="text-muted-foreground truncate hidden sm:inline">
                   Active View: <strong>{activeNav}</strong>.{" "}
                   {live

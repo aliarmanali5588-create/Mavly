@@ -266,7 +266,7 @@ export default function UsersAdminPage() {
             <button
               type="button"
               onClick={() => setShowInviteModal(true)}
-              className="h-8 px-3 rounded-xl bg-black hover:bg-neutral-800 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm transition-colors cursor-pointer"
+              className="h-8 px-3 rounded-xl bg-primary hover:bg-[var(--neu-brand-hover)] text-white font-bold text-xs flex items-center gap-1.5 shadow-sm transition-colors cursor-pointer"
             >
               <Plus className="w-3.5 h-3.5" />
               <span>Invite Member</span>
@@ -301,7 +301,7 @@ export default function UsersAdminPage() {
                   <tr key={user.id} className="hover:bg-[var(--neu-sunken)]/60 transition-colors">
                     <td className="py-2.5 px-4">
                       <div className="flex items-center gap-2.5">
-                        <div className="w-7 h-7 rounded-full bg-gray-900 text-white flex items-center justify-center font-bold text-[10px] shrink-0">
+                        <div className="w-7 h-7 rounded-full bg-black text-white flex items-center justify-center font-bold text-[10px] shrink-0">
                           {user.name.slice(0, 2).toUpperCase()}
                         </div>
                         <div>
@@ -341,7 +341,7 @@ export default function UsersAdminPage() {
                         <button
                           type="button"
                           onClick={() => setSelectedUser(user)}
-                          className="px-2 py-1 rounded-lg text-[11px] font-semibold text-foreground bg-[var(--neu-sunken)] hover:bg-gray-200 transition-colors"
+                          className="px-2 py-1 rounded-lg text-[11px] font-semibold text-foreground bg-[var(--neu-sunken)] hover:bg-[var(--neu-sunken-deep)] transition-colors"
                         >
                           View
                         </button>
@@ -351,7 +351,7 @@ export default function UsersAdminPage() {
                             setEditingPlanUser(user);
                             setSelectedNewPlan(user.plan);
                           }}
-                          className="px-2 py-1 rounded-lg text-[11px] font-semibold text-foreground bg-[var(--neu-sunken)] hover:bg-gray-200 transition-colors"
+                          className="px-2 py-1 rounded-lg text-[11px] font-semibold text-foreground bg-[var(--neu-sunken)] hover:bg-[var(--neu-sunken-deep)] transition-colors"
                         >
                           Plan
                         </button>
@@ -517,7 +517,7 @@ export default function UsersAdminPage() {
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 text-xs font-bold text-white bg-black hover:bg-neutral-800 rounded-xl"
+                  className="px-4 py-2 text-xs font-bold text-white bg-primary hover:bg-[var(--neu-brand-hover)] rounded-xl"
                 >
                   Confirm Change
                 </button>
@@ -589,7 +589,7 @@ export default function UsersAdminPage() {
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 text-xs font-bold text-white bg-black hover:bg-neutral-800 rounded-xl shadow-sm"
+                  className="px-4 py-2 text-xs font-bold text-white bg-primary hover:bg-[var(--neu-brand-hover)] rounded-xl shadow-sm"
                 >
                   Send Invitation
                 </button>

@@ -1787,8 +1787,8 @@ export default function WorkspacePage() {
   const cardBg = darkMode ? "var(--neu-surface)" : "var(--neu-surface)";
   const btnBorder = "border-[var(--neu-line)]";
 
-  if (loading) return <div className="h-screen flex flex-col items-center justify-center gap-3 dark:text-gray-200" style={{ background: pageBg }}><Loader2 className="w-7 h-7 animate-spin" /><p className="text-sm text-muted-foreground">{"Loading..."}</p></div>;
-  if (!project) return <div className="h-screen flex flex-col items-center justify-center gap-4 dark:text-gray-200" style={{ background: pageBg }}><p className="text-muted-foreground">Project not found</p><Link href="/dashboard"><Button variant="outline">{"Back"}</Button></Link></div>;
+  if (loading) return <div className="h-screen flex flex-col items-center justify-center gap-3 " style={{ background: pageBg }}><Loader2 className="w-7 h-7 animate-spin" /><p className="text-sm text-muted-foreground">{"Loading..."}</p></div>;
+  if (!project) return <div className="h-screen flex flex-col items-center justify-center gap-4 " style={{ background: pageBg }}><p className="text-muted-foreground">Project not found</p><Link href="/dashboard"><Button variant="outline">{"Back"}</Button></Link></div>;
   if (project.projectId !== projectId) return <div className="h-screen flex items-center justify-center bg-[var(--neu-base)] text-sm text-muted-foreground">Loading project…</div>;
   if (project.projectType === "android") return <AndroidWorkspace key={project.projectId} project={project} />;
 
@@ -1897,7 +1897,7 @@ export default function WorkspacePage() {
   };
 
   return (
-    <div className="h-[100dvh] flex flex-col overflow-hidden dark:text-gray-200" style={{ background: pageBg }} onClickCapture={markWorkspaceTouched}>
+    <div className="h-[100dvh] flex flex-col overflow-hidden " style={{ background: pageBg }} onClickCapture={markWorkspaceTouched}>
       {isResizing && <div className="fixed inset-0 z-50 cursor-col-resize" />}
 
       {/* ═══ DESKTOP LAYOUT ═══ */}
@@ -1913,7 +1913,7 @@ export default function WorkspacePage() {
             <div className="relative flex-1 min-w-0" ref={menuRef}>
               <button onClick={() => setMenuOpen(!menuOpen)} className="flex items-center gap-1.5 max-w-full rounded-lg px-1.5 py-1 hover:bg-[var(--neu-sunken)] hover:shadow-[var(--neu-inset-1)] transition-[box-shadow,background-color] duration-200">
                 <Image src="/logo/Mavly.png" alt="Mavly" width={20} height={20} className="w-5 h-5 rounded object-contain shrink-0" priority referrerPolicy="no-referrer" />
-                <span className="text-sm font-medium text-foreground dark:text-gray-200 truncate">{project.label || projectId}</span>
+                <span className="text-sm font-medium text-foreground truncate">{project.label || projectId}</span>
                 <ChevronDown className="w-3 h-3 text-muted-foreground shrink-0" />
               </button>
               {popupMenu}
@@ -1937,7 +1937,7 @@ export default function WorkspacePage() {
             </div>
             <div className="flex-1 flex items-center justify-center min-w-0">
               <div className={`flex items-center h-7 w-[320px] rounded-full border ${btnBorder} px-1.5 gap-1`}>
-                <button onClick={() => setMobilePreview(!mobilePreview)} className="p-1 rounded text-muted-foreground hover:text-muted-foreground dark:hover:text-gray-300 shrink-0">{mobilePreview ? <Smartphone className="w-3.5 h-3.5" /> : <Monitor className="w-3.5 h-3.5" />}</button>
+                <button onClick={() => setMobilePreview(!mobilePreview)} className="p-1 rounded text-muted-foreground hover:text-muted-foreground dark:hover:text-muted-foreground shrink-0">{mobilePreview ? <Smartphone className="w-3.5 h-3.5" /> : <Monitor className="w-3.5 h-3.5" />}</button>
                 {/*
                   ⭐ THE ADDRESS BOX LISTS THE PROJECT'S OWN PAGES. It was a bare text
                   input, so reaching any page but `/` meant knowing its URL by heart.
@@ -1952,8 +1952,8 @@ export default function WorkspacePage() {
                   onRefresh={() => setPreviewKey((k) => k + 1)}
                   className="flex-1 min-w-0"
                 />
-                <button className="p-1 rounded text-muted-foreground hover:text-muted-foreground dark:hover:text-gray-300 shrink-0" onClick={() => { fetchProject(); setPreviewKey((k) => k + 1); }}><RefreshCw className="w-3.5 h-3.5" /></button>
-                {previewUrl && <a href={previewUrl} target="_blank" rel="noopener noreferrer" className="p-1 rounded text-muted-foreground hover:text-muted-foreground dark:hover:text-gray-300 shrink-0"><ExternalLink className="w-3.5 h-3.5" /></a>}
+                <button className="p-1 rounded text-muted-foreground hover:text-muted-foreground dark:hover:text-muted-foreground shrink-0" onClick={() => { fetchProject(); setPreviewKey((k) => k + 1); }}><RefreshCw className="w-3.5 h-3.5" /></button>
+                {previewUrl && <a href={previewUrl} target="_blank" rel="noopener noreferrer" className="p-1 rounded text-muted-foreground hover:text-muted-foreground dark:hover:text-muted-foreground shrink-0"><ExternalLink className="w-3.5 h-3.5" /></a>}
               </div>
             </div>
             <CreditsIndicator refreshKey={isBuilding ? "running" : "idle"} />
@@ -1985,7 +1985,7 @@ export default function WorkspacePage() {
               aria-valuemax={CHAT_MAX_WIDTH}
               aria-valuenow={chatWidth}
               tabIndex={0}
-              className="flex w-1 hover:w-1.5 bg-transparent hover:bg-gray-200 dark:hover:bg-gray-700 cursor-col-resize transition-colors items-center justify-center shrink-0 touch-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-400"
+              className="flex w-1 hover:w-1.5 bg-transparent hover:bg-[var(--neu-sunken-deep)] dark:hover:bg-[var(--neu-sunken-deep)] cursor-col-resize transition-colors items-center justify-center shrink-0 touch-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--neu-line)]"
               onPointerDown={handleResizeStart}
               onPointerMove={handleResizeMove}
               onPointerUp={handleResizeEnd}
@@ -1993,7 +1993,7 @@ export default function WorkspacePage() {
               onLostPointerCapture={finishResize}
               onKeyDown={handleResizeKeyDown}
             >
-              <div className="w-0.5 h-8 bg-gray-200 dark:bg-gray-600 rounded-full" />
+              <div className="w-0.5 h-8 bg-[var(--neu-sunken-deep)] rounded-full" />
             </div>
           )}
           <div className="flex-1 flex flex-col min-h-0 min-w-0">
@@ -2103,7 +2103,7 @@ export default function WorkspacePage() {
           <div className="relative" ref={menuRef}>
             <button onClick={() => setMenuOpen(!menuOpen)} className="flex items-center gap-1.5 px-1.5 py-1 rounded-lg hover:bg-black/5 dark:hover:bg-card/10 transition-colors">
               <Image src="/logo/Mavly.png" alt="Mavly" width={20} height={20} className="w-5 h-5 rounded object-contain shrink-0" priority referrerPolicy="no-referrer" />
-              <span className="text-sm font-medium text-foreground dark:text-gray-200 truncate max-w-[160px]">{project.label || projectId}</span>
+              <span className="text-sm font-medium text-foreground truncate max-w-[160px]">{project.label || projectId}</span>
               <ChevronDown className="w-3 h-3 text-muted-foreground shrink-0" />
             </button>
             {popupMenu}

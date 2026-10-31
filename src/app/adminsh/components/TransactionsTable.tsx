@@ -40,7 +40,7 @@ export function TransactionsTable() {
       {/* ── Search / Export (disabled: no source to query or export) ── */}
       <div className="flex items-center justify-between gap-3">
         <div className="relative flex-1 max-w-sm">
-          <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-gray-300" />
+          <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
           <input
             type="text"
             disabled
@@ -56,7 +56,7 @@ export function TransactionsTable() {
           title="There are no billing records to export"
           className="flex items-center gap-1 px-3 py-1.5 rounded-xl border border-[var(--neu-line)] text-xs font-semibold text-muted-foreground cursor-not-allowed"
         >
-          <Download className="w-3.5 h-3.5 text-gray-300" />
+          <Download className="w-3.5 h-3.5 text-muted-foreground" />
           <span>Export CSV</span>
         </button>
       </div>

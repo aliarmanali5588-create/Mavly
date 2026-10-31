@@ -258,7 +258,7 @@ export function MockDataViews({ section }: MockDataViewProps) {
         <button
           type="button"
           onClick={() => toast.info(`Viewing ${section} analytics (Demo)`)}
-          className="px-4 py-2 text-xs font-semibold bg-[var(--neu-sunken)] hover:bg-gray-200 text-foreground rounded-xl transition-colors cursor-pointer"
+          className="px-4 py-2 text-xs font-semibold bg-[var(--neu-sunken)] hover:bg-[var(--neu-sunken-deep)] text-foreground rounded-xl transition-colors cursor-pointer"
         >
           Inspect {section} Metrics
         </button>

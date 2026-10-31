@@ -109,7 +109,7 @@ export function InstallButton({ label = "Install Mavly" }: InstallButtonProps = 
   // iOS: manual Add to Home Screen guidance, not a Chromium-style button.
   if (ios) {
     return (
-      <div className="text-xs text-gray-600 leading-relaxed">
+      <div className="text-xs text-muted-foreground leading-relaxed">
         To install Mavly on this device, tap <strong>Share</strong>, then{" "}
         <strong>Add to Home Screen</strong>.
       </div>

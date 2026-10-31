@@ -61,13 +61,13 @@ export function FeaturesSection() {
       <div className="max-w-6xl mx-auto px-4 sm:px-6">
         {/* Section Header */}
         <div className="text-center max-w-2xl mx-auto mb-16 sm:mb-20">
-          <span className="text-xs font-bold tracking-widest uppercase text-stone-500 mb-3 block">
+          <span className="text-xs font-bold tracking-widest uppercase text-muted-foreground mb-3 block">
             Capabilities
           </span>
-          <h2 className="text-3xl sm:text-4xl md:text-5xl font-black tracking-tight text-gray-950 leading-tight">
+          <h2 className="text-3xl sm:text-4xl md:text-5xl font-black tracking-tight text-foreground leading-tight">
             Everything you need to build stunning websites.
           </h2>
-          <p className="mt-4 text-sm sm:text-base text-gray-600 leading-relaxed font-normal">
+          <p className="mt-4 text-sm sm:text-base text-muted-foreground leading-relaxed font-normal">
             Whether you&apos;re launching a business, portfolio, storefront, or web application, Mavly gives you total creative control without writing code.
           </p>
         </div>
@@ -85,18 +85,18 @@ export function FeaturesSection() {
                   <div className="w-12 h-12 rounded-2xl bg-card border border-[var(--neu-line)] shadow-[var(--neu-elev-2)] flex items-center justify-center text-foreground mb-6 transition-[transform,box-shadow] duration-200 group-hover:scale-105 group-hover:shadow-[var(--neu-elev-3)]">
                     <Icon className="w-6 h-6" />
                   </div>
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-stone-500">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
                     {feat.subtitle}
                   </span>
-                  <h3 className="text-2xl font-bold text-gray-950 tracking-tight mt-1 mb-3">
+                  <h3 className="text-2xl font-bold text-foreground tracking-tight mt-1 mb-3">
                     {feat.title}
                   </h3>
-                  <p className="text-sm text-gray-600 leading-relaxed mb-6 font-normal">
+                  <p className="text-sm text-muted-foreground leading-relaxed mb-6 font-normal">
                     {feat.description}
                   </p>
                   <ul className="space-y-2.5 pt-4 border-t border-black/[0.06]">
                     {feat.bullets.map((b, bIdx) => (
-                      <li key={bIdx} className="flex items-start gap-2.5 text-xs text-gray-700">
+                      <li key={bIdx} className="flex items-start gap-2.5 text-xs text-foreground">
                         <Check className="w-4 h-4 text-black shrink-0 mt-0.5" />
                         <span>{b}</span>
                       </li>
@@ -113,7 +113,7 @@ export function FeaturesSection() {
           <h3 className="text-2xl sm:text-3xl font-bold tracking-tight">
             Ready to bring your ideas to life?
           </h3>
-          <p className="mt-2 text-sm text-neutral-400 max-w-lg mx-auto">
+          <p className="mt-2 text-sm text-muted-foreground max-w-lg mx-auto">
             Build your first website in minutes. Type a prompt, watch it come together, and publish with one click.
           </p>
           <Link

@@ -117,11 +117,11 @@ export function AuthNav({ profile }: { profile: ProfileSummary | null }) {
                 className="h-10 w-10 ring-1 ring-black/[0.06]"
               />
               <div className="min-w-0">
-                <p className="truncate text-sm font-semibold text-gray-950">
+                <p className="truncate text-sm font-semibold text-foreground">
                   {displayName || email || "Signed in"}
                 </p>
                 {displayName && email ? (
-                  <p className="truncate text-xs text-gray-500">{email}</p>
+                  <p className="truncate text-xs text-muted-foreground">{email}</p>
                 ) : null}
               </div>
             </div>
@@ -131,7 +131,7 @@ export function AuthNav({ profile }: { profile: ProfileSummary | null }) {
 
           <DropdownMenuItem
             asChild
-            className="cursor-pointer gap-2.5 rounded-xl px-2.5 py-2 text-[13px] text-gray-700 focus:bg-stone-100 focus:text-gray-950 [&_svg]:text-stone-500"
+            className="cursor-pointer gap-2.5 rounded-xl px-2.5 py-2 text-[13px] text-foreground focus:bg-[var(--neu-sunken)] focus:text-foreground [&_svg]:text-muted-foreground"
           >
             <Link href="/upgrade">
               <Sparkles className="h-4 w-4" aria-hidden="true" />
@@ -141,7 +141,7 @@ export function AuthNav({ profile }: { profile: ProfileSummary | null }) {
 
           <DropdownMenuItem
             asChild
-            className="cursor-pointer gap-2.5 rounded-xl px-2.5 py-2 text-[13px] text-gray-700 focus:bg-stone-100 focus:text-gray-950 [&_svg]:text-stone-500"
+            className="cursor-pointer gap-2.5 rounded-xl px-2.5 py-2 text-[13px] text-foreground focus:bg-[var(--neu-sunken)] focus:text-foreground [&_svg]:text-muted-foreground"
           >
             <Link href="/credit-topup">
               <CreditCard className="h-4 w-4" aria-hidden="true" />
@@ -151,7 +151,7 @@ export function AuthNav({ profile }: { profile: ProfileSummary | null }) {
 
           <DropdownMenuItem
             asChild
-            className="cursor-pointer gap-2.5 rounded-xl px-2.5 py-2 text-[13px] text-gray-700 focus:bg-stone-100 focus:text-gray-950 [&_svg]:text-stone-500"
+            className="cursor-pointer gap-2.5 rounded-xl px-2.5 py-2 text-[13px] text-foreground focus:bg-[var(--neu-sunken)] focus:text-foreground [&_svg]:text-muted-foreground"
           >
             <Link href="/support">
               <HelpCircle className="h-4 w-4" aria-hidden="true" />
@@ -186,7 +186,7 @@ export function AuthNav({ profile }: { profile: ProfileSummary | null }) {
         description="You'll be signed out of this device and returned to the home page."
         confirmLabel="Sign out"
         cancelLabel="Cancel"
-        confirmClassName="bg-black text-white hover:bg-neutral-800"
+        confirmClassName="bg-primary text-primary-foreground hover:bg-[var(--neu-brand-hover)]"
         onConfirm={handleSignOut}
       />
     </>

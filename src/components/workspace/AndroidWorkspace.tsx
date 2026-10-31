@@ -798,7 +798,7 @@ export function AndroidWorkspace({ project }: { project: VcaasProject }) {
           {mobileView === "preview" ? (
             <div className="flex min-h-0 flex-1 flex-col items-center justify-center overflow-hidden px-4 py-4 sm:px-8">
               <div
-                className="relative flex aspect-[9/19.5] w-auto min-h-0 max-h-full max-w-[420px] flex-col overflow-hidden rounded-[2.8rem] border-[7px] border-neutral-800 bg-neutral-900 p-1.5 shadow-2xl ring-1 ring-black/10"
+                className="relative flex aspect-[9/19.5] w-auto min-h-0 max-h-full max-w-[420px] flex-col overflow-hidden rounded-[2.8rem] border-[7px] border-[var(--neu-line-strong)] bg-foreground p-1.5 shadow-2xl ring-1 ring-black/10"
                 style={{
                   height: "min(860px, calc(100% - 32px))",
                   maxWidth: "min(420px, calc(100% - 32px))",
@@ -806,7 +806,7 @@ export function AndroidWorkspace({ project }: { project: VcaasProject }) {
               >
                 <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-[2.2rem] bg-background">
                   <div className="flex h-8 shrink-0 items-center justify-center bg-background">
-                    <span className="h-1.5 w-16 rounded-full bg-neutral-800" aria-hidden="true" />
+                    <span className="h-1.5 w-16 rounded-full bg-foreground" aria-hidden="true" />
                   </div>
                   <div className="flex min-h-0 flex-1 flex-col items-center justify-center border-y border-border bg-muted/30 px-5 text-center">
                     <div className="mb-4 flex size-16 items-center justify-center rounded-2xl border border-border bg-background text-muted-foreground shadow-sm">
@@ -823,7 +823,7 @@ export function AndroidWorkspace({ project }: { project: VcaasProject }) {
                     ) : null}
                   </div>
                   <div className="flex h-7 shrink-0 items-center justify-center bg-background">
-                    <span className="h-1 w-20 rounded-full bg-neutral-800" aria-hidden="true" />
+                    <span className="h-1 w-20 rounded-full bg-foreground" aria-hidden="true" />
                   </div>
                 </div>
               </div>

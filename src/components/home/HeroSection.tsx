@@ -432,13 +432,13 @@ export function HeroSection() {
         </div>
 
         {/* Headline */}
-        <h1 className="text-4xl sm:text-5xl md:text-6xl font-black tracking-tight text-gray-950 leading-[1.12] max-w-2xl mx-auto">
+        <h1 className="text-4xl sm:text-5xl md:text-6xl font-black tracking-tight text-foreground leading-[1.12] max-w-2xl mx-auto">
           Build Websites with AI. <br className="hidden sm:inline" />
           No Coding Required.
         </h1>
 
         {/* Supporting Description */}
-        <p className="mt-5 text-sm sm:text-base md:text-lg text-gray-700 font-normal leading-relaxed max-w-xl mx-auto">
+        <p className="mt-5 text-sm sm:text-base md:text-lg text-foreground font-normal leading-relaxed max-w-xl mx-auto">
           Mavly is an AI website builder that turns your ideas into beautiful, functional websites. We don&apos;t make websites. We make memories.
         </p>
 
@@ -449,7 +449,7 @@ export function HeroSection() {
             href="/login?provider=google"
             onClick={(event) => void handleProviderClick(event, "google")}
             aria-busy={loadingProvider === "google"}
-            className="w-full h-12 rounded-full bg-black hover:bg-neutral-800 text-white font-medium text-sm flex items-center justify-center gap-3 shadow-[0_4px_14px_rgba(0,0,0,0.14),0_1px_2px_rgba(0,0,0,0.06)] hover:shadow-[0_6px_20px_rgba(0,0,0,0.2)] hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] active:shadow-[inset_0_2px_4px_rgba(0,0,0,0.25)] transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black focus-visible:ring-offset-2 select-none"
+            className="w-full h-12 rounded-full bg-primary hover:bg-[var(--neu-brand-hover)] text-white font-medium text-sm flex items-center justify-center gap-3 shadow-[0_4px_14px_rgba(0,0,0,0.14),0_1px_2px_rgba(0,0,0,0.06)] hover:shadow-[0_6px_20px_rgba(0,0,0,0.2)] hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] active:shadow-[inset_0_2px_4px_rgba(0,0,0,0.25)] transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black focus-visible:ring-offset-2 select-none"
           >
             <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" aria-hidden="true">
               <path
@@ -479,7 +479,7 @@ export function HeroSection() {
             aria-busy={loadingProvider === "github"}
             className="w-full h-12 rounded-full bg-card text-foreground border border-[var(--neu-line)] font-medium text-sm flex items-center justify-center gap-3 shadow-[var(--neu-elev-2)] hover:shadow-[var(--neu-elev-3)] hover:-translate-y-0.5 active:translate-y-0 active:shadow-[var(--neu-inset-2)] transition-[box-shadow,transform] duration-200 outline-none focus-visible:shadow-[var(--neu-focus)] select-none"
           >
-            <svg className="w-4 h-4 shrink-0 fill-current text-gray-900" viewBox="0 0 24 24" aria-hidden="true">
+            <svg className="w-4 h-4 shrink-0 fill-current text-foreground" viewBox="0 0 24 24" aria-hidden="true">
               <path
                 fillRule="evenodd"
                 clipRule="evenodd"
@@ -490,13 +490,13 @@ export function HeroSection() {
           </Link>
 
           {/* Legal Notice */}
-          <p className="text-xs text-gray-500 text-center mt-3">
+          <p className="text-xs text-muted-foreground text-center mt-3">
             By continuing, you agree to our{" "}
-            <Link href="/terms" className="underline hover:text-gray-900 transition-colors">
+            <Link href="/terms" className="underline hover:text-foreground transition-colors">
               Terms of Service
             </Link>{" "}
             and{" "}
-            <Link href="/privacy" className="underline hover:text-gray-900 transition-colors">
+            <Link href="/privacy" className="underline hover:text-foreground transition-colors">
               Privacy Policy
             </Link>
           </p>

@@ -139,7 +139,7 @@ export function AdminSidebar({
               </span>
             </div>
             <p className="text-[10px] text-muted-foreground font-medium truncate flex items-center gap-1 mt-0.5">
-              <span className={`w-1.5 h-1.5 rounded-full ${live ? "bg-gray-400" : "bg-emerald-500 animate-pulse"}`} />
+              <span className={`w-1.5 h-1.5 rounded-full ${live ? "bg-muted-foreground" : "bg-emerald-500 animate-pulse"}`} />
               <span>{live ? "Verified admin session" : "Enterprise Console"}</span>
             </p>
           </div>

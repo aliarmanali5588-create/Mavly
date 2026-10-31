@@ -245,14 +245,14 @@ export default function AiUsageAdminPage() {
         {/* Multi-segment Progress Bar */}
         <div className="space-y-2">
           <div className="h-3 w-full bg-[var(--neu-sunken)] rounded-full overflow-hidden flex">
-            <div className="bg-gray-950 h-full w-[45%]" title="DeepSeek V4.1: 45%" />
+            <div className="bg-black h-full w-[45%]" title="DeepSeek V4.1: 45%" />
             <div className="bg-blue-600 h-full w-[28%]" title="Claude 3.5 Sonnet: 28%" />
             <div className="bg-purple-600 h-full w-[18%]" title="Gemini 1.5 Pro: 18%" />
             <div className="bg-emerald-600 h-full w-[9%]" title="GPT-4o: 9%" />
           </div>
           <div className="flex flex-wrap items-center gap-4 text-xs pt-1 text-muted-foreground font-medium">
             <div className="flex items-center gap-1.5">
-              <span className="w-2.5 h-2.5 rounded-full bg-gray-950" />
+              <span className="w-2.5 h-2.5 rounded-full bg-black" />
               <span>DeepSeek V4.1 (45%)</span>
             </div>
             <div className="flex items-center gap-1.5">
@@ -364,7 +364,7 @@ export default function AiUsageAdminPage() {
                     <button
                       type="button"
                       onClick={() => handleRunPingTest(row.model)}
-                      className="px-2.5 py-1 text-[11px] font-medium text-foreground bg-[var(--neu-sunken)] hover:bg-gray-200 rounded-md transition-colors"
+                      className="px-2.5 py-1 text-[11px] font-medium text-foreground bg-[var(--neu-sunken)] hover:bg-[var(--neu-sunken-deep)] rounded-md transition-colors"
                     >
                       Probe
                     </button>
@@ -394,7 +394,7 @@ export default function AiUsageAdminPage() {
               </button>
             </div>
 
-            <div className="p-4 rounded-xl bg-gray-950 text-gray-200 font-mono text-xs space-y-2">
+            <div className="p-4 rounded-xl bg-black text-white/80 font-mono text-xs space-y-2">
               <p className="text-muted-foreground">
                 &gt; Pinging OpenRouter endpoint: <span className="text-white">https://openrouter.ai/api/v1</span>
               </p>
@@ -406,9 +406,9 @@ export default function AiUsageAdminPage() {
               ) : pingResult ? (
                 <div className="space-y-1.5 text-emerald-400 py-1">
                   <p>✔ HTTP 200 OK — Ready</p>
-                  <p className="text-gray-300">Model: {pingResult.provider}</p>
-                  <p className="text-gray-300">Round-trip Latency: {pingResult.latency}ms</p>
-                  <p className="text-gray-300">Auth Header: Bearer [REDACTED]</p>
+                  <p className="text-muted-foreground">Model: {pingResult.provider}</p>
+                  <p className="text-muted-foreground">Round-trip Latency: {pingResult.latency}ms</p>
+                  <p className="text-muted-foreground">Auth Header: Bearer [REDACTED]</p>
                 </div>
               ) : null}
             </div>
@@ -418,14 +418,14 @@ export default function AiUsageAdminPage() {
                 type="button"
                 onClick={() => handleRunPingTest("DeepSeek V4.1 Flash")}
                 disabled={pingStatus === "running"}
-                className="px-3 py-1.5 text-xs font-medium text-foreground bg-[var(--neu-sunken)] hover:bg-gray-200 rounded-lg transition-colors"
+                className="px-3 py-1.5 text-xs font-medium text-foreground bg-[var(--neu-sunken)] hover:bg-[var(--neu-sunken-deep)] rounded-lg transition-colors"
               >
                 Re-test
               </button>
               <button
                 type="button"
                 onClick={() => setIsTestPingOpen(false)}
-                className="px-3.5 py-1.5 text-xs font-semibold text-white bg-black hover:bg-neutral-800 rounded-lg"
+                className="px-3.5 py-1.5 text-xs font-semibold text-white bg-primary hover:bg-[var(--neu-brand-hover)] rounded-lg"
               >
                 Done
               </button>

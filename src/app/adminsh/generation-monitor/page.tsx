@@ -245,7 +245,7 @@ export default function GenerationMonitorAdminPage() {
                             setSelectedJob(job);
                             setInspectorTab("overview");
                           }}
-                          className="px-2.5 py-1 text-[11px] font-medium text-foreground bg-[var(--neu-sunken)] hover:bg-gray-200 rounded-md transition-colors"
+                          className="px-2.5 py-1 text-[11px] font-medium text-foreground bg-[var(--neu-sunken)] hover:bg-[var(--neu-sunken-deep)] rounded-md transition-colors"
                         >
                           Inspect
                         </button>
@@ -372,7 +372,7 @@ export default function GenerationMonitorAdminPage() {
                 <span className="text-muted-foreground text-[10px] uppercase font-bold block">
                   Natural Language Prompt Context
                 </span>
-                <div className="p-3 bg-gray-950 text-gray-200 font-mono text-[11px] rounded-xl overflow-x-auto leading-relaxed border border-black/10">
+                <div className="p-3 bg-black text-white/80 font-mono text-[11px] rounded-xl overflow-x-auto leading-relaxed border border-black/10">
                   {selectedJob.promptSnippet || "Create modern landing page with pricing calculator and dark mode toggle."}
                 </div>
               </div>
@@ -391,7 +391,7 @@ export default function GenerationMonitorAdminPage() {
                     <p className="break-all">{selectedJob.errorLog}</p>
                   </div>
                 ) : (
-                  <div className="p-3 bg-gray-950 text-emerald-400 font-mono text-[11px] rounded-xl space-y-1">
+                  <div className="p-3 bg-black text-emerald-400 font-mono text-[11px] rounded-xl space-y-1">
                     <p>&gt; [AST Engine] Parsed 14 React components successfully.</p>
                     <p>&gt; [Bundler] Static preview.html compiled (184 KB).</p>
                     <p>&gt; [Status] Pipeline exit code 0 — Completed.</p>
@@ -415,7 +415,7 @@ export default function GenerationMonitorAdminPage() {
               <button
                 type="button"
                 onClick={() => setSelectedJob(null)}
-                className="px-4 py-1.5 bg-[var(--neu-sunken)] hover:bg-gray-200 text-foreground text-xs font-semibold rounded-lg"
+                className="px-4 py-1.5 bg-[var(--neu-sunken)] hover:bg-[var(--neu-sunken-deep)] text-foreground text-xs font-semibold rounded-lg"
               >
                 Close
               </button>

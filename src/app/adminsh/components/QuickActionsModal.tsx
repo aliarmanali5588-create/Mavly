@@ -97,7 +97,7 @@ function Shortcut({
   return (
     <Link
       href={href}
-      className="p-4 rounded-xl border border-[var(--neu-line)] bg-[var(--neu-sunken)]/70 hover:bg-black hover:text-white group transition-all text-left flex flex-col justify-between h-24 cursor-pointer"
+      className="p-4 rounded-xl border border-[var(--neu-line)] bg-[var(--neu-sunken)]/70 hover:bg-primary hover:text-primary-foreground group transition-all text-left flex flex-col justify-between h-24 cursor-pointer"
     >
       <div className="flex items-center justify-between w-full">
         {icon}

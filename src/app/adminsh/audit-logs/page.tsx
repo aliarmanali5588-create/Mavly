@@ -215,7 +215,7 @@ export default function AuditLogsAdminPage() {
                     <td className="py-3.5 text-right">
                       <button
                         onClick={() => setSelectedLog(log)}
-                        className="px-2.5 py-1 text-[11px] font-medium text-foreground bg-[var(--neu-sunken)] hover:bg-gray-200 rounded-md transition-colors inline-flex items-center gap-1"
+                        className="px-2.5 py-1 text-[11px] font-medium text-foreground bg-[var(--neu-sunken)] hover:bg-[var(--neu-sunken-deep)] rounded-md transition-colors inline-flex items-center gap-1"
                       >
                         <Terminal className="w-3 h-3" />
                         <span>JSON</span>
@@ -282,7 +282,7 @@ export default function AuditLogsAdminPage() {
                   )}
                 </div>
 
-                <pre className="p-3 bg-gray-950 text-emerald-400 font-mono text-[11px] rounded-xl overflow-x-auto leading-relaxed border border-black/10">
+                <pre className="p-3 bg-black text-emerald-400 font-mono text-[11px] rounded-xl overflow-x-auto leading-relaxed border border-black/10">
                   {selectedLog.payloadJson
                     ? JSON.stringify(JSON.parse(selectedLog.payloadJson), null, 2)
                     : '{"message": "No additional payload recorded."}'}
@@ -293,7 +293,7 @@ export default function AuditLogsAdminPage() {
             <div className="flex justify-end pt-2 border-t border-[var(--neu-line)]">
               <button
                 onClick={() => setSelectedLog(null)}
-                className="px-4 py-1.5 text-xs font-semibold text-foreground bg-[var(--neu-sunken)] hover:bg-gray-200 rounded-lg"
+                className="px-4 py-1.5 text-xs font-semibold text-foreground bg-[var(--neu-sunken)] hover:bg-[var(--neu-sunken-deep)] rounded-lg"
               >
                 Close
               </button>

@@ -133,7 +133,7 @@ export function ScrollProgressIndicator() {
         style={{
           transform: "scaleX(0)",
           background:
-            "linear-gradient(90deg, #09090b 0%, #1e1b4b 25%, #4338ca 55%, #6366f1 80%, #a855f7 95%, #ffffff 100%)",
+            "linear-gradient(90deg, #000000 0%, #093fb4 35%, #0a4ad4 70%, #ffd8d8 92%, #ffffff 100%)",
           boxShadow:
             "0 0 10px rgba(99, 102, 241, 0.65), 0 0 3px rgba(168, 85, 247, 0.9), 0 1px 2px rgba(0, 0, 0, 0.5)",
           transition: "opacity 0.2s ease-out",

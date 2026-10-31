@@ -20,7 +20,7 @@ export default function GlobalError({
         margin: 0,
         padding: 0,
         fontFamily: 'system-ui, -apple-system, sans-serif',
-        background: 'linear-gradient(to bottom right, #f9fafb, #f3f4f6)',
+        background: 'linear-gradient(to bottom right, #fffcfb, #f7f2f0)',
         minHeight: '100vh',
         display: 'flex',
         alignItems: 'center',
@@ -52,7 +52,7 @@ export default function GlobalError({
           <h1 style={{
             fontSize: '24px',
             fontWeight: '600',
-            color: '#111827',
+            color: '#000000',
             marginBottom: '12px'
           }}>
             Something went wrong
@@ -60,7 +60,7 @@ export default function GlobalError({
 
           <p style={{
             fontSize: '16px',
-            color: '#6b7280',
+            color: 'rgba(0, 0, 0, 0.62)',
             marginBottom: '24px',
             lineHeight: '1.5'
           }}>

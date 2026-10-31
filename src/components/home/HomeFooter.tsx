@@ -27,12 +27,12 @@ export function HomeFooter() {
                   referrerPolicy="no-referrer"
                 />
               </div>
-              <span className="font-extrabold tracking-tight text-gray-950 text-lg leading-none">
+              <span className="font-extrabold tracking-tight text-foreground text-lg leading-none">
                 Mavly
               </span>
             </Link>
 
-            <p className="text-xs text-gray-600 leading-relaxed font-normal">
+            <p className="text-xs text-muted-foreground leading-relaxed font-normal">
               Mavly is an AI website builder that turns your ideas into beautiful, functional websites. We don&apos;t make websites. We make memories.
             </p>
 
@@ -52,31 +52,31 @@ export function HomeFooter() {
           <div className="lg:col-span-8 grid grid-cols-2 sm:grid-cols-4 gap-8 text-xs">
             {/* Product Column */}
             <div className="flex flex-col gap-3">
-              <span className="font-bold text-gray-950 tracking-wider uppercase text-[10px]">
+              <span className="font-bold text-foreground tracking-wider uppercase text-[10px]">
                 Product
               </span>
               <nav className="flex flex-col gap-2.5">
                 <Link
                   href="/features"
-                  className="text-gray-600 hover:text-black transition-colors"
+                  className="text-muted-foreground hover:text-black transition-colors"
                 >
                   Features
                 </Link>
                 <Link
                   href="/pricing"
-                  className="text-gray-600 hover:text-black transition-colors"
+                  className="text-muted-foreground hover:text-black transition-colors"
                 >
                   Pricing
                 </Link>
                 <Link
                   href="/integrations"
-                  className="text-gray-600 hover:text-black transition-colors"
+                  className="text-muted-foreground hover:text-black transition-colors"
                 >
                   Integrations
                 </Link>
                 <Link
                   href="/changelog"
-                  className="text-gray-600 hover:text-black transition-colors"
+                  className="text-muted-foreground hover:text-black transition-colors"
                 >
                   Changelog
                 </Link>
@@ -85,31 +85,31 @@ export function HomeFooter() {
 
             {/* Resources Column */}
             <div className="flex flex-col gap-3">
-              <span className="font-bold text-gray-950 tracking-wider uppercase text-[10px]">
+              <span className="font-bold text-foreground tracking-wider uppercase text-[10px]">
                 Resources
               </span>
               <nav className="flex flex-col gap-2.5">
                 <Link
                   href="/docs"
-                  className="text-gray-600 hover:text-black transition-colors"
+                  className="text-muted-foreground hover:text-black transition-colors"
                 >
                   Documentation
                 </Link>
                 <Link
                   href="/tutorials"
-                  className="text-gray-600 hover:text-black transition-colors"
+                  className="text-muted-foreground hover:text-black transition-colors"
                 >
                   Tutorials
                 </Link>
                 <Link
                   href="/blog"
-                  className="text-gray-600 hover:text-black transition-colors"
+                  className="text-muted-foreground hover:text-black transition-colors"
                 >
                   Blog
                 </Link>
                 <Link
                   href="/faq"
-                  className="text-gray-600 hover:text-black transition-colors"
+                  className="text-muted-foreground hover:text-black transition-colors"
                 >
                   FAQs
                 </Link>
@@ -118,25 +118,25 @@ export function HomeFooter() {
 
             {/* Company Column */}
             <div className="flex flex-col gap-3">
-              <span className="font-bold text-gray-950 tracking-wider uppercase text-[10px]">
+              <span className="font-bold text-foreground tracking-wider uppercase text-[10px]">
                 Company
               </span>
               <nav className="flex flex-col gap-2.5">
                 <Link
                   href="/about"
-                  className="text-gray-600 hover:text-black transition-colors"
+                  className="text-muted-foreground hover:text-black transition-colors"
                 >
                   About Mavly
                 </Link>
                 <Link
                   href="/contact"
-                  className="text-gray-600 hover:text-black transition-colors"
+                  className="text-muted-foreground hover:text-black transition-colors"
                 >
                   Contact
                 </Link>
                 <Link
                   href="/careers"
-                  className="text-gray-600 hover:text-black transition-colors"
+                  className="text-muted-foreground hover:text-black transition-colors"
                 >
                   Careers
                 </Link>
@@ -145,25 +145,25 @@ export function HomeFooter() {
 
             {/* Support & Legal Column */}
             <div className="flex flex-col gap-3">
-              <span className="font-bold text-gray-950 tracking-wider uppercase text-[10px]">
+              <span className="font-bold text-foreground tracking-wider uppercase text-[10px]">
                 Support &amp; Legal
               </span>
               <nav className="flex flex-col gap-2.5">
                 <Link
                   href="/support"
-                  className="text-gray-600 hover:text-black transition-colors font-medium"
+                  className="text-muted-foreground hover:text-black transition-colors font-medium"
                 >
                   Help &amp; Support
                 </Link>
                 <Link
                   href="/terms"
-                  className="text-gray-600 hover:text-black transition-colors"
+                  className="text-muted-foreground hover:text-black transition-colors"
                 >
                   Terms of Service
                 </Link>
                 <Link
                   href="/privacy"
-                  className="text-gray-600 hover:text-black transition-colors"
+                  className="text-muted-foreground hover:text-black transition-colors"
                 >
                   Privacy Policy
                 </Link>
@@ -173,7 +173,7 @@ export function HomeFooter() {
         </div>
 
         {/* Bottom Bar: Copyright & Back to Top */}
-        <div className="pt-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-gray-500">
+        <div className="pt-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-muted-foreground">
           <div>
             © {new Date().getFullYear()} Mavly. All rights reserved.
           </div>

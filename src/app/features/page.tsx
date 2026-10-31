@@ -36,8 +36,8 @@ export default function FeaturesPage() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-24">
         {/* 1. Hero Section */}
         <div className="max-w-3xl mx-auto text-center space-y-5 pt-6 sm:pt-12">
-          <div className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-stone-600 bg-stone-100 px-3 py-1 rounded-full border border-[var(--neu-line)]">
-            <Sparkles className="w-3.5 h-3.5 text-stone-800" />
+          <div className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-muted-foreground bg-[var(--neu-sunken)] px-3 py-1 rounded-full border border-[var(--neu-line)]">
+            <Sparkles className="w-3.5 h-3.5 text-foreground" />
             <span>THE MAVLY BUILDER</span>
           </div>
 
@@ -195,7 +195,7 @@ export default function FeaturesPage() {
             </div>
 
             <div className="p-6 rounded-2xl bg-card border border-[var(--neu-line)] shadow-[0_4px_20px_rgba(0,0,0,0.02)] space-y-3">
-              <div className="w-10 h-10 rounded-xl bg-stone-100 border border-stone-200 flex items-center justify-center text-stone-800">
+              <div className="w-10 h-10 rounded-xl bg-[var(--neu-sunken)] border border-[var(--neu-line)] flex items-center justify-center text-foreground">
                 <ShieldCheck className="w-5 h-5" />
               </div>
               <h3 className="text-base font-bold text-foreground">Durable Restore Points</h3>

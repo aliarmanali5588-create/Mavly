@@ -104,7 +104,7 @@ export default function AdminAuthPage() {
               type="button"
               disabled={isLoading}
               onClick={handleGoogleClick}
-              className="w-full h-11 px-4 rounded-xl bg-black hover:bg-neutral-800 text-white font-semibold text-xs sm:text-sm flex items-center justify-center gap-3 shadow-[0_4px_14px_rgba(0,0,0,0.12)] hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] transition-all duration-200 disabled:opacity-70 disabled:pointer-events-none cursor-pointer select-none"
+              className="w-full h-11 px-4 rounded-xl bg-primary hover:bg-[var(--neu-brand-hover)] text-white font-semibold text-xs sm:text-sm flex items-center justify-center gap-3 shadow-[0_4px_14px_rgba(0,0,0,0.12)] hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] transition-all duration-200 disabled:opacity-70 disabled:pointer-events-none cursor-pointer select-none"
             >
               {isLoading ? (
                 <Loader2 className="w-4 h-4 animate-spin text-white" />

@@ -94,7 +94,7 @@ export default function SettingsAdminPage() {
             <button
               type="button"
               onClick={handleResetDefaults}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-muted-foreground bg-[var(--neu-sunken)] hover:bg-gray-200 rounded-lg transition-colors"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-muted-foreground bg-[var(--neu-sunken)] hover:bg-[var(--neu-sunken-deep)] rounded-lg transition-colors"
             >
               <RotateCcw className="w-3.5 h-3.5" />
               <span>Reset</span>
@@ -102,7 +102,7 @@ export default function SettingsAdminPage() {
 
             <button
               type="submit"
-              className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-white bg-black hover:bg-neutral-800 rounded-lg transition-colors shadow-xs"
+              className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-white bg-primary hover:bg-[var(--neu-brand-hover)] rounded-lg transition-colors shadow-xs"
             >
               <Save className="w-3.5 h-3.5" />
               <span>Save Changes</span>
@@ -316,7 +316,7 @@ export default function SettingsAdminPage() {
                 type="checkbox"
                 checked={require2FA}
                 onChange={(e) => setRequire2FA(e.target.checked)}
-                className="rounded border-gray-300 text-black focus:ring-black h-4 w-4"
+                className="rounded border-[var(--neu-line-strong)] text-black focus:ring-black h-4 w-4"
               />
             </div>
 
@@ -331,7 +331,7 @@ export default function SettingsAdminPage() {
                 type="checkbox"
                 checked={highFidelityAudit}
                 onChange={(e) => setHighFidelityAudit(e.target.checked)}
-                className="rounded border-gray-300 text-black focus:ring-black h-4 w-4"
+                className="rounded border-[var(--neu-line-strong)] text-black focus:ring-black h-4 w-4"
               />
             </div>
 
@@ -377,7 +377,7 @@ export default function SettingsAdminPage() {
                 type="checkbox"
                 checked={emailAlertsOnFailure}
                 onChange={(e) => setEmailAlertsOnFailure(e.target.checked)}
-                className="rounded border-gray-300 text-black focus:ring-black h-4 w-4"
+                className="rounded border-[var(--neu-line-strong)] text-black focus:ring-black h-4 w-4"
               />
             </div>
 
@@ -392,7 +392,7 @@ export default function SettingsAdminPage() {
                 type="checkbox"
                 checked={dailyRevenueDigest}
                 onChange={(e) => setDailyRevenueDigest(e.target.checked)}
-                className="rounded border-gray-300 text-black focus:ring-black h-4 w-4"
+                className="rounded border-[var(--neu-line-strong)] text-black focus:ring-black h-4 w-4"
               />
             </div>
 

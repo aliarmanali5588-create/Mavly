@@ -229,7 +229,7 @@ export default function ProjectsAdminPage() {
                         <button
                           type="button"
                           onClick={() => setSelectedProject(proj)}
-                          className="px-2.5 py-1 text-[11px] font-medium text-foreground bg-[var(--neu-sunken)] hover:bg-gray-200 rounded-md transition-colors"
+                          className="px-2.5 py-1 text-[11px] font-medium text-foreground bg-[var(--neu-sunken)] hover:bg-[var(--neu-sunken-deep)] rounded-md transition-colors"
                         >
                           Inspect
                         </button>

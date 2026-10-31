@@ -51,8 +51,8 @@ function StatusBadge({ status }: { status: AdminGenerationRow["status"] }) {
     running: "bg-blue-500 animate-pulse",
     queued: "bg-amber-500",
     failed: "bg-red-500",
-    cancelled: "bg-gray-400",
-    interrupted: "bg-gray-400",
+    cancelled: "bg-muted-foreground",
+    interrupted: "bg-muted-foreground",
   };
 
   return (
@@ -268,7 +268,7 @@ export function GenerationsTable() {
                     <button
                       type="button"
                       onClick={() => setSelected(run)}
-                      className="px-2 py-1 rounded-lg text-[11px] font-semibold text-foreground bg-[var(--neu-sunken)] hover:bg-gray-200 transition-colors"
+                      className="px-2 py-1 rounded-lg text-[11px] font-semibold text-foreground bg-[var(--neu-sunken)] hover:bg-[var(--neu-sunken-deep)] transition-colors"
                     >
                       Inspect
                     </button>

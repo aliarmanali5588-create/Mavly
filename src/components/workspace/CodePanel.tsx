@@ -35,7 +35,7 @@ const MonacoEditor = dynamic(() => import("@monaco-editor/react"), {
   ssr: false,
   loading: () => (
     <div className="h-full w-full flex items-center justify-center">
-      <Loader2 className="w-5 h-5 animate-spin text-gray-400" />
+      <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
     </div>
   ),
 });
@@ -388,13 +388,13 @@ function iconForFile(path: string) {
     case "json":
       return <FileJson className="w-3.5 h-3.5 text-yellow-500 shrink-0" />;
     case "md": case "mdx": case "txt":
-      return <FileText className="w-3.5 h-3.5 text-gray-400 shrink-0" />;
+      return <FileText className="w-3.5 h-3.5 text-muted-foreground shrink-0" />;
     case "css": case "scss": case "less":
       return <FileCode2 className="w-3.5 h-3.5 text-indigo-500 shrink-0" />;
     case "html": case "htm": case "xml":
       return <FileCode2 className="w-3.5 h-3.5 text-orange-500 shrink-0" />;
     default:
-      return <FileIcon className="w-3.5 h-3.5 text-gray-400 shrink-0" />;
+      return <FileIcon className="w-3.5 h-3.5 text-muted-foreground shrink-0" />;
   }
 }
 
@@ -423,15 +423,15 @@ function TreeRow({
         <button
           onClick={() => toggle(node.path)}
           style={{ paddingLeft: pad }}
-          className="w-full flex items-center gap-1.5 pr-2 py-1 rounded-md text-[13px] text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800/70 transition-colors group"
+          className="w-full flex items-center gap-1.5 pr-2 py-1 rounded-md text-[13px] text-foreground hover:bg-[var(--neu-sunken)] dark:hover:bg-foreground/70 transition-colors group"
         >
           <ChevronRight
-            className={`w-3.5 h-3.5 text-gray-400 shrink-0 transition-transform ${isOpen ? "rotate-90" : ""}`}
+            className={`w-3.5 h-3.5 text-muted-foreground shrink-0 transition-transform ${isOpen ? "rotate-90" : ""}`}
           />
           {isOpen ? (
-            <FolderOpen className="w-3.5 h-3.5 text-neutral-500 dark:text-neutral-400 shrink-0" />
+            <FolderOpen className="w-3.5 h-3.5 text-muted-foreground dark:text-muted-foreground shrink-0" />
           ) : (
-            <Folder className="w-3.5 h-3.5 text-neutral-400 dark:text-neutral-500 shrink-0" />
+            <Folder className="w-3.5 h-3.5 text-muted-foreground dark:text-muted-foreground shrink-0" />
           )}
           <span className="truncate">{node.name}</span>
         </button>
@@ -461,8 +461,8 @@ function TreeRow({
       style={{ paddingLeft: pad + 18 }}
       className={`w-full flex items-center gap-1.5 pr-2 py-1 rounded-md text-[13px] transition-colors ${
         isSelected
-          ? "bg-neutral-200/70 dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 font-medium"
-          : "text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800/70"
+          ? "bg-[var(--neu-sunken-deep)]/70 text-foreground font-medium"
+          : "text-muted-foreground hover:bg-[var(--neu-sunken)] dark:hover:bg-foreground/70"
       }`}
     >
       {iconForFile(node.path)}
@@ -835,7 +835,7 @@ export function CodePanel({ projectId, darkMode, onAskAiEdit, wake, sourceRevisi
     return (
       <div className="h-full flex flex-col items-center justify-center gap-3">
         <Loader2 className="w-6 h-6 animate-spin text-foreground" />
-        <p className="text-sm text-gray-400">{"Loading source code..."}</p>
+        <p className="text-sm text-muted-foreground">{"Loading source code..."}</p>
       </div>
     );
   }
@@ -844,11 +844,11 @@ export function CodePanel({ projectId, darkMode, onAskAiEdit, wake, sourceRevisi
     return (
       <div className="h-full flex flex-col items-center justify-center gap-4 px-6 text-center">
         <div className="w-14 h-14 rounded-2xl bg-[var(--neu-sunken)] border border-[var(--neu-line)] shadow-[var(--neu-inset-2)] flex items-center justify-center">
-          <FileCode2 className="w-6 h-6 text-gray-400" />
+          <FileCode2 className="w-6 h-6 text-muted-foreground" />
         </div>
         <div>
-          <p className="text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">{"No files yet"}</p>
-          <p className="text-xs text-gray-400 max-w-sm">
+          <p className="text-sm font-medium text-foreground mb-1">{"No files yet"}</p>
+          <p className="text-xs text-muted-foreground max-w-sm">
             {"This project has no generated files. Send a prompt to generate the source, then refresh this tab."}
           </p>
         </div>
@@ -866,8 +866,8 @@ export function CodePanel({ projectId, darkMode, onAskAiEdit, wake, sourceRevisi
           <AlertTriangle className="w-6 h-6 text-red-500" />
         </div>
         <div>
-          <p className="text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">{"Failed to load source code"}</p>
-          <p className="text-xs text-gray-400 max-w-sm break-words">{String(error)}</p>
+          <p className="text-sm font-medium text-foreground mb-1">{"Failed to load source code"}</p>
+          <p className="text-xs text-muted-foreground max-w-sm break-words">{String(error)}</p>
         </div>
         <Button
           onClick={() => fetchCode(true)}
@@ -886,10 +886,10 @@ export function CodePanel({ projectId, darkMode, onAskAiEdit, wake, sourceRevisi
   return (
     <div className="h-full flex flex-col">
       {/* Header */}
-      <div className="px-3 py-2 border-b border-gray-100 dark:border-gray-800 flex items-center gap-2 shrink-0">
+      <div className="px-3 py-2 border-b border-[var(--neu-line)] flex items-center gap-2 shrink-0">
         <FileCode2 className="w-4 h-4 text-foreground" />
-        <span className="text-sm font-medium text-gray-700 dark:text-gray-200">{"Code Explorer"}</span>
-        <span className="text-[11px] text-gray-400">· {filesCount} {"files"}</span>
+        <span className="text-sm font-medium text-foreground ">{"Code Explorer"}</span>
+        <span className="text-[11px] text-muted-foreground">· {filesCount} {"files"}</span>
         <div className="ml-auto flex items-center gap-2">
           {/* Ask-AI-to-edit — only meaningful once a file is open */}
           {selected && onAskAiEdit && (
@@ -905,7 +905,7 @@ export function CodePanel({ projectId, darkMode, onAskAiEdit, wake, sourceRevisi
           )}
           <button
             onClick={() => fetchCode(true)}
-            className="flex items-center gap-1.5 h-7 px-2.5 rounded-lg text-xs font-medium text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+            className="flex items-center gap-1.5 h-7 px-2.5 rounded-lg text-xs font-medium text-muted-foreground border border-[var(--neu-line)] hover:bg-[var(--neu-sunken)] dark:hover:bg-foreground transition-colors"
             title={"Refresh"}
           >
             <RefreshCw className="w-3.5 h-3.5" /> {"Refresh"}
@@ -916,11 +916,11 @@ export function CodePanel({ projectId, darkMode, onAskAiEdit, wake, sourceRevisi
       {/* Body: tree + viewer */}
       <div className="flex-1 flex min-h-0">
         {/* Tree sidebar */}
-        <div className="w-64 shrink-0 border-r border-gray-100 dark:border-gray-800 flex flex-col bg-gray-50/40 dark:bg-gray-900/40">
+        <div className="w-64 shrink-0 border-r border-[var(--neu-line)] flex flex-col bg-[var(--neu-sunken)]/40 ">
           {/* Search by file name or content */}
-          <div className="p-2 border-b border-gray-100 dark:border-gray-800 shrink-0">
+          <div className="p-2 border-b border-[var(--neu-line)] shrink-0">
             <div className="relative">
-              <Search className="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <Search className="w-3.5 h-3.5 text-muted-foreground absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
               <input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
@@ -930,7 +930,7 @@ export function CodePanel({ projectId, darkMode, onAskAiEdit, wake, sourceRevisi
               {search && (
                 <button
                   onClick={() => setSearch("")}
-                  className="absolute right-1.5 top-1/2 -translate-y-1/2 p-0.5 rounded text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                  className="absolute right-1.5 top-1/2 -translate-y-1/2 p-0.5 rounded text-muted-foreground hover:text-muted-foreground dark:hover:text-muted-foreground"
                   title="Clear"
                 >
                   <X className="w-3.5 h-3.5" />
@@ -940,7 +940,7 @@ export function CodePanel({ projectId, darkMode, onAskAiEdit, wake, sourceRevisi
           </div>
           <div className="flex-1 overflow-y-auto py-1.5 px-1.5">
             {tree.children.length === 0 ? (
-              <p className="text-xs text-gray-400 p-3">{query ? "No files match your search" : "Failed to load source code"}</p>
+              <p className="text-xs text-muted-foreground p-3">{query ? "No files match your search" : "Failed to load source code"}</p>
             ) : (
               tree.children.map((child) => (
                 <TreeRow
@@ -961,23 +961,23 @@ export function CodePanel({ projectId, darkMode, onAskAiEdit, wake, sourceRevisi
         <div className="flex-1 min-w-0 flex flex-col">
           {!selected ? (
             <div className="flex-1 flex flex-col items-center justify-center text-center gap-3 px-6">
-              <div className="w-14 h-14 rounded-2xl bg-gray-50 dark:bg-gray-800 border border-dashed border-gray-200 dark:border-gray-700 flex items-center justify-center">
-                <FileCode2 className="w-6 h-6 text-gray-300 dark:text-gray-600" />
+              <div className="w-14 h-14 rounded-2xl bg-[var(--neu-sunken)] border border-dashed border-[var(--neu-line)] flex items-center justify-center">
+                <FileCode2 className="w-6 h-6 text-muted-foreground " />
               </div>
-              <p className="text-sm text-gray-400">{"Select a file to view its contents"}</p>
+              <p className="text-sm text-muted-foreground">{"Select a file to view its contents"}</p>
             </div>
           ) : (
             <>
               {/* Breadcrumb + the save control */}
-              <div className="px-3 py-1.5 border-b border-gray-100 dark:border-gray-800 flex items-center gap-2 shrink-0">
-                <code className="text-xs font-mono text-gray-600 dark:text-gray-300 truncate">{selected}</code>
+              <div className="px-3 py-1.5 border-b border-[var(--neu-line)] flex items-center gap-2 shrink-0">
+                <code className="text-xs font-mono text-muted-foreground truncate">{selected}</code>
                 {/* ⭐ The dot is the whole "unsaved" signal — see the `drafts` note. */}
                 {isDirty(selected) && (
                   <span className="shrink-0 text-[10px] font-medium text-amber-600 dark:text-amber-400">
                     ● unsaved
                   </span>
                 )}
-                <span className="text-[10px] text-gray-400 shrink-0">{humanSize(selectedSize)}</span>
+                <span className="text-[10px] text-muted-foreground shrink-0">{humanSize(selectedSize)}</span>
                 <div className="flex-1" />
                 {selectedKind === "text" && (
                   <Button
@@ -1050,7 +1050,7 @@ export function CodePanel({ projectId, darkMode, onAskAiEdit, wake, sourceRevisi
                       // eslint-disable-next-line @next/next/no-img-element
                       <img src={imageUrl} alt={selected} className="max-w-full max-h-full object-contain rounded shadow-lg bg-white/10" />
                     ) : (
-                      <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
+                      <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
                     )}
                   </div>
                 ) : (
@@ -1083,10 +1083,10 @@ export function CodePanel({ projectId, darkMode, onAskAiEdit, wake, sourceRevisi
 function PlaceholderBinary({ onDownload }: { onDownload: () => void }) {
   return (
     <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 text-center px-6">
-      <div className="w-16 h-16 rounded-2xl bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 flex items-center justify-center">
-        <FileWarning className="w-7 h-7 text-gray-300 dark:text-gray-600" />
+      <div className="w-16 h-16 rounded-2xl bg-[var(--neu-sunken)] border border-[var(--neu-line)] flex items-center justify-center">
+        <FileWarning className="w-7 h-7 text-muted-foreground " />
       </div>
-      <p className="text-sm text-gray-500 dark:text-gray-400 max-w-xs">{"Preview not available for this file type"}</p>
+      <p className="text-sm text-muted-foreground max-w-xs">{"Preview not available for this file type"}</p>
       <Button
         onClick={onDownload}
         className="gap-1.5"

@@ -195,7 +195,7 @@ export default function SystemHealthAdminPage() {
                       description: `Response time: ${svc.latency} (HTTP 200)`,
                     });
                   }}
-                  className="px-2.5 py-1 text-[11px] font-medium text-foreground bg-[var(--neu-sunken)] hover:bg-gray-200 rounded-md transition-colors"
+                  className="px-2.5 py-1 text-[11px] font-medium text-foreground bg-[var(--neu-sunken)] hover:bg-[var(--neu-sunken-deep)] rounded-md transition-colors"
                 >
                   Ping
                 </button>
@@ -242,7 +242,7 @@ export default function SystemHealthAdminPage() {
                 <span className="text-muted-foreground text-[11px] whitespace-nowrap">{inc.timestamp}</span>
                 <button
                   onClick={() => setSelectedIncident(inc)}
-                  className="px-2.5 py-1 text-[11px] font-medium text-foreground bg-[var(--neu-sunken)] hover:bg-gray-200 rounded-md transition-colors"
+                  className="px-2.5 py-1 text-[11px] font-medium text-foreground bg-[var(--neu-sunken)] hover:bg-[var(--neu-sunken-deep)] rounded-md transition-colors"
                 >
                   Postmortem
                 </button>
@@ -302,7 +302,7 @@ export default function SystemHealthAdminPage() {
             <div className="flex justify-end pt-2 border-t border-[var(--neu-line)]">
               <button
                 onClick={() => setSelectedIncident(null)}
-                className="px-4 py-1.5 text-xs font-semibold text-foreground bg-[var(--neu-sunken)] hover:bg-gray-200 rounded-lg"
+                className="px-4 py-1.5 text-xs font-semibold text-foreground bg-[var(--neu-sunken)] hover:bg-[var(--neu-sunken-deep)] rounded-lg"
               >
                 Close Report
               </button>

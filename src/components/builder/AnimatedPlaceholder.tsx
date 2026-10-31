@@ -70,7 +70,7 @@ export function AnimatedPlaceholder({
     >
       <span>{visibleText}</span>
       {!reduceMotion && (
-        <span className="inline-block w-[2px] h-[1.05em] translate-y-[0.15em] ml-px bg-gray-400 align-baseline animate-pulse" />
+        <span className="inline-block w-[2px] h-[1.05em] translate-y-[0.15em] ml-px bg-muted-foreground align-baseline animate-pulse" />
       )}
     </div>
   );

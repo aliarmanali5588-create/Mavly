@@ -113,7 +113,7 @@ export function PreviewPanel({ previewUrl, onRefresh, loading, mobilePreview = f
   return (
     <div className="h-full min-h-0 flex flex-col overflow-hidden">
       {/* iframe - no URL bar here, it's in the header now */}
-      <div className="flex-1 min-h-0 flex items-center justify-center overflow-hidden relative" style={{ background: "#fcfbf8" }}>
+      <div className="flex-1 min-h-0 flex items-center justify-center overflow-hidden relative" style={{ background: "var(--neu-surface)" }}>
         {/* Cached snapshot indicator: shown when the dev server is not active and
             we're displaying the cachedDevelopmentUrl static snapshot */}
         {previewUrl && cached && (
@@ -154,15 +154,15 @@ export function PreviewPanel({ previewUrl, onRefresh, loading, mobilePreview = f
             />
           ) : (
             <div className="flex flex-col items-center justify-center text-center px-8">
-              <Monitor className="w-10 h-10 text-gray-300 mb-4" />
-              <p className="text-sm font-medium text-gray-500 mb-1">{emptyTitle}</p>
-              <p className="text-xs text-gray-400 max-w-sm">{emptyText}</p>
+              <Monitor className="w-10 h-10 text-muted-foreground mb-4" />
+              <p className="text-sm font-medium text-muted-foreground mb-1">{emptyTitle}</p>
+              <p className="text-xs text-muted-foreground max-w-sm">{emptyText}</p>
               {previewState?.canResume && onResumeGeneration && (
                 <button
                   type="button"
                   onClick={onResumeGeneration}
                   disabled={resumingGeneration}
-                  className="mt-4 rounded-full border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-60"
+                  className="mt-4 rounded-full border border-[var(--neu-line-strong)] px-3 py-1.5 text-xs font-medium text-foreground hover:bg-[var(--neu-sunken)] disabled:opacity-60"
                 >
                   {resumingGeneration ? "Resuming…" : "Resume generation"}
                 </button>
@@ -171,7 +171,7 @@ export function PreviewPanel({ previewUrl, onRefresh, loading, mobilePreview = f
           )
         ) : (
           <div className={`preview-panel-enter bg-card transition-all duration-300 relative ${
-            mobilePreview ? "w-[375px] h-[667px] rounded-[2rem] border-[8px] border-gray-800 overflow-hidden shadow-2xl" : "w-full h-full"
+            mobilePreview ? "w-[375px] h-[667px] rounded-[2rem] border-[8px] border-white/10 overflow-hidden shadow-2xl" : "w-full h-full"
           }`}>
             <div className="absolute inset-0">
               <iframe

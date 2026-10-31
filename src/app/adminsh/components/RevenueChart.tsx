@@ -164,7 +164,7 @@ function DemoRevenueChart() {
                   className={`w-full max-w-[42px] rounded-t-lg transition-all duration-200 ${
                     isHovered
                       ? "bg-black shadow-[0_4px_16px_rgba(0,0,0,0.2)]"
-                      : "bg-gray-800 hover:bg-gray-950"
+                      : "bg-foreground hover:bg-black"
                   }`}
                   style={{ height: `${heightPercent}%` }}
                 />

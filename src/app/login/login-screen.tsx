@@ -152,7 +152,7 @@ export default function LoginScreen({
               type="button"
               disabled={!!loadingProvider}
               onClick={() => void beginOAuth("google")}
-              className="w-full h-12 px-4 rounded-xl bg-black hover:bg-neutral-800 text-white font-medium text-sm flex items-center justify-center gap-3 shadow-[0_4px_14px_rgba(0,0,0,0.14),0_1px_2px_rgba(0,0,0,0.06)] hover:shadow-[0_6px_20px_rgba(0,0,0,0.2)] hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] active:shadow-[inset_0_2px_4px_rgba(0,0,0,0.25)] transition-all duration-200 disabled:opacity-70 disabled:pointer-events-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black focus-visible:ring-offset-2 cursor-pointer select-none"
+              className="w-full h-12 px-4 rounded-xl bg-primary hover:bg-[var(--neu-brand-hover)] text-white font-medium text-sm flex items-center justify-center gap-3 shadow-[0_4px_14px_rgba(0,0,0,0.14),0_1px_2px_rgba(0,0,0,0.06)] hover:shadow-[0_6px_20px_rgba(0,0,0,0.2)] hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] active:shadow-[inset_0_2px_4px_rgba(0,0,0,0.25)] transition-all duration-200 disabled:opacity-70 disabled:pointer-events-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black focus-visible:ring-offset-2 cursor-pointer select-none"
             >
               {loadingProvider === "google" ? (
                 <Loader2 className="w-4 h-4 animate-spin text-white" />
@@ -184,7 +184,7 @@ export default function LoginScreen({
               type="button"
               disabled={!!loadingProvider}
               onClick={() => void beginOAuth("github")}
-              className="w-full h-12 px-4 rounded-xl bg-card hover:bg-neutral-50 text-foreground border border-black/[0.1] hover:border-black/[0.18] font-medium text-sm flex items-center justify-center gap-3 shadow-[0_2px_8px_rgba(0,0,0,0.04)] hover:shadow-[0_4px_14px_rgba(0,0,0,0.08)] hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] active:shadow-[inset_0_1px_3px_rgba(0,0,0,0.06)] transition-all duration-200 disabled:opacity-70 disabled:pointer-events-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black focus-visible:ring-offset-2 cursor-pointer select-none"
+              className="w-full h-12 px-4 rounded-xl bg-card hover:bg-[var(--neu-sunken)] text-foreground border border-black/[0.1] hover:border-black/[0.18] font-medium text-sm flex items-center justify-center gap-3 shadow-[0_2px_8px_rgba(0,0,0,0.04)] hover:shadow-[0_4px_14px_rgba(0,0,0,0.08)] hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] active:shadow-[inset_0_1px_3px_rgba(0,0,0,0.06)] transition-all duration-200 disabled:opacity-70 disabled:pointer-events-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black focus-visible:ring-offset-2 cursor-pointer select-none"
             >
               {loadingProvider === "github" ? (
                 <Loader2 className="w-4 h-4 animate-spin text-foreground" />

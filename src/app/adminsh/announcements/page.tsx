@@ -306,7 +306,7 @@ export default function AnnouncementsAdminPage() {
 
             <button
               onClick={() => setIsCreateModalOpen(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-black hover:bg-neutral-800 rounded-lg transition-colors shadow-xs"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-primary hover:bg-[var(--neu-brand-hover)] rounded-lg transition-colors shadow-xs"
             >
               <PlusCircle className="w-3.5 h-3.5" />
               <span>New Announcement</span>
@@ -358,7 +358,7 @@ export default function AnnouncementsAdminPage() {
                 <div className="flex items-center gap-2 self-end md:self-center shrink-0">
                   <button
                     onClick={() => setPreviewItem(item)}
-                    className="px-2.5 py-1 text-[11px] font-medium text-foreground bg-[var(--neu-sunken)] hover:bg-gray-200 rounded-md transition-colors"
+                    className="px-2.5 py-1 text-[11px] font-medium text-foreground bg-[var(--neu-sunken)] hover:bg-[var(--neu-sunken-deep)] rounded-md transition-colors"
                   >
                     Simulate
                   </button>
@@ -474,7 +474,7 @@ export default function AnnouncementsAdminPage() {
                   id="dismissibleCheck"
                   checked={newDismissible}
                   onChange={(e) => setNewDismissible(e.target.checked)}
-                  className="rounded border-gray-300 text-black focus:ring-black"
+                  className="rounded border-[var(--neu-line-strong)] text-black focus:ring-black"
                 />
                 <label htmlFor="dismissibleCheck" className="text-foreground font-medium">
                   Allow users to dismiss banner with close icon
@@ -485,13 +485,13 @@ export default function AnnouncementsAdminPage() {
                 <button
                   type="button"
                   onClick={() => setIsCreateModalOpen(false)}
-                  className="px-3.5 py-1.5 text-xs font-medium text-foreground bg-[var(--neu-sunken)] hover:bg-gray-200 rounded-lg transition-colors"
+                  className="px-3.5 py-1.5 text-xs font-medium text-foreground bg-[var(--neu-sunken)] hover:bg-[var(--neu-sunken-deep)] rounded-lg transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-1.5 text-xs font-semibold text-white bg-black hover:bg-neutral-800 rounded-lg transition-colors flex items-center gap-1.5"
+                  className="px-4 py-1.5 text-xs font-semibold text-white bg-primary hover:bg-[var(--neu-brand-hover)] rounded-lg transition-colors flex items-center gap-1.5"
                 >
                   <Send className="w-3.5 h-3.5" />
                   <span>Publish Broadcast</span>

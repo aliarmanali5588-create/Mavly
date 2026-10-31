@@ -270,13 +270,13 @@ export function PricingSection({
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Section Header */}
         <div className="text-center max-w-2xl mx-auto mb-12 sm:mb-16">
-          <span className="text-xs font-bold tracking-widest uppercase text-stone-500 mb-3 block">
+          <span className="text-xs font-bold tracking-widest uppercase text-muted-foreground mb-3 block">
             {badge}
           </span>
-          <h2 className="text-3xl sm:text-4xl md:text-5xl font-black tracking-tight text-gray-950 leading-tight">
+          <h2 className="text-3xl sm:text-4xl md:text-5xl font-black tracking-tight text-foreground leading-tight">
             {title}
           </h2>
-          <p className="mt-4 text-sm sm:text-base text-gray-600 leading-relaxed font-normal">
+          <p className="mt-4 text-sm sm:text-base text-muted-foreground leading-relaxed font-normal">
             {description}
           </p>
 
@@ -296,8 +296,8 @@ export function PricingSection({
                 onClick={() => setBillingCycle("monthly")}
                 className={`px-4 py-2 rounded-full text-xs font-semibold transition-all duration-200 cursor-pointer focus-visible:outline-none ${
                   billingCycle === "monthly"
-                    ? "bg-black text-white shadow-xs"
-                    : "text-gray-700 hover:text-black"
+                    ? "bg-primary text-primary-foreground shadow-[var(--neu-elev-1)]"
+                    : "text-foreground hover:text-black"
                 }`}
               >
                 Monthly
@@ -310,8 +310,8 @@ export function PricingSection({
                 onClick={() => setBillingCycle("yearly")}
                 className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-semibold transition-all duration-200 cursor-pointer focus-visible:outline-none ${
                   billingCycle === "yearly"
-                    ? "bg-black text-white shadow-xs"
-                    : "text-gray-700 hover:text-black"
+                    ? "bg-primary text-primary-foreground shadow-[var(--neu-elev-1)]"
+                    : "text-foreground hover:text-black"
                 }`}
               >
                 <span>Yearly</span>
@@ -346,37 +346,37 @@ export function PricingSection({
                 <div>
                   {/* Top Tier Header & Optional Popular Badge */}
                   <div className="flex items-center justify-between min-h-[26px]">
-                    <span className="text-[11px] font-bold uppercase tracking-wider text-stone-500">
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
                       {plan.tierLabel}
                     </span>
                     {plan.badge && (
-                      <span className="px-2.5 py-0.5 rounded-full bg-black text-white text-[10px] font-bold tracking-wide uppercase shadow-xs">
+                      <span className="px-2.5 py-0.5 rounded-full bg-primary text-primary-foreground text-[10px] font-bold tracking-wide uppercase shadow-[var(--neu-elev-1)]">
                         {plan.badge}
                       </span>
                     )}
                   </div>
 
-                  <h3 className="text-2xl font-extrabold text-gray-950 mt-2 tracking-tight">
+                  <h3 className="text-2xl font-extrabold text-foreground mt-2 tracking-tight">
                     {plan.name}
                   </h3>
 
-                  <p className="text-xs text-gray-500 mt-1 leading-relaxed min-h-[34px]">
+                  <p className="text-xs text-muted-foreground mt-1 leading-relaxed min-h-[34px]">
                     {plan.description}
                   </p>
 
                   {/* Price Block */}
                   <div className="mt-5 pb-5 border-b border-[var(--neu-line)]">
                     <div className="flex items-baseline gap-0.5">
-                      <span className="text-3xl sm:text-4xl font-black text-gray-950 tracking-tight">
+                      <span className="text-3xl sm:text-4xl font-black text-foreground tracking-tight">
                         {pricing.integerPart}
                       </span>
                       {pricing.decimalPart && (
-                        <span className="text-lg sm:text-xl font-bold text-gray-500 tracking-tight">
+                        <span className="text-lg sm:text-xl font-bold text-muted-foreground tracking-tight">
                           {pricing.decimalPart}
                         </span>
                       )}
                       {!pricing.isFree && (
-                        <span className="text-xs text-gray-500 font-medium ml-1.5">
+                        <span className="text-xs text-muted-foreground font-medium ml-1.5">
                           / month
                         </span>
                       )}
@@ -385,12 +385,12 @@ export function PricingSection({
                     {/* Secondary Yearly Calculation Disclosures */}
                     <div className="min-h-[42px] mt-1.5 flex flex-col justify-center">
                       {pricing.isFree ? (
-                        <span className="text-[11px] text-gray-400 font-medium">
+                        <span className="text-[11px] text-muted-foreground font-medium">
                           Free forever · No card required
                         </span>
                       ) : billingCycle === "yearly" ? (
                         <>
-                          <span className="text-[11px] text-gray-600 font-medium leading-tight">
+                          <span className="text-[11px] text-muted-foreground font-medium leading-tight">
                             Effective monthly rate · Billed annually at {pricing.annualTotalFormatted}/yr
                           </span>
                           <span className="text-[11px] text-emerald-600 font-semibold mt-0.5">
@@ -398,7 +398,7 @@ export function PricingSection({
                           </span>
                         </>
                       ) : (
-                        <span className="text-[11px] text-gray-400 font-medium">
+                        <span className="text-[11px] text-muted-foreground font-medium">
                           Billed monthly · Cancel anytime
                         </span>
                       )}
@@ -408,14 +408,14 @@ export function PricingSection({
                   {/* Feature Checklist */}
                   <div className="mt-5 space-y-2.5">
                     {plan.features.map((feat, i) => (
-                      <div key={i} className="flex items-start gap-2.5 text-xs text-gray-700 leading-snug">
+                      <div key={i} className="flex items-start gap-2.5 text-xs text-foreground leading-snug">
                         <Check className="w-4 h-4 text-black shrink-0 mt-0.5" />
                         <span>{feat}</span>
                       </div>
                     ))}
                     {plan.id === "free" && (
                       <div className="pt-2 mt-2 border-t border-[var(--neu-line)]">
-                        <p className="text-[11px] text-gray-500 leading-snug">
+                        <p className="text-[11px] text-muted-foreground leading-snug">
                           <span className="font-medium">Paid limits:</span> custom domains, advanced developer tools, and premium build capacity.
                         </p>
                       </div>
@@ -468,7 +468,7 @@ export function PricingSection({
                     </Link>
                   )}
 
-                  <p className="text-[11px] text-center text-gray-400 mt-2.5">
+                  <p className="text-[11px] text-center text-muted-foreground mt-2.5">
                     {pricing.isFree
                       ? (isUpgradePage && userEmail ? "Active Free Tier" : "No credit card required")
                       : (isUpgradePage ? "Select plan to review" : "Direct entry to AI workspace")}
@@ -483,13 +483,13 @@ export function PricingSection({
         {showEnterprise && (
           <div className="mt-20 pt-16 border-t border-[var(--neu-line)]">
             <div className="text-center max-w-xl mx-auto mb-10">
-              <span className="text-xs font-bold tracking-widest uppercase text-stone-500 mb-2 block">
+              <span className="text-xs font-bold tracking-widest uppercase text-muted-foreground mb-2 block">
                 Specialized Solutions
               </span>
-              <h3 className="text-2xl sm:text-3xl font-black text-gray-950 tracking-tight">
+              <h3 className="text-2xl sm:text-3xl font-black text-foreground tracking-tight">
                 Agency & Custom Plans
               </h3>
-              <p className="mt-2 text-xs sm:text-sm text-gray-600 leading-relaxed font-normal">
+              <p className="mt-2 text-xs sm:text-sm text-muted-foreground leading-relaxed font-normal">
                 High-volume delivery, client management, and tailored infrastructure for growing businesses and enterprises.
               </p>
             </div>
@@ -507,28 +507,28 @@ export function PricingSection({
                         <div className="w-11 h-11 rounded-2xl bg-[var(--neu-sunken)] border border-[var(--neu-line)] shadow-[var(--neu-inset-2)] flex items-center justify-center text-foreground">
                           <Icon className="w-5 h-5" />
                         </div>
-                        <span className="px-2.5 py-0.5 rounded-full bg-stone-100 text-stone-700 text-[10px] font-bold tracking-wide uppercase">
+                        <span className="px-2.5 py-0.5 rounded-full bg-[var(--neu-sunken)] text-foreground text-[10px] font-bold tracking-wide uppercase">
                           {item.badge}
                         </span>
                       </div>
 
-                      <h4 className="text-xl sm:text-2xl font-extrabold text-gray-950 tracking-tight">
+                      <h4 className="text-xl sm:text-2xl font-extrabold text-foreground tracking-tight">
                         {item.name}
                       </h4>
 
-                      <p className="text-xs text-gray-500 mt-1 leading-relaxed">
+                      <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
                         {item.description}
                       </p>
 
                       <div className="mt-4 flex items-baseline gap-1">
-                        <span className="text-2xl font-black text-gray-950 tracking-tight">
+                        <span className="text-2xl font-black text-foreground tracking-tight">
                           {item.priceDisplay}
                         </span>
                       </div>
 
                       <div className="mt-5 space-y-2 pt-4 border-t border-[var(--neu-line)]">
                         {item.features.map((feat, fIdx) => (
-                          <div key={fIdx} className="flex items-start gap-2 text-xs text-gray-700 leading-snug">
+                          <div key={fIdx} className="flex items-start gap-2 text-xs text-foreground leading-snug">
                             <Check className="w-3.5 h-3.5 text-black shrink-0 mt-0.5" />
                             <span>{feat}</span>
                           </div>
@@ -553,7 +553,7 @@ export function PricingSection({
         )}
 
         {/* Bottom Disclosures & Pricing Truthfulness Note */}
-        <div className="mt-12 text-center text-[11px] text-gray-400 max-w-lg mx-auto">
+        <div className="mt-12 text-center text-[11px] text-muted-foreground max-w-lg mx-auto">
           All prices in Indian Rupees (INR). Annual plans billed as a single annual charge. Need a custom plan structure or have questions? Contact our team.
         </div>
       </div>

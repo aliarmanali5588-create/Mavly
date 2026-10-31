@@ -33,8 +33,8 @@ export default function IntegrationsPage() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-20">
         {/* Hero */}
         <div className="max-w-3xl mx-auto text-center space-y-5 pt-6 sm:pt-12">
-          <div className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-stone-600 bg-stone-100 px-3 py-1 rounded-full border border-[var(--neu-line)]">
-            <Layers className="w-3.5 h-3.5 text-stone-800" />
+          <div className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-muted-foreground bg-[var(--neu-sunken)] px-3 py-1 rounded-full border border-[var(--neu-line)]">
+            <Layers className="w-3.5 h-3.5 text-foreground" />
             <span>CONNECTED WORKFLOWS</span>
           </div>
 
@@ -62,7 +62,7 @@ export default function IntegrationsPage() {
           {/* GitHub App */}
           <div className="p-8 rounded-3xl bg-card border border-[var(--neu-line)] shadow-[0_4px_20px_rgba(0,0,0,0.02)] space-y-6">
             <div className="flex items-center justify-between">
-              <div className="w-12 h-12 rounded-2xl bg-gray-950 text-white flex items-center justify-center">
+              <div className="w-12 h-12 rounded-2xl bg-black text-white flex items-center justify-center">
                 <GitBranch className="w-6 h-6" />
               </div>
               <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-full">

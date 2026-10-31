@@ -126,7 +126,7 @@ export function SupportClient({ profile }: SupportClientProps) {
             </Link>
 
             <nav className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
-              <span className="text-gray-300">/</span>
+              <span className="text-muted-foreground">/</span>
               <span className="text-foreground font-semibold">Support</span>
             </nav>
           </div>
@@ -161,8 +161,8 @@ export function SupportClient({ profile }: SupportClientProps) {
       <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-10 sm:py-16 flex-1 w-full">
         {/* Page Heading & Introduction */}
         <div className="max-w-3xl mb-10 sm:mb-14">
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-stone-100 border border-[var(--neu-line)] text-[11px] font-bold text-stone-700 tracking-wide uppercase mb-3">
-            <LifeBuoy className="w-3.5 h-3.5 text-stone-600" aria-hidden="true" />
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[var(--neu-sunken)] border border-[var(--neu-line)] text-[11px] font-bold text-foreground tracking-wide uppercase mb-3">
+            <LifeBuoy className="w-3.5 h-3.5 text-muted-foreground" aria-hidden="true" />
             <span>MAVLY SUPPORT</span>
           </div>
           <h1 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tight text-foreground">
@@ -202,7 +202,7 @@ export function SupportClient({ profile }: SupportClientProps) {
                     <div className="w-11 h-11 rounded-2xl bg-card border border-[var(--neu-line)] shadow-xs flex items-center justify-center text-foreground shrink-0">
                       <Icon className="w-5 h-5 text-foreground" aria-hidden="true" />
                     </div>
-                    <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-stone-100 text-stone-700 border border-[var(--neu-line)]">
+                    <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-[var(--neu-sunken)] text-foreground border border-[var(--neu-line)]">
                       {channel.category}
                     </span>
                   </div>
@@ -236,7 +236,7 @@ export function SupportClient({ profile }: SupportClientProps) {
                     <button
                       type="button"
                       onClick={() => handleCopy(channel.email)}
-                      className="px-2.5 py-1.5 rounded-lg bg-card border border-[var(--neu-line)] text-xs font-medium text-foreground hover:text-black hover:bg-neutral-50 shadow-xs active:scale-95 transition-all flex items-center gap-1.5 shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-400"
+                      className="px-2.5 py-1.5 rounded-lg bg-card border border-[var(--neu-line)] text-xs font-medium text-foreground hover:text-black hover:bg-[var(--neu-sunken)] shadow-xs active:scale-95 transition-all flex items-center gap-1.5 shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--neu-brand)]"
                       aria-label={`Copy ${channel.email} to clipboard`}
                     >
                       {isCopied ? (
@@ -285,7 +285,7 @@ export function SupportClient({ profile }: SupportClientProps) {
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
             <div className="max-w-xl">
               <div className="flex items-center gap-2 mb-2">
-                <Sparkles className="w-4 h-4 text-stone-700" aria-hidden="true" />
+                <Sparkles className="w-4 h-4 text-foreground" aria-hidden="true" />
                 <h3 className="text-base font-bold text-foreground tracking-tight">
                   Guides, Documentation &amp; Frequently Asked Questions
                 </h3>

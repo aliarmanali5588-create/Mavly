@@ -160,20 +160,20 @@ function renderInline(text: string, keyPrefix: string = "0"): React.ReactNode[] 
 function FormattedText({ text }: { text: string }) {
   const parts = text.split(/(```[\s\S]*?```)/g);
   return (
-    <div className="text-[15px] text-gray-700 dark:text-gray-300 leading-relaxed space-y-1">
+    <div className="text-[15px] text-foreground leading-relaxed space-y-1">
       {parts.map((part, i) => {
         if (part.startsWith("```") && part.endsWith("```")) {
           const code = part.slice(3, -3).replace(/^\w+\n/, "");
-          return <pre key={i} className="bg-gray-900 text-gray-200 rounded-lg p-3 text-xs font-mono overflow-x-auto my-2">{code}</pre>;
+          return <pre key={i} className="bg-black text-white/80 rounded-lg p-3 text-xs font-mono overflow-x-auto my-2">{code}</pre>;
         }
         return part.split("\n").map((line, li) => {
           const lineKey = `${i}-${li}`;
           if (line.startsWith("# ")) return <h3 key={lineKey} className="font-semibold text-base mt-2">{renderInline(line.slice(2), lineKey)}</h3>;
           if (line.startsWith("## ")) return <h4 key={lineKey} className="font-semibold text-[15px] mt-1.5">{renderInline(line.slice(3), lineKey)}</h4>;
           if (line.startsWith("### ")) return <h5 key={lineKey} className="font-semibold text-sm mt-1">{renderInline(line.slice(4), lineKey)}</h5>;
-          if (line.startsWith("- ") || line.startsWith("* ")) return <div key={lineKey} className="flex gap-1.5"><span className="text-gray-400 shrink-0">•</span><span>{renderInline(line.slice(2), lineKey)}</span></div>;
+          if (line.startsWith("- ") || line.startsWith("* ")) return <div key={lineKey} className="flex gap-1.5"><span className="text-muted-foreground shrink-0">•</span><span>{renderInline(line.slice(2), lineKey)}</span></div>;
           const numberedMatch = line.match(/^(\d+)\.\s+(.*)$/);
-          if (numberedMatch) return <div key={lineKey} className="flex gap-1.5"><span className="text-gray-400 shrink-0 min-w-[1.2em] text-right">{numberedMatch[1]}.</span><span>{renderInline(numberedMatch[2], lineKey)}</span></div>;
+          if (numberedMatch) return <div key={lineKey} className="flex gap-1.5"><span className="text-muted-foreground shrink-0 min-w-[1.2em] text-right">{numberedMatch[1]}.</span><span>{renderInline(numberedMatch[2], lineKey)}</span></div>;
           if (line.trim() === "") return <div key={lineKey} className="h-1" />;
           return <p key={lineKey}>{renderInline(line, lineKey)}</p>;
         });
@@ -220,13 +220,13 @@ function UserMessage({ text, files }: { text: string; files?: AgentInputFile[] }
 
   return (
     <div className="flex justify-end">
-      <div className="max-w-[88%] rounded-2xl rounded-br-sm px-4 py-2.5" style={{ background: "var(--user-bubble, #eeecea)" }}>
+      <div className="max-w-[88%] rounded-2xl rounded-br-sm px-4 py-2.5" style={{ background: "var(--user-bubble, #f7f2f0)" }}>
         {text.trim() && (
-          <p className="text-[15px] leading-relaxed whitespace-pre-wrap break-words text-gray-800 dark:text-gray-200">
+          <p className="text-[15px] leading-relaxed whitespace-pre-wrap break-words text-foreground ">
             {isLong && !expanded ? (
               <>
                 {preview}
-                <span className="text-gray-400">…</span>
+                <span className="text-muted-foreground">…</span>
               </>
             ) : (
               text
@@ -237,7 +237,7 @@ function UserMessage({ text, files }: { text: string; files?: AgentInputFile[] }
         {isLong && (
           <button
             onClick={() => setExpanded((v) => !v)}
-            className="mt-1.5 inline-flex items-center gap-1 text-xs font-medium text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
+            className="mt-1.5 inline-flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground dark:hover:text-white/80 transition-colors"
           >
             {expanded ? (
               <>
@@ -246,7 +246,7 @@ function UserMessage({ text, files }: { text: string; files?: AgentInputFile[] }
             ) : (
               <>
                 <ChevronDown className="w-3 h-3" /> {"See all"}
-                <span className="text-gray-400">· {text.length.toLocaleString()} {"characters"}</span>
+                <span className="text-muted-foreground">· {text.length.toLocaleString()} {"characters"}</span>
               </>
             )}
           </button>
@@ -411,15 +411,15 @@ function SecretKeysForm({ secretKeysNeeded, projectId, onTellAi, projectSecrets 
         {secrets.map((secret, si) => (
           <div key={secret.secretName} className="bg-card rounded-xl border border-[var(--neu-line)] p-3 shadow-[var(--neu-elev-1)]">
             <div className="mb-2">
-              <code className="text-xs font-mono font-semibold text-gray-800 dark:text-gray-200">{secret.secretName}</code>
-              <p className="text-[11px] text-gray-400 mt-0.5 leading-snug">{secret.description}</p>
+              <code className="text-xs font-mono font-semibold text-foreground ">{secret.secretName}</code>
+              <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug">{secret.description}</p>
             </div>
 
             {secret.entries.map((entry, ei) => (
               <div key={ei} className="mt-2">
                 {secret.entries.length > 1 && (
                   <div className="flex items-center justify-between mb-1">
-                    <span className="text-[10px] text-gray-400 font-medium">Environment {ei + 1}</span>
+                    <span className="text-[10px] text-muted-foreground font-medium">Environment {ei + 1}</span>
                     <button onClick={() => removeEntry(si, ei)} className="text-[10px] text-red-400 hover:text-red-600 transition-colors">
                       <X className="w-3 h-3" />
                     </button>
@@ -436,7 +436,7 @@ function SecretKeysForm({ secretKeysNeeded, projectId, onTellAi, projectSecrets 
                     />
                     <button
                       onClick={() => updateEntry(si, ei, "showValue", !entry.showValue)}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-muted-foreground"
                     >
                       {entry.showValue ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
                     </button>
@@ -471,7 +471,7 @@ function SecretKeysForm({ secretKeysNeeded, projectId, onTellAi, projectSecrets 
         <button
           onClick={handleSubmit}
           disabled={!allFilled || submitting}
-          className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-amber-500 hover:bg-amber-600 disabled:bg-gray-300 dark:disabled:bg-gray-700 text-white text-xs font-medium transition-colors disabled:cursor-not-allowed"
+          className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-amber-500 hover:bg-amber-600 disabled:bg-[var(--neu-sunken-deep)] dark:disabled:bg-[var(--neu-sunken-deep)] text-white text-xs font-medium transition-colors disabled:cursor-not-allowed"
         >
           {submitting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Key className="w-3.5 h-3.5" />}
           {submitting ? "Saving..." : "Save Secret Keys"}
@@ -491,21 +491,21 @@ function BuildGroup({ group, projectId, onTellAi, projectSecrets, onRestored }: 
   return (
     <div className="space-y-1">
       {hasBuildMsgs && (
-        <button onClick={() => setExpanded(!expanded)} className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 py-0.5 transition-colors">
+        <button onClick={() => setExpanded(!expanded)} className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-muted-foreground dark:hover:text-muted-foreground py-0.5 transition-colors">
           {expanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
           {isComplete ? `${group.buildMsgs!.length} ${"build steps"}` : `${"Building..."} (${group.buildMsgs!.length})`}
-          {!isComplete && <Loader2 className="w-3 h-3 animate-spin text-gray-400" />}
+          {!isComplete && <Loader2 className="w-3 h-3 animate-spin text-muted-foreground" />}
         </button>
       )}
       {expanded && group.buildMsgs?.map((msg, idx) => (
-        <div key={idx} className="text-xs text-gray-400 dark:text-gray-500 pl-4 py-0.5 border-l-2 border-gray-100 dark:border-gray-700">{msg.message}</div>
+        <div key={idx} className="text-xs text-muted-foreground pl-4 py-0.5 border-l-2 border-[var(--neu-line)] ">{msg.message}</div>
       ))}
 
       {/* Live current build step — always visible while the run is in progress,
           shows ONLY the latest step so the user sees progress without expanding. */}
       {!isComplete && hasBuildMsgs && !expanded && (
-        <div className="flex items-start gap-1.5 text-xs text-gray-500 dark:text-gray-400 pl-4 py-0.5">
-          <Loader2 className="w-3 h-3 animate-spin text-gray-400 mt-0.5 shrink-0" />
+        <div className="flex items-start gap-1.5 text-xs text-muted-foreground pl-4 py-0.5">
+          <Loader2 className="w-3 h-3 animate-spin text-muted-foreground mt-0.5 shrink-0" />
           <span className="min-w-0 break-words">{group.buildMsgs![group.buildMsgs!.length - 1].message}</span>
         </div>
       )}
@@ -542,7 +542,7 @@ function BuildGroup({ group, projectId, onTellAi, projectSecrets, onRestored }: 
               <button
                 type="button"
                 onClick={() => setDiffOpen(true)}
-                className="inline-flex items-center gap-1 mt-2 text-xs text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+                className="inline-flex items-center gap-1 mt-2 text-xs text-muted-foreground hover:text-foreground dark:hover:text-muted-foreground"
               >
                 <FileDiff className="w-2.5 h-2.5" /> {"View changes"}
               </button>
@@ -575,7 +575,7 @@ function BuildGroup({ group, projectId, onTellAi, projectSecrets, onRestored }: 
         </div>
       )}
       {!isComplete && !hasBuildMsgs && group.startMsg && (
-        <div className="flex items-center gap-2 text-[15px] text-gray-500 py-1"><Loader2 className="w-4 h-4 animate-spin" /><span>{group.startMsg.message}</span></div>
+        <div className="flex items-center gap-2 text-[15px] text-muted-foreground py-1"><Loader2 className="w-4 h-4 animate-spin" /><span>{group.startMsg.message}</span></div>
       )}
     </div>
   );
@@ -723,8 +723,8 @@ export function ChatPanel({
         {messages.length === 0 && !isBuilding && (
           <div className="flex flex-col items-center justify-center h-full text-center px-4">
             <div className="w-11 h-11 rounded-2xl bg-[var(--neu-sunken)] border border-[var(--neu-line)] shadow-[var(--neu-inset-2)] flex items-center justify-center mb-3"><Bot className="w-5 h-5 text-muted-foreground" /></div>
-            <p className="text-[15px] text-gray-500 dark:text-gray-400 mb-1">{"What do you want to build?"}</p>
-            <p className="text-sm text-gray-400">{"Describe your idea below"}</p>
+            <p className="text-[15px] text-muted-foreground mb-1">{"What do you want to build?"}</p>
+            <p className="text-sm text-muted-foreground">{"Describe your idea below"}</p>
           </div>
         )}
 
@@ -736,7 +736,7 @@ export function ChatPanel({
             >
               <ChevronUp className="w-3.5 h-3.5" />
               {"Load earlier messages"}
-              <span className="text-gray-400">· {hiddenCount}</span>
+              <span className="text-muted-foreground">· {hiddenCount}</span>
             </button>
           </div>
         )}
@@ -823,10 +823,10 @@ export function ChatPanel({
       />
 
       <div className="shrink-0 px-3 pb-3 pt-2">
-        <div className="rounded-2xl overflow-hidden transition-all focus-within:ring-2 focus-within:ring-gray-200 dark:focus-within:ring-gray-600" style={{ background: "var(--textarea-bg, #f3f1ee)" }}>
+        <div className="rounded-2xl overflow-hidden transition-all focus-within:ring-2 focus-within:ring-[var(--neu-line)] dark:focus-within:ring-[var(--neu-line-strong)]" style={{ background: "var(--textarea-bg, #f7f2f0)" }}>
           <textarea data-chat-input ref={textareaRef} value={prompt} onChange={(e) => setPrompt(e.target.value)} onKeyDown={handleKeyDown} onPaste={handlePaste}
             placeholder={isBuilding ? "Agent is working..." : "Ask anything..."}
-            className="w-full bg-transparent border-0 resize-none text-base outline-none placeholder:text-gray-400 min-h-[48px] max-h-[200px] px-4 pt-3.5 pb-1 leading-relaxed dark:text-gray-200"
+            className="w-full bg-transparent border-0 resize-none text-base outline-none placeholder:text-muted-foreground min-h-[48px] max-h-[200px] px-4 pt-3.5 pb-1 leading-relaxed "
             disabled={isBuilding} rows={1} />
           <div className="flex items-center justify-between px-2 pb-2">
             {/*
@@ -839,7 +839,7 @@ export function ChatPanel({
                 <TooltipTrigger asChild>
                   <label className="cursor-pointer size-8 inline-flex items-center justify-center rounded-lg hover:bg-[var(--neu-sunken)] hover:shadow-[var(--neu-inset-1)] transition-[box-shadow,background-color] duration-200">
                     <input type="file" multiple className="hidden" onChange={handleFileUpload} accept="image/*,.pdf,.svg" disabled={isBuilding} />
-                    {uploading ? <Loader2 className="w-4 h-4 text-gray-400 animate-spin" /> : <Paperclip className="w-4 h-4 text-gray-400" />}
+                    {uploading ? <Loader2 className="w-4 h-4 text-muted-foreground animate-spin" /> : <Paperclip className="w-4 h-4 text-muted-foreground" />}
                     <span className="sr-only">{t("prompt.attachments.attach")}</span>
                   </label>
                 </TooltipTrigger>

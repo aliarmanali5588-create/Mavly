@@ -57,10 +57,10 @@ function stateLabel(session: RuntimeSandboxView | null): string {
 }
 
 function stateTone(session: RuntimeSandboxView | null): string {
-  if (!session) return "bg-gray-400";
+  if (!session) return "bg-muted-foreground";
   if (session.state === "ready") return "bg-emerald-500";
   if (session.state === "failed" || session.state === "expired") return "bg-amber-500";
-  if (session.state === "stopped") return "bg-gray-400";
+  if (session.state === "stopped") return "bg-muted-foreground";
   return "bg-sky-500";
 }
 
@@ -75,7 +75,7 @@ function checkTone(status: string): string {
   if (status === "passed") return "text-emerald-600 dark:text-emerald-400";
   if (status === "failed") return "text-red-600 dark:text-red-400";
   if (status === "pending") return "text-sky-600 dark:text-sky-400";
-  return "text-gray-400";
+  return "text-muted-foreground";
 }
 
 /**
@@ -273,13 +273,13 @@ export function LiveRuntimePreview({
     <div className="h-full min-h-0 flex flex-col">
       <div className="flex flex-wrap items-center gap-2 border-b border-[var(--neu-line)] bg-card/90 px-2.5 py-1.5 text-[11px]">
         <span className={`h-2 w-2 rounded-full ${stateTone(session)}`} aria-hidden="true" />
-        <span className="font-medium text-gray-700 dark:text-gray-200">
+        <span className="font-medium text-foreground ">
           {unsupported && !session ? "Static preview" : stateLabel(session)}
         </span>
         {session?.state === "ready" && session.port !== null && (
-          <span className="text-gray-400">port {session.port}</span>
+          <span className="text-muted-foreground">port {session.port}</span>
         )}
-        <span className="text-gray-400">· static fallback stays available</span>
+        <span className="text-muted-foreground">· static fallback stays available</span>
 
         <span className="ml-auto flex items-center gap-1.5">
           {session?.state === "ready" && (
@@ -287,7 +287,7 @@ export function LiveRuntimePreview({
               type="button"
               onClick={() => void runBuild()}
               disabled={building}
-              className="flex items-center gap-1 rounded-md border border-gray-200/70 px-2 py-0.5 text-gray-600 hover:bg-gray-50 disabled:opacity-50 dark:border-gray-700/60 dark:text-gray-300 dark:hover:bg-gray-800"
+              className="flex items-center gap-1 rounded-md border border-[var(--neu-line)]/70 px-2 py-0.5 text-muted-foreground hover:bg-[var(--neu-sunken)] disabled:opacity-50 dark:hover:bg-foreground"
             >
               {building ? <Loader2 className="h-3 w-3 animate-spin" /> : null} Build
             </button>
@@ -296,7 +296,7 @@ export function LiveRuntimePreview({
             <button
               type="button"
               onClick={() => setLogsOpen(false)}
-              className="rounded-md border border-gray-200/70 px-2 py-0.5 text-gray-600 hover:bg-gray-50 dark:border-gray-700/60 dark:text-gray-300 dark:hover:bg-gray-800"
+              className="rounded-md border border-[var(--neu-line)]/70 px-2 py-0.5 text-muted-foreground hover:bg-[var(--neu-sunken)] dark:hover:bg-foreground"
             >
               Hide logs
             </button>
@@ -305,7 +305,7 @@ export function LiveRuntimePreview({
               type="button"
               onClick={() => void refreshLogs()}
               disabled={!session}
-              className="flex items-center gap-1 rounded-md border border-gray-200/70 px-2 py-0.5 text-gray-600 hover:bg-gray-50 disabled:opacity-50 dark:border-gray-700/60 dark:text-gray-300 dark:hover:bg-gray-800"
+              className="flex items-center gap-1 rounded-md border border-[var(--neu-line)]/70 px-2 py-0.5 text-muted-foreground hover:bg-[var(--neu-sunken)] disabled:opacity-50 dark:hover:bg-foreground"
             >
               <FileTerminal className="h-3 w-3" /> Logs
             </button>
@@ -315,7 +315,7 @@ export function LiveRuntimePreview({
               type="button"
               onClick={() => void invoke("start")}
               disabled={unsupported}
-              className="flex items-center gap-1 rounded-md border border-gray-200/70 px-2 py-0.5 text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-700/60 dark:text-gray-200 dark:hover:bg-gray-800"
+              className="flex items-center gap-1 rounded-md border border-[var(--neu-line)]/70 px-2 py-0.5 text-foreground hover:bg-[var(--neu-sunken)] disabled:cursor-not-allowed disabled:opacity-50 dark:hover:bg-foreground"
             >
               <Play className="h-3 w-3" /> Start live preview
             </button>
@@ -324,7 +324,7 @@ export function LiveRuntimePreview({
             <button
               type="button"
               onClick={() => void invoke("restart")}
-              className="flex items-center gap-1 rounded-md border border-gray-200/70 px-2 py-0.5 text-gray-700 hover:bg-gray-50 dark:border-gray-700/60 dark:text-gray-200 dark:hover:bg-gray-800"
+              className="flex items-center gap-1 rounded-md border border-[var(--neu-line)]/70 px-2 py-0.5 text-foreground hover:bg-[var(--neu-sunken)] dark:hover:bg-foreground"
             >
               <RotateCw className="h-3 w-3" /> Restart
             </button>
@@ -333,7 +333,7 @@ export function LiveRuntimePreview({
             <button
               type="button"
               onClick={() => void invoke("stop")}
-              className="flex items-center gap-1 rounded-md border border-gray-200/70 px-2 py-0.5 text-gray-700 hover:bg-gray-50 dark:border-gray-700/60 dark:text-gray-200 dark:hover:bg-gray-800"
+              className="flex items-center gap-1 rounded-md border border-[var(--neu-line)]/70 px-2 py-0.5 text-foreground hover:bg-[var(--neu-sunken)] dark:hover:bg-foreground"
             >
               <Square className="h-3 w-3" /> Stop
             </button>
@@ -343,7 +343,7 @@ export function LiveRuntimePreview({
             <button
               type="button"
               onClick={() => setFrameNonce((value) => value + 1)}
-              className="flex items-center gap-1 rounded-md border border-gray-200/70 px-2 py-0.5 text-gray-600 hover:bg-gray-50 dark:border-gray-700/60 dark:text-gray-300 dark:hover:bg-gray-800"
+              className="flex items-center gap-1 rounded-md border border-[var(--neu-line)]/70 px-2 py-0.5 text-muted-foreground hover:bg-[var(--neu-sunken)] dark:hover:bg-foreground"
             >
               <RotateCw className="h-3 w-3" /> Refresh
             </button>
@@ -353,7 +353,7 @@ export function LiveRuntimePreview({
               href={session.previewUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center gap-1 rounded-md border border-gray-200/70 px-2 py-0.5 text-gray-600 hover:bg-gray-50 dark:border-gray-700/60 dark:text-gray-300 dark:hover:bg-gray-800"
+              className="flex items-center gap-1 rounded-md border border-[var(--neu-line)]/70 px-2 py-0.5 text-muted-foreground hover:bg-[var(--neu-sunken)] dark:hover:bg-foreground"
             >
               <ExternalLink className="h-3 w-3" /> Open
             </a>
@@ -370,10 +370,10 @@ export function LiveRuntimePreview({
       {(error || notice || (failed && session)) && (
         <div
           role="status"
-          className="flex items-start gap-1.5 border-b border-gray-200/70 bg-gray-50 px-3 py-1.5 text-[11px] dark:border-gray-700/60 dark:bg-gray-900/40"
+          className="flex items-start gap-1.5 border-b border-[var(--neu-line)]/70 bg-[var(--neu-sunken)] px-3 py-1.5 text-[11px] "
         >
           {(error || failed) && <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0 text-amber-600" />}
-          <span className="min-w-0 flex-1 text-gray-700 dark:text-gray-200">
+          <span className="min-w-0 flex-1 text-foreground ">
             {error ??
               (failed
                 ? `${session?.failureReason ?? "The live preview failed."}${session?.failureCode ? ` (${session.failureCode})` : ""}`
@@ -415,7 +415,7 @@ export function LiveRuntimePreview({
       </div>
 
       {logsOpen && (
-        <div className="max-h-48 shrink-0 overflow-auto border-t border-gray-200/70 bg-[#111] px-3 py-2 dark:border-gray-700/60">
+        <div className="max-h-48 shrink-0 overflow-auto border-t border-[var(--neu-line)]/70 bg-[#111] px-3 py-2 ">
           <div className="mb-1.5 flex flex-wrap gap-3 text-[10px]">
             {(session?.checks ?? []).map((entry) => (
               <span key={entry.id} className={checkTone(entry.status)}>
@@ -423,10 +423,10 @@ export function LiveRuntimePreview({
               </span>
             ))}
           </div>
-          <pre className="whitespace-pre-wrap break-words font-mono text-[10.5px] leading-relaxed text-gray-200">
+          <pre className="whitespace-pre-wrap break-words font-mono text-[10.5px] leading-relaxed text-white/80">
             {session?.logs?.trim() || "No terminal output yet."}
           </pre>
-          <p className="mt-2 text-[10px] text-gray-500">
+          <p className="mt-2 text-[10px] text-muted-foreground">
             Output is bounded and redacted on the server. It never includes environment variables.
           </p>
         </div>

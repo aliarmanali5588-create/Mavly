@@ -176,14 +176,14 @@ export default function CreditsAdminPage() {
           <span className="text-muted-foreground font-mono">100% capacity managed</span>
         </div>
         <div className="h-3 w-full bg-[var(--neu-sunken)] rounded-full overflow-hidden flex">
-          <div className="bg-gray-950 h-full w-[65%]" title="Agency & Pro: 65%" />
+          <div className="bg-black h-full w-[65%]" title="Agency & Pro: 65%" />
           <div className="bg-blue-600 h-full w-[22%]" title="Starter: 22%" />
           <div className="bg-amber-500 h-full w-[9%]" title="Creator: 9%" />
-          <div className="bg-gray-400 h-full w-[4%]" title="Free Trials: 4%" />
+          <div className="bg-muted-foreground h-full w-[4%]" title="Free Trials: 4%" />
         </div>
         <div className="flex flex-wrap items-center gap-4 text-xs pt-1 text-muted-foreground font-medium">
           <div className="flex items-center gap-1.5">
-            <span className="w-2.5 h-2.5 rounded-full bg-gray-950" />
+            <span className="w-2.5 h-2.5 rounded-full bg-black" />
             <span>Agency & Pro (65%)</span>
           </div>
           <div className="flex items-center gap-1.5">
@@ -195,7 +195,7 @@ export default function CreditsAdminPage() {
             <span>Creator (9%)</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <span className="w-2.5 h-2.5 rounded-full bg-gray-400" />
+            <span className="w-2.5 h-2.5 rounded-full bg-muted-foreground" />
             <span>Free Trials (4%)</span>
           </div>
         </div>
@@ -246,7 +246,7 @@ export default function CreditsAdminPage() {
 
             <button
               onClick={() => setIsAdjustModalOpen(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-black hover:bg-neutral-800 rounded-lg transition-colors shadow-xs"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-primary hover:bg-[var(--neu-brand-hover)] rounded-lg transition-colors shadow-xs"
             >
               <PlusCircle className="w-3.5 h-3.5" />
               <span>Adjust Credits</span>
@@ -316,7 +316,7 @@ export default function CreditsAdminPage() {
                     <td className="py-3.5 text-right">
                       <button
                         onClick={() => setSelectedTx(tx)}
-                        className="px-2.5 py-1 text-[11px] font-medium text-foreground bg-[var(--neu-sunken)] hover:bg-gray-200 rounded-md transition-colors"
+                        className="px-2.5 py-1 text-[11px] font-medium text-foreground bg-[var(--neu-sunken)] hover:bg-[var(--neu-sunken-deep)] rounded-md transition-colors"
                       >
                         Details
                       </button>
@@ -412,13 +412,13 @@ export default function CreditsAdminPage() {
                 <button
                   type="button"
                   onClick={() => setIsAdjustModalOpen(false)}
-                  className="px-3.5 py-1.5 text-xs font-medium text-foreground bg-[var(--neu-sunken)] hover:bg-gray-200 rounded-lg transition-colors"
+                  className="px-3.5 py-1.5 text-xs font-medium text-foreground bg-[var(--neu-sunken)] hover:bg-[var(--neu-sunken-deep)] rounded-lg transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-1.5 text-xs font-semibold text-white bg-black hover:bg-neutral-800 rounded-lg transition-colors"
+                  className="px-4 py-1.5 text-xs font-semibold text-white bg-primary hover:bg-[var(--neu-brand-hover)] rounded-lg transition-colors"
                 >
                   Apply Credit Adjustment
                 </button>
@@ -483,7 +483,7 @@ export default function CreditsAdminPage() {
             <div className="flex justify-end pt-2 border-t border-[var(--neu-line)]">
               <button
                 onClick={() => setSelectedTx(null)}
-                className="px-4 py-1.5 text-xs font-semibold text-foreground bg-[var(--neu-sunken)] hover:bg-gray-200 rounded-lg"
+                className="px-4 py-1.5 text-xs font-semibold text-foreground bg-[var(--neu-sunken)] hover:bg-[var(--neu-sunken-deep)] rounded-lg"
               >
                 Close
               </button>

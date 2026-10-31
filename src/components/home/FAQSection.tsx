@@ -45,7 +45,7 @@ export function FAQSection() {
           <a
             href="#pricing"
             onClick={(e) => e.stopPropagation()}
-            className="underline font-semibold text-gray-950 hover:text-black transition-colors"
+            className="underline font-semibold text-foreground hover:text-black transition-colors"
           >
             Pricing section
           </a>{" "}
@@ -60,13 +60,13 @@ export function FAQSection() {
       <div className="max-w-4xl mx-auto px-4 sm:px-6">
         {/* Section Header */}
         <div className="text-center max-w-2xl mx-auto mb-16">
-          <span className="text-xs font-bold tracking-widest uppercase text-stone-500 mb-3 block">
+          <span className="text-xs font-bold tracking-widest uppercase text-muted-foreground mb-3 block">
             Frequently Asked Questions
           </span>
-          <h2 className="text-3xl sm:text-4xl md:text-5xl font-black tracking-tight text-gray-950 leading-tight">
+          <h2 className="text-3xl sm:text-4xl md:text-5xl font-black tracking-tight text-foreground leading-tight">
             Got questions? We&apos;ve got answers.
           </h2>
-          <p className="mt-4 text-sm sm:text-base text-gray-600 leading-relaxed font-normal">
+          <p className="mt-4 text-sm sm:text-base text-muted-foreground leading-relaxed font-normal">
             Everything you need to know about building websites with Mavly.
           </p>
         </div>
@@ -94,15 +94,15 @@ export function FAQSection() {
                     aria-expanded={isOpen}
                     aria-controls={panelId}
                     onClick={() => toggleItem(idx)}
-                    className="w-full py-5 px-6 text-left flex items-center justify-between gap-4 font-bold text-sm sm:text-base text-gray-950 hover:text-neutral-700 active:bg-black/[0.02] transition-colors cursor-pointer select-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black focus-visible:ring-offset-2 rounded-2xl"
+                    className="w-full py-5 px-6 text-left flex items-center justify-between gap-4 font-bold text-sm sm:text-base text-foreground hover:text-foreground active:bg-black/[0.02] transition-colors cursor-pointer select-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black focus-visible:ring-offset-2 rounded-2xl"
                   >
                     <span className="pr-2">{faq.q}</span>
                     <div
                       aria-hidden="true"
                       className={`p-1.5 sm:p-2 rounded-xl bg-card border transition-[box-shadow,border-color] duration-300 ease-out shrink-0 flex items-center justify-center motion-reduce:transition-none pointer-events-none ${
                         isOpen
-                          ? "rotate-180 text-gray-950 border-black/[0.16] shadow-sm"
-                          : "rotate-0 text-gray-400 border-black/[0.08]"
+                          ? "rotate-180 text-foreground border-black/[0.16] shadow-sm"
+                          : "rotate-0 text-muted-foreground border-black/[0.08]"
                       }`}
                     >
                       <ChevronDown className="w-4 h-4 transition-transform duration-300" />
@@ -120,7 +120,7 @@ export function FAQSection() {
                   className="mavly-accordion-content"
                 >
                   <div className="mavly-accordion-inner">
-                    <div className="px-6 pb-6 pt-1 text-xs sm:text-sm text-gray-600 leading-relaxed border-t border-black/[0.04]">
+                    <div className="px-6 pb-6 pt-1 text-xs sm:text-sm text-muted-foreground leading-relaxed border-t border-black/[0.04]">
                       {faq.a}
                     </div>
                   </div>

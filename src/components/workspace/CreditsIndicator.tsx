@@ -71,9 +71,9 @@ export function CreditsIndicator({ className, credits, refreshKey }: CreditsIndi
       title={title}
       className={cn(
         "flex items-center gap-1.5 h-7 px-2 rounded-lg shrink-0 select-none",
-        "border border-gray-200/60 dark:border-gray-700/60",
+        "border border-[var(--neu-line)]/60 ",
         "bg-black/[0.02] dark:bg-white/[0.04]",
-        "text-gray-700 dark:text-gray-200",
+        "text-foreground ",
         "transition-colors",
         className
       )}

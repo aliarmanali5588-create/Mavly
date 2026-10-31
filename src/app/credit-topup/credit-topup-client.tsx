@@ -75,7 +75,7 @@ export function CreditTopupClient({ profile }: CreditTopupClientProps) {
                 <ArrowLeft className="w-3.5 h-3.5" />
                 <span>{userEmail ? "Dashboard" : "Home"}</span>
               </Link>
-              <span className="text-gray-300">/</span>
+              <span className="text-muted-foreground">/</span>
               <span className="text-foreground font-semibold">Credit Top-up</span>
             </nav>
           </div>
@@ -90,7 +90,7 @@ export function CreditTopupClient({ profile }: CreditTopupClientProps) {
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-12 sm:py-16">
         {/* Page Title & Introductory Copy */}
         <div className="text-center max-w-3xl mx-auto mb-12 sm:mb-16">
-          <span className="text-xs font-bold tracking-widest uppercase text-stone-500 mb-3 block">
+          <span className="text-xs font-bold tracking-widest uppercase text-muted-foreground mb-3 block">
             Credits
           </span>
           <h1 className="text-3xl sm:text-4xl md:text-5xl font-black tracking-tight text-foreground leading-tight">
@@ -105,7 +105,7 @@ export function CreditTopupClient({ profile }: CreditTopupClientProps) {
             {/* Account Status / Actual Balance Notice */}
             <div className="p-4 rounded-2xl bg-card border border-[var(--neu-line)] shadow-[var(--neu-elev-2)]">
               <div className="flex items-center gap-2 mb-1.5">
-                <Coins className="w-4 h-4 text-stone-600" />
+                <Coins className="w-4 h-4 text-muted-foreground" />
                 <span className="text-xs font-bold text-foreground uppercase tracking-wide">
                   Account Status
                 </span>
@@ -129,7 +129,7 @@ export function CreditTopupClient({ profile }: CreditTopupClientProps) {
             {/* Provisional Pricing Disclosure */}
             <div className="p-4 rounded-2xl bg-card border border-[var(--neu-line)] shadow-[var(--neu-elev-2)]">
               <div className="flex items-center gap-2 mb-1.5">
-                <Info className="w-4 h-4 text-stone-600" />
+                <Info className="w-4 h-4 text-muted-foreground" />
                 <span className="text-xs font-bold text-foreground uppercase tracking-wide">
                   Provisional Pricing Notice
                 </span>
@@ -150,7 +150,7 @@ export function CreditTopupClient({ profile }: CreditTopupClientProps) {
             <h2 className="text-sm font-bold text-foreground uppercase tracking-wider">
               Available Packages (10)
             </h2>
-            <span className="text-xs text-stone-500">
+            <span className="text-xs text-muted-foreground">
               Click a card to select
             </span>
           </div>
@@ -181,7 +181,7 @@ export function CreditTopupClient({ profile }: CreditTopupClientProps) {
                   {/* Top: Package Identifier & Selected Indicator */}
                   <div>
                     <div className="flex items-center justify-between min-h-[22px]">
-                      <span className="text-[11px] font-bold uppercase tracking-wider text-stone-500">
+                      <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
                         {pkg.name}
                       </span>
                       {isSelected ? (
@@ -190,7 +190,7 @@ export function CreditTopupClient({ profile }: CreditTopupClientProps) {
                           <span>Selected</span>
                         </span>
                       ) : (
-                        <span className="text-[10px] font-medium text-stone-400">
+                        <span className="text-[10px] font-medium text-muted-foreground">
                           Pack
                         </span>
                       )}
@@ -217,7 +217,7 @@ export function CreditTopupClient({ profile }: CreditTopupClientProps) {
                       <span className="text-lg font-extrabold text-foreground tracking-tight">
                         {formatINR(pkg.priceINR)}
                       </span>
-                      <span className="text-[10px] text-stone-500">
+                      <span className="text-[10px] text-muted-foreground">
                         Provisional price
                       </span>
                     </div>
@@ -232,7 +232,7 @@ export function CreditTopupClient({ profile }: CreditTopupClientProps) {
                       className={`w-full py-2 px-3 rounded-full text-xs font-semibold transition-all ${
                         isSelected
                           ? "bg-black text-white shadow-xs"
-                          : "bg-stone-100 text-stone-800 hover:bg-stone-200"
+                          : "bg-[var(--neu-sunken)] text-foreground hover:bg-[var(--neu-sunken-deep)]"
                       }`}
                     >
                       {isSelected ? "Selected" : "Select package"}
@@ -248,7 +248,7 @@ export function CreditTopupClient({ profile }: CreditTopupClientProps) {
         <div className="max-w-3xl mx-auto rounded-3xl bg-card border border-[var(--neu-line)] shadow-[0_4px_24px_-4px_rgba(0,0,0,0.06)] p-6 sm:p-8">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6 pb-6 border-b border-[var(--neu-line)]">
             <div>
-              <span className="text-[11px] font-bold uppercase tracking-wider text-stone-500 block mb-1">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground block mb-1">
                 Current Package Selection
               </span>
               <h3 className="text-2xl font-black text-foreground tracking-tight flex items-center gap-2">
@@ -264,13 +264,13 @@ export function CreditTopupClient({ profile }: CreditTopupClientProps) {
             </div>
 
             <div className="text-left sm:text-right shrink-0">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-stone-500 block mb-1">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground block mb-1">
                 Provisional Amount
               </span>
               <span className="text-3xl font-black text-foreground tracking-tight">
                 {formatINR(selectedPackage.priceINR)}
               </span>
-              <span className="text-[11px] text-stone-500 block mt-0.5">
+              <span className="text-[11px] text-muted-foreground block mt-0.5">
                 Taxes applicable where required
               </span>
             </div>
@@ -279,7 +279,7 @@ export function CreditTopupClient({ profile }: CreditTopupClientProps) {
           {/* Checkout Status Notice */}
           <div className="mt-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div className="flex items-start gap-2.5 max-w-lg">
-              <Info className="w-4 h-4 text-stone-500 shrink-0 mt-0.5" />
+              <Info className="w-4 h-4 text-muted-foreground shrink-0 mt-0.5" />
               <p className="text-xs text-muted-foreground leading-relaxed">
                 <strong className="text-foreground">Checkout status:</strong> Automated payment gateway integration (Razorpay / Stripe) is currently in development. You will not be charged.
               </p>

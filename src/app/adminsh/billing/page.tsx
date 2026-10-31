@@ -109,7 +109,7 @@ export default function BillingAdminPage() {
       case "Refunded":
         return (
           <span className="text-muted-foreground font-medium text-xs flex items-center gap-1.5">
-            <span className="w-1.5 h-1.5 rounded-full bg-gray-400" />
+            <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground" />
             Refunded
           </span>
         );
@@ -302,7 +302,7 @@ export default function BillingAdminPage() {
                         <button
                           type="button"
                           onClick={() => setSelectedTxn(tx)}
-                          className="px-2 py-1 rounded-lg text-[11px] font-semibold text-foreground bg-[var(--neu-sunken)] hover:bg-gray-200 transition-colors"
+                          className="px-2 py-1 rounded-lg text-[11px] font-semibold text-foreground bg-[var(--neu-sunken)] hover:bg-[var(--neu-sunken-deep)] transition-colors"
                         >
                           Invoice
                         </button>

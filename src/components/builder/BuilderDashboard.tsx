@@ -103,12 +103,12 @@ function PreviewPlaceholder({ name, text, isRow }: { name: string; text: string;
   return (
     <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-1.5 bg-[var(--neu-sunken)] px-3 text-center">
       <div className={`rounded-lg border border-[var(--neu-line)] bg-card flex items-center justify-center shadow-[var(--neu-elev-1)] ${isRow ? "w-5 h-5" : "w-8 h-8"}`}>
-        <Monitor className={`text-gray-300 ${isRow ? "w-3 h-3" : "w-4 h-4"}`} />
+        <Monitor className={`text-muted-foreground ${isRow ? "w-3 h-3" : "w-4 h-4"}`} />
       </div>
-      <span className={`font-medium text-gray-600 line-clamp-2 leading-snug ${isRow ? "text-[8px]" : "text-[11px]"}`} title={name}>
+      <span className={`font-medium text-muted-foreground line-clamp-2 leading-snug ${isRow ? "text-[8px]" : "text-[11px]"}`} title={name}>
         {name}
       </span>
-      <span className={`uppercase tracking-[0.12em] text-gray-400 ${isRow ? "hidden" : "text-[8px]"}`}>{text}</span>
+      <span className={`uppercase tracking-[0.12em] text-muted-foreground ${isRow ? "hidden" : "text-[8px]"}`}>{text}</span>
     </div>
   );
 }
@@ -117,10 +117,10 @@ function AndroidProjectPlaceholder({ isRow }: { isRow: boolean }) {
   return (
     <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-1.5 bg-[var(--neu-sunken)] px-3 text-center">
       <div className={`rounded-lg border border-[var(--neu-line)] bg-card flex items-center justify-center shadow-[var(--neu-elev-1)] ${isRow ? "w-5 h-5" : "w-8 h-8"}`}>
-        <Smartphone className={`text-gray-400 ${isRow ? "w-3 h-3" : "w-4 h-4"}`} aria-hidden="true" />
+        <Smartphone className={`text-muted-foreground ${isRow ? "w-3 h-3" : "w-4 h-4"}`} aria-hidden="true" />
       </div>
-      <span className={`font-medium text-gray-600 ${isRow ? "text-[8px]" : "text-[11px]"}`}>Android app</span>
-      <span className={`text-gray-400 ${isRow ? "hidden" : "text-[8px]"}`}>Kotlin/Compose source</span>
+      <span className={`font-medium text-muted-foreground ${isRow ? "text-[8px]" : "text-[11px]"}`}>Android app</span>
+      <span className={`text-muted-foreground ${isRow ? "hidden" : "text-[8px]"}`}>Kotlin/Compose source</span>
     </div>
   );
 }
@@ -1035,10 +1035,10 @@ export default function DashboardPage({ profile }: { profile: ProfileSummary }) 
                   referrerPolicy="no-referrer"
                 />
               </div>
-              <h1 className="break-words text-center text-[2rem] font-bold leading-[1.12] tracking-tight text-gray-900 sm:text-[2.5rem] lg:text-[3.25rem]">
+              <h1 className="break-words text-center text-[2rem] font-bold leading-[1.12] tracking-tight text-foreground sm:text-[2.5rem] lg:text-[3.25rem]">
                 What do you want to build{headingName ? `, ${headingName}` : ""}?
               </h1>
-              <p className="text-gray-500 max-w-md mx-auto mt-2 text-sm">Describe your app and AI will build it in minutes.</p>
+              <p className="text-muted-foreground max-w-md mx-auto mt-2 text-sm">Describe your app and AI will build it in minutes.</p>
             </div>
             <div className="mb-2 px-4 sm:px-5">
               <div role="group" aria-label="Project type" className="inline-flex max-w-full gap-1 rounded-xl border border-[var(--neu-line)] bg-[var(--neu-sunken)] p-1 shadow-[var(--neu-inset-2)]">
@@ -1090,7 +1090,7 @@ export default function DashboardPage({ profile }: { profile: ProfileSummary }) 
                       ? "Describe what you want to build..."
                       : "Describe the Android app you want to build..."
                   }
-                  className="block w-full min-h-[140px] sm:min-h-[170px] resize-none text-[15px] leading-relaxed p-5 pb-3 outline-none placeholder:text-gray-400 bg-transparent"
+                  className="block w-full min-h-[140px] sm:min-h-[170px] resize-none text-[15px] leading-relaxed p-5 pb-3 outline-none placeholder:text-muted-foreground bg-transparent"
                   onKeyDown={(e) => {
                     // Enter submits, Shift+Enter is a newline (the box is a textarea).
                     if (shouldSubmitPrompt(e.key, e.shiftKey)) {
@@ -1123,7 +1123,7 @@ export default function DashboardPage({ profile }: { profile: ProfileSummary }) 
               />
               <div className="flex items-center justify-between px-4 py-2.5 border-t border-black/[0.05]">
                 <div className="flex items-center gap-1">
-                  <label className="cursor-pointer flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-800 transition-colors px-2 py-1.5 rounded-lg hover:bg-black/5 active:scale-95">
+                  <label className="cursor-pointer flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors px-2 py-1.5 rounded-lg hover:bg-black/5 active:scale-95">
                     <input type="file" multiple className="hidden" onChange={handleFileSelect} accept="image/*,.pdf,.svg" />
                     {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Paperclip className="w-4 h-4" />}
                     <span className="hidden sm:inline">Attach</span>
@@ -1167,10 +1167,10 @@ export default function DashboardPage({ profile }: { profile: ProfileSummary }) 
             {/* Toolbar: search, sort, view toggle */}
             <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-5">
               <div className="flex items-center gap-2">
-                <h2 id="dashboard-projects-heading" className="text-base font-semibold text-gray-700">
+                <h2 id="dashboard-projects-heading" className="text-base font-semibold text-foreground">
                   {promptMode === "website" ? "Websites" : "Android Apps"}
                 </h2>
-                <span className="text-xs text-gray-400 bg-gray-100 rounded-full px-2 py-0.5">
+                <span className="text-xs text-muted-foreground bg-[var(--neu-sunken)] rounded-full px-2 py-0.5">
                   {loading ? "…" : filtered.length}
                 </span>
               </div>
@@ -1178,7 +1178,7 @@ export default function DashboardPage({ profile }: { profile: ProfileSummary }) 
               <div className="flex-1 flex flex-wrap items-center gap-2 sm:justify-end">
                 {/* Search */}
                 <div className="relative flex-1 sm:flex-none sm:w-56 min-w-[160px]">
-                  <Search className="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <Search className="w-3.5 h-3.5 text-muted-foreground absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                   <input
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
@@ -1186,7 +1186,7 @@ export default function DashboardPage({ profile }: { profile: ProfileSummary }) 
                     className="w-full h-8 pl-8 pr-7 text-xs rounded-lg border border-[var(--neu-line)] bg-[var(--neu-sunken)] text-foreground shadow-[var(--neu-inset-1)] outline-none focus-visible:shadow-[var(--neu-inset-1),var(--neu-focus)]"
                   />
                   {search && (
-                    <button onClick={() => setSearch("")} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                    <button onClick={() => setSearch("")} className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-muted-foreground">
                       <X className="w-3 h-3" />
                     </button>
                   )}
@@ -1194,7 +1194,7 @@ export default function DashboardPage({ profile }: { profile: ProfileSummary }) 
 
                 {/* Sort */}
                 <div className="relative">
-                  <ArrowUpDown className="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <ArrowUpDown className="w-3.5 h-3.5 text-muted-foreground absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                   <select
                     value={sortKey}
                     onChange={(e) => setSortKey(e.target.value as SortKey)}
@@ -1244,10 +1244,10 @@ export default function DashboardPage({ profile }: { profile: ProfileSummary }) 
               </div>
             ) : projects.length === 0 ? (
               <div className="rounded-2xl border border-[var(--neu-line)] bg-[var(--neu-sunken)] px-5 py-10 text-center shadow-[var(--neu-inset-2)]">
-                <p className="font-medium text-gray-700">
+                <p className="font-medium text-foreground">
                   No {promptMode === "website" ? "websites" : "Android apps"} yet
                 </p>
-                <p className="mx-auto mt-1 max-w-md text-sm text-gray-500">
+                <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
                   {promptMode === "website"
                     ? "Describe your idea above and Mavly will create your first website."
                     : "Describe your idea above and Mavly will create your first Android app."}
@@ -1262,8 +1262,8 @@ export default function DashboardPage({ profile }: { profile: ProfileSummary }) 
                 </button>
               </div>
             ) : filtered.length === 0 ? (
-              <div className="text-center py-16 text-gray-400">
-                <Search className="w-8 h-8 mx-auto mb-2 text-gray-300" />
+              <div className="text-center py-16 text-muted-foreground">
+                <Search className="w-8 h-8 mx-auto mb-2 text-muted-foreground" />
                 <p className="text-sm">No projects match &ldquo;{search}&rdquo;</p>
               </div>
             ) : resolvedView === "cards" ? (
@@ -1285,11 +1285,11 @@ export default function DashboardPage({ profile }: { profile: ProfileSummary }) 
                         </div>
                         <div className="p-4 flex-1">
                           <div className="flex items-start justify-between mb-1">
-                            <h3 className="font-medium text-sm text-gray-800 group-hover:text-gray-900 truncate flex-1" title={name}>
+                            <h3 className="font-medium text-sm text-foreground group-hover:text-foreground truncate flex-1" title={name}>
                               {name}
                             </h3>
                             {p.projectType === "android" && (
-                              <span className="ml-2 shrink-0 rounded-full bg-gray-100 px-2 py-0.5 text-[9px] font-medium text-gray-500">
+                              <span className="ml-2 shrink-0 rounded-full bg-[var(--neu-sunken)] px-2 py-0.5 text-[9px] font-medium text-muted-foreground">
                                 Android
                               </span>
                             )}
@@ -1298,7 +1298,7 @@ export default function DashboardPage({ profile }: { profile: ProfileSummary }) 
                                 <button
                                   onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
                                   title="Options"
-                                  className="w-6 h-6 rounded-md flex items-center justify-center text-gray-300 hover:text-gray-600 hover:bg-gray-100 transition-all shrink-0 ml-2"
+                                  className="w-6 h-6 rounded-md flex items-center justify-center text-muted-foreground hover:text-muted-foreground hover:bg-[var(--neu-sunken)] transition-all shrink-0 ml-2"
                                 >
                                   <MoreVertical className="w-3.5 h-3.5" />
                                 </button>
@@ -1326,12 +1326,12 @@ export default function DashboardPage({ profile }: { profile: ProfileSummary }) 
                               </DropdownMenuContent>
                             </DropdownMenu>
                           </div>
-                          <p className="text-[11px] text-gray-500 line-clamp-1">{p.description || "No description"}</p>
+                          <p className="text-[11px] text-muted-foreground line-clamp-1">{p.description || "No description"}</p>
                           <div className="flex items-center justify-between mt-2">
-                            <span className="text-[10px] text-gray-400">
+                            <span className="text-[10px] text-muted-foreground">
                               {updated ? `Updated ${updated}` : ""}
                             </span>
-                            <ArrowRight className="w-3 h-3 text-gray-300 group-hover:text-gray-500 transition-colors" />
+                            <ArrowRight className="w-3 h-3 text-muted-foreground group-hover:text-muted-foreground transition-colors" />
                           </div>
                         </div>
                       </div>
@@ -1345,7 +1345,7 @@ export default function DashboardPage({ profile }: { profile: ProfileSummary }) 
                 <div className="overflow-x-auto">
                   <table className="w-full text-left">
                     <thead>
-                      <tr className="border-b border-gray-200/70 text-[11px] uppercase tracking-wider text-gray-400">
+                      <tr className="border-b border-[var(--neu-line)]/70 text-[11px] uppercase tracking-wider text-muted-foreground">
                         <th className="font-medium px-4 py-2.5 w-16">Preview</th>
                         <th className="font-medium px-2 py-2.5">Project</th>
                         <th className="font-medium px-2 py-2.5 hidden md:table-cell">Description</th>
@@ -1358,10 +1358,10 @@ export default function DashboardPage({ profile }: { profile: ProfileSummary }) 
                         <tr
                           key={p.projectId}
                           onClick={() => router.push(`/project/${p.projectId}`)}
-                          className="border-b border-gray-100/70 last:border-0 hover:bg-gray-50/60 cursor-pointer transition-colors group"
+                          className="border-b border-[var(--neu-line)]/70 last:border-0 hover:bg-[var(--neu-sunken)]/60 cursor-pointer transition-colors group"
                         >
                           <td className="px-4 py-2">
-                            <div className="relative w-14 aspect-[16/10] rounded-md overflow-hidden border border-gray-200/60">
+                            <div className="relative w-14 aspect-[16/10] rounded-md overflow-hidden border border-[var(--neu-line)]/60">
                               {p.projectType === "android" ? (
                                 <AndroidProjectPlaceholder isRow />
                               ) : (
@@ -1370,20 +1370,20 @@ export default function DashboardPage({ profile }: { profile: ProfileSummary }) 
                             </div>
                           </td>
                           <td className="px-2 py-2">
-                            <span className="text-sm font-medium text-gray-800 group-hover:text-gray-900" title={displayProjectName(p)}>
+                            <span className="text-sm font-medium text-foreground group-hover:text-foreground" title={displayProjectName(p)}>
                               {displayProjectName(p)}
                             </span>
                             {p.projectType === "android" && (
-                              <span className="ml-2 rounded-full bg-gray-100 px-2 py-0.5 text-[9px] font-medium text-gray-500">
+                              <span className="ml-2 rounded-full bg-[var(--neu-sunken)] px-2 py-0.5 text-[9px] font-medium text-muted-foreground">
                                 Android
                               </span>
                             )}
                           </td>
                           <td className="px-2 py-2 hidden md:table-cell">
-                            <span className="text-xs text-gray-500 line-clamp-1 max-w-[280px]">{p.description || "No description"}</span>
+                            <span className="text-xs text-muted-foreground line-clamp-1 max-w-[280px]">{p.description || "No description"}</span>
                           </td>
                           <td className="px-2 py-2 whitespace-nowrap">
-                            <span className="text-xs text-gray-400">{formatProjectDate(p)}</span>
+                            <span className="text-xs text-muted-foreground">{formatProjectDate(p)}</span>
                           </td>
                           <td className="px-4 py-2 text-right">
                             <DropdownMenu>
@@ -1391,7 +1391,7 @@ export default function DashboardPage({ profile }: { profile: ProfileSummary }) 
                                 <button
                                   onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
                                   title="Options"
-                                  className="w-6 h-6 rounded-md inline-flex items-center justify-center text-gray-300 hover:text-gray-600 hover:bg-gray-100 transition-all"
+                                  className="w-6 h-6 rounded-md inline-flex items-center justify-center text-muted-foreground hover:text-muted-foreground hover:bg-[var(--neu-sunken)] transition-all"
                                 >
                                   <MoreVertical className="w-3.5 h-3.5" />
                                 </button>
@@ -1436,7 +1436,7 @@ export default function DashboardPage({ profile }: { profile: ProfileSummary }) 
                 >
                   <ChevronLeft className="w-4 h-4" />
                 </button>
-                <span className="text-xs text-gray-500 px-2">Page {safePage} of {totalPages}</span>
+                <span className="text-xs text-muted-foreground px-2">Page {safePage} of {totalPages}</span>
                 <button
                   onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                   disabled={safePage >= totalPages}
@@ -1459,7 +1459,7 @@ export default function DashboardPage({ profile }: { profile: ProfileSummary }) 
         <DialogContent>
           <DialogHeader><DialogTitle>Create a project for GitHub</DialogTitle></DialogHeader>
           <div className="space-y-4 mt-4">
-            <p className="text-sm text-gray-500">
+            <p className="text-sm text-muted-foreground">
               Mavly imports a repository into a project. Name the project first, then choose
               the repository and branch in the GitHub dialog.
             </p>
@@ -1478,9 +1478,9 @@ export default function DashboardPage({ profile }: { profile: ProfileSummary }) 
                 }}
                 className="mt-1.5"
               />
-              <p className="text-xs text-gray-400 mt-1">
+              <p className="text-xs text-muted-foreground mt-1">
                 3-35 chars, lowercase, hyphens allowed. Final id:{" "}
-                <span className="font-mono text-gray-500">{normalizeId(githubName) || "…"}</span>
+                <span className="font-mono text-muted-foreground">{normalizeId(githubName) || "…"}</span>
               </p>
             </div>
             {githubNameError && (
@@ -1511,14 +1511,14 @@ export default function DashboardPage({ profile }: { profile: ProfileSummary }) 
               <AlertTriangle className="w-7 h-7 text-red-500" />
             </div>
             <DialogHeader className="mt-4">
-              <DialogTitle className="text-center text-lg font-semibold text-gray-900">Delete this project?</DialogTitle>
+              <DialogTitle className="text-center text-lg font-semibold text-foreground">Delete this project?</DialogTitle>
             </DialogHeader>
           </div>
 
           <div className="px-6 py-5 space-y-4">
-            <p className="text-sm text-gray-600 text-center leading-relaxed">
+            <p className="text-sm text-muted-foreground text-center leading-relaxed">
               You&rsquo;re about to permanently delete{" "}
-              <span className="font-semibold text-gray-900 font-mono break-all">{deleteTarget}</span>.
+              <span className="font-semibold text-foreground font-mono break-all">{deleteTarget}</span>.
             </p>
             <div className="flex items-start gap-2.5 text-xs text-red-700 bg-red-50 border border-red-200 rounded-xl p-3">
               <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />

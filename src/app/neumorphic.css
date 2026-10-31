@@ -21,86 +21,90 @@
 
 :root {
   /* Material ------------------------------------------------------- */
-  --neu-base: #eeeae7;          /* the canvas everything is carved from */
-  --neu-surface: #fffcfb;       /* raised surface — brand warm white     */
-  --neu-surface-soft: #fbf7f4;  /* barely-raised surface                 */
-  --neu-sunken: #e6e0db;        /* recessed well                         */
-  --neu-sunken-deep: #ddd6d0;   /* deep recess                           */
-  --neu-line: rgba(28, 20, 17, 0.07);    /* edge definition, not a border */
-  --neu-line-strong: rgba(28, 20, 17, 0.13);
+  --neu-base: #fffcfb;          /* Warm White — the brand canvas         */
+  --neu-surface: #ffffff;       /* Pure White — raised surface           */
+  --neu-surface-soft: #fffcfb;  /* barely-raised surface                 */
+  --neu-sunken: #f7f2f0;        /* recessed well                         */
+  --neu-sunken-deep: #f1eae7;   /* deep recess                           */
+  --neu-line: rgba(0, 0, 0, 0.06);       /* edge definition, not a border */
+  --neu-line-strong: rgba(0, 0, 0, 0.12);
 
   /* Ink ------------------------------------------------------------ */
-  --neu-ink: #0b0908;
-  --neu-ink-soft: #6d605a;
-  --neu-ink-faint: #9c8f88;
+  --neu-ink: #000000;
+  --neu-ink-soft: rgba(0, 0, 0, 0.62);
+  --neu-ink-faint: rgba(0, 0, 0, 0.42);
 
   /* Brand ---------------------------------------------------------- */
-  --neu-brand: #093fb4;
-  --neu-brand-soft: #e8edfa;
-  --neu-peach: #ffd8d8;
-  --neu-peach-soft: #fff2f2;
-  --neu-ember: #ed3500;
+  --neu-brand: #093fb4;         /* Royal Blue                            */
+  --neu-brand-hover: #0a4ad4;
+  --neu-brand-active: #07339a;
+  --neu-brand-soft: #e7edfb;    /* Royal Blue tint                       */
+  --neu-peach: #ffd8d8;         /* Soft Peach Pink                       */
+  --neu-peach-soft: #fff0f0;
+  --neu-ember: #ed3500;         /* Vivid Orange-Red                      */
+  --neu-white: #ffffff;
+  --neu-black: #000000;
 
   /* Shadow material ------------------------------------------------ */
-  --neu-shade: 132 104 92;      /* warm shadow, never grey            */
+  --neu-shade: 0 0 0;           /* neutral shadow — no colour cast    */
   --neu-glow: 255 255 255;      /* highlight                          */
 
   /* Elevation ladder — upper-left light ---------------------------- */
   --neu-elev-0: none;
-  --neu-elev-1: 0 1px 2px rgb(var(--neu-shade) / 0.16),
-    2px 3px 7px rgb(var(--neu-shade) / 0.26),
-    5px 7px 16px rgb(var(--neu-shade) / 0.16),
+  --neu-elev-1: 0 1px 2px rgb(var(--neu-shade) / 0.099),
+    2px 3px 7px rgb(var(--neu-shade) / 0.161),
+    5px 7px 16px rgb(var(--neu-shade) / 0.099),
     -2px -2px 6px rgb(var(--neu-glow) / 1),
     -4px -4px 12px rgb(var(--neu-glow) / 0.7),
     inset 0 1px 0 rgb(var(--neu-glow) / 0.95);
-  --neu-elev-2: 0 1px 2px rgb(var(--neu-shade) / 0.18),
-    4px 6px 12px rgb(var(--neu-shade) / 0.3),
-    9px 13px 28px rgb(var(--neu-shade) / 0.2),
+  --neu-elev-2: 0 1px 2px rgb(var(--neu-shade) / 0.112),
+    4px 6px 12px rgb(var(--neu-shade) / 0.186),
+    9px 13px 28px rgb(var(--neu-shade) / 0.124),
     -5px -5px 14px rgb(var(--neu-glow) / 1),
     -9px -9px 26px rgb(var(--neu-glow) / 0.72),
     inset 0 1px 0 rgb(var(--neu-glow) / 1),
-    inset 0 -1px 0 rgb(var(--neu-shade) / 0.07);
-  --neu-elev-3: 0 2px 3px rgb(var(--neu-shade) / 0.2),
-    7px 10px 20px rgb(var(--neu-shade) / 0.32),
-    15px 22px 46px rgb(var(--neu-shade) / 0.22),
+    inset 0 -1px 0 rgb(var(--neu-shade) / 0.043);
+  --neu-elev-3: 0 2px 3px rgb(var(--neu-shade) / 0.124),
+    7px 10px 20px rgb(var(--neu-shade) / 0.198),
+    15px 22px 46px rgb(var(--neu-shade) / 0.136),
     -8px -8px 22px rgb(var(--neu-glow) / 1),
     -14px -14px 40px rgb(var(--neu-glow) / 0.75),
     inset 0 1px 0 rgb(var(--neu-glow) / 1),
-    inset 0 -1px 0 rgb(var(--neu-shade) / 0.08);
-  --neu-elev-4: 0 3px 5px rgb(var(--neu-shade) / 0.22),
-    12px 16px 32px rgb(var(--neu-shade) / 0.34),
-    24px 34px 72px rgb(var(--neu-shade) / 0.24),
+    inset 0 -1px 0 rgb(var(--neu-shade) / 0.05);
+  --neu-elev-4: 0 3px 5px rgb(var(--neu-shade) / 0.136),
+    12px 16px 32px rgb(var(--neu-shade) / 0.211),
+    24px 34px 72px rgb(var(--neu-shade) / 0.149),
     -12px -12px 30px rgb(var(--neu-glow) / 0.98),
     -20px -20px 56px rgb(var(--neu-glow) / 0.78),
     inset 0 1px 0 rgb(var(--neu-glow) / 1),
-    inset 0 -1px 0 rgb(var(--neu-shade) / 0.09);
-  --neu-elev-5: 0 4px 7px rgb(var(--neu-shade) / 0.24),
-    18px 24px 48px rgb(var(--neu-shade) / 0.36),
-    38px 52px 104px rgb(var(--neu-shade) / 0.26),
+    inset 0 -1px 0 rgb(var(--neu-shade) / 0.056);
+  --neu-elev-5: 0 4px 7px rgb(var(--neu-shade) / 0.149),
+    18px 24px 48px rgb(var(--neu-shade) / 0.223),
+    38px 52px 104px rgb(var(--neu-shade) / 0.161),
     -16px -16px 40px rgb(var(--neu-glow) / 0.95),
     -28px -28px 76px rgb(var(--neu-glow) / 0.8),
     inset 0 1px 0 rgb(var(--neu-glow) / 1),
-    inset 0 -1px 0 rgb(var(--neu-shade) / 0.1);
+    inset 0 -1px 0 rgb(var(--neu-shade) / 0.062);
 
   /* Recess --------------------------------------------------------- */
-  --neu-inset-1: inset 1px 2px 3px rgb(var(--neu-shade) / 0.24),
-    inset 3px 5px 11px rgb(var(--neu-shade) / 0.15),
+  --neu-inset-1: inset 1px 2px 3px rgb(var(--neu-shade) / 0.149),
+    inset 3px 5px 11px rgb(var(--neu-shade) / 0.093),
     inset -2px -2px 5px rgb(var(--neu-glow) / 1),
     inset 0 -1px 0 rgb(var(--neu-glow) / 0.85);
-  --neu-inset-2: inset 2px 4px 6px rgb(var(--neu-shade) / 0.28),
-    inset 5px 9px 20px rgb(var(--neu-shade) / 0.19),
+  --neu-inset-2: inset 2px 4px 6px rgb(var(--neu-shade) / 0.174),
+    inset 5px 9px 20px rgb(var(--neu-shade) / 0.118),
     inset -3px -3px 8px rgb(var(--neu-glow) / 1),
     inset 0 -1px 0 rgb(var(--neu-glow) / 0.9);
-  --neu-inset-3: inset 3px 6px 10px rgb(var(--neu-shade) / 0.32),
-    inset 8px 15px 30px rgb(var(--neu-shade) / 0.24),
+  --neu-inset-3: inset 3px 6px 10px rgb(var(--neu-shade) / 0.198),
+    inset 8px 15px 30px rgb(var(--neu-shade) / 0.149),
     inset -4px -4px 12px rgb(var(--neu-glow) / 0.98),
     inset 0 -1px 0 rgb(var(--neu-glow) / 0.92);
 
   /* Floating (menus, dialogs, popovers) ---------------------------- */
-  --neu-float: 0 2px 4px rgb(var(--neu-shade) / 0.12),
-    0 9px 18px -4px rgb(var(--neu-shade) / 0.2),
-    0 22px 44px -8px rgb(var(--neu-shade) / 0.26),
-    0 44px 90px -22px rgb(var(--neu-shade) / 0.3),
+  --neu-float: 0 2px 4px rgb(var(--neu-shade) / 0.074),
+    0 9px 18px -4px rgb(var(--neu-shade) / 0.124),
+    0 22px 44px -8px rgb(var(--neu-shade) / 0.161),
+    0 44px 90px -22px rgb(var(--neu-shade) / 0.186),
     -8px -8px 24px rgb(var(--neu-glow) / 0.9),
     inset 0 1px 0 rgb(var(--neu-glow) / 1);
 
@@ -119,95 +123,36 @@
     rgb(var(--neu-glow) / 1) 0%,
     rgb(var(--neu-glow) / 0.6) 22%,
     rgb(var(--neu-glow) / 0.14) 48%,
-    rgb(var(--neu-shade) / 0.05) 74%,
-    rgb(var(--neu-shade) / 0.1) 100%
+    rgb(var(--neu-shade) / 0.031) 74%,
+    rgb(var(--neu-shade) / 0.062) 100%
   );
 }
 
 .dark {
-  --neu-base: #14100f;
-  --neu-surface: #1a1514;
-  --neu-surface-soft: #181312;
-  --neu-sunken: #100c0b;
-  --neu-sunken-deep: #0b0807;
-  --neu-line: rgba(255, 245, 240, 0.07);
-  --neu-line-strong: rgba(255, 245, 240, 0.12);
+  --neu-base: #0a0a0a;
+  --neu-surface: #141414;
+  --neu-surface-soft: #101010;
+  --neu-sunken: #050505;
+  --neu-sunken-deep: #000000;
+  --neu-line: rgba(255, 255, 255, 0.07);
+  --neu-line-strong: rgba(255, 255, 255, 0.12);
 
-  --neu-ink: #fbf7f5;
-  --neu-ink-soft: #a89a93;
-  --neu-ink-faint: #7d706a;
+  --neu-ink: #ffffff;
+  --neu-ink-soft: rgba(255, 255, 255, 0.62);
+  --neu-ink-faint: rgba(255, 255, 255, 0.42);
 
-  --neu-brand: #6f96ff;
-  --neu-brand-soft: #1b2540;
-  --neu-peach: #5a3a3a;
+  --neu-brand: #4d7fef;
+  --neu-brand-hover: #6b93f5;
+  --neu-brand-active: #3a6ad9;
+  --neu-brand-soft: #16213d;
+  --neu-peach: #ffd8d8;
   --neu-peach-soft: #2a1e1e;
-  --neu-ember: #ff6a3d;
+  --neu-ember: #ed3500;
+  --neu-white: #ffffff;
+  --neu-black: #000000;
 
   --neu-shade: 0 0 0;
-  --neu-glow: 255 244 238;
-
-  --neu-elev-1: 0 1px 2px rgb(var(--neu-shade) / 0.5),
-    2px 3px 7px rgb(var(--neu-shade) / 0.55),
-    5px 7px 16px rgb(var(--neu-shade) / 0.4),
-    -2px -2px 6px rgb(var(--neu-glow) / 0.06),
-    inset 0 1px 0 rgb(var(--neu-glow) / 0.08);
-  --neu-elev-2: 0 1px 2px rgb(var(--neu-shade) / 0.55),
-    4px 6px 12px rgb(var(--neu-shade) / 0.6),
-    9px 13px 28px rgb(var(--neu-shade) / 0.45),
-    -5px -5px 14px rgb(var(--neu-glow) / 0.07),
-    inset 0 1px 0 rgb(var(--neu-glow) / 0.09),
-    inset 0 -1px 0 rgb(var(--neu-shade) / 0.4);
-  --neu-elev-3: 0 2px 3px rgb(var(--neu-shade) / 0.6),
-    7px 10px 20px rgb(var(--neu-shade) / 0.65),
-    15px 22px 46px rgb(var(--neu-shade) / 0.5),
-    -8px -8px 22px rgb(var(--neu-glow) / 0.08),
-    inset 0 1px 0 rgb(var(--neu-glow) / 0.1),
-    inset 0 -1px 0 rgb(var(--neu-shade) / 0.45);
-  --neu-elev-4: 0 3px 5px rgb(var(--neu-shade) / 0.65),
-    12px 16px 32px rgb(var(--neu-shade) / 0.7),
-    24px 34px 72px rgb(var(--neu-shade) / 0.55),
-    -12px -12px 30px rgb(var(--neu-glow) / 0.09),
-    inset 0 1px 0 rgb(var(--neu-glow) / 0.11),
-    inset 0 -1px 0 rgb(var(--neu-shade) / 0.5);
-  --neu-elev-5: 0 4px 7px rgb(var(--neu-shade) / 0.7),
-    18px 24px 48px rgb(var(--neu-shade) / 0.75),
-    38px 52px 104px rgb(var(--neu-shade) / 0.6),
-    -16px -16px 40px rgb(var(--neu-glow) / 0.1),
-    inset 0 1px 0 rgb(var(--neu-glow) / 0.12),
-    inset 0 -1px 0 rgb(var(--neu-shade) / 0.55);
-
-  --neu-inset-1: inset 1px 2px 3px rgb(var(--neu-shade) / 0.6),
-    inset 3px 5px 11px rgb(var(--neu-shade) / 0.4),
-    inset -2px -2px 5px rgb(var(--neu-glow) / 0.06),
-    inset 0 -1px 0 rgb(var(--neu-glow) / 0.05);
-  --neu-inset-2: inset 2px 4px 6px rgb(var(--neu-shade) / 0.65),
-    inset 5px 9px 20px rgb(var(--neu-shade) / 0.45),
-    inset -3px -3px 8px rgb(var(--neu-glow) / 0.07),
-    inset 0 -1px 0 rgb(var(--neu-glow) / 0.06);
-  --neu-inset-3: inset 3px 6px 10px rgb(var(--neu-shade) / 0.7),
-    inset 8px 15px 30px rgb(var(--neu-shade) / 0.5),
-    inset -4px -4px 12px rgb(var(--neu-glow) / 0.08),
-    inset 0 -1px 0 rgb(var(--neu-glow) / 0.07);
-
-  --neu-float: 0 2px 4px rgb(var(--neu-shade) / 0.45),
-    0 9px 18px -4px rgb(var(--neu-shade) / 0.6),
-    0 22px 44px -8px rgb(var(--neu-shade) / 0.7),
-    0 44px 90px -22px rgb(var(--neu-shade) / 0.8),
-    -8px -8px 24px rgb(var(--neu-glow) / 0.07),
-    inset 0 1px 0 rgb(var(--neu-glow) / 0.1);
-
-  --neu-focus:
-    0 0 0 2px var(--neu-base),
-    0 0 0 4px rgb(111 150 255 / 0.55);
-
-  --neu-sheen: linear-gradient(
-    145deg,
-    rgb(var(--neu-glow) / 0.1) 0%,
-    rgb(var(--neu-glow) / 0.05) 22%,
-    rgb(var(--neu-glow) / 0.01) 48%,
-    rgb(var(--neu-shade) / 0.16) 74%,
-    rgb(var(--neu-shade) / 0.28) 100%
-  );
+  --neu-glow: 255 255 255;
 }
 
 /* ── 2. WIRE THE TAILWIND ELEVATION SCALE TO THE LADDER ──────────────

@@ -68,14 +68,14 @@ const KIND_STYLE: Record<AttachmentKind, { Icon: typeof FileIcon; plate: string;
     sheet: { Icon: FileSpreadsheetIcon, plate: "bg-emerald-500/10", glyph: "text-emerald-600 dark:text-emerald-400" },
     doc: { Icon: FileTextIcon, plate: "bg-sky-500/10", glyph: "text-sky-600 dark:text-sky-400" },
     slides: { Icon: PresentationIcon, plate: "bg-orange-500/10", glyph: "text-orange-600 dark:text-orange-400" },
-    text: { Icon: FileTextIcon, plate: "bg-slate-500/10", glyph: "text-slate-600 dark:text-slate-300" },
+    text: { Icon: FileTextIcon, plate: "bg-[var(--neu-sunken-deep)]", glyph: "text-muted-foreground" },
     code: { Icon: FileCodeIcon, plate: "bg-blue-500/10", glyph: "text-blue-600 dark:text-blue-400" },
     data: { Icon: BracesIcon, plate: "bg-teal-500/10", glyph: "text-teal-600 dark:text-teal-400" },
     archive: { Icon: FileArchiveIcon, plate: "bg-amber-500/10", glyph: "text-amber-600 dark:text-amber-400" },
     model3d: { Icon: BoxIcon, plate: "bg-cyan-500/10", glyph: "text-cyan-600 dark:text-cyan-400" },
     font: { Icon: TypeIcon, plate: "bg-indigo-500/10", glyph: "text-indigo-600 dark:text-indigo-400" },
     design: { Icon: PaletteIcon, plate: "bg-rose-500/10", glyph: "text-rose-600 dark:text-rose-400" },
-    file: { Icon: FileIcon, plate: "bg-gray-500/10", glyph: "text-gray-500 dark:text-gray-400" },
+    file: { Icon: FileIcon, plate: "bg-[var(--neu-sunken)]0/10", glyph: "text-muted-foreground " },
 };
 
 /** What a chip needs, whichever of the three surfaces it is on. */
@@ -164,11 +164,11 @@ function AttachmentChip({
                 )}
             </span>
             <span className="min-w-0 flex-1 text-left leading-tight">
-                <span className="block truncate text-[11px] font-medium text-gray-700 dark:text-gray-200">
+                <span className="block truncate text-[11px] font-medium text-foreground ">
                     {truncateFileName(item.name, compact ? 20 : 26)}
                 </span>
                 {size ? (
-                    <span className="block text-[10px] text-gray-400">{formatBytes(size)}</span>
+                    <span className="block text-[10px] text-muted-foreground">{formatBytes(size)}</span>
                 ) : null}
             </span>
         </>
@@ -200,7 +200,7 @@ function AttachmentChip({
                 type="button"
                 onClick={onRemove}
                 aria-label={`Remove ${item.name}`}
-                className="grid size-5 shrink-0 place-items-center rounded-full text-gray-400 transition-colors hover:bg-black/5 hover:text-red-500 dark:hover:bg-white/10"
+                className="grid size-5 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-black/5 hover:text-red-500 dark:hover:bg-white/10"
             >
                 <XIcon className="size-3" aria-hidden />
             </button>

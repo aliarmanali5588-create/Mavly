@@ -28,7 +28,7 @@ export default function TermsPage() {
           <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-foreground">
             Terms of Service
           </h1>
-          <p className="text-xs text-gray-400">
+          <p className="text-xs text-muted-foreground">
             Last updated: October 2026 · Standard Draft for Platform Usage
           </p>
         </div>
