@@ -864,7 +864,7 @@ async function execute(
   });
   if (!ruleFiles.ok) {
     return fail(input, guard, {
-      message: ruleFiles.error,
+      message: (ruleFiles as { ok: false; error: string }).error,
       signals: { code: "GENERATION_PERSIST_FAILED" },
     });
   }
@@ -2030,7 +2030,7 @@ async function complete(
       ];
     } else {
       return fail(input, guard, {
-        message: `The website was generated, but its required work-state file could not be saved: ${work.error}`,
+        message: `The website was generated, but its required work-state file could not be saved: ${(work as { ok: false; error: string }).error}`,
         before,
         baseline,
         signals: { code: "GENERATION_PERSIST_FAILED" },

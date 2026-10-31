@@ -769,7 +769,7 @@ async function createProjectResponse(userId: string, body: unknown): Promise<Nex
     });
     if (!rules.ok) {
       await deleteProject(userId, created.data.project_id);
-      return fail(500, "GENERATION_PERSIST_FAILED", rules.error);
+      return fail(500, "GENERATION_PERSIST_FAILED", (rules as { ok: false; error: string }).error);
     }
   }
 
@@ -850,7 +850,7 @@ async function launchProjectResponse(userId: string, body: unknown): Promise<Nex
     });
     if (!rules.ok) {
       if (!mayReuseExistingProject) await deleteProject(userId, created.data.project_id);
-      return fail(500, "GENERATION_PERSIST_FAILED", rules.error);
+      return fail(500, "GENERATION_PERSIST_FAILED", (rules as { ok: false; error: string }).error);
     }
   }
 
@@ -2136,7 +2136,7 @@ async function startAgentResponse(userId: string, projectId: string, body: unkno
       projectId,
       projectType: "website",
     });
-    if (!rules.ok) return fail(500, "GENERATION_PERSIST_FAILED", rules.error);
+    if (!rules.ok) return fail(500, "GENERATION_PERSIST_FAILED", (rules as { ok: false; error: string }).error);
   }
 
   const record = recordOf(body);
@@ -2323,7 +2323,7 @@ async function resumeAgentResponse(userId: string, projectId: string): Promise<N
       projectId,
       projectType: "website",
     });
-    if (!rules.ok) return fail(500, "GENERATION_PERSIST_FAILED", rules.error);
+    if (!rules.ok) return fail(500, "GENERATION_PERSIST_FAILED", (rules as { ok: false; error: string }).error);
   }
 
   const current = await latestRun(projectId);

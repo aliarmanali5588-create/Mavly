@@ -1015,7 +1015,7 @@ export async function generateApp(
       requiredPaths: REQUIRED_CREATE_PATHS,
     });
     if (!scope.ok) {
-      return fail("GENERATION_SCOPE_VIOLATION", scope.summary);
+      return fail("GENERATION_SCOPE_VIOLATION", (scope as { ok: false; summary: string }).summary);
     }
   }
 
