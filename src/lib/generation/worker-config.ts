@@ -2,10 +2,9 @@
  * Platform-wide generation worker configuration.
  *
  * Production deployments always dispatch eligible runs to the durable queue.
- * The Cloudflare Cron Worker and the app server need only the existing
- * server-side Supabase service-role key and Supabase URL. Local development,
- * local production-mode starts and Vercel preview deployments retain inline
- * execution.
+ * The Render background worker uses the existing server-side Supabase
+ * service-role key, Supabase URL and OpenRouter key. Local development, local
+ * production-mode starts and Vercel preview deployments retain inline execution.
  */
 
 import { sanitizeWorkerId } from "./leases";
@@ -13,6 +12,7 @@ import { sanitizeWorkerId } from "./leases";
 export const SERVICE_ROLE_ENV = "SUPABASE_SERVICE_ROLE_KEY";
 export const SUPABASE_URL_ENV = "NEXT_PUBLIC_SUPABASE_URL";
 export const CLOUDFLARE_WORKER_ENV = "MAVLY_CLOUDFLARE_WORKER";
+export const RENDER_WORKER_ENV = "MAVLY_RENDER_WORKER";
 
 export type WorkerConfigProblem = "missing_service_role" | "missing_supabase_url";
 
@@ -34,12 +34,18 @@ export function parseWorkerConfig(env: WorkerEnvironment): GenerationWorkerConfi
   if (!env[SUPABASE_URL_ENV]?.trim()) problems.push("missing_supabase_url");
 
   const productionRuntime =
-    env.VERCEL_ENV === "production" || env[CLOUDFLARE_WORKER_ENV] === "true";
+    env.VERCEL_ENV === "production" ||
+    env[CLOUDFLARE_WORKER_ENV] === "true" ||
+    env[RENDER_WORKER_ENV] === "true";
+  const workerId =
+    env[RENDER_WORKER_ENV] === "true"
+      ? "render-generation-worker"
+      : "cloudflare-generation-worker";
 
   return {
     requested: true,
     ready: problems.length === 0,
-    workerId: sanitizeWorkerId("cloudflare-generation-worker"),
+    workerId: sanitizeWorkerId(workerId),
     production: env.NODE_ENV === "production" && productionRuntime,
     problems,
   };

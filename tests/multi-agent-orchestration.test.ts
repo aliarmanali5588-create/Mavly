@@ -262,7 +262,8 @@ test("complexity is conservative and deterministic", () => {
 test("a simple workflow pays for fewer specialists", () => {
   const simple = tasksForComplexity("simple", { repairEnabled: false }).map((entry) => entry.key);
   const standard = tasksForComplexity("standard", { repairEnabled: false }).map((entry) => entry.key);
-  assert.deepEqual(simple, ["plan", "implement", "verify", "security-review"]);
+  assert.deepEqual(simple, ["implement", "verify", "security-review"]);
+  assert.ok(standard.includes("plan"));
   assert.ok(standard.includes("design-review"));
   assert.ok(standard.includes("deployment-proposal"));
   assert.ok(!standard.includes("repair"));

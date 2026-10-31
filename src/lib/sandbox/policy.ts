@@ -15,6 +15,7 @@
 
 import { sanitizeProjectPath } from "@/lib/ai/agent";
 import { hashSource } from "@/lib/mavly/source-hash";
+import { isAgentControlPath } from "@/lib/project-rules/rules";
 import { planNextAppRouter } from "@/lib/runtime/next-app-router";
 import type { RuntimePlan } from "@/lib/runtime/profile";
 
@@ -62,7 +63,10 @@ export type PreparationResult =
 
 // ── Reserved sandbox paths ──────────────────────────────────────────────────
 
-/** The sandbox writes its own markers here; project content may not occupy it. */
+/**
+ * The sandbox writes its own markers here. Mavly's `.mavly/` control files are
+ * hashed for snapshot integrity but never uploaded into this directory.
+ */
 export const MARKER_DIRECTORY = ".mavly";
 export const INSTALL_EXIT_MARKER = `${MARKER_DIRECTORY}/install.exit`;
 export const INSTALL_LOG_MARKER = `${MARKER_DIRECTORY}/install.log`;
@@ -145,6 +149,8 @@ export function prepareVerification(
 
   const seen = new Set<string>();
   const accepted: VerificationFile[] = [];
+  /** Every validated file, including the control files excluded from upload. */
+  const hashed: VerificationFile[] = [];
   let totalBytes = 0;
 
   for (const file of files) {
@@ -156,13 +162,25 @@ export function prepareVerification(
       );
     }
     const segments = safe.split("/");
-    if (segments.some((segment) => segment.toLowerCase() === MARKER_DIRECTORY)) {
+    /**
+     * ⚠️ ONLY THE TWO CONTROL FILES MAY LIVE IN `.mavly/` HERE. The sandbox
+     * reserves that directory for its own exit/log markers, so any other path
+     * under it still refuses the whole upload. The exact server-owned control
+     * files are HASHED but NOT UPLOADED: they are part of the snapshot (so the
+     * integrity check and restore stay consistent) but are Mavly's notes, not
+     * build input.
+     */
+    const controlFile = isAgentControlPath(safe);
+    if (
+      !controlFile &&
+      segments.some((segment) => segment.toLowerCase() === MARKER_DIRECTORY)
+    ) {
       return invalid(
         "A snapshot path uses the sandbox's reserved .mavly directory.",
         [`refused path: ${safe.slice(0, 200)}`],
       );
     }
-    if (isSecretPath(safe)) {
+    if (!controlFile && isSecretPath(safe)) {
       return invalid(
         "A snapshot contains a credential-shaped file, so nothing was uploaded.",
         [`refused path: ${safe.slice(0, 200)}`],
@@ -194,10 +212,12 @@ export function prepareVerification(
       );
     }
 
-    accepted.push({ path: safe, content: file.content, bytes });
+    const entry = { path: safe, content: file.content, bytes };
+    hashed.push(entry);
+    if (!controlFile) accepted.push(entry);
   }
 
-  const sourceHash = hashSource(accepted);
+  const sourceHash = hashSource(hashed);
   if (!expectedSourceHash || sourceHash !== expectedSourceHash) {
     return {
       ok: false,

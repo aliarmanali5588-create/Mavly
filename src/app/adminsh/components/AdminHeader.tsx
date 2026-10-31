@@ -66,7 +66,7 @@ export function AdminHeader({
   };
 
   return (
-    <header className="sticky top-0 z-20 bg-card/90 backdrop-blur-md border-b border-[var(--neu-line)] px-4 sm:px-6 lg:px-8 h-16 sm:h-20 flex items-center justify-between select-none">
+    <header className="sticky top-0 z-20 bg-card/90 backdrop-blur-md border-b border-[var(--clay-line)] px-4 sm:px-6 lg:px-8 h-16 sm:h-20 flex items-center justify-between select-none">
       {/* ── Left: Mobile Toggle & Page Title Hierarchy ── */}
       <div className="flex items-center gap-3">
         <button
@@ -104,7 +104,7 @@ export function AdminHeader({
       <div className="flex items-center gap-2 sm:gap-3">
         {/* Segmented Time Range Selector */}
         <div
-          className="hidden sm:flex items-center p-1 rounded-xl bg-[var(--neu-sunken)]/80 border border-[var(--neu-line)] text-xs font-semibold text-muted-foreground"
+          className="hidden sm:flex items-center p-1 rounded-xl bg-[var(--clay-sunken)]/80 border border-[var(--clay-line)] text-xs font-semibold text-muted-foreground"
           role="group"
           aria-label="Dashboard period"
         >
@@ -142,8 +142,8 @@ export function AdminHeader({
           </button>
 
           {showNotifications ? (
-            <div className="absolute right-0 mt-2 w-80 sm:w-92 bg-card rounded-2xl border border-[var(--neu-line)] shadow-[0_20px_50px_rgba(0,0,0,0.1)] p-4 z-50 animate-in fade-in slide-in-from-top-2">
-              <div className="flex items-center justify-between pb-3 border-b border-[var(--neu-line)] mb-3">
+            <div className="absolute right-0 mt-2 w-80 sm:w-92 bg-card rounded-2xl border border-[var(--clay-line)] shadow-[var(--clay-float)] p-4 z-50 animate-in fade-in slide-in-from-top-2">
+              <div className="flex items-center justify-between pb-3 border-b border-[var(--clay-line)] mb-3">
                 <div className="flex items-center gap-2">
                   <h3 className="text-xs font-bold text-foreground">System Notifications</h3>
                   {!live ? (
@@ -191,7 +191,7 @@ export function AdminHeader({
                   ].map((n) => (
                     <div
                       key={n.title}
-                      className="p-2.5 rounded-xl bg-[var(--neu-sunken)]/80 hover:bg-[var(--neu-sunken)]/80 transition-colors flex items-start gap-2.5"
+                      className="p-2.5 rounded-xl bg-[var(--clay-sunken)]/80 hover:bg-[var(--clay-sunken)]/80 transition-colors flex items-start gap-2.5"
                     >
                       <Layers className="w-4 h-4 shrink-0 mt-0.5 text-muted-foreground" />
                       <div className="min-w-0 flex-1">
@@ -210,7 +210,7 @@ export function AdminHeader({
         </div>
 
         {/* Environment Badge Pill */}
-        <div className="hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[var(--neu-sunken)] border border-[var(--neu-line)] text-[10px] font-bold text-foreground">
+        <div className="hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[var(--clay-sunken)] border border-[var(--clay-line)] text-[10px] font-bold text-foreground">
           <ShieldCheck className="w-3.5 h-3.5 text-muted-foreground" />
           <span className="uppercase">{live ? environment : "PRODUCTION"}</span>
         </div>

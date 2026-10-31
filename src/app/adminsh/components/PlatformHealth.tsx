@@ -36,12 +36,12 @@ const STATE_STYLES: Record<
   },
   not_configured: {
     label: "Not configured",
-    pill: "text-muted-foreground bg-[var(--neu-sunken)] border-[var(--neu-line)]",
+    pill: "text-muted-foreground bg-[var(--clay-sunken)] border-[var(--clay-line)]",
     icon: <ShieldQuestion className="w-3 h-3" />,
   },
   unknown: {
     label: "Unknown",
-    pill: "text-muted-foreground bg-[var(--neu-sunken)] border-[var(--neu-line)]",
+    pill: "text-muted-foreground bg-[var(--clay-sunken)] border-[var(--clay-line)]",
     icon: <HelpCircle className="w-3 h-3" />,
   },
 };
@@ -77,9 +77,9 @@ function LivePlatformHealth({ data }: { data: AdminOverviewPayload }) {
       : `${measured.length} of ${checks.length} configured checks operational`;
 
   return (
-    <div className="bg-card rounded-2xl p-5 sm:p-6 border border-[var(--neu-line)] shadow-[0_4px_20px_rgba(0,0,0,0.02)] space-y-4">
+    <div className="bg-card rounded-2xl p-5 sm:p-6 border border-[var(--clay-line)] shadow-[var(--clay-elev-2)] space-y-4">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-[var(--neu-line)]">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-[var(--clay-line)]">
         <div>
           <div className="flex items-center gap-2">
             <div className="p-1.5 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200">
@@ -103,7 +103,7 @@ function LivePlatformHealth({ data }: { data: AdminOverviewPayload }) {
             <Activity className="w-3.5 h-3.5" />
             <span>{summary}</span>
           </span>
-          <span className="px-2 py-1 text-[10px] font-bold tracking-wider uppercase bg-[var(--neu-sunken)] text-muted-foreground rounded-lg">
+          <span className="px-2 py-1 text-[10px] font-bold tracking-wider uppercase bg-[var(--clay-sunken)] text-muted-foreground rounded-lg">
             Live checks
           </span>
         </div>
@@ -116,7 +116,7 @@ function LivePlatformHealth({ data }: { data: AdminOverviewPayload }) {
           return (
             <div
               key={check.id}
-              className="p-4 rounded-xl border border-[var(--neu-line)] bg-[var(--neu-sunken)]/50 hover:bg-card hover:border-black/20 transition-all space-y-2"
+              className="p-4 rounded-xl border border-[var(--clay-line)] bg-[var(--clay-sunken)]/50 hover:bg-card hover:border-black/20 transition-all space-y-2"
             >
               <div className="flex items-center justify-between gap-2">
                 <span className="text-xs font-bold text-foreground">{check.label}</span>
@@ -136,7 +136,7 @@ function LivePlatformHealth({ data }: { data: AdminOverviewPayload }) {
                 </p>
               ) : null}
 
-              <div className="pt-2 border-t border-[var(--neu-line)] flex items-center justify-between text-[10px] text-muted-foreground font-medium">
+              <div className="pt-2 border-t border-[var(--clay-line)] flex items-center justify-between text-[10px] text-muted-foreground font-medium">
                 <span>
                   Uptime: <strong className="text-muted-foreground">Not measured</strong>
                 </span>
@@ -163,14 +163,14 @@ function LivePlatformHealth({ data }: { data: AdminOverviewPayload }) {
 
 function HealthUnavailable() {
   return (
-    <div className="bg-card rounded-2xl p-5 sm:p-6 border border-[var(--neu-line)] shadow-[0_4px_20px_rgba(0,0,0,0.02)] space-y-4">
+    <div className="bg-card rounded-2xl p-5 sm:p-6 border border-[var(--clay-line)] shadow-[var(--clay-elev-2)] space-y-4">
       <div className="flex items-center gap-2">
-        <div className="p-1.5 rounded-lg bg-[var(--neu-sunken)] text-muted-foreground border border-[var(--neu-line)]">
+        <div className="p-1.5 rounded-lg bg-[var(--clay-sunken)] text-muted-foreground border border-[var(--clay-line)]">
           <Server className="w-4 h-4" />
         </div>
         <h2 className="text-base font-bold text-foreground">Platform Health & Infrastructure</h2>
       </div>
-      <div className="rounded-xl border border-dashed border-black/[0.1] bg-[var(--neu-sunken)]/50 px-4 py-10 text-center">
+      <div className="rounded-xl border border-dashed border-black/[0.1] bg-[var(--clay-sunken)]/50 px-4 py-10 text-center">
         <p className="text-sm font-semibold text-foreground">Health checks are unavailable</p>
         <p className="text-xs text-muted-foreground mt-1">
           The status endpoint could not be read. Services are not assumed healthy.
@@ -182,11 +182,11 @@ function HealthUnavailable() {
 
 function HealthSkeleton() {
   return (
-    <div className="bg-card rounded-2xl p-5 sm:p-6 border border-[var(--neu-line)] shadow-[0_4px_20px_rgba(0,0,0,0.02)] space-y-4 animate-pulse">
-      <div className="h-4 w-64 rounded bg-[var(--neu-sunken)]" />
+    <div className="bg-card rounded-2xl p-5 sm:p-6 border border-[var(--clay-line)] shadow-[var(--clay-elev-2)] space-y-4 animate-pulse">
+      <div className="h-4 w-64 rounded bg-[var(--clay-sunken)]" />
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
         {Array.from({ length: 6 }).map((_, index) => (
-          <div key={index} className="h-24 rounded-xl bg-[var(--neu-sunken)]" />
+          <div key={index} className="h-24 rounded-xl bg-[var(--clay-sunken)]" />
         ))}
       </div>
     </div>
@@ -195,9 +195,9 @@ function HealthSkeleton() {
 
 function DemoPlatformHealth() {
   return (
-    <div className="bg-card rounded-2xl p-5 sm:p-6 border border-[var(--neu-line)] shadow-[0_4px_20px_rgba(0,0,0,0.02)] space-y-4">
+    <div className="bg-card rounded-2xl p-5 sm:p-6 border border-[var(--clay-line)] shadow-[var(--clay-elev-2)] space-y-4">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-[var(--neu-line)]">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-[var(--clay-line)]">
         <div>
           <div className="flex items-center gap-2">
             <div className="p-1.5 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200">
@@ -215,7 +215,7 @@ function DemoPlatformHealth() {
             <CheckCircle2 className="w-3.5 h-3.5" />
             <span>All Systems Operational</span>
           </span>
-          <span className="px-2 py-1 text-[10px] font-bold tracking-wider uppercase bg-[var(--neu-sunken)] text-muted-foreground rounded-lg">
+          <span className="px-2 py-1 text-[10px] font-bold tracking-wider uppercase bg-[var(--clay-sunken)] text-muted-foreground rounded-lg">
             Demo Statuses
           </span>
         </div>
@@ -226,7 +226,7 @@ function DemoPlatformHealth() {
         {MOCK_SYSTEM_HEALTH.map((srv) => (
           <div
             key={srv.name}
-            className="p-4 rounded-xl border border-[var(--neu-line)] bg-[var(--neu-sunken)]/50 hover:bg-card hover:border-black/20 transition-all space-y-2"
+            className="p-4 rounded-xl border border-[var(--clay-line)] bg-[var(--clay-sunken)]/50 hover:bg-card hover:border-black/20 transition-all space-y-2"
           >
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold text-foreground">{srv.name}</span>
@@ -238,7 +238,7 @@ function DemoPlatformHealth() {
 
             <p className="text-[11px] text-muted-foreground leading-snug">{srv.description}</p>
 
-            <div className="pt-2 border-t border-[var(--neu-line)] flex items-center justify-between text-[10px] text-muted-foreground font-medium">
+            <div className="pt-2 border-t border-[var(--clay-line)] flex items-center justify-between text-[10px] text-muted-foreground font-medium">
               <span>
                 Uptime: <strong className="text-foreground">{srv.uptime}</strong>
               </span>

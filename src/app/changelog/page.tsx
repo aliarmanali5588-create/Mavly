@@ -86,7 +86,7 @@ export default function ChangelogPage() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-16">
         {/* Hero */}
         <div className="max-w-3xl mx-auto text-center space-y-4 pt-6 sm:pt-12">
-          <div className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-muted-foreground bg-[var(--neu-sunken)] px-3 py-1 rounded-full border border-[var(--neu-line)]">
+          <div className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-muted-foreground bg-[var(--clay-sunken)] px-3 py-1 rounded-full border border-[var(--clay-line)]">
             <GitCommit className="w-3.5 h-3.5 text-foreground" />
             <span>PRODUCT UPDATES</span>
           </div>
@@ -105,9 +105,9 @@ export default function ChangelogPage() {
           {RELEASES.map((rel) => (
             <div
               key={rel.version}
-              className="p-8 rounded-3xl bg-card border border-[var(--neu-line)] shadow-[0_4px_20px_rgba(0,0,0,0.02)] space-y-6"
+              className="p-8 rounded-3xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)] space-y-6"
             >
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-[var(--neu-line)] pb-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-[var(--clay-line)] pb-4">
                 <div className="flex items-center gap-3">
                   <span className="font-mono text-xs font-bold px-2.5 py-1 rounded-lg bg-black text-white">
                     {rel.version}
@@ -121,7 +121,7 @@ export default function ChangelogPage() {
                   className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full self-start sm:self-auto ${
                     rel.status === "Shipped"
                       ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                      : "bg-blue-50 text-blue-700 border border-blue-200"
+                      : "bg-[var(--clay-sunken)] text-foreground border border-[var(--clay-line)]"
                   }`}
                 >
                   {rel.status}

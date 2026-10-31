@@ -77,7 +77,7 @@ export function AuthNav({ profile }: { profile: ProfileSummary | null }) {
     return (
       <Link
         href="/login"
-        className="text-xs text-foreground font-medium px-3.5 py-1.5 rounded-full bg-card border border-[var(--neu-line)] shadow-[var(--neu-elev-1)] hover:shadow-[var(--neu-elev-2)] active:shadow-[var(--neu-inset-1)] active:scale-95 transition-[box-shadow,transform] outline-none focus-visible:shadow-[var(--neu-focus)]"
+        className="text-xs text-foreground font-medium px-3.5 py-1.5 rounded-full bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-1)] hover:shadow-[var(--clay-elev-2)] active:shadow-[var(--clay-well-1)] active:scale-95 transition-[box-shadow,transform] outline-none focus-visible:shadow-[var(--clay-focus)]"
       >
         Sign in
       </Link>
@@ -96,7 +96,7 @@ export function AuthNav({ profile }: { profile: ProfileSummary | null }) {
             type="button"
             aria-label={`Open account menu for ${accountLabel}`}
             title={accountLabel}
-            className="group flex h-9 w-9 items-center justify-center rounded-full border border-[var(--neu-line)] bg-card p-0.5 shadow-[var(--neu-elev-2)] transition-[box-shadow,border-color] hover:border-[var(--neu-line-strong)] hover:shadow-[var(--neu-elev-3)] active:shadow-[var(--neu-inset-1)] active:scale-95 outline-none focus-visible:shadow-[var(--neu-focus)]"
+            className="group flex h-9 w-9 items-center justify-center rounded-full border border-[var(--clay-line)] bg-card p-0.5 shadow-[var(--clay-elev-2)] transition-[box-shadow,border-color] hover:border-[var(--clay-line-strong)] hover:shadow-[var(--clay-elev-3)] active:shadow-[var(--clay-well-1)] active:scale-95 outline-none focus-visible:shadow-[var(--clay-focus)]"
           >
             <ProfileAvatar
               profile={profile}
@@ -108,7 +108,7 @@ export function AuthNav({ profile }: { profile: ProfileSummary | null }) {
         <DropdownMenuContent
           align="end"
           sideOffset={8}
-          className="w-72 max-w-[calc(100vw-2rem)] rounded-2xl border border-[var(--neu-line)] bg-card p-1.5 text-foreground shadow-[var(--neu-float)]"
+          className="w-72 max-w-[calc(100vw-2rem)] rounded-2xl border border-[var(--clay-line)] bg-card p-1.5 text-foreground shadow-[var(--clay-float)]"
         >
           <DropdownMenuLabel className="p-0 font-normal">
             <div className="flex items-center gap-3 px-2.5 py-2">
@@ -131,7 +131,7 @@ export function AuthNav({ profile }: { profile: ProfileSummary | null }) {
 
           <DropdownMenuItem
             asChild
-            className="cursor-pointer gap-2.5 rounded-xl px-2.5 py-2 text-[13px] text-foreground focus:bg-[var(--neu-sunken)] focus:text-foreground [&_svg]:text-muted-foreground"
+            className="cursor-pointer gap-2.5 rounded-xl px-2.5 py-2 text-[13px] text-foreground focus:bg-[var(--clay-sunken)] focus:text-foreground [&_svg]:text-muted-foreground"
           >
             <Link href="/upgrade">
               <Sparkles className="h-4 w-4" aria-hidden="true" />
@@ -141,7 +141,7 @@ export function AuthNav({ profile }: { profile: ProfileSummary | null }) {
 
           <DropdownMenuItem
             asChild
-            className="cursor-pointer gap-2.5 rounded-xl px-2.5 py-2 text-[13px] text-foreground focus:bg-[var(--neu-sunken)] focus:text-foreground [&_svg]:text-muted-foreground"
+            className="cursor-pointer gap-2.5 rounded-xl px-2.5 py-2 text-[13px] text-foreground focus:bg-[var(--clay-sunken)] focus:text-foreground [&_svg]:text-muted-foreground"
           >
             <Link href="/credit-topup">
               <CreditCard className="h-4 w-4" aria-hidden="true" />
@@ -151,7 +151,7 @@ export function AuthNav({ profile }: { profile: ProfileSummary | null }) {
 
           <DropdownMenuItem
             asChild
-            className="cursor-pointer gap-2.5 rounded-xl px-2.5 py-2 text-[13px] text-foreground focus:bg-[var(--neu-sunken)] focus:text-foreground [&_svg]:text-muted-foreground"
+            className="cursor-pointer gap-2.5 rounded-xl px-2.5 py-2 text-[13px] text-foreground focus:bg-[var(--clay-sunken)] focus:text-foreground [&_svg]:text-muted-foreground"
           >
             <Link href="/support">
               <HelpCircle className="h-4 w-4" aria-hidden="true" />
@@ -186,7 +186,7 @@ export function AuthNav({ profile }: { profile: ProfileSummary | null }) {
         description="You'll be signed out of this device and returned to the home page."
         confirmLabel="Sign out"
         cancelLabel="Cancel"
-        confirmClassName="bg-primary text-primary-foreground hover:bg-[var(--neu-brand-hover)]"
+        confirmClassName="bg-primary text-primary-foreground hover:bg-[var(--clay-brand-hover)]"
         onConfirm={handleSignOut}
       />
     </>

@@ -173,7 +173,7 @@ export default function FaqPage() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-16">
         {/* Hero */}
         <div className="max-w-3xl mx-auto text-center space-y-4 pt-6 sm:pt-12">
-          <div className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-muted-foreground bg-[var(--neu-sunken)] px-3 py-1 rounded-full border border-[var(--neu-line)]">
+          <div className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-muted-foreground bg-[var(--clay-sunken)] px-3 py-1 rounded-full border border-[var(--clay-line)]">
             <HelpCircle className="w-3.5 h-3.5 text-foreground" />
             <span>FREQUENTLY ASKED QUESTIONS</span>
           </div>
@@ -196,7 +196,7 @@ export default function FaqPage() {
               placeholder="Search questions or keywords (e.g. GitHub, credits, preview)..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-11 pr-4 py-3 text-xs sm:text-sm bg-card border border-[var(--neu-line)] rounded-2xl focus:outline-none focus:ring-2 focus:ring-black/10 text-foreground shadow-xs"
+              className="w-full pl-11 pr-4 py-3 text-xs sm:text-sm bg-card border border-[var(--clay-line)] rounded-2xl focus:outline-none focus:ring-2 focus:ring-black/10 text-foreground shadow-xs"
             />
           </div>
 
@@ -208,8 +208,8 @@ export default function FaqPage() {
                 onClick={() => setSelectedCategory(cat)}
                 className={`px-3.5 py-1.5 text-xs font-semibold rounded-xl transition-all cursor-pointer ${
                   selectedCategory === cat
-                    ? "bg-black text-white shadow-xs"
-                    : "bg-card text-muted-foreground hover:text-black border border-[var(--neu-line)]"
+                    ? "bg-black text-white shadow-[var(--clay-elev-ink-1)]"
+                    : "bg-card text-muted-foreground hover:text-black border border-[var(--clay-line)]"
                 }`}
               >
                 {cat}
@@ -221,7 +221,7 @@ export default function FaqPage() {
         {/* FAQs Accordion Grid */}
         <div className="max-w-3xl mx-auto space-y-4">
           {filtered.length === 0 ? (
-            <div className="p-8 text-center bg-card rounded-2xl border border-[var(--neu-line)] text-muted-foreground text-xs">
+            <div className="p-8 text-center bg-card rounded-2xl border border-[var(--clay-line)] text-muted-foreground text-xs">
               No questions found matching your search.
             </div>
           ) : (
@@ -230,12 +230,12 @@ export default function FaqPage() {
               return (
                 <div
                   key={item.id}
-                  className="rounded-2xl bg-card border border-[var(--neu-line)] shadow-[0_4px_20px_rgba(0,0,0,0.02)] overflow-hidden transition-all"
+                  className="rounded-2xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)] overflow-hidden transition-all"
                 >
                   <button
                     type="button"
                     onClick={() => setExpandedId(isExpanded ? "" : item.id)}
-                    className="w-full p-5 text-left flex items-start justify-between gap-4 cursor-pointer hover:bg-[var(--neu-sunken)]/50 transition-colors"
+                    className="w-full p-5 text-left flex items-start justify-between gap-4 cursor-pointer hover:bg-[var(--clay-sunken)]/50 transition-colors"
                   >
                     <div className="space-y-1">
                       <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block">
@@ -245,7 +245,7 @@ export default function FaqPage() {
                         {item.question}
                       </h3>
                     </div>
-                    <div className="p-1.5 rounded-lg bg-[var(--neu-sunken)] border border-[var(--neu-line)] text-muted-foreground shrink-0 mt-1">
+                    <div className="p-1.5 rounded-lg bg-[var(--clay-sunken)] border border-[var(--clay-line)] text-muted-foreground shrink-0 mt-1">
                       <ChevronDown
                         className={`w-4 h-4 transition-transform ${
                           isExpanded ? "rotate-180" : ""
@@ -255,7 +255,7 @@ export default function FaqPage() {
                   </button>
 
                   {isExpanded && (
-                    <div className="px-5 pb-5 pt-2 border-t border-[var(--neu-line)] text-xs sm:text-sm text-muted-foreground leading-relaxed space-y-3">
+                    <div className="px-5 pb-5 pt-2 border-t border-[var(--clay-line)] text-xs sm:text-sm text-muted-foreground leading-relaxed space-y-3">
                       <p>{item.answer}</p>
                       {item.relatedLink && (
                         <div className="pt-1">
@@ -277,7 +277,7 @@ export default function FaqPage() {
         </div>
 
         {/* Bottom Callout */}
-        <div className="p-8 rounded-3xl bg-card border border-[var(--neu-line)] text-center max-w-2xl mx-auto space-y-3 text-xs">
+        <div className="p-8 rounded-3xl bg-card border border-[var(--clay-line)] text-center max-w-2xl mx-auto space-y-3 text-xs">
           <h3 className="text-sm font-bold text-foreground">Have a question that isn&apos;t answered here?</h3>
           <p className="text-muted-foreground">
             Reach out to our support specialists directly at <code>support@mavly.xyz</code>.

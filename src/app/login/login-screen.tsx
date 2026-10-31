@@ -66,7 +66,7 @@ export default function LoginScreen({
   }, [initialProvider]);
 
   return (
-    <div className="relative isolate min-h-screen flex flex-col justify-between bg-[var(--neu-base)] text-foreground font-sans mavly-page-enter">
+    <div className="relative isolate min-h-screen flex flex-col justify-between bg-[var(--clay-base)] text-foreground font-sans mavly-page-enter">
       <HeroShowcaseBackground variant="login" />
 
       {/* ── Top Navigation Row ── */}
@@ -87,7 +87,7 @@ export default function LoginScreen({
             className="flex items-center gap-2.5 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black focus-visible:ring-offset-2 p-1 group select-none"
             aria-label="Mavly Home"
           >
-            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl overflow-hidden bg-card shadow-xs p-0.5 border border-[var(--neu-line)] flex items-center justify-center transition-transform group-hover:scale-105 active:scale-95 shrink-0">
+            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl overflow-hidden bg-card shadow-xs p-0.5 border border-[var(--clay-line)] flex items-center justify-center transition-transform group-hover:scale-105 active:scale-95 shrink-0">
               <Image
                 src="/logo/Mavly.png"
                 alt="Mavly Logo"
@@ -107,10 +107,10 @@ export default function LoginScreen({
 
       {/* ── Central Authentication Card ── */}
       <main className="relative z-10 flex-1 flex items-center justify-center px-4 py-10 sm:py-16">
-        <div className="w-full max-w-[420px] bg-card rounded-2xl sm:rounded-3xl border border-[var(--neu-line)] shadow-[0_20px_50px_rgba(0,0,0,0.05),0_4px_12px_rgba(0,0,0,0.02)] p-7 sm:p-10 transition-all">
+        <div className="w-full max-w-[420px] bg-card rounded-2xl sm:rounded-3xl border border-[var(--clay-line)] shadow-[var(--clay-float)] p-7 sm:p-10 transition-all">
           {/* A. Mavly Logo at top of the card */}
           <div className="flex flex-col items-center text-center">
-            <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl overflow-hidden bg-card shadow-[0_4px_12px_rgba(0,0,0,0.05)] p-1 border border-[var(--neu-line)] flex items-center justify-center mb-5 sm:mb-6 transition-transform hover:scale-105 duration-200 shrink-0 select-none">
+            <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl overflow-hidden bg-card shadow-[var(--clay-elev-2)] p-1 border border-[var(--clay-line)] flex items-center justify-center mb-5 sm:mb-6 transition-transform hover:scale-105 duration-200 shrink-0 select-none">
               <Image
                 src="/logo/Mavly.png"
                 alt="Mavly Logo"
@@ -152,7 +152,7 @@ export default function LoginScreen({
               type="button"
               disabled={!!loadingProvider}
               onClick={() => void beginOAuth("google")}
-              className="w-full h-12 px-4 rounded-xl bg-primary hover:bg-[var(--neu-brand-hover)] text-white font-medium text-sm flex items-center justify-center gap-3 shadow-[0_4px_14px_rgba(0,0,0,0.14),0_1px_2px_rgba(0,0,0,0.06)] hover:shadow-[0_6px_20px_rgba(0,0,0,0.2)] hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] active:shadow-[inset_0_2px_4px_rgba(0,0,0,0.25)] transition-all duration-200 disabled:opacity-70 disabled:pointer-events-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black focus-visible:ring-offset-2 cursor-pointer select-none"
+              className="w-full h-12 px-4 rounded-xl bg-primary hover:bg-[var(--clay-brand-hover)] text-white font-medium text-sm flex items-center justify-center gap-3 shadow-[var(--clay-elev-ink-2)] hover:shadow-[var(--clay-elev-ink-3)] hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] active:shadow-[var(--clay-elev-ink-1)] transition-all duration-200 disabled:opacity-70 disabled:pointer-events-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black focus-visible:ring-offset-2 cursor-pointer select-none"
             >
               {loadingProvider === "google" ? (
                 <Loader2 className="w-4 h-4 animate-spin text-white" />
@@ -184,7 +184,7 @@ export default function LoginScreen({
               type="button"
               disabled={!!loadingProvider}
               onClick={() => void beginOAuth("github")}
-              className="w-full h-12 px-4 rounded-xl bg-card hover:bg-[var(--neu-sunken)] text-foreground border border-black/[0.1] hover:border-black/[0.18] font-medium text-sm flex items-center justify-center gap-3 shadow-[0_2px_8px_rgba(0,0,0,0.04)] hover:shadow-[0_4px_14px_rgba(0,0,0,0.08)] hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] active:shadow-[inset_0_1px_3px_rgba(0,0,0,0.06)] transition-all duration-200 disabled:opacity-70 disabled:pointer-events-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black focus-visible:ring-offset-2 cursor-pointer select-none"
+              className="w-full h-12 px-4 rounded-xl bg-card hover:bg-[var(--clay-sunken)] text-foreground border border-black/[0.1] hover:border-black/[0.18] font-medium text-sm flex items-center justify-center gap-3 shadow-[var(--clay-elev-1)] hover:shadow-[var(--clay-elev-2)] hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] active:shadow-[var(--clay-well-1)] transition-all duration-200 disabled:opacity-70 disabled:pointer-events-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black focus-visible:ring-offset-2 cursor-pointer select-none"
             >
               {loadingProvider === "github" ? (
                 <Loader2 className="w-4 h-4 animate-spin text-foreground" />

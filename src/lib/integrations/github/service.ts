@@ -14,8 +14,9 @@
  * they are used.
  */
 
-import { isStoreFailure, listFiles, writeFiles } from "@/lib/mavly/store";
+import { getProject, isStoreFailure, listFiles, writeFiles } from "@/lib/mavly/store";
 import { createSnapshot, diffPaths, diffSource, isSnapshotFailure } from "@/lib/mavly/snapshots";
+import { isAgentControlPath } from "@/lib/project-rules/rules";
 import type { GithubIntegrationConfig } from "./config";
 import {
   getBranchHead,
@@ -784,13 +785,31 @@ export async function importProjectSource(
 
   const local = await listFiles(input.projectId);
   if (isStoreFailure(local)) return { ok: false, code: "store_unavailable" };
+  const project = await getProject(input.userId, input.projectId);
+  if (isStoreFailure(project)) return { ok: false, code: "store_unavailable" };
+  if (!project.data) return { ok: false, code: "project_not_connected" };
+  const websiteProject = project.data.project_type === "website";
   const localFiles: GitFile[] = local.data.map((file) => ({
     path: file.path,
     content: file.content,
   }));
 
-  const diff = diffSource(localFiles, policy.included);
-  const unchanged = policy.included
+  const sourceLocalFiles = websiteProject
+    ? localFiles.filter((file) => !isAgentControlPath(file.path))
+    : localFiles;
+  const sourceRemoteFiles = websiteProject
+    ? policy.included.filter((file) => !isAgentControlPath(file.path))
+    : policy.included;
+  const controlFilesExcluded = websiteProject
+    ? policy.included
+        .filter((file) => isAgentControlPath(file.path))
+        .map((file) => ({
+          path: file.path,
+          reason: "reserved for Mavly website rules and work state",
+        }))
+    : [];
+  const diff = diffSource(sourceLocalFiles, sourceRemoteFiles);
+  const unchanged = sourceRemoteFiles
     .filter((file) => !diff.added.includes(file.path) && !diff.modified.includes(file.path))
     .map((file) => file.path);
 
@@ -799,7 +818,7 @@ export async function importProjectSource(
     modified: diff.modified,
     removed: diff.removed,
     unchanged,
-    excluded: policy.excluded,
+    excluded: [...policy.excluded, ...controlFilesExcluded],
     remoteCommitSha: head.data.sha,
     diverged: !diff.unchanged,
   };
@@ -820,15 +839,15 @@ export async function importProjectSource(
   });
   if (isSnapshotFailure(snapshot)) return { ok: false, code: "store_unavailable" };
 
-  const remotePaths = new Set(policy.included.map((file) => file.path));
-  const removedPaths = localFiles
+  const remotePaths = new Set(sourceRemoteFiles.map((file) => file.path));
+  const removedPaths = sourceLocalFiles
     .map((file) => file.path)
     .filter((path) => !remotePaths.has(path));
 
   const written = await writeFiles(
     input.userId,
     input.projectId,
-    policy.included,
+    sourceRemoteFiles,
     removedPaths,
   );
   if (isStoreFailure(written)) return { ok: false, code: "store_unavailable" };
@@ -844,7 +863,7 @@ export async function importProjectSource(
     data: {
       ...plan,
       recoverySnapshotId: snapshot.data.id,
-      written: policy.included.map((file) => file.path),
+      written: sourceRemoteFiles.map((file) => file.path),
     },
   };
 }

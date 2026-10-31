@@ -136,7 +136,7 @@ export default function UsersAdminPage() {
     switch (plan) {
       case "Agency":
         return (
-          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-purple-50 text-purple-700 border border-purple-200">
+          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-[var(--clay-sunken)] text-foreground border border-[var(--clay-line)]">
             Agency
           </span>
         );
@@ -148,19 +148,19 @@ export default function UsersAdminPage() {
         );
       case "Creator":
         return (
-          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
+          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-[var(--clay-sunken)] text-foreground border border-[var(--clay-line)]">
             Creator
           </span>
         );
       case "Starter":
         return (
-          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-[var(--neu-sunken)] text-foreground border border-[var(--neu-line)]">
+          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-[var(--clay-sunken)] text-foreground border border-[var(--clay-line)]">
             Starter
           </span>
         );
       case "Free":
         return (
-          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-[var(--neu-sunken)] text-muted-foreground border border-black/[0.05]">
+          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-[var(--clay-sunken)] text-muted-foreground border border-black/[0.05]">
             Free
           </span>
         );
@@ -171,7 +171,7 @@ export default function UsersAdminPage() {
     <AdminShell activeNav="Users">
       {/* ── Summary Counters Strip ── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="p-5 rounded-2xl bg-card border border-[var(--neu-line)] shadow-[var(--neu-elev-2)]">
+        <div className="p-5 rounded-2xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)]">
           <p className="text-xs font-semibold text-muted-foreground tracking-wide">Total Users</p>
           <h3 className="text-2xl sm:text-3xl font-extrabold text-foreground mt-1.5 font-mono">12,480</h3>
           <span className="text-[11px] text-emerald-600 font-semibold mt-2 inline-block">
@@ -179,7 +179,7 @@ export default function UsersAdminPage() {
           </span>
         </div>
 
-        <div className="p-5 rounded-2xl bg-card border border-[var(--neu-line)] shadow-[var(--neu-elev-2)]">
+        <div className="p-5 rounded-2xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)]">
           <p className="text-xs font-semibold text-muted-foreground tracking-wide">Active Tenants</p>
           <h3 className="text-2xl sm:text-3xl font-extrabold text-foreground mt-1.5 font-mono">9,840</h3>
           <span className="text-[11px] text-emerald-600 font-semibold mt-2 inline-block">
@@ -187,7 +187,7 @@ export default function UsersAdminPage() {
           </span>
         </div>
 
-        <div className="p-5 rounded-2xl bg-card border border-[var(--neu-line)] shadow-[var(--neu-elev-2)]">
+        <div className="p-5 rounded-2xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)]">
           <p className="text-xs font-semibold text-muted-foreground tracking-wide">Paid Subscribers</p>
           <h3 className="text-2xl sm:text-3xl font-extrabold text-foreground mt-1.5 font-mono">2,840</h3>
           <span className="text-[11px] text-muted-foreground font-medium mt-2 inline-block">
@@ -195,7 +195,7 @@ export default function UsersAdminPage() {
           </span>
         </div>
 
-        <div className="p-5 rounded-2xl bg-card border border-[var(--neu-line)] shadow-[var(--neu-elev-2)]">
+        <div className="p-5 rounded-2xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)]">
           <p className="text-xs font-semibold text-muted-foreground tracking-wide">Account Health SLA</p>
           <h3 className="text-2xl sm:text-3xl font-extrabold text-emerald-700 mt-1.5 font-mono">99.8%</h3>
           <span className="text-[11px] text-muted-foreground font-medium mt-2 inline-block">
@@ -205,9 +205,9 @@ export default function UsersAdminPage() {
       </div>
 
       {/* ── Table & Command Bar Container ── */}
-      <div className="bg-card rounded-2xl p-5 sm:p-6 border border-[var(--neu-line)] shadow-[0_2px_8px_rgba(0,0,0,0.02)] space-y-4">
+      <div className="bg-card rounded-2xl p-5 sm:p-6 border border-[var(--clay-line)] shadow-[var(--clay-elev-1)] space-y-4">
         {/* Controls Bar */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-4 border-b border-[var(--neu-line)]">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-4 border-b border-[var(--clay-line)]">
           <div>
             <h2 className="text-base font-bold text-foreground">Customer Directory</h2>
             <p className="text-xs text-muted-foreground mt-0.5">
@@ -227,7 +227,7 @@ export default function UsersAdminPage() {
                   setSearchQuery(e.target.value);
                   setCurrentPage(1);
                 }}
-                className="w-full h-8 pl-8 pr-3 text-xs rounded-xl bg-[var(--neu-sunken)] border border-[var(--neu-line)] text-foreground focus:bg-card focus:outline-none focus:ring-2 focus:ring-black"
+                className="w-full h-8 pl-8 pr-3 text-xs rounded-xl bg-[var(--clay-sunken)] border border-[var(--clay-line)] text-foreground focus:bg-card focus:outline-none focus:ring-2 focus:ring-black"
               />
             </div>
 
@@ -238,7 +238,7 @@ export default function UsersAdminPage() {
                 setPlanFilter(e.target.value);
                 setCurrentPage(1);
               }}
-              className="h-8 px-2.5 text-xs font-medium bg-[var(--neu-sunken)] border border-[var(--neu-line)] rounded-xl text-foreground focus:outline-none focus:ring-2 focus:ring-black cursor-pointer"
+              className="h-8 px-2.5 text-xs font-medium bg-[var(--clay-sunken)] border border-[var(--clay-line)] rounded-xl text-foreground focus:outline-none focus:ring-2 focus:ring-black cursor-pointer"
             >
               <option value="All">All Plans</option>
               <option value="Agency">Agency</option>
@@ -255,7 +255,7 @@ export default function UsersAdminPage() {
                 setStatusFilter(e.target.value);
                 setCurrentPage(1);
               }}
-              className="h-8 px-2.5 text-xs font-medium bg-[var(--neu-sunken)] border border-[var(--neu-line)] rounded-xl text-foreground focus:outline-none focus:ring-2 focus:ring-black cursor-pointer"
+              className="h-8 px-2.5 text-xs font-medium bg-[var(--clay-sunken)] border border-[var(--clay-line)] rounded-xl text-foreground focus:outline-none focus:ring-2 focus:ring-black cursor-pointer"
             >
               <option value="All">All Statuses</option>
               <option value="Active">Active Only</option>
@@ -266,7 +266,7 @@ export default function UsersAdminPage() {
             <button
               type="button"
               onClick={() => setShowInviteModal(true)}
-              className="h-8 px-3 rounded-xl bg-primary hover:bg-[var(--neu-brand-hover)] text-white font-bold text-xs flex items-center gap-1.5 shadow-sm transition-colors cursor-pointer"
+              className="h-8 px-3 rounded-xl bg-primary hover:bg-[var(--clay-brand-hover)] text-white font-bold text-xs flex items-center gap-1.5 shadow-[var(--clay-elev-ink-1)] transition-colors cursor-pointer"
             >
               <Plus className="w-3.5 h-3.5" />
               <span>Invite Member</span>
@@ -275,10 +275,10 @@ export default function UsersAdminPage() {
         </div>
 
         {/* ── High-Density Directory Table ── */}
-        <div className="overflow-x-auto rounded-xl border border-[var(--neu-line)]">
+        <div className="overflow-x-auto rounded-xl border border-[var(--clay-line)]">
           <table className="w-full text-left border-collapse text-xs">
             <thead>
-              <tr className="bg-[var(--neu-sunken)]/60 border-b border-[var(--neu-line)] text-muted-foreground font-bold uppercase tracking-wider text-[10px]">
+              <tr className="bg-[var(--clay-sunken)]/60 border-b border-[var(--clay-line)] text-muted-foreground font-bold uppercase tracking-wider text-[10px]">
                 <th className="py-2.5 px-4">User</th>
                 <th className="py-2.5 px-4">Role</th>
                 <th className="py-2.5 px-4">Plan</th>
@@ -298,7 +298,7 @@ export default function UsersAdminPage() {
                 </tr>
               ) : (
                 paginatedUsers.map((user) => (
-                  <tr key={user.id} className="hover:bg-[var(--neu-sunken)]/60 transition-colors">
+                  <tr key={user.id} className="hover:bg-[var(--clay-sunken)]/60 transition-colors">
                     <td className="py-2.5 px-4">
                       <div className="flex items-center gap-2.5">
                         <div className="w-7 h-7 rounded-full bg-black text-white flex items-center justify-center font-bold text-[10px] shrink-0">
@@ -341,7 +341,7 @@ export default function UsersAdminPage() {
                         <button
                           type="button"
                           onClick={() => setSelectedUser(user)}
-                          className="px-2 py-1 rounded-lg text-[11px] font-semibold text-foreground bg-[var(--neu-sunken)] hover:bg-[var(--neu-sunken-deep)] transition-colors"
+                          className="px-2 py-1 rounded-lg text-[11px] font-semibold text-foreground bg-[var(--clay-sunken)] hover:bg-[var(--clay-sunken-deep)] transition-colors"
                         >
                           View
                         </button>
@@ -351,7 +351,7 @@ export default function UsersAdminPage() {
                             setEditingPlanUser(user);
                             setSelectedNewPlan(user.plan);
                           }}
-                          className="px-2 py-1 rounded-lg text-[11px] font-semibold text-foreground bg-[var(--neu-sunken)] hover:bg-[var(--neu-sunken-deep)] transition-colors"
+                          className="px-2 py-1 rounded-lg text-[11px] font-semibold text-foreground bg-[var(--clay-sunken)] hover:bg-[var(--clay-sunken-deep)] transition-colors"
                         >
                           Plan
                         </button>
@@ -377,7 +377,7 @@ export default function UsersAdminPage() {
         </div>
 
         {/* Pagination Controls */}
-        <div className="flex items-center justify-between pt-3 border-t border-[var(--neu-line)] text-xs text-muted-foreground">
+        <div className="flex items-center justify-between pt-3 border-t border-[var(--clay-line)] text-xs text-muted-foreground">
           <div>
             Showing {(currentPage - 1) * usersPerPage + 1} to{" "}
             {Math.min(currentPage * usersPerPage, filteredUsers.length)} of{" "}
@@ -389,7 +389,7 @@ export default function UsersAdminPage() {
               type="button"
               disabled={currentPage === 1}
               onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-              className="p-1.5 rounded-lg border border-[var(--neu-line)] hover:bg-[var(--neu-sunken)] disabled:opacity-40 disabled:pointer-events-none transition-colors"
+              className="p-1.5 rounded-lg border border-[var(--clay-line)] hover:bg-[var(--clay-sunken)] disabled:opacity-40 disabled:pointer-events-none transition-colors"
             >
               <ChevronLeft className="w-3.5 h-3.5" />
             </button>
@@ -400,7 +400,7 @@ export default function UsersAdminPage() {
               type="button"
               disabled={currentPage === totalPages}
               onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-              className="p-1.5 rounded-lg border border-[var(--neu-line)] hover:bg-[var(--neu-sunken)] disabled:opacity-40 disabled:pointer-events-none transition-colors"
+              className="p-1.5 rounded-lg border border-[var(--clay-line)] hover:bg-[var(--clay-sunken)] disabled:opacity-40 disabled:pointer-events-none transition-colors"
             >
               <ChevronRight className="w-3.5 h-3.5" />
             </button>
@@ -411,8 +411,8 @@ export default function UsersAdminPage() {
       {/* ── User Details Modal ── */}
       {selectedUser && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-in fade-in">
-          <div className="w-full max-w-md bg-card rounded-2xl border border-[var(--neu-line)] shadow-2xl p-6 space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-[var(--neu-line)]">
+          <div className="w-full max-w-md bg-card rounded-2xl border border-[var(--clay-line)] shadow-2xl p-6 space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-[var(--clay-line)]">
               <div className="flex items-center gap-3">
                 <div className="w-9 h-9 rounded-full bg-black text-white flex items-center justify-center font-bold text-xs">
                   {selectedUser.name.slice(0, 2).toUpperCase()}
@@ -431,30 +431,30 @@ export default function UsersAdminPage() {
               </button>
             </div>
 
-            <div className="space-y-2.5 text-xs bg-[var(--neu-sunken)] p-4 rounded-xl border border-[var(--neu-line)]">
-              <div className="flex justify-between py-1 border-b border-[var(--neu-line)]">
+            <div className="space-y-2.5 text-xs bg-[var(--clay-sunken)] p-4 rounded-xl border border-[var(--clay-line)]">
+              <div className="flex justify-between py-1 border-b border-[var(--clay-line)]">
                 <span className="text-muted-foreground">Email:</span>
                 <span className="font-mono text-foreground">{selectedUser.email}</span>
               </div>
-              <div className="flex justify-between py-1 border-b border-[var(--neu-line)]">
+              <div className="flex justify-between py-1 border-b border-[var(--clay-line)]">
                 <span className="text-muted-foreground">Role:</span>
                 <span className="font-semibold text-foreground">{selectedUser.role || "Member"}</span>
               </div>
-              <div className="flex justify-between py-1 border-b border-[var(--neu-line)]">
+              <div className="flex justify-between py-1 border-b border-[var(--clay-line)]">
                 <span className="text-muted-foreground">Current Plan:</span>
                 <span>{getPlanBadge(selectedUser.plan)}</span>
               </div>
-              <div className="flex justify-between py-1 border-b border-[var(--neu-line)]">
+              <div className="flex justify-between py-1 border-b border-[var(--clay-line)]">
                 <span className="text-muted-foreground">Credits Remaining:</span>
                 <span className="font-mono font-extrabold text-foreground">
                   {selectedUser.creditsRemaining.toLocaleString()}
                 </span>
               </div>
-              <div className="flex justify-between py-1 border-b border-[var(--neu-line)]">
+              <div className="flex justify-between py-1 border-b border-[var(--clay-line)]">
                 <span className="text-muted-foreground">Active Projects:</span>
                 <span className="font-mono font-bold text-foreground">{selectedUser.projectsCount}</span>
               </div>
-              <div className="flex justify-between py-1 border-b border-[var(--neu-line)]">
+              <div className="flex justify-between py-1 border-b border-[var(--clay-line)]">
                 <span className="text-muted-foreground">Account Status:</span>
                 <span className="font-semibold text-emerald-700">{selectedUser.status}</span>
               </div>
@@ -487,7 +487,7 @@ export default function UsersAdminPage() {
       {/* ── Edit Plan Modal ── */}
       {editingPlanUser && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-in fade-in">
-          <div className="w-full max-w-sm bg-card rounded-2xl border border-[var(--neu-line)] shadow-2xl p-6 space-y-4">
+          <div className="w-full max-w-sm bg-card rounded-2xl border border-[var(--clay-line)] shadow-2xl p-6 space-y-4">
             <h3 className="text-base font-bold text-foreground">
               Change Plan for {editingPlanUser.name}
             </h3>
@@ -511,13 +511,13 @@ export default function UsersAdminPage() {
                 <button
                   type="button"
                   onClick={() => setEditingPlanUser(null)}
-                  className="px-3 py-2 text-xs text-muted-foreground hover:bg-[var(--neu-sunken)] rounded-xl"
+                  className="px-3 py-2 text-xs text-muted-foreground hover:bg-[var(--clay-sunken)] rounded-xl"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 text-xs font-bold text-white bg-primary hover:bg-[var(--neu-brand-hover)] rounded-xl"
+                  className="px-4 py-2 text-xs font-bold text-white bg-primary hover:bg-[var(--clay-brand-hover)] rounded-xl"
                 >
                   Confirm Change
                 </button>
@@ -530,8 +530,8 @@ export default function UsersAdminPage() {
       {/* ── Invite Member Modal ── */}
       {showInviteModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-in fade-in">
-          <div className="w-full max-w-md bg-card rounded-2xl border border-[var(--neu-line)] shadow-2xl p-6 space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-[var(--neu-line)]">
+          <div className="w-full max-w-md bg-card rounded-2xl border border-[var(--clay-line)] shadow-2xl p-6 space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-[var(--clay-line)]">
               <h3 className="text-base font-bold text-foreground">Invite Team Member</h3>
               <button
                 type="button"
@@ -583,13 +583,13 @@ export default function UsersAdminPage() {
                 <button
                   type="button"
                   onClick={() => setShowInviteModal(false)}
-                  className="px-3 py-2 text-xs text-muted-foreground hover:bg-[var(--neu-sunken)] rounded-xl"
+                  className="px-3 py-2 text-xs text-muted-foreground hover:bg-[var(--clay-sunken)] rounded-xl"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 text-xs font-bold text-white bg-primary hover:bg-[var(--neu-brand-hover)] rounded-xl shadow-sm"
+                  className="px-4 py-2 text-xs font-bold text-white bg-primary hover:bg-[var(--clay-brand-hover)] rounded-xl shadow-[var(--clay-elev-ink-1)]"
                 >
                   Send Invitation
                 </button>

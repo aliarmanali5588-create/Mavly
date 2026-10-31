@@ -1,6 +1,12 @@
-# Runbook — Durable Generation Worker
+# Legacy Runbook — Cloudflare Cron Generation Worker
 
-Status: **Cloudflare Cron implementation added; production deployment and invocation are
+> **Do not use this as the current deployment guide.** The active production worker is the
+> Render Background Worker documented in
+> [`render-generation-worker.md`](./render-generation-worker.md). This file records the
+> retained Cloudflare configuration for historical reference. Disable its Cron trigger
+> before enabling the Render poller.
+
+Status: **Legacy Cloudflare Cron implementation added; production deployment and invocation are
 not verified.** Every production website and Android generation admission uses the durable
 worker queue without a project allowlist or worker-specific enable/secret configuration.
 Local development and Vercel previews retain the inline `after()` path.

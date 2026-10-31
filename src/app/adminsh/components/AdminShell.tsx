@@ -38,7 +38,7 @@ export function AdminShell({
   const [showNotice, setShowNotice] = useState(true);
 
   return (
-    <div className="min-h-screen bg-[var(--neu-base)] text-foreground font-sans flex flex-col lg:flex-row mavly-page-enter antialiased">
+    <div className="min-h-screen bg-[var(--clay-base)] text-foreground font-sans flex flex-col lg:flex-row mavly-page-enter antialiased">
       {/* 1. Sidebar */}
       <AdminSidebar
         activeNav={activeNav}
@@ -67,7 +67,7 @@ export function AdminShell({
         <main className="flex-1 p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl w-full mx-auto">
           {/* Environment ribbon */}
           {showNotice && (
-            <div className="px-4 py-2.5 rounded-xl bg-card border border-[var(--neu-line)] shadow-[var(--neu-elev-2)] flex items-center justify-between gap-3 text-xs">
+            <div className="px-4 py-2.5 rounded-xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)] flex items-center justify-between gap-3 text-xs">
               <div className="flex items-center gap-2.5 min-w-0">
                 <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
                 <span className="font-bold text-foreground tracking-tight shrink-0">
@@ -107,7 +107,7 @@ export function AdminShell({
         </main>
 
         {/* Enterprise System Footer */}
-        <footer className="py-5 px-6 lg:px-8 border-t border-[var(--neu-line)] bg-card/60 text-xs text-muted-foreground">
+        <footer className="py-5 px-6 lg:px-8 border-t border-[var(--clay-line)] bg-card/60 text-xs text-muted-foreground">
           <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3">
             <div className="flex items-center gap-2">
               <span className="font-semibold text-foreground">Mavly Cloud Admin</span>

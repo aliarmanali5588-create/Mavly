@@ -151,7 +151,7 @@ function renderInline(text: string, keyPrefix: string = "0"): React.ReactNode[] 
     }
     // Inline code
     if (token.startsWith("`") && token.endsWith("`")) {
-      return <code key={key} className="bg-[var(--neu-sunken)] px-1 py-0.5 rounded text-xs font-mono shadow-[var(--neu-inset-1)]">{token.slice(1, -1)}</code>;
+      return <code key={key} className="bg-[var(--clay-sunken)] px-1 py-0.5 rounded text-xs font-mono shadow-[var(--clay-well-1)]">{token.slice(1, -1)}</code>;
     }
     return <span key={key}>{token}</span>;
   });
@@ -377,7 +377,7 @@ function SecretKeysForm({ secretKeysNeeded, projectId, onTellAi, projectSecrets 
         ))}
         <button
           onClick={() => onTellAi(totalKeys)}
-          className="mt-3 w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl bg-primary text-primary-foreground text-xs font-semibold shadow-[var(--neu-elev-1)] hover:shadow-[var(--neu-elev-2)] active:shadow-[var(--neu-inset-2)] transition-[box-shadow] duration-200"
+          className="mt-3 w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl bg-primary text-primary-foreground text-xs font-semibold shadow-[var(--clay-elev-ink-1)] hover:shadow-[var(--clay-elev-ink-2)] active:shadow-[var(--clay-elev-ink-1)] transition-[box-shadow] duration-200"
         >
           <ArrowRight className="w-3.5 h-3.5" />
           {"Tell AI secrets are ready"}
@@ -409,7 +409,7 @@ function SecretKeysForm({ secretKeysNeeded, projectId, onTellAi, projectSecrets 
       {/* Secret inputs */}
       <div className="p-3 space-y-3">
         {secrets.map((secret, si) => (
-          <div key={secret.secretName} className="bg-card rounded-xl border border-[var(--neu-line)] p-3 shadow-[var(--neu-elev-1)]">
+          <div key={secret.secretName} className="bg-card rounded-xl border border-[var(--clay-line)] p-3 shadow-[var(--clay-elev-1)]">
             <div className="mb-2">
               <code className="text-xs font-mono font-semibold text-foreground ">{secret.secretName}</code>
               <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug">{secret.description}</p>
@@ -432,7 +432,7 @@ function SecretKeysForm({ secretKeysNeeded, projectId, onTellAi, projectSecrets 
                       value={entry.value}
                       onChange={(e) => updateEntry(si, ei, "value", e.target.value)}
                       placeholder={"Enter value..."}
-                      className="w-full h-8 px-2.5 pr-8 text-xs rounded-lg border border-[var(--neu-line)] bg-[var(--neu-sunken)] text-foreground shadow-[var(--neu-inset-1)] outline-none focus-visible:shadow-[var(--neu-inset-1),var(--neu-focus)] font-mono"
+                      className="w-full h-8 px-2.5 pr-8 text-xs rounded-lg border border-[var(--clay-line)] bg-[var(--clay-sunken)] text-foreground shadow-[var(--clay-well-1)] outline-none focus-visible:shadow-[var(--clay-well-1),var(--clay-focus)] font-mono"
                     />
                     <button
                       onClick={() => updateEntry(si, ei, "showValue", !entry.showValue)}
@@ -444,7 +444,7 @@ function SecretKeysForm({ secretKeysNeeded, projectId, onTellAi, projectSecrets 
                   <select
                     value={entry.environment}
                     onChange={(e) => updateEntry(si, ei, "environment", e.target.value)}
-                    className="h-8 px-2 text-[11px] rounded-lg border border-[var(--neu-line)] bg-[var(--neu-sunken)] text-foreground shadow-[var(--neu-inset-1)] outline-none focus-visible:shadow-[var(--neu-inset-1),var(--neu-focus)] min-w-[90px]"
+                    className="h-8 px-2 text-[11px] rounded-lg border border-[var(--clay-line)] bg-[var(--clay-sunken)] text-foreground shadow-[var(--clay-well-1)] outline-none focus-visible:shadow-[var(--clay-well-1),var(--clay-focus)] min-w-[90px]"
                   >
                     <option value="both">Dev + Prod</option>
                     <option value="development">Dev only</option>
@@ -471,7 +471,7 @@ function SecretKeysForm({ secretKeysNeeded, projectId, onTellAi, projectSecrets 
         <button
           onClick={handleSubmit}
           disabled={!allFilled || submitting}
-          className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-amber-500 hover:bg-amber-600 disabled:bg-[var(--neu-sunken-deep)] dark:disabled:bg-[var(--neu-sunken-deep)] text-white text-xs font-medium transition-colors disabled:cursor-not-allowed"
+          className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-amber-500 hover:bg-amber-600 disabled:bg-[var(--clay-sunken-deep)] dark:disabled:bg-[var(--clay-sunken-deep)] text-white text-xs font-medium transition-colors disabled:cursor-not-allowed"
         >
           {submitting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Key className="w-3.5 h-3.5" />}
           {submitting ? "Saving..." : "Save Secret Keys"}
@@ -498,7 +498,7 @@ function BuildGroup({ group, projectId, onTellAi, projectSecrets, onRestored }: 
         </button>
       )}
       {expanded && group.buildMsgs?.map((msg, idx) => (
-        <div key={idx} className="text-xs text-muted-foreground pl-4 py-0.5 border-l-2 border-[var(--neu-line)] ">{msg.message}</div>
+        <div key={idx} className="text-xs text-muted-foreground pl-4 py-0.5 border-l-2 border-[var(--clay-line)] ">{msg.message}</div>
       ))}
 
       {/* Live current build step — always visible while the run is in progress,
@@ -722,7 +722,7 @@ export function ChatPanel({
       <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto px-4 py-4 space-y-4">
         {messages.length === 0 && !isBuilding && (
           <div className="flex flex-col items-center justify-center h-full text-center px-4">
-            <div className="w-11 h-11 rounded-2xl bg-[var(--neu-sunken)] border border-[var(--neu-line)] shadow-[var(--neu-inset-2)] flex items-center justify-center mb-3"><Bot className="w-5 h-5 text-muted-foreground" /></div>
+            <div className="w-11 h-11 rounded-2xl bg-[var(--clay-sunken)] border border-[var(--clay-line)] shadow-[var(--clay-well-2)] flex items-center justify-center mb-3"><Bot className="w-5 h-5 text-muted-foreground" /></div>
             <p className="text-[15px] text-muted-foreground mb-1">{"What do you want to build?"}</p>
             <p className="text-sm text-muted-foreground">{"Describe your idea below"}</p>
           </div>
@@ -732,7 +732,7 @@ export function ChatPanel({
           <div className="flex justify-center pb-1">
             <button
               onClick={handleLoadEarlier}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium text-muted-foreground bg-[var(--neu-sunken)] border border-[var(--neu-line)] shadow-[var(--neu-inset-1)] hover:shadow-[var(--neu-elev-1)] transition-[box-shadow] duration-200"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium text-muted-foreground bg-[var(--clay-sunken)] border border-[var(--clay-line)] shadow-[var(--clay-well-1)] hover:shadow-[var(--clay-elev-1)] transition-[box-shadow] duration-200"
             >
               <ChevronUp className="w-3.5 h-3.5" />
               {"Load earlier messages"}
@@ -823,7 +823,7 @@ export function ChatPanel({
       />
 
       <div className="shrink-0 px-3 pb-3 pt-2">
-        <div className="rounded-2xl overflow-hidden transition-all focus-within:ring-2 focus-within:ring-[var(--neu-line)] dark:focus-within:ring-[var(--neu-line-strong)]" style={{ background: "var(--textarea-bg, #f7f2f0)" }}>
+        <div className="rounded-2xl overflow-hidden transition-all focus-within:ring-2 focus-within:ring-[var(--clay-line)] dark:focus-within:ring-[var(--clay-line-strong)]" style={{ background: "var(--textarea-bg, #f7f2f0)" }}>
           <textarea data-chat-input ref={textareaRef} value={prompt} onChange={(e) => setPrompt(e.target.value)} onKeyDown={handleKeyDown} onPaste={handlePaste}
             placeholder={isBuilding ? "Agent is working..." : "Ask anything..."}
             className="w-full bg-transparent border-0 resize-none text-base outline-none placeholder:text-muted-foreground min-h-[48px] max-h-[200px] px-4 pt-3.5 pb-1 leading-relaxed "
@@ -837,7 +837,7 @@ export function ChatPanel({
             <div className="flex items-center gap-0.5">
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <label className="cursor-pointer size-8 inline-flex items-center justify-center rounded-lg hover:bg-[var(--neu-sunken)] hover:shadow-[var(--neu-inset-1)] transition-[box-shadow,background-color] duration-200">
+                  <label className="cursor-pointer size-8 inline-flex items-center justify-center rounded-lg hover:bg-[var(--clay-sunken)] hover:shadow-[var(--clay-well-1)] transition-[box-shadow,background-color] duration-200">
                     <input type="file" multiple className="hidden" onChange={handleFileUpload} accept="image/*,.pdf,.svg" disabled={isBuilding} />
                     {uploading ? <Loader2 className="w-4 h-4 text-muted-foreground animate-spin" /> : <Paperclip className="w-4 h-4 text-muted-foreground" />}
                     <span className="sr-only">{t("prompt.attachments.attach")}</span>
@@ -891,7 +891,7 @@ export function ChatPanel({
               <button onClick={() => setConfirmingStop(true)} aria-label={t("workspace.chat.stop")} className="w-8 h-8 rounded-full bg-red-500 hover:bg-red-600 flex items-center justify-center transition-colors"><Square className="w-3 h-3 text-white" /></button>
             ) : (
               <button onClick={handleSend} disabled={(!prompt.trim() && attachedFiles.length === 0) || sending}
-                className="w-8 h-8 rounded-full bg-primary text-primary-foreground shadow-[var(--neu-elev-2)] hover:shadow-[var(--neu-elev-3)] active:shadow-[var(--neu-inset-2)] disabled:opacity-40 disabled:pointer-events-none flex items-center justify-center transition-[box-shadow] duration-200">
+                className="w-8 h-8 rounded-full bg-primary text-primary-foreground shadow-[var(--clay-elev-2)] hover:shadow-[var(--clay-elev-3)] active:shadow-[var(--clay-well-2)] disabled:opacity-40 disabled:pointer-events-none flex items-center justify-center transition-[box-shadow] duration-200">
                 {sending ? <Loader2 className="w-3.5 h-3.5 animate-spin text-current" /> : <Send className="w-3.5 h-3.5 text-current" />}
               </button>
             )}

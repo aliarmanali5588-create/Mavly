@@ -9,7 +9,21 @@
  * success.
  */
 
+import { isAgentControlPath } from "@/lib/project-rules/rules";
+
 export const GENERATED_PREVIEW_PATH = "preview.html";
+
+/**
+ * ⚠️ `.mavly/` IS NEVER PUBLIC. The two control files are visible in the source
+ * explorer, but they are not part of the website: no preview request and no
+ * published file may resolve to them. Imported static sites are filtered too,
+ * because unlike a generated `preview.html` they publish every sibling asset.
+ */
+function isPublicControlPath(path: string): boolean {
+  const normalized = path.replaceAll("\\", "/").replace(/^\/+/, "");
+  if (isAgentControlPath(normalized)) return true;
+  return normalized.split("/").some((segment) => segment.toLowerCase() === ".mavly");
+}
 
 export interface StaticSite {
   /** The HTML document that is served at the preview root. */
@@ -51,11 +65,13 @@ function isSafeRelativePath(value: string): boolean {
  */
 export function staticPreviewPath(site: StaticSite, requested: string): string | null {
   const clean = requested.replace(/^\/+/, "");
+  if (isPublicControlPath(clean)) return null;
   if (!clean || clean === "index.html" || clean === site.entryPath) {
     return site.entryPath;
   }
   if (!isSafeRelativePath(clean)) return null;
-  return site.root ? `${site.root}/${clean}` : clean;
+  const resolved = site.root ? `${site.root}/${clean}` : clean;
+  return isPublicControlPath(resolved) ? null : resolved;
 }
 
 export interface StaticSiteResolution {
@@ -180,12 +196,14 @@ export function resolveStaticPreview(
 
 /** The file path relative to the published site root, or null outside it. */
 export function staticPublishPath(site: StaticSite, filePath: string): string | null {
+  if (isPublicControlPath(filePath)) return null;
   if (site.generated) return filePath === site.entryPath ? "index.html" : null;
   const prefix = site.root ? `${site.root}/` : "";
   if (!filePath.startsWith(prefix)) return null;
   const relative = filePath.slice(prefix.length);
   if (!isSafeRelativePath(relative)) return null;
-  return relative === site.entryPath.slice(prefix.length) ? "index.html" : relative;
+  const published = relative === site.entryPath.slice(prefix.length) ? "index.html" : relative;
+  return isPublicControlPath(published) ? null : published;
 }
 
 export interface StaticPublishFile {

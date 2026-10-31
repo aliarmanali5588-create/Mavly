@@ -51,7 +51,7 @@ export function StatusPill({
   return (
     <span
       className={cn(
-        "inline-flex shrink-0 items-center gap-1.5 rounded-full border font-semibold whitespace-nowrap shadow-[var(--neu-elev-1)]",
+        "inline-flex shrink-0 items-center gap-1.5 rounded-full border font-semibold whitespace-nowrap shadow-[var(--clay-elev-1)]",
         size === "sm" ? "text-2xs px-2 py-0.5" : "px-2.5 py-1 text-xs",
         "[&_svg]:size-3 [&_svg]:shrink-0",
         TONES[tone],

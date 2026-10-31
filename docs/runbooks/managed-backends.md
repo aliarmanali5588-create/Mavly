@@ -34,7 +34,7 @@ MAVLY_APP_GATEWAY_ORIGIN=https://app.example.com                 # absolute http
 MAVLY_MANAGED_BACKENDS_RPC_SECRET=<>=32 chars, no whitespace>     # keep stable
 ```
 
-Plus a deployed Cloudflare Cron Worker and the existing server-side worker prerequisites
+Plus a deployed Render Background Worker and the existing server-side worker prerequisites
 (`SUPABASE_SERVICE_ROLE_KEY`, `NEXT_PUBLIC_SUPABASE_URL`, `OPENROUTER_API_KEY`). Managed
 backend provisioning remains limited to the explicit `MAVLY_MANAGED_BACKENDS_PROJECTS`
 cohort; production generation dispatch itself has no project allowlist.

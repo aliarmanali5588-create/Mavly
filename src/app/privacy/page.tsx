@@ -20,7 +20,7 @@ export default function PrivacyPage() {
     <MarketingPageShell>
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 space-y-12">
         {/* Header */}
-        <div className="space-y-3 border-b border-[var(--neu-line)] pb-6">
+        <div className="space-y-3 border-b border-[var(--clay-line)] pb-6">
           <div className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-muted-foreground">
             <Lock className="w-3.5 h-3.5" />
             <span>DATA &amp; PRIVACY</span>
@@ -34,7 +34,7 @@ export default function PrivacyPage() {
         </div>
 
         {/* Legal Transparency Notice */}
-        <div className="p-4 rounded-xl bg-[var(--neu-sunken)] border border-[var(--neu-line)] text-xs text-foreground leading-relaxed">
+        <div className="p-4 rounded-xl bg-[var(--clay-sunken)] border border-[var(--clay-line)] text-xs text-foreground leading-relaxed">
           <strong>Privacy Commitment:</strong> This policy describes our actual data practices as implemented in our codebase. We do not sell your personal data or project files. For privacy questions, reach us at <code>hello@mavly.xyz</code>.
         </div>
 
@@ -151,12 +151,12 @@ export default function PrivacyPage() {
             </p>
           </section>
 
-          <section id="contact-privacy" className="space-y-2 border-t border-[var(--neu-line)] pt-6">
+          <section id="contact-privacy" className="space-y-2 border-t border-[var(--clay-line)] pt-6">
             <h2 className="text-base font-bold text-foreground">15. Contact Information</h2>
             <p>
               For privacy-related questions, data export requests, or security disclosures:
             </p>
-            <div className="p-4 rounded-xl bg-[var(--neu-sunken)] border border-black/[0.04] inline-block font-mono text-xs">
+            <div className="p-4 rounded-xl bg-[var(--clay-sunken)] border border-black/[0.04] inline-block font-mono text-xs">
               <a href="mailto:hello@mavly.xyz" className="text-black font-semibold hover:underline">
                 hello@mavly.xyz
               </a>

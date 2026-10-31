@@ -111,9 +111,9 @@ export function AdminSidebar({
   };
 
   const content = (
-    <div className="flex flex-col h-full bg-card border-r border-[var(--neu-line)] text-foreground select-none font-sans">
+    <div className="flex flex-col h-full bg-card border-r border-[var(--clay-line)] text-foreground select-none font-sans">
       {/* ── Top Workspace Header ── */}
-      <div className="p-4 border-b border-[var(--neu-line)] flex items-center justify-between">
+      <div className="p-4 border-b border-[var(--clay-line)] flex items-center justify-between">
         <Link
           href="/adminsh/dashboard"
           className="flex items-center gap-3 group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black rounded-xl p-1 -m-1"
@@ -187,7 +187,7 @@ export function AdminSidebar({
                   }}
                   className={`w-full flex items-center justify-between px-2.5 py-2 rounded-xl text-xs font-medium transition-all duration-150 group cursor-pointer ${
                     isActive
-                      ? "bg-black text-white shadow-[0_2px_8px_rgba(0,0,0,0.12)] font-semibold"
+                      ? "bg-black text-white shadow-[var(--clay-elev-ink-1)] font-semibold"
                       : "text-muted-foreground hover:text-foreground hover:bg-black/[0.04]"
                   }`}
                 >
@@ -205,7 +205,7 @@ export function AdminSidebar({
                       className={`px-1.5 py-0.5 text-[9px] font-mono font-bold rounded-md shrink-0 ml-1.5 ${
                         isActive
                           ? "bg-card/20 text-white"
-                          : "bg-[var(--neu-sunken)] text-muted-foreground group-hover:bg-black/10"
+                          : "bg-[var(--clay-sunken)] text-muted-foreground group-hover:bg-black/10"
                       }`}
                     >
                       {badge}
@@ -221,8 +221,8 @@ export function AdminSidebar({
       </nav>
 
       {/* ── Bottom Operator Profile Card & Sign Out ── */}
-      <div className="p-3 border-t border-[var(--neu-line)] bg-[var(--neu-sunken)]/50 space-y-2">
-        <div className="p-2.5 rounded-xl bg-card border border-[var(--neu-line)] flex items-center gap-2.5 shadow-[0_1px_3px_rgba(0,0,0,0.02)]">
+      <div className="p-3 border-t border-[var(--clay-line)] bg-[var(--clay-sunken)]/50 space-y-2">
+        <div className="p-2.5 rounded-xl bg-card border border-[var(--clay-line)] flex items-center gap-2.5 shadow-[var(--clay-elev-1)]">
           <div className="w-8 h-8 rounded-full bg-black text-white flex items-center justify-center font-bold text-xs shrink-0">
             {live ? "AD" : "SA"}
           </div>

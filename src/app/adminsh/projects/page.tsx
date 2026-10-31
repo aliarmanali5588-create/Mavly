@@ -69,8 +69,8 @@ export default function ProjectsAdminPage() {
         );
       case "Building":
         return (
-          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-medium bg-blue-50 text-blue-700 border border-blue-200/60 font-mono">
-            <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
+          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-medium bg-[var(--clay-sunken)] text-foreground border border-[var(--clay-line)]/60 font-mono">
+            <span className="w-1.5 h-1.5 rounded-full bg-[var(--clay-sunken)]0 animate-pulse" />
             Building
           </span>
         );
@@ -88,7 +88,7 @@ export default function ProjectsAdminPage() {
     <AdminShell activeNav="Projects">
       {/* 1. Projects Statistics Summary */}
       <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
-        <div className="p-4 rounded-xl bg-card border border-[var(--neu-line)] shadow-[var(--neu-elev-2)]">
+        <div className="p-4 rounded-xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)]">
           <div className="flex items-center justify-between text-xs text-muted-foreground font-medium">
             <span>Total Projects</span>
             <FolderGit2 className="w-3.5 h-3.5 text-muted-foreground" />
@@ -97,7 +97,7 @@ export default function ProjectsAdminPage() {
           <p className="text-[11px] text-muted-foreground mt-1">Across all workspace tenants</p>
         </div>
 
-        <div className="p-4 rounded-xl bg-card border border-[var(--neu-line)] shadow-[var(--neu-elev-2)]">
+        <div className="p-4 rounded-xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)]">
           <div className="flex items-center justify-between text-xs text-muted-foreground font-medium">
             <span>Weekly Velocity</span>
             <ArrowUpRight className="w-3.5 h-3.5 text-emerald-600" />
@@ -108,7 +108,7 @@ export default function ProjectsAdminPage() {
           </div>
         </div>
 
-        <div className="p-4 rounded-xl bg-card border border-[var(--neu-line)] shadow-[var(--neu-elev-2)]">
+        <div className="p-4 rounded-xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)]">
           <div className="flex items-center justify-between text-xs text-muted-foreground font-medium">
             <span>Deployed & Live</span>
             <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
@@ -117,10 +117,10 @@ export default function ProjectsAdminPage() {
           <p className="text-[11px] text-muted-foreground mt-1">96.2% operational health</p>
         </div>
 
-        <div className="p-4 rounded-xl bg-card border border-[var(--neu-line)] shadow-[var(--neu-elev-2)]">
+        <div className="p-4 rounded-xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)]">
           <div className="flex items-center justify-between text-xs text-muted-foreground font-medium">
             <span>Custom Domains</span>
-            <Globe className="w-3.5 h-3.5 text-blue-500" />
+            <Globe className="w-3.5 h-3.5 text-muted-foreground" />
           </div>
           <h3 className="text-xl font-bold tracking-tight text-foreground font-mono mt-1">1,890</h3>
           <p className="text-[11px] text-muted-foreground mt-1">Auto-SSL on mavly.xyz</p>
@@ -128,10 +128,10 @@ export default function ProjectsAdminPage() {
       </div>
 
       {/* 2. Projects Table & Filter Toolbar */}
-      <div className="bg-card rounded-2xl p-5 sm:p-6 border border-[var(--neu-line)] shadow-[0_2px_8px_rgba(0,0,0,0.02)] space-y-4">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pb-3 border-b border-[var(--neu-line)]">
+      <div className="bg-card rounded-2xl p-5 sm:p-6 border border-[var(--clay-line)] shadow-[var(--clay-elev-1)] space-y-4">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pb-3 border-b border-[var(--clay-line)]">
           {/* Segmented Status Tabs */}
-          <div className="flex flex-wrap items-center gap-1 bg-[var(--neu-sunken)] p-0.5 rounded-lg border border-[var(--neu-line)] text-xs">
+          <div className="flex flex-wrap items-center gap-1 bg-[var(--clay-sunken)] p-0.5 rounded-lg border border-[var(--clay-line)] text-xs">
             {["All", "Ready", "Building", "Failed"].map((st) => (
               <button
                 key={st}
@@ -156,14 +156,14 @@ export default function ProjectsAdminPage() {
                 placeholder="Search project, owner, domain..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full h-8 pl-8 pr-3 text-xs rounded-lg bg-[var(--neu-sunken)] border border-[var(--neu-line)] text-foreground placeholder:text-muted-foreground focus:bg-card focus:outline-none focus:ring-1 focus:ring-black"
+                className="w-full h-8 pl-8 pr-3 text-xs rounded-lg bg-[var(--clay-sunken)] border border-[var(--clay-line)] text-foreground placeholder:text-muted-foreground focus:bg-card focus:outline-none focus:ring-1 focus:ring-black"
               />
             </div>
 
             <select
               value={visibilityFilter}
               onChange={(e) => setVisibilityFilter(e.target.value)}
-              className="h-8 px-2.5 text-xs rounded-lg bg-[var(--neu-sunken)] border border-[var(--neu-line)] text-foreground focus:bg-card focus:outline-none"
+              className="h-8 px-2.5 text-xs rounded-lg bg-[var(--clay-sunken)] border border-[var(--clay-line)] text-foreground focus:bg-card focus:outline-none"
             >
               <option value="All">All Visibility</option>
               <option value="Custom Domain">Custom Domain</option>
@@ -177,7 +177,7 @@ export default function ProjectsAdminPage() {
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
             <thead>
-              <tr className="border-b border-[var(--neu-line)] text-muted-foreground font-semibold uppercase text-[10px]">
+              <tr className="border-b border-[var(--clay-line)] text-muted-foreground font-semibold uppercase text-[10px]">
                 <th className="pb-3">Project Title & ID</th>
                 <th className="pb-3">Workspace Owner</th>
                 <th className="pb-3">Model Engine</th>
@@ -191,7 +191,7 @@ export default function ProjectsAdminPage() {
             <tbody className="divide-y divide-black/[0.04]">
               {filtered.length > 0 ? (
                 filtered.map((proj) => (
-                  <tr key={proj.id} className="hover:bg-[var(--neu-sunken)]/70 transition-colors">
+                  <tr key={proj.id} className="hover:bg-[var(--clay-sunken)]/70 transition-colors">
                     <td className="py-3.5">
                       <div className="flex items-center gap-1.5">
                         <p className="font-semibold text-foreground">{proj.name}</p>
@@ -211,7 +211,7 @@ export default function ProjectsAdminPage() {
                       <p className="text-[11px] text-muted-foreground">{proj.ownerEmail}</p>
                     </td>
                     <td className="py-3.5">
-                      <span className="font-mono text-[11px] text-foreground bg-[var(--neu-sunken)] px-2 py-0.5 rounded border border-[var(--neu-line)]">
+                      <span className="font-mono text-[11px] text-foreground bg-[var(--clay-sunken)] px-2 py-0.5 rounded border border-[var(--clay-line)]">
                         {proj.model}
                       </span>
                     </td>
@@ -229,7 +229,7 @@ export default function ProjectsAdminPage() {
                         <button
                           type="button"
                           onClick={() => setSelectedProject(proj)}
-                          className="px-2.5 py-1 text-[11px] font-medium text-foreground bg-[var(--neu-sunken)] hover:bg-[var(--neu-sunken-deep)] rounded-md transition-colors"
+                          className="px-2.5 py-1 text-[11px] font-medium text-foreground bg-[var(--clay-sunken)] hover:bg-[var(--clay-sunken-deep)] rounded-md transition-colors"
                         >
                           Inspect
                         </button>
@@ -238,7 +238,7 @@ export default function ProjectsAdminPage() {
                           onClick={() =>
                             toast.info(`Opening preview sandbox for "${proj.name}" (Demo)`)
                           }
-                          className="p-1 text-muted-foreground hover:text-blue-600 transition-colors"
+                          className="p-1 text-muted-foreground hover:text-foreground transition-colors"
                           title="Preview App"
                         >
                           <ExternalLink className="w-3.5 h-3.5" />
@@ -271,7 +271,7 @@ export default function ProjectsAdminPage() {
       {selectedProject && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs animate-in fade-in">
           <div className="w-full max-w-md bg-card rounded-2xl border border-black/[0.1] shadow-2xl p-6 space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-[var(--neu-line)]">
+            <div className="flex items-center justify-between pb-3 border-b border-[var(--clay-line)]">
               <div className="flex items-center gap-2">
                 <FolderGit2 className="w-4 h-4 text-foreground" />
                 <div>
@@ -289,7 +289,7 @@ export default function ProjectsAdminPage() {
             </div>
 
             <div className="space-y-2.5 text-xs">
-              <div className="grid grid-cols-2 gap-2 bg-[var(--neu-sunken)] p-3 rounded-xl border border-[var(--neu-line)]">
+              <div className="grid grid-cols-2 gap-2 bg-[var(--clay-sunken)] p-3 rounded-xl border border-[var(--clay-line)]">
                 <div>
                   <span className="text-muted-foreground block text-[10px] uppercase font-bold">Owner</span>
                   <span className="font-semibold text-foreground">{selectedProject.owner}</span>
@@ -317,7 +317,7 @@ export default function ProjectsAdminPage() {
               </div>
             </div>
 
-            <div className="pt-2 flex items-center justify-end gap-2 border-t border-[var(--neu-line)]">
+            <div className="pt-2 flex items-center justify-end gap-2 border-t border-[var(--clay-line)]">
               <button
                 type="button"
                 onClick={() => setSelectedProject(null)}

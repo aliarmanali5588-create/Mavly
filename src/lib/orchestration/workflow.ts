@@ -206,12 +206,13 @@ export function tasksForComplexity(
     role: "coding",
     kind: "implement",
     title: "Implement the approved plan",
-    dependsOn: [
-      { key: "plan", required: true },
-      ...(complexity === "simple"
+    dependsOn:
+      complexity === "simple"
         ? []
-        : [{ key: "design-review", required: false }]),
-    ],
+        : [
+            { key: "plan", required: true },
+            { key: "design-review", required: false },
+          ],
     writesFiles: true,
     required: true,
     maxAttempts: 1,
@@ -253,8 +254,14 @@ export function tasksForComplexity(
     maxAttempts: 1,
   };
 
-  const tasks: AgentTaskDefinition[] = [plan];
-  if (complexity !== "simple") tasks.push(design);
+  /**
+   * ⚠️ A SIMPLE EDIT DOES NOT PAY FOR A FULL PLANNING PASS. The planner and the
+   * design review exist for new builds and structural changes; a copy/colour/
+   * single-component edit goes straight to Coding, then QA and Security. The
+   * existing manifest planner inside `generateApp` still selects the exact files.
+   */
+  const tasks: AgentTaskDefinition[] = [];
+  if (complexity !== "simple") tasks.push(plan, design);
   tasks.push(implement, verify, security);
   if (complexity !== "simple") tasks.push(deployment);
   return tasks.filter((task) => task.kind !== "repair" || options.repairEnabled);

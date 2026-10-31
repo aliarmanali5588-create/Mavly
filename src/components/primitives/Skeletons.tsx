@@ -13,7 +13,7 @@ export function SkeletonBox({ className, ...props }: React.ComponentProps<"div">
   return (
     <div
       aria-hidden
-      className={cn("relative overflow-hidden rounded-xl border border-[var(--neu-line)] bg-[var(--neu-sunken)] shadow-[var(--neu-inset-1)]", className)}
+      className={cn("relative overflow-hidden rounded-xl border border-[var(--clay-line)] bg-[var(--clay-sunken)] shadow-[var(--clay-well-1)]", className)}
       {...props}
     >
       <span className="tp-shimmer absolute inset-0" />
@@ -43,7 +43,7 @@ export function SkeletonText({
 
 export function SkeletonCard({ className }: { className?: string }) {
   return (
-    <div className={cn("bg-card rounded-2xl border border-[var(--neu-line)] p-5 shadow-[var(--neu-elev-2)]", className)}>
+    <div className={cn("bg-card rounded-2xl border border-[var(--clay-line)] p-5 shadow-[var(--clay-elev-2)]", className)}>
       <div className="flex items-center gap-3">
         <SkeletonBox className="size-9 rounded-lg" />
         <div className="flex-1 space-y-2">

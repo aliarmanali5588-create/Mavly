@@ -72,7 +72,7 @@ export default function AuditLogsAdminPage() {
     <AdminShell activeNav="Audit Logs">
       {/* 1. Audit Metrics Summary */}
       <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
-        <div className="p-4 rounded-xl bg-card border border-[var(--neu-line)] shadow-[var(--neu-elev-2)]">
+        <div className="p-4 rounded-xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)]">
           <div className="flex items-center justify-between text-xs text-muted-foreground font-medium">
             <span>Security Events</span>
             <Shield className="w-3.5 h-3.5 text-muted-foreground" />
@@ -81,7 +81,7 @@ export default function AuditLogsAdminPage() {
           <p className="text-[11px] text-muted-foreground mt-1">90-day compliance retention</p>
         </div>
 
-        <div className="p-4 rounded-xl bg-card border border-[var(--neu-line)] shadow-[var(--neu-elev-2)]">
+        <div className="p-4 rounded-xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)]">
           <div className="flex items-center justify-between text-xs text-muted-foreground font-medium">
             <span>Console Actions</span>
             <Lock className="w-3.5 h-3.5 text-emerald-600" />
@@ -90,7 +90,7 @@ export default function AuditLogsAdminPage() {
           <p className="text-[11px] text-emerald-600 font-medium mt-1">100% authenticated & signed</p>
         </div>
 
-        <div className="p-4 rounded-xl bg-card border border-[var(--neu-line)] shadow-[var(--neu-elev-2)]">
+        <div className="p-4 rounded-xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)]">
           <div className="flex items-center justify-between text-xs text-muted-foreground font-medium">
             <span>Edge Mitigations</span>
             <FileText className="w-3.5 h-3.5 text-amber-500" />
@@ -99,7 +99,7 @@ export default function AuditLogsAdminPage() {
           <p className="text-[11px] text-muted-foreground mt-1">WAF rate limit triggers blocked</p>
         </div>
 
-        <div className="p-4 rounded-xl bg-card border border-[var(--neu-line)] shadow-[var(--neu-elev-2)]">
+        <div className="p-4 rounded-xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)]">
           <div className="flex items-center justify-between text-xs text-muted-foreground font-medium">
             <span>Cryptographic Chain</span>
             <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
@@ -110,10 +110,10 @@ export default function AuditLogsAdminPage() {
       </div>
 
       {/* 2. Search, Filter & Action Bar */}
-      <div className="bg-card rounded-2xl p-5 sm:p-6 border border-[var(--neu-line)] shadow-[0_2px_8px_rgba(0,0,0,0.02)] space-y-4">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pb-3 border-b border-[var(--neu-line)]">
+      <div className="bg-card rounded-2xl p-5 sm:p-6 border border-[var(--clay-line)] shadow-[var(--clay-elev-1)] space-y-4">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pb-3 border-b border-[var(--clay-line)]">
           {/* Segmented Status Tabs */}
-          <div className="flex flex-wrap items-center gap-1 bg-[var(--neu-sunken)] p-0.5 rounded-lg border border-[var(--neu-line)] text-xs">
+          <div className="flex flex-wrap items-center gap-1 bg-[var(--clay-sunken)] p-0.5 rounded-lg border border-[var(--clay-line)] text-xs">
             {["All", "Success", "Failed"].map((st) => (
               <button
                 key={st}
@@ -138,14 +138,14 @@ export default function AuditLogsAdminPage() {
                 placeholder="Search actor, action, IP..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full h-8 pl-8 pr-3 text-xs rounded-lg bg-[var(--neu-sunken)] border border-[var(--neu-line)] text-foreground placeholder:text-muted-foreground focus:bg-card focus:outline-none focus:ring-1 focus:ring-black"
+                className="w-full h-8 pl-8 pr-3 text-xs rounded-lg bg-[var(--clay-sunken)] border border-[var(--clay-line)] text-foreground placeholder:text-muted-foreground focus:bg-card focus:outline-none focus:ring-1 focus:ring-black"
               />
             </div>
 
             <select
               value={sourceFilter}
               onChange={(e) => setSourceFilter(e.target.value)}
-              className="h-8 px-2.5 text-xs rounded-lg bg-[var(--neu-sunken)] border border-[var(--neu-line)] text-foreground focus:bg-card focus:outline-none"
+              className="h-8 px-2.5 text-xs rounded-lg bg-[var(--clay-sunken)] border border-[var(--clay-line)] text-foreground focus:bg-card focus:outline-none"
             >
               <option value="All">All Sources</option>
               <option value="Admin Console">Admin Console</option>
@@ -158,7 +158,7 @@ export default function AuditLogsAdminPage() {
               onClick={() => {
                 toast.info("Exporting cryptographic audit log (demo)");
               }}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-foreground bg-[var(--neu-sunken)] hover:bg-[var(--neu-sunken)] border border-[var(--neu-line)] rounded-lg transition-colors"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-foreground bg-[var(--clay-sunken)] hover:bg-[var(--clay-sunken)] border border-[var(--clay-line)] rounded-lg transition-colors"
             >
               <Download className="w-3.5 h-3.5" />
               <span>Export</span>
@@ -170,7 +170,7 @@ export default function AuditLogsAdminPage() {
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
             <thead>
-              <tr className="border-b border-[var(--neu-line)] text-muted-foreground font-semibold uppercase text-[10px]">
+              <tr className="border-b border-[var(--clay-line)] text-muted-foreground font-semibold uppercase text-[10px]">
                 <th className="pb-3">Timestamp</th>
                 <th className="pb-3">Actor / Principal</th>
                 <th className="pb-3">Action Executed</th>
@@ -190,7 +190,7 @@ export default function AuditLogsAdminPage() {
                 </tr>
               ) : (
                 filtered.map((log) => (
-                  <tr key={log.id} className="hover:bg-[var(--neu-sunken)]/70 transition-colors">
+                  <tr key={log.id} className="hover:bg-[var(--clay-sunken)]/70 transition-colors">
                     <td className="py-3.5 text-muted-foreground whitespace-nowrap font-mono text-[11px]">
                       {log.timestamp}
                     </td>
@@ -204,7 +204,7 @@ export default function AuditLogsAdminPage() {
                       {log.target}
                     </td>
                     <td className="py-3.5">
-                      <span className="font-mono text-[11px] text-foreground bg-[var(--neu-sunken)] px-2 py-0.5 rounded border border-[var(--neu-line)]">
+                      <span className="font-mono text-[11px] text-foreground bg-[var(--clay-sunken)] px-2 py-0.5 rounded border border-[var(--clay-line)]">
                         {log.source}
                       </span>
                     </td>
@@ -215,7 +215,7 @@ export default function AuditLogsAdminPage() {
                     <td className="py-3.5 text-right">
                       <button
                         onClick={() => setSelectedLog(log)}
-                        className="px-2.5 py-1 text-[11px] font-medium text-foreground bg-[var(--neu-sunken)] hover:bg-[var(--neu-sunken-deep)] rounded-md transition-colors inline-flex items-center gap-1"
+                        className="px-2.5 py-1 text-[11px] font-medium text-foreground bg-[var(--clay-sunken)] hover:bg-[var(--clay-sunken-deep)] rounded-md transition-colors inline-flex items-center gap-1"
                       >
                         <Terminal className="w-3 h-3" />
                         <span>JSON</span>
@@ -233,7 +233,7 @@ export default function AuditLogsAdminPage() {
       {selectedLog && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs animate-in fade-in">
           <div className="bg-card rounded-2xl max-w-lg w-full border border-black/[0.1] shadow-2xl p-6 relative space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-[var(--neu-line)]">
+            <div className="flex items-center justify-between pb-3 border-b border-[var(--clay-line)]">
               <div className="flex items-center gap-2">
                 <Terminal className="w-4 h-4 text-foreground" />
                 <h3 className="text-sm font-bold text-foreground">Audit Event {selectedLog.id}</h3>
@@ -247,7 +247,7 @@ export default function AuditLogsAdminPage() {
             </div>
 
             <div className="space-y-3 text-xs">
-              <div className="grid grid-cols-2 gap-2 bg-[var(--neu-sunken)] p-3 rounded-xl border border-[var(--neu-line)]">
+              <div className="grid grid-cols-2 gap-2 bg-[var(--clay-sunken)] p-3 rounded-xl border border-[var(--clay-line)]">
                 <div>
                   <span className="text-muted-foreground block text-[10px] uppercase font-bold">Principal Actor</span>
                   <p className="font-semibold text-foreground truncate">{selectedLog.actor}</p>
@@ -290,10 +290,10 @@ export default function AuditLogsAdminPage() {
               </div>
             </div>
 
-            <div className="flex justify-end pt-2 border-t border-[var(--neu-line)]">
+            <div className="flex justify-end pt-2 border-t border-[var(--clay-line)]">
               <button
                 onClick={() => setSelectedLog(null)}
-                className="px-4 py-1.5 text-xs font-semibold text-foreground bg-[var(--neu-sunken)] hover:bg-[var(--neu-sunken-deep)] rounded-lg"
+                className="px-4 py-1.5 text-xs font-semibold text-foreground bg-[var(--clay-sunken)] hover:bg-[var(--clay-sunken-deep)] rounded-lg"
               >
                 Close
               </button>

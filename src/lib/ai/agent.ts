@@ -71,6 +71,15 @@ import {
   parseAppDataModel,
   type AppDataModel,
 } from "@/lib/managed-backend/model";
+import { isAgentControlPath } from "@/lib/project-rules/rules";
+import {
+  projectGenerationContext,
+  projectRulesSystemBlock,
+} from "@/lib/project-rules/prompt";
+import {
+  validateWebsiteScope,
+  type ChangeClass,
+} from "@/lib/project-rules/scope";
 
 export type AgentProjectType = "website" | "android";
 
@@ -227,6 +236,17 @@ export interface AgentGenerationInput {
   imagePlanCounts?: { siteType: string; approved: number; deferred: number };
   /** Verified completed work from a previous interrupted attempt. */
   resume?: AgentResumeState;
+  /**
+   * Persisted website project rules (`.mavly/.agentrules.md`) and work state
+   * (`.mavly/.agentwork.md`), plus the backend-classified change size. Android
+   * runs do not use this. The files are server-owned: the model never writes
+   * anything under `.mavly/`.
+   */
+  projectRules?: {
+    rules: string;
+    workState: string;
+    changeClass: ChangeClass;
+  } | null;
   /** Persist ONE validated batch. The caller must make this idempotent. */
   onBatch?: (batch: AgentBatchCheckpoint) => Promise<void> | void;
   /** Persist the manifest so a later attempt can resume without re-planning. */
@@ -294,6 +314,8 @@ export type AgentGenerationFailureCode =
   | "GENERATION_PERSIST_FAILED"
   | "GENERATION_CONTRACT_INVALID"
   | "GENERATION_NO_FILES"
+  /** The plan left the project's approved change scope. Nothing was written. */
+  | "GENERATION_SCOPE_VIOLATION"
   | "GENERATION_MODEL_NOT_ALLOWED";
 
 export interface AgentGenerationFailure {
@@ -727,19 +749,31 @@ function systemPromptFor(
   profile: AgentProjectType,
   managedBackendContext?: AgentGenerationInput["managedBackendContext"],
   backendContract?: string | null,
+  rules?: AgentGenerationInput["projectRules"],
 ): string {
   const prompt = profile === "android" ? ANDROID_SYSTEM_PROMPT : SYSTEM_PROMPT;
-  if (!managedBackendContext || profile === "android") return prompt;
+  /**
+   * The persisted project rules are server-authored repository policy, so they
+   * belong in the system message. They never reach an Android prompt: that
+   * profile's contract and path policy are separate and unchanged.
+   */
+  const rulesBlock =
+    profile === "website" && rules
+      ? projectRulesSystemBlock(rules.rules, rules.changeClass)
+      : "";
+  if (!managedBackendContext || profile === "android") {
+    return `${prompt}${rulesBlock}`;
+  }
 
   if (managedBackendContext === "ready" && backendContract) {
-    return `${prompt}\n\nManaged database boundary (server-controlled):\nA managed database is provisioned, its application schema was applied and verified, and Mavly's data API is configured for this project. The contract below is the ONLY data layer: build the UI against exactly these endpoints and fields, with real loading, empty, error and signed-out states. Do not add a database client, a direct SQL call, DATABASE_URL, your own password storage or any endpoint not listed.\n${backendContract}`;
+    return `${prompt}${rulesBlock}\n\nManaged database boundary (server-controlled):\nA managed database is provisioned, its application schema was applied and verified, and Mavly's data API is configured for this project. The contract below is the ONLY data layer: build the UI against exactly these endpoints and fields, with real loading, empty, error and signed-out states. Do not add a database client, a direct SQL call, DATABASE_URL, your own password storage or any endpoint not listed.\n${backendContract}`;
   }
 
   const backendBoundary =
     managedBackendContext === "provisioned_without_runtime"
       ? "A Neon database project has been provisioned and its server-side connection was checked, but its application schema was not applied and the data API is not configured. Do not include or request DATABASE_URL, do not connect from browser code, do not create or claim working persistent CRUD/auth, and do not claim schema migrations were applied. Use clearly labeled prototype-only in-memory data and state this limitation in README.md."
       : "No managed database was provisioned for this run. Do not include or request DATABASE_URL, do not connect from browser code, and do not claim working persistent CRUD/auth. Use clearly labeled prototype-only in-memory data and state this limitation in README.md.";
-  return `${prompt}\n\nManaged database boundary (server-controlled):\n${backendBoundary}`;
+  return `${prompt}${rulesBlock}\n\nManaged database boundary (server-controlled):\n${backendBoundary}`;
 }
 
 /** The files the first generated version must contain for this profile. */
@@ -940,6 +974,48 @@ export async function generateApp(
           `The Android plan includes ${entry.path}, which is not allowed: ${rejection}. Nothing was changed.`,
         );
       }
+    }
+  }
+
+  /**
+   * ═══ WEBSITE CHANGE SCOPE — ENFORCED BEFORE ANYTHING IS PERSISTED ═════════
+   *
+   * The model chooses WHAT to build; this backend check decides whether the plan
+   * may leave the project's approved scope. It runs before `onManifest`, so a
+   * refused plan writes no manifest, no file and no checkpoint. Android keeps its
+   * own source contract and is not affected by this rule set.
+   */
+  if (profile === "website") {
+    for (const entry of normalizedFiles) {
+      if (isAgentControlPath(entry.path)) {
+        return fail(
+          "GENERATION_SCOPE_VIOLATION",
+          `${entry.path} is a Mavly control file and cannot be written by the model. Nothing was changed.`,
+        );
+      }
+    }
+    for (const path of normalizedDeleted) {
+      if (isAgentControlPath(path)) {
+        return fail(
+          "GENERATION_SCOPE_VIOLATION",
+          `${path} is a Mavly control file and cannot be deleted. Nothing was changed.`,
+        );
+      }
+    }
+
+    const scope = validateWebsiteScope({
+      mode: input.mode,
+      prompt: input.prompt,
+      changeClass:
+        input.projectRules?.changeClass ??
+        (input.mode === "create" ? "major" : "medium"),
+      plannedPaths: normalizedFiles.map((entry) => entry.path),
+      deletedPaths: normalizedDeleted,
+      existingPaths: (input.existingFiles ?? []).map((file) => file.path),
+      requiredPaths: REQUIRED_CREATE_PATHS,
+    });
+    if (!scope.ok) {
+      return fail("GENERATION_SCOPE_VIOLATION", scope.summary);
     }
   }
 
@@ -2307,6 +2383,19 @@ function buildManifestMessages(input: AgentGenerationInput, model: AiModel): Cha
   const design = input.designContext?.trim().slice(0, 30_000) ?? "";
   const memory = input.memoryContext?.trim().slice(0, MAX_MEMORY_CONTEXT_CHARS) ?? "";
   const specialist = specialistContext(input);
+  /**
+   * The two `.mavly` control files are server-owned. They are passed as explicit
+   * rules/work-state context, never as ordinary project files the model might
+   * decide to rewrite.
+   */
+  const rules = profile === "website" ? input.projectRules ?? null : null;
+  const projectFiles = input.contextFiles ?? input.existingFiles ?? [];
+  const rulesContext = rules
+    ? projectGenerationContext({
+        workState: rules.workState,
+        changeClass: rules.changeClass,
+      })
+    : "";
   const action =
     input.mode === "create"
       ? profile === "android"
@@ -2314,7 +2403,9 @@ function buildManifestMessages(input: AgentGenerationInput, model: AiModel): Cha
         : "Plan a new application."
       : "Plan an update to the existing application.";
   const existingIndex = formatExistingFileIndex(
-    input.contextFiles ?? input.existingFiles ?? [],
+    profile === "website"
+      ? projectFiles.filter((file) => !isAgentControlPath(file.path))
+      : projectFiles,
     input.resume?.completedPaths ?? [],
   );
   const android =
@@ -2331,6 +2422,7 @@ function buildManifestMessages(input: AgentGenerationInput, model: AiModel): Cha
     design ? `\nFigma design reference:\n${design}` : "",
     memory ? `\n${memory}` : "",
     specialist,
+    rulesContext,
     existingIndex ? `\nExisting project files (selected context):\n${existingIndex}` : "",
     "",
     "Return the plan JSON now.",
@@ -2339,12 +2431,12 @@ function buildManifestMessages(input: AgentGenerationInput, model: AiModel): Cha
   return [
     {
       role: "system",
-      content: plannerSystemPrompt(
+      content: `${plannerSystemPrompt(
         input.planning,
         profile,
         // Image planning is a website concern; an Android plan never adds it.
         profile === "website" ? input.imagePlanning?.addendum : undefined,
-      ),
+      )}${rules ? projectRulesSystemBlock(rules.rules, rules.changeClass) : ""}`,
     },
     { role: "user", content: user },
   ];
@@ -2362,8 +2454,18 @@ function buildBatchMessages(
   const design = input.designContext?.trim().slice(0, 30_000) ?? "";
   const memory = input.memoryContext?.trim().slice(0, MAX_MEMORY_CONTEXT_CHARS) ?? "";
   const specialist = specialistContext(input);
+  const rules = profile === "website" ? input.projectRules ?? null : null;
+  const projectFiles = input.contextFiles ?? input.existingFiles ?? [];
+  const rulesContext = rules
+    ? projectGenerationContext({
+        workState: rules.workState,
+        changeClass: rules.changeClass,
+      })
+    : "";
   const context = formatContextFiles(
-    input.contextFiles ?? input.existingFiles ?? [],
+    profile === "website"
+      ? projectFiles.filter((file) => !isAgentControlPath(file.path))
+      : projectFiles,
     state.generated,
   );
   const requested = group
@@ -2402,6 +2504,7 @@ function buildBatchMessages(
     design ? `\nFigma design reference:\n${design}` : "",
     memory ? `\n${memory}` : "",
     specialist,
+    rulesContext,
     imagePlanText,
     imageAssetText,
     context ? `\nCurrent project files (authoritative over memory):\n${context}` : "",
@@ -2434,6 +2537,7 @@ function buildBatchMessages(
         profile,
         input.managedBackendContext,
         input.backendContract,
+        rules,
       ),
     },
     { role: "user", content: user },

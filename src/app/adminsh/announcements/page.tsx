@@ -116,8 +116,8 @@ export default function AnnouncementsAdminPage() {
     switch (type) {
       case "Information":
         return (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-blue-50 text-blue-700 border border-blue-200/60 font-mono">
-            <Info className="w-3 h-3 text-blue-600" />
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-[var(--clay-sunken)] text-foreground border border-[var(--clay-line)]/60 font-mono">
+            <Info className="w-3 h-3 text-foreground" />
             Information
           </span>
         );
@@ -137,8 +137,8 @@ export default function AnnouncementsAdminPage() {
         );
       case "Maintenance":
         return (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-purple-50 text-purple-700 border border-purple-200/60 font-mono">
-            <Wrench className="w-3 h-3 text-purple-600" />
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-[var(--clay-sunken)] text-foreground border border-[var(--clay-line)]/60 font-mono">
+            <Wrench className="w-3 h-3 text-foreground" />
             Maintenance
           </span>
         );
@@ -156,14 +156,14 @@ export default function AnnouncementsAdminPage() {
         );
       case "Scheduled":
         return (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-blue-50 text-blue-700 border border-blue-200/60 font-mono">
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-[var(--clay-sunken)] text-foreground border border-[var(--clay-line)]/60 font-mono">
             <Clock className="w-3 h-3" />
             Scheduled
           </span>
         );
       case "Draft":
         return (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-[var(--neu-sunken)] text-foreground border border-[var(--neu-line)] font-mono">
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-[var(--clay-sunken)] text-foreground border border-[var(--clay-line)] font-mono">
             Draft
           </span>
         );
@@ -180,7 +180,7 @@ export default function AnnouncementsAdminPage() {
     <AdminShell activeNav="Announcements">
       {/* 1. Header Metrics */}
       <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
-        <div className="p-4 rounded-xl bg-card border border-[var(--neu-line)] shadow-[var(--neu-elev-2)]">
+        <div className="p-4 rounded-xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)]">
           <div className="flex items-center justify-between text-xs text-muted-foreground font-medium">
             <span>Total Broadcasts</span>
             <Megaphone className="w-3.5 h-3.5 text-muted-foreground" />
@@ -189,7 +189,7 @@ export default function AnnouncementsAdminPage() {
           <p className="text-[11px] text-muted-foreground mt-1">Managed across all channels</p>
         </div>
 
-        <div className="p-4 rounded-xl bg-card border border-[var(--neu-line)] shadow-[var(--neu-elev-2)]">
+        <div className="p-4 rounded-xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)]">
           <div className="flex items-center justify-between text-xs text-muted-foreground font-medium">
             <span>Live in Workspaces</span>
             <Radio className="w-3.5 h-3.5 text-emerald-600" />
@@ -200,10 +200,10 @@ export default function AnnouncementsAdminPage() {
           <p className="text-[11px] text-muted-foreground mt-1">Active customer banners</p>
         </div>
 
-        <div className="p-4 rounded-xl bg-card border border-[var(--neu-line)] shadow-[var(--neu-elev-2)]">
+        <div className="p-4 rounded-xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)]">
           <div className="flex items-center justify-between text-xs text-muted-foreground font-medium">
             <span>Scheduled</span>
-            <Clock className="w-3.5 h-3.5 text-blue-500" />
+            <Clock className="w-3.5 h-3.5 text-muted-foreground" />
           </div>
           <h3 className="text-xl font-bold tracking-tight text-foreground font-mono mt-1">
             {announcements.filter((a) => a.status === "Scheduled").length}
@@ -211,10 +211,10 @@ export default function AnnouncementsAdminPage() {
           <p className="text-[11px] text-muted-foreground mt-1">Upcoming maintenance windows</p>
         </div>
 
-        <div className="p-4 rounded-xl bg-card border border-[var(--neu-line)] shadow-[var(--neu-elev-2)]">
+        <div className="p-4 rounded-xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)]">
           <div className="flex items-center justify-between text-xs text-muted-foreground font-medium">
             <span>Drafts</span>
-            <Edit3 className="w-3.5 h-3.5 text-purple-500" />
+            <Edit3 className="w-3.5 h-3.5 text-muted-foreground" />
           </div>
           <h3 className="text-xl font-bold tracking-tight text-foreground font-mono mt-1">
             {announcements.filter((a) => a.status === "Draft").length}
@@ -225,7 +225,7 @@ export default function AnnouncementsAdminPage() {
 
       {/* 2. End-User Workspace Live Banner Simulator */}
       {previewItem && (
-        <div className="p-5 rounded-2xl bg-card border border-[var(--neu-line)] shadow-[var(--neu-elev-2)] space-y-3">
+        <div className="p-5 rounded-2xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)] space-y-3">
           <div className="flex items-center justify-between text-xs">
             <div className="flex items-center gap-2">
               <Eye className="w-4 h-4 text-muted-foreground" />
@@ -241,20 +241,20 @@ export default function AnnouncementsAdminPage() {
           <div
             className={`p-3.5 rounded-xl border flex items-start justify-between gap-3 text-xs ${
               previewItem.type === "Information"
-                ? "bg-blue-50/60 border-blue-200 text-blue-950"
+                ? "bg-[var(--clay-sunken)]/60 border-[var(--clay-line)] text-foreground"
                 : previewItem.type === "Success"
                 ? "bg-emerald-50/60 border-emerald-200 text-emerald-950"
                 : previewItem.type === "Warning"
                 ? "bg-amber-50/60 border-amber-200 text-amber-950"
-                : "bg-purple-50/60 border-purple-200 text-purple-950"
+                : "bg-[var(--clay-sunken)]/60 border-[var(--clay-line)] text-foreground"
             }`}
           >
             <div className="flex items-start gap-2.5">
               <div className="mt-0.5">
-                {previewItem.type === "Information" && <Info className="w-4 h-4 text-blue-600" />}
+                {previewItem.type === "Information" && <Info className="w-4 h-4 text-foreground" />}
                 {previewItem.type === "Success" && <CheckCircle2 className="w-4 h-4 text-emerald-600" />}
                 {previewItem.type === "Warning" && <AlertTriangle className="w-4 h-4 text-amber-600" />}
-                {previewItem.type === "Maintenance" && <Wrench className="w-4 h-4 text-purple-600" />}
+                {previewItem.type === "Maintenance" && <Wrench className="w-4 h-4 text-foreground" />}
               </div>
               <div>
                 <p className="font-semibold text-foreground">{previewItem.title}</p>
@@ -272,10 +272,10 @@ export default function AnnouncementsAdminPage() {
       )}
 
       {/* 3. Search, Filter & Action Bar */}
-      <div className="bg-card rounded-2xl p-5 sm:p-6 border border-[var(--neu-line)] shadow-[0_2px_8px_rgba(0,0,0,0.02)] space-y-4">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pb-3 border-b border-[var(--neu-line)]">
+      <div className="bg-card rounded-2xl p-5 sm:p-6 border border-[var(--clay-line)] shadow-[var(--clay-elev-1)] space-y-4">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pb-3 border-b border-[var(--clay-line)]">
           {/* Segmented Filter */}
-          <div className="flex flex-wrap items-center gap-1 bg-[var(--neu-sunken)] p-0.5 rounded-lg border border-[var(--neu-line)] text-xs">
+          <div className="flex flex-wrap items-center gap-1 bg-[var(--clay-sunken)] p-0.5 rounded-lg border border-[var(--clay-line)] text-xs">
             {["All", "Published", "Scheduled", "Draft", "Expired"].map((st) => (
               <button
                 key={st}
@@ -300,13 +300,13 @@ export default function AnnouncementsAdminPage() {
                 placeholder="Search announcements..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full h-8 pl-8 pr-3 text-xs rounded-lg bg-[var(--neu-sunken)] border border-[var(--neu-line)] text-foreground placeholder:text-muted-foreground focus:bg-card focus:outline-none focus:ring-1 focus:ring-black"
+                className="w-full h-8 pl-8 pr-3 text-xs rounded-lg bg-[var(--clay-sunken)] border border-[var(--clay-line)] text-foreground placeholder:text-muted-foreground focus:bg-card focus:outline-none focus:ring-1 focus:ring-black"
               />
             </div>
 
             <button
               onClick={() => setIsCreateModalOpen(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-primary hover:bg-[var(--neu-brand-hover)] rounded-lg transition-colors shadow-xs"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-primary hover:bg-[var(--clay-brand-hover)] rounded-lg transition-colors shadow-[var(--clay-elev-ink-1)]"
             >
               <PlusCircle className="w-3.5 h-3.5" />
               <span>New Announcement</span>
@@ -324,7 +324,7 @@ export default function AnnouncementsAdminPage() {
             filtered.map((item) => (
               <div
                 key={item.id}
-                className="p-4 rounded-xl border border-[var(--neu-line)] hover:border-black/20 transition-all flex flex-col md:flex-row md:items-center justify-between gap-4"
+                className="p-4 rounded-xl border border-[var(--clay-line)] hover:border-black/20 transition-all flex flex-col md:flex-row md:items-center justify-between gap-4"
               >
                 <div className="space-y-1.5 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
@@ -358,7 +358,7 @@ export default function AnnouncementsAdminPage() {
                 <div className="flex items-center gap-2 self-end md:self-center shrink-0">
                   <button
                     onClick={() => setPreviewItem(item)}
-                    className="px-2.5 py-1 text-[11px] font-medium text-foreground bg-[var(--neu-sunken)] hover:bg-[var(--neu-sunken-deep)] rounded-md transition-colors"
+                    className="px-2.5 py-1 text-[11px] font-medium text-foreground bg-[var(--clay-sunken)] hover:bg-[var(--clay-sunken-deep)] rounded-md transition-colors"
                   >
                     Simulate
                   </button>
@@ -392,7 +392,7 @@ export default function AnnouncementsAdminPage() {
       {isCreateModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs animate-in fade-in">
           <div className="bg-card rounded-2xl max-w-lg w-full border border-black/[0.1] shadow-2xl p-6 relative space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-[var(--neu-line)]">
+            <div className="flex items-center justify-between pb-3 border-b border-[var(--clay-line)]">
               <div className="flex items-center gap-2">
                 <Megaphone className="w-4 h-4 text-foreground" />
                 <h3 className="text-sm font-bold text-foreground">Broadcast Announcement</h3>
@@ -415,7 +415,7 @@ export default function AnnouncementsAdminPage() {
                   placeholder="e.g. Major Platform Upgrade: DeepSeek V4.1 Ready"
                   value={newTitle}
                   onChange={(e) => setNewTitle(e.target.value)}
-                  className="w-full px-3 py-2 bg-[var(--neu-sunken)] border border-[var(--neu-line)] rounded-xl focus:outline-none focus:bg-card"
+                  className="w-full px-3 py-2 bg-[var(--clay-sunken)] border border-[var(--clay-line)] rounded-xl focus:outline-none focus:bg-card"
                 />
               </div>
 
@@ -428,7 +428,7 @@ export default function AnnouncementsAdminPage() {
                   placeholder="Describe the upgrade, maintenance schedule, or notice..."
                   value={newContent}
                   onChange={(e) => setNewContent(e.target.value)}
-                  className="w-full px-3 py-2 bg-[var(--neu-sunken)] border border-[var(--neu-line)] rounded-xl focus:outline-none focus:bg-card leading-relaxed"
+                  className="w-full px-3 py-2 bg-[var(--clay-sunken)] border border-[var(--clay-line)] rounded-xl focus:outline-none focus:bg-card leading-relaxed"
                 />
               </div>
 
@@ -442,7 +442,7 @@ export default function AnnouncementsAdminPage() {
                     onChange={(e) =>
                       setNewType(e.target.value as AnnouncementRecord["type"])
                     }
-                    className="w-full px-3 py-2 bg-[var(--neu-sunken)] border border-[var(--neu-line)] rounded-xl focus:outline-none focus:bg-card"
+                    className="w-full px-3 py-2 bg-[var(--clay-sunken)] border border-[var(--clay-line)] rounded-xl focus:outline-none focus:bg-card"
                   >
                     <option value="Information">Information (Blue)</option>
                     <option value="Success">Success (Green)</option>
@@ -458,7 +458,7 @@ export default function AnnouncementsAdminPage() {
                   <select
                     value={newTargetPlan}
                     onChange={(e) => setNewTargetPlan(e.target.value)}
-                    className="w-full px-3 py-2 bg-[var(--neu-sunken)] border border-[var(--neu-line)] rounded-xl focus:outline-none focus:bg-card"
+                    className="w-full px-3 py-2 bg-[var(--clay-sunken)] border border-[var(--clay-line)] rounded-xl focus:outline-none focus:bg-card"
                   >
                     <option value="All Plans">All Plans (Global)</option>
                     <option value="Free Tier">Free Tier Only</option>
@@ -474,24 +474,24 @@ export default function AnnouncementsAdminPage() {
                   id="dismissibleCheck"
                   checked={newDismissible}
                   onChange={(e) => setNewDismissible(e.target.checked)}
-                  className="rounded border-[var(--neu-line-strong)] text-black focus:ring-black"
+                  className="rounded border-[var(--clay-line-strong)] text-black focus:ring-black"
                 />
                 <label htmlFor="dismissibleCheck" className="text-foreground font-medium">
                   Allow users to dismiss banner with close icon
                 </label>
               </div>
 
-              <div className="pt-2 flex items-center justify-end gap-2 border-t border-[var(--neu-line)]">
+              <div className="pt-2 flex items-center justify-end gap-2 border-t border-[var(--clay-line)]">
                 <button
                   type="button"
                   onClick={() => setIsCreateModalOpen(false)}
-                  className="px-3.5 py-1.5 text-xs font-medium text-foreground bg-[var(--neu-sunken)] hover:bg-[var(--neu-sunken-deep)] rounded-lg transition-colors"
+                  className="px-3.5 py-1.5 text-xs font-medium text-foreground bg-[var(--clay-sunken)] hover:bg-[var(--clay-sunken-deep)] rounded-lg transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-1.5 text-xs font-semibold text-white bg-primary hover:bg-[var(--neu-brand-hover)] rounded-lg transition-colors flex items-center gap-1.5"
+                  className="px-4 py-1.5 text-xs font-semibold text-white bg-primary hover:bg-[var(--clay-brand-hover)] rounded-lg transition-colors flex items-center gap-1.5"
                 >
                   <Send className="w-3.5 h-3.5" />
                   <span>Publish Broadcast</span>

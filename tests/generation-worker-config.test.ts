@@ -10,6 +10,7 @@ import {
 function env(overrides: WorkerEnvironment = {}): WorkerEnvironment {
   return {
     NODE_ENV: "production",
+    VERCEL_ENV: "production",
     SUPABASE_SERVICE_ROLE_KEY: "service-role-value",
     NEXT_PUBLIC_SUPABASE_URL: "https://example.supabase.co",
     ...overrides,
@@ -59,5 +60,16 @@ test("legacy worker-specific variables do not gate production dispatch", () => {
     MAVLY_GENERATION_WORKER_PROJECTS: "",
   }));
   assert.equal(config.ready, true);
+  assert.equal(dispatchModeForProject("any-project", config), "worker");
+});
+
+test("the Render background worker selects production dispatch", () => {
+  const config = parseWorkerConfig(env({
+    VERCEL_ENV: undefined,
+    MAVLY_RENDER_WORKER: "true",
+  }));
+  assert.equal(config.ready, true);
+  assert.equal(config.production, true);
+  assert.equal(config.workerId, "render-generation-worker");
   assert.equal(dispatchModeForProject("any-project", config), "worker");
 });

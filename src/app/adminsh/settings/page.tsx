@@ -80,7 +80,7 @@ export default function SettingsAdminPage() {
     <AdminShell activeNav="Settings">
       <form onSubmit={handleSaveSettings} className="space-y-4">
         {/* Top Header with Save Action */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-5 rounded-2xl bg-card border border-[var(--neu-line)] shadow-[var(--neu-elev-2)]">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-5 rounded-2xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)]">
           <div>
             <h3 className="text-sm font-semibold tracking-tight text-foreground">
               System Configuration & Environmental Variables
@@ -94,7 +94,7 @@ export default function SettingsAdminPage() {
             <button
               type="button"
               onClick={handleResetDefaults}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-muted-foreground bg-[var(--neu-sunken)] hover:bg-[var(--neu-sunken-deep)] rounded-lg transition-colors"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-muted-foreground bg-[var(--clay-sunken)] hover:bg-[var(--clay-sunken-deep)] rounded-lg transition-colors"
             >
               <RotateCcw className="w-3.5 h-3.5" />
               <span>Reset</span>
@@ -102,7 +102,7 @@ export default function SettingsAdminPage() {
 
             <button
               type="submit"
-              className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-white bg-primary hover:bg-[var(--neu-brand-hover)] rounded-lg transition-colors shadow-xs"
+              className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-white bg-primary hover:bg-[var(--clay-brand-hover)] rounded-lg transition-colors shadow-[var(--clay-elev-ink-1)]"
             >
               <Save className="w-3.5 h-3.5" />
               <span>Save Changes</span>
@@ -111,8 +111,8 @@ export default function SettingsAdminPage() {
         </div>
 
         {/* 1. General Branding & Profile */}
-        <div className="p-5 sm:p-6 rounded-2xl bg-card border border-[var(--neu-line)] shadow-[var(--neu-elev-2)] space-y-4">
-          <div className="flex items-center gap-2 pb-2 border-b border-[var(--neu-line)]">
+        <div className="p-5 sm:p-6 rounded-2xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)] space-y-4">
+          <div className="flex items-center gap-2 pb-2 border-b border-[var(--clay-line)]">
             <Globe className="w-4 h-4 text-foreground" />
             <h4 className="text-xs font-bold text-foreground uppercase tracking-wider">
               Organization & Application Profile
@@ -128,7 +128,7 @@ export default function SettingsAdminPage() {
                 type="text"
                 value={platformName}
                 onChange={(e) => setPlatformName(e.target.value)}
-                className="w-full h-8 px-3 bg-[var(--neu-sunken)] border border-[var(--neu-line)] rounded-lg shadow-[var(--neu-inset-1)] outline-none focus-visible:shadow-[var(--neu-inset-1),var(--neu-focus)] text-foreground"
+                className="w-full h-8 px-3 bg-[var(--clay-sunken)] border border-[var(--clay-line)] rounded-lg shadow-[var(--clay-well-1)] outline-none focus-visible:shadow-[var(--clay-well-1),var(--clay-focus)] text-foreground"
               />
             </div>
 
@@ -140,7 +140,7 @@ export default function SettingsAdminPage() {
                 type="text"
                 value={adminConsoleTitle}
                 onChange={(e) => setAdminConsoleTitle(e.target.value)}
-                className="w-full h-8 px-3 bg-[var(--neu-sunken)] border border-[var(--neu-line)] rounded-lg shadow-[var(--neu-inset-1)] outline-none focus-visible:shadow-[var(--neu-inset-1),var(--neu-focus)] text-foreground"
+                className="w-full h-8 px-3 bg-[var(--clay-sunken)] border border-[var(--clay-line)] rounded-lg shadow-[var(--clay-well-1)] outline-none focus-visible:shadow-[var(--clay-well-1),var(--clay-focus)] text-foreground"
               />
             </div>
 
@@ -152,16 +152,16 @@ export default function SettingsAdminPage() {
                 type="email"
                 value={supportEmail}
                 onChange={(e) => setSupportEmail(e.target.value)}
-                className="w-full h-8 px-3 bg-[var(--neu-sunken)] border border-[var(--neu-line)] rounded-lg shadow-[var(--neu-inset-1)] outline-none focus-visible:shadow-[var(--neu-inset-1),var(--neu-focus)] text-foreground"
+                className="w-full h-8 px-3 bg-[var(--clay-sunken)] border border-[var(--clay-line)] rounded-lg shadow-[var(--clay-well-1)] outline-none focus-visible:shadow-[var(--clay-well-1),var(--clay-focus)] text-foreground"
               />
             </div>
           </div>
         </div>
 
         {/* 2. AI Model & Generation Defaults */}
-        <div className="p-5 sm:p-6 rounded-2xl bg-card border border-[var(--neu-line)] shadow-[var(--neu-elev-2)] space-y-4">
-          <div className="flex items-center gap-2 pb-2 border-b border-[var(--neu-line)]">
-            <Cpu className="w-4 h-4 text-purple-600" />
+        <div className="p-5 sm:p-6 rounded-2xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)] space-y-4">
+          <div className="flex items-center gap-2 pb-2 border-b border-[var(--clay-line)]">
+            <Cpu className="w-4 h-4 text-foreground" />
             <h4 className="text-xs font-bold text-foreground uppercase tracking-wider">
               AI Orchestration & Generation Parameters
             </h4>
@@ -175,7 +175,7 @@ export default function SettingsAdminPage() {
               <select
                 value={defaultModel}
                 onChange={(e) => setDefaultModel(e.target.value)}
-                className="w-full h-8 px-2.5 bg-[var(--neu-sunken)] border border-[var(--neu-line)] rounded-lg focus:outline-none focus:bg-card font-medium text-foreground"
+                className="w-full h-8 px-2.5 bg-[var(--clay-sunken)] border border-[var(--clay-line)] rounded-lg focus:outline-none focus:bg-card font-medium text-foreground"
               >
                 <option value="deepseek/deepseek-v4.1-flash">
                   DeepSeek V4.1 Flash (Fast, Built-in Default)
@@ -197,7 +197,7 @@ export default function SettingsAdminPage() {
               <select
                 value={fallbackModel}
                 onChange={(e) => setFallbackModel(e.target.value)}
-                className="w-full h-8 px-2.5 bg-[var(--neu-sunken)] border border-[var(--neu-line)] rounded-lg focus:outline-none focus:bg-card font-medium text-foreground"
+                className="w-full h-8 px-2.5 bg-[var(--clay-sunken)] border border-[var(--clay-line)] rounded-lg focus:outline-none focus:bg-card font-medium text-foreground"
               >
                 <option value="anthropic/claude-3.5-sonnet">
                   Anthropic Claude 3.5 Sonnet
@@ -217,7 +217,7 @@ export default function SettingsAdminPage() {
                 type="text"
                 value={maxTokens}
                 onChange={(e) => setMaxTokens(e.target.value)}
-                className="w-full h-8 px-3 bg-[var(--neu-sunken)] border border-[var(--neu-line)] rounded-lg focus:outline-none focus:bg-card font-mono text-foreground"
+                className="w-full h-8 px-3 bg-[var(--clay-sunken)] border border-[var(--clay-line)] rounded-lg focus:outline-none focus:bg-card font-mono text-foreground"
               />
               <span className="text-[11px] text-muted-foreground mt-1 block">
                 Standard output cap for generated Next.js AST files
@@ -232,7 +232,7 @@ export default function SettingsAdminPage() {
                 type="text"
                 value={temperature}
                 onChange={(e) => setTemperature(e.target.value)}
-                className="w-full h-8 px-3 bg-[var(--neu-sunken)] border border-[var(--neu-line)] rounded-lg focus:outline-none focus:bg-card font-mono text-foreground"
+                className="w-full h-8 px-3 bg-[var(--clay-sunken)] border border-[var(--clay-line)] rounded-lg focus:outline-none focus:bg-card font-mono text-foreground"
               />
               <span className="text-[11px] text-muted-foreground mt-1 block">
                 0.2 ensures code determinism and syntax stability
@@ -242,8 +242,8 @@ export default function SettingsAdminPage() {
         </div>
 
         {/* 3. Regional Billing & Payment Processing */}
-        <div className="p-5 sm:p-6 rounded-2xl bg-card border border-[var(--neu-line)] shadow-[var(--neu-elev-2)] space-y-4">
-          <div className="flex items-center gap-2 pb-2 border-b border-[var(--neu-line)]">
+        <div className="p-5 sm:p-6 rounded-2xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)] space-y-4">
+          <div className="flex items-center gap-2 pb-2 border-b border-[var(--clay-line)]">
             <DollarSign className="w-4 h-4 text-emerald-600" />
             <h4 className="text-xs font-bold text-foreground uppercase tracking-wider">
               Regional Billing & Payment Gateway
@@ -258,7 +258,7 @@ export default function SettingsAdminPage() {
               <select
                 value={currency}
                 onChange={(e) => setCurrency(e.target.value)}
-                className="w-full h-8 px-2.5 bg-[var(--neu-sunken)] border border-[var(--neu-line)] rounded-lg focus:outline-none focus:bg-card font-medium text-foreground"
+                className="w-full h-8 px-2.5 bg-[var(--clay-sunken)] border border-[var(--clay-line)] rounded-lg focus:outline-none focus:bg-card font-medium text-foreground"
               >
                 <option value="INR">INR (₹) Indian Rupee</option>
                 <option value="USD">USD ($) United States Dollar</option>
@@ -274,7 +274,7 @@ export default function SettingsAdminPage() {
               <select
                 value={gateway}
                 onChange={(e) => setGateway(e.target.value)}
-                className="w-full h-8 px-2.5 bg-[var(--neu-sunken)] border border-[var(--neu-line)] rounded-lg focus:outline-none focus:bg-card font-medium text-foreground"
+                className="w-full h-8 px-2.5 bg-[var(--clay-sunken)] border border-[var(--clay-line)] rounded-lg focus:outline-none focus:bg-card font-medium text-foreground"
               >
                 <option value="Razorpay">Razorpay (Cards, UPI, NetBanking)</option>
                 <option value="Stripe">Stripe (International Credit Cards)</option>
@@ -289,23 +289,23 @@ export default function SettingsAdminPage() {
                 type="text"
                 value={invoicePrefix}
                 onChange={(e) => setInvoicePrefix(e.target.value)}
-                className="w-full h-8 px-3 bg-[var(--neu-sunken)] border border-[var(--neu-line)] rounded-lg focus:outline-none focus:bg-card font-mono text-foreground"
+                className="w-full h-8 px-3 bg-[var(--clay-sunken)] border border-[var(--clay-line)] rounded-lg focus:outline-none focus:bg-card font-mono text-foreground"
               />
             </div>
           </div>
         </div>
 
         {/* 4. Security & Audit Policies */}
-        <div className="p-5 sm:p-6 rounded-2xl bg-card border border-[var(--neu-line)] shadow-[var(--neu-elev-2)] space-y-4">
-          <div className="flex items-center gap-2 pb-2 border-b border-[var(--neu-line)]">
-            <Shield className="w-4 h-4 text-blue-600" />
+        <div className="p-5 sm:p-6 rounded-2xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)] space-y-4">
+          <div className="flex items-center gap-2 pb-2 border-b border-[var(--clay-line)]">
+            <Shield className="w-4 h-4 text-foreground" />
             <h4 className="text-xs font-bold text-foreground uppercase tracking-wider">
               Admin Security Governance & Access Control
             </h4>
           </div>
 
           <div className="space-y-2.5 text-xs">
-            <div className="flex items-center justify-between p-3 rounded-xl bg-[var(--neu-sunken)]/80 border border-[var(--neu-line)]">
+            <div className="flex items-center justify-between p-3 rounded-xl bg-[var(--clay-sunken)]/80 border border-[var(--clay-line)]">
               <div>
                 <p className="font-semibold text-foreground">Enforce Multi-Factor Authentication</p>
                 <p className="text-muted-foreground text-[11px]">
@@ -316,11 +316,11 @@ export default function SettingsAdminPage() {
                 type="checkbox"
                 checked={require2FA}
                 onChange={(e) => setRequire2FA(e.target.checked)}
-                className="rounded border-[var(--neu-line-strong)] text-black focus:ring-black h-4 w-4"
+                className="rounded border-[var(--clay-line-strong)] text-black focus:ring-black h-4 w-4"
               />
             </div>
 
-            <div className="flex items-center justify-between p-3 rounded-xl bg-[var(--neu-sunken)]/80 border border-[var(--neu-line)]">
+            <div className="flex items-center justify-between p-3 rounded-xl bg-[var(--clay-sunken)]/80 border border-[var(--clay-line)]">
               <div>
                 <p className="font-semibold text-foreground">High-Fidelity Event Journaling</p>
                 <p className="text-muted-foreground text-[11px]">
@@ -331,11 +331,11 @@ export default function SettingsAdminPage() {
                 type="checkbox"
                 checked={highFidelityAudit}
                 onChange={(e) => setHighFidelityAudit(e.target.checked)}
-                className="rounded border-[var(--neu-line-strong)] text-black focus:ring-black h-4 w-4"
+                className="rounded border-[var(--clay-line-strong)] text-black focus:ring-black h-4 w-4"
               />
             </div>
 
-            <div className="flex items-center justify-between p-3 rounded-xl bg-[var(--neu-sunken)]/80 border border-[var(--neu-line)]">
+            <div className="flex items-center justify-between p-3 rounded-xl bg-[var(--clay-sunken)]/80 border border-[var(--clay-line)]">
               <div>
                 <p className="font-semibold text-foreground">Session Inactivity Timeout</p>
                 <p className="text-muted-foreground text-[11px]">
@@ -345,7 +345,7 @@ export default function SettingsAdminPage() {
               <select
                 value={sessionTimeout}
                 onChange={(e) => setSessionTimeout(e.target.value)}
-                className="h-8 px-2.5 text-xs bg-card border border-[var(--neu-line)] rounded-lg"
+                className="h-8 px-2.5 text-xs bg-card border border-[var(--clay-line)] rounded-lg"
               >
                 <option value="15">15 Minutes</option>
                 <option value="30">30 Minutes</option>
@@ -357,8 +357,8 @@ export default function SettingsAdminPage() {
         </div>
 
         {/* 5. Notification Webhooks & Alerts */}
-        <div className="p-5 sm:p-6 rounded-2xl bg-card border border-[var(--neu-line)] shadow-[var(--neu-elev-2)] space-y-4">
-          <div className="flex items-center gap-2 pb-2 border-b border-[var(--neu-line)]">
+        <div className="p-5 sm:p-6 rounded-2xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)] space-y-4">
+          <div className="flex items-center gap-2 pb-2 border-b border-[var(--clay-line)]">
             <Bell className="w-4 h-4 text-amber-600" />
             <h4 className="text-xs font-bold text-foreground uppercase tracking-wider">
               Alerts & Operational Dispatch
@@ -366,7 +366,7 @@ export default function SettingsAdminPage() {
           </div>
 
           <div className="space-y-2.5 text-xs">
-            <div className="flex items-center justify-between p-3 rounded-xl bg-[var(--neu-sunken)]/80 border border-[var(--neu-line)]">
+            <div className="flex items-center justify-between p-3 rounded-xl bg-[var(--clay-sunken)]/80 border border-[var(--clay-line)]">
               <div>
                 <p className="font-semibold text-foreground">Critical Error & Spike Alerts</p>
                 <p className="text-muted-foreground text-[11px]">
@@ -377,11 +377,11 @@ export default function SettingsAdminPage() {
                 type="checkbox"
                 checked={emailAlertsOnFailure}
                 onChange={(e) => setEmailAlertsOnFailure(e.target.checked)}
-                className="rounded border-[var(--neu-line-strong)] text-black focus:ring-black h-4 w-4"
+                className="rounded border-[var(--clay-line-strong)] text-black focus:ring-black h-4 w-4"
               />
             </div>
 
-            <div className="flex items-center justify-between p-3 rounded-xl bg-[var(--neu-sunken)]/80 border border-[var(--neu-line)]">
+            <div className="flex items-center justify-between p-3 rounded-xl bg-[var(--clay-sunken)]/80 border border-[var(--clay-line)]">
               <div>
                 <p className="font-semibold text-foreground">Daily MRR & Revenue Digest</p>
                 <p className="text-muted-foreground text-[11px]">
@@ -392,7 +392,7 @@ export default function SettingsAdminPage() {
                 type="checkbox"
                 checked={dailyRevenueDigest}
                 onChange={(e) => setDailyRevenueDigest(e.target.checked)}
-                className="rounded border-[var(--neu-line-strong)] text-black focus:ring-black h-4 w-4"
+                className="rounded border-[var(--clay-line-strong)] text-black focus:ring-black h-4 w-4"
               />
             </div>
 
@@ -404,14 +404,14 @@ export default function SettingsAdminPage() {
                 type="text"
                 value={slackWebhook}
                 onChange={(e) => setSlackWebhook(e.target.value)}
-                className="w-full h-8 px-3 bg-[var(--neu-sunken)] border border-[var(--neu-line)] rounded-lg focus:outline-none focus:bg-card font-mono text-[11px] text-foreground"
+                className="w-full h-8 px-3 bg-[var(--clay-sunken)] border border-[var(--clay-line)] rounded-lg focus:outline-none focus:bg-card font-mono text-[11px] text-foreground"
               />
             </div>
           </div>
         </div>
 
         {/* 6. Admin Account Information */}
-        <div className="p-5 sm:p-6 rounded-2xl bg-card border border-[var(--neu-line)] shadow-[var(--neu-elev-2)] flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="p-5 sm:p-6 rounded-2xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)] flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-full bg-black text-white flex items-center justify-center font-bold text-xs shrink-0">
               SA
@@ -419,7 +419,7 @@ export default function SettingsAdminPage() {
             <div>
               <div className="flex items-center gap-2">
                 <h4 className="text-xs font-bold text-foreground">Mavly Super Admin</h4>
-                <span className="font-mono text-[10px] font-semibold px-1.5 py-0.5 rounded bg-purple-50 text-purple-700 border border-purple-200/60">
+                <span className="font-mono text-[10px] font-semibold px-1.5 py-0.5 rounded bg-[var(--clay-sunken)] text-foreground border border-[var(--clay-line)]/60">
                   Organization Owner
                 </span>
               </div>

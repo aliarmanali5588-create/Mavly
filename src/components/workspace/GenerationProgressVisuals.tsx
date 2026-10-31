@@ -30,7 +30,7 @@ export function GenerationIndicator({
         data-active={active}
         className="generation-indicator-orbit absolute inset-0"
       >
-        <span className="absolute left-1/2 top-[1px] size-1 -translate-x-1/2 rounded-full bg-primary shadow-[0_0_6px_color-mix(in_oklab,var(--primary)_55%,transparent)]" />
+        <span className="absolute left-1/2 top-[1px] size-1 -translate-x-1/2 rounded-full bg-primary shadow-[var(--clay-elev-ink-1)]" />
       </span>
     </span>
   );

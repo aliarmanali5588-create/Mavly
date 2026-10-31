@@ -332,27 +332,25 @@ install/Vite dev server/readiness probe/QA build, or the migrations against a da
   and Android generation admissions use `dispatch_mode = 'worker'`; there is no worker
   enable flag, shared worker secret, project allowlist or public invocation route. Local
   development and Vercel previews retain the inline `after()` path. The app admission path
-  and the Cloudflare Cron Worker require only the existing server-side
-  `SUPABASE_SERVICE_ROLE_KEY` and `NEXT_PUBLIC_SUPABASE_URL`. The dedicated Cloudflare
-  Worker runs `workers/generation-scheduler.ts` on `* * * * *` and calls the existing
-  worker tick directly. Each invocation recovers expired leases, claims one ready job with
-  `FOR UPDATE SKIP LOCKED`, re-verifies
-  the owner with a service-role client, executes the unchanged generation
-  pipeline under a 420 s fenced `lease_token`, and renews it every 120 s. Retries reuse
-  only verified checkpoints and back off 15 s→300 s with jitter; exhaustion dead-letters
-  the run without deleting it. Expired leases become retries or dead letters, never
-  duplicates. Cancellation is persisted and fences the worker at safe checkpoints; a
-  provider request already sent cannot be undone. **The service-role client is confined to
-  `src/lib/supabase/worker.ts`, the worker orchestrator and scheduled Cloudflare
-  entrypoint; the managed-backend provisioning service only receives that client from the
-  worker. RLS is unchanged,
-  and the authenticated role's UPDATE grant explicitly excludes all worker-owned columns.**
-  The Cloudflare Cron configuration is `wrangler.jsonc`; scheduler heartbeats and outcomes
-  are emitted through structured generation logs. Deployment, Cloudflare runtime
-  compatibility and actual Cron operation remain unverified; see
-  `docs/runbooks/generation-worker.md` for deployment, monitoring, pause/drain,
-  safe rollback and capacity limits. Do not raise the 2/user or 8/global admission caps to
-  claim support for 1,000 concurrent users.
+  and Render Background Worker require only the existing server-side
+  `SUPABASE_SERVICE_ROLE_KEY`, `NEXT_PUBLIC_SUPABASE_URL` and `OPENROUTER_API_KEY`. The
+  root `render.yaml` starts `workers/render-generation-worker.ts` as a single serial,
+  continuously polling Node.js process; each tick invokes the existing worker. It recovers
+  expired leases, claims one ready job with `FOR UPDATE SKIP LOCKED`, re-verifies the owner
+  with a service-role client, executes the unchanged generation pipeline under a 420 s
+  fenced `lease_token`, and renews it every 120 s. Retries reuse only verified checkpoints
+  and back off 15 s→300 s with jitter; exhaustion dead-letters the run without deleting it.
+  Expired leases become retries or dead letters, never duplicates. Cancellation is persisted
+  and fences the worker at safe checkpoints; a provider request already sent cannot be
+  undone. **The service-role client is confined to `src/lib/supabase/worker.ts`, the worker
+  orchestrator and trusted worker entrypoints; the managed-backend provisioning service
+  only receives that client from the worker. RLS is unchanged, and the authenticated role's
+  UPDATE grant explicitly excludes all worker-owned columns.** The previous Cloudflare Cron
+  configuration is retained in `wrangler.jsonc` and must be disabled before the Render
+  poller is enabled. Render deployment, runtime compatibility and memory use remain
+  unverified; see `docs/runbooks/render-generation-worker.md` for setup, monitoring,
+  pause/drain and recovery. Do not raise the 2/user or 8/global admission caps to claim
+  support for 1,000 concurrent users.
   **An inline run that cannot finish can be handed to the worker (migration 36).** When an
   inline attempt reaches its terminal decision with a retryable failure and this deployment
   dispatches the run to the worker, `fail()` persists its provider usage, then calls
@@ -752,8 +750,8 @@ browser ── src/lib/vcaas.ts (client catalog, same-origin only)
    │      └── src/lib/deployments/*      opt-in static publish/unpublish
    │             ├── store.ts            project_deployments (RLS)
    │             └── service.ts → src/lib/vercel/provider.ts → api.vercel.com
-   ├── Cloudflare Cron Worker      scheduled trusted runtime → service-role worker tick
-   │      ├── workers/generation-scheduler.ts → src/lib/generation/worker.ts
+   ├── Render Background Worker    continuous Node process → service-role worker tick
+   │      ├── workers/render-generation-worker.ts → src/lib/generation/worker.ts
    │      └── run-agent → OpenRouter + durable checkpoints
    ├── /api/app/v1/apps/{id}/data|auth/*  public, project id + end-user session
    │      └── src/lib/app-data/gateway.ts → parameterized SQL → customer Neon database
@@ -793,7 +791,9 @@ paths with `src/lib/vcaas-scope.ts`, so unknown shapes are refused before any wo
 | `src/lib/generation/worker-config.ts` | Platform credential readiness and production/local admission dispatch mode. |
 | `src/lib/generation/verification.ts` | Claim parsing plus owner re-verification for the service-role worker. |
 | `src/lib/generation/worker.ts` | One bounded worker tick: preflight → recover → claim → verify → execute → renew. |
-| `workers/generation-scheduler.ts`, `wrangler.jsonc` | Cloudflare Cron `* * * * *`; direct worker invocation and structured heartbeat/outcome logs. |
+| `workers/render-generation-worker.ts`, `render.yaml` | Continuous serial Render Background Worker; polls the existing queue and invokes one worker tick at a time. |
+| `workers/generation-scheduler.ts`, `wrangler.jsonc` | Retained legacy Cloudflare Cron configuration; disable its trigger before enabling the Render worker. |
+| `workers/register-node-ts-resolver.mjs`, `workers/node-ts-resolver.mjs` | Node resolver hook for native TypeScript execution and source `@/` aliases in the standalone worker process. |
 | `src/lib/supabase/worker.ts` | The confined service-role client factory (scheduled worker, credit accounting, and owner-checked Android artifact download only). |
 | `src/lib/observability/` | Correlation ids, structured generation events, redaction and reported-cost accounting. |
 | `src/lib/runtime/` | Generated-project runtime detection (App Router only), package-manifest validation, the bounded `next build` plan and the fixed loopback runtime start. |
@@ -827,7 +827,8 @@ paths with `src/lib/vcaas-scope.ts`, so unknown shapes are refused before any wo
 | `supabase/migrations/34_runtime_sandboxes.sql` | Runtime sandbox lifecycle table, active-session uniqueness, database transition table, owner-checked begin/update/stop RPCs, service-role expiry sweep, SELECT-only RLS and schema marker 34. Additive; apply after 33. |
 | `docs/architecture/phase-13-live-runtime-preview.md`, `docs/runbooks/runtime-sandbox.md` | Phase 13 design, authority, security model, residuals and the operator enable/smoke/rollback runbook. |
 | `supabase/migrations/16_durable_generation_worker.sql` | Queue columns/constraints/indexes, claim/lease/retry/recovery/resume RPCs, least-privilege grants and the worker schema marker. |
-| `docs/runbooks/generation-worker.md` | Operator runbook for the durable worker. |
+| `docs/runbooks/render-generation-worker.md` | Current Render worker setup, monitoring and recovery runbook. |
+| `docs/runbooks/generation-worker.md` | Historical Cloudflare Cron runbook; do not use for current deployment. |
 | `src/lib/ai/retry.ts` | Bounded exponential retry, jitter and `Retry-After` parsing. |
 | `src/lib/ai/budget.ts` | Pure run-deadline policy: finalization reserve, per-attempt planning from the time actually left, the minimum useful attempt, the capped reserve for work still queued (`reserveForPendingWork`) and the reserve that keeps every queued group's own minimum (`reserveForPendingFloors`). A batch group's minimum scales with its own estimated bytes (`batchAttemptFloorMs` / `batchGroupFloorFor` in `src/lib/ai/agent.ts`), so a single small file gets a usable window instead of the full-batch 60 s floor, and the one deadline is reserved for the groups that still need it rather than letting the first consume it. |
 | `docs/architecture/generation-reliability.md` | Static audit of the generation pipeline: which of the seven roles really execute, the budget/timeout and parse-recovery defects that were found and fixed, and what remains unverified (nothing was executed to produce it). |
@@ -975,8 +976,8 @@ paths with `src/lib/vcaas-scope.ts`, so unknown shapes are refused before any wo
    prefix. Razorpay credentials are **never** environment variables on Mavly: they are
    entered per project, encrypted as project secrets, and decrypted only inside the
    owner test or gateway request. Never commit `.env*` files. The service-role client is
-   confined to `src/lib/supabase/worker.ts`, the worker orchestrator and scheduled
-   Cloudflare entrypoint, the
+   confined to `src/lib/supabase/worker.ts`, the worker orchestrator and trusted
+   Render/legacy scheduler entrypoints, the
    verification sandbox tick, the Android build worker, the managed-backend provisioning
    service that receives it from the worker, and the owner-checked Android
    artifact-download handler that mints a short-lived signed URL (it re-reads the build

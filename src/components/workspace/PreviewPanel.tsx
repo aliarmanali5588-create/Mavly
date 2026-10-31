@@ -113,7 +113,7 @@ export function PreviewPanel({ previewUrl, onRefresh, loading, mobilePreview = f
   return (
     <div className="h-full min-h-0 flex flex-col overflow-hidden">
       {/* iframe - no URL bar here, it's in the header now */}
-      <div className="flex-1 min-h-0 flex items-center justify-center overflow-hidden relative" style={{ background: "var(--neu-surface)" }}>
+      <div className="flex-1 min-h-0 flex items-center justify-center overflow-hidden relative" style={{ background: "var(--clay-surface)" }}>
         {/* Cached snapshot indicator: shown when the dev server is not active and
             we're displaying the cachedDevelopmentUrl static snapshot */}
         {previewUrl && cached && (
@@ -162,7 +162,7 @@ export function PreviewPanel({ previewUrl, onRefresh, loading, mobilePreview = f
                   type="button"
                   onClick={onResumeGeneration}
                   disabled={resumingGeneration}
-                  className="mt-4 rounded-full border border-[var(--neu-line-strong)] px-3 py-1.5 text-xs font-medium text-foreground hover:bg-[var(--neu-sunken)] disabled:opacity-60"
+                  className="mt-4 rounded-full border border-[var(--clay-line-strong)] px-3 py-1.5 text-xs font-medium text-foreground hover:bg-[var(--clay-sunken)] disabled:opacity-60"
                 >
                   {resumingGeneration ? "Resuming…" : "Resume generation"}
                 </button>

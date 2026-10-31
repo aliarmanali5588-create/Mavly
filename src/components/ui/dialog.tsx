@@ -60,7 +60,7 @@ function DialogContent({
       <DialogPrimitive.Content
         data-slot="dialog-content"
         className={cn(
-          "bg-card text-card-foreground data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 fixed top-[50%] left-[50%] z-50 grid w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 rounded-3xl border border-[var(--neu-line)] p-6 shadow-[var(--neu-float)] duration-200 sm:max-w-lg",
+          "bg-card text-card-foreground data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 fixed top-[50%] left-[50%] z-50 grid w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 rounded-3xl border border-[var(--clay-line)] p-6 shadow-[var(--clay-float)] duration-200 sm:max-w-lg",
           className
         )}
         {...props}
@@ -69,7 +69,7 @@ function DialogContent({
         {showCloseButton && (
           <DialogPrimitive.Close
             data-slot="dialog-close"
-            className="absolute top-4 right-4 grid size-8 place-items-center rounded-full border border-[var(--neu-line)] bg-[var(--neu-sunken)] text-muted-foreground shadow-[var(--neu-inset-1)] opacity-80 transition-all duration-200 hover:opacity-100 hover:shadow-[var(--neu-elev-1)] active:shadow-[var(--neu-inset-2)] focus-visible:shadow-[var(--neu-focus)] focus-visible:outline-hidden disabled:pointer-events-none [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4"
+            className="absolute top-4 right-4 grid size-8 place-items-center rounded-full border border-[var(--clay-line)] bg-[var(--clay-sunken)] text-muted-foreground shadow-[var(--clay-well-1)] opacity-80 transition-all duration-200 hover:opacity-100 hover:shadow-[var(--clay-elev-1)] active:shadow-[var(--clay-well-2)] focus-visible:shadow-[var(--clay-focus)] focus-visible:outline-hidden disabled:pointer-events-none [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4"
           >
             <XIcon />
             <span className="sr-only">Close</span>

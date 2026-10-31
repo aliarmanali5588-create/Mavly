@@ -56,7 +56,7 @@ export function FAQSection() {
   ];
 
   return (
-    <section id="faqs" className="py-24 sm:py-32 bg-[var(--neu-base)] relative">
+    <section id="faqs" className="py-24 sm:py-32 bg-[var(--clay-base)] relative">
       <div className="max-w-4xl mx-auto px-4 sm:px-6">
         {/* Section Header */}
         <div className="text-center max-w-2xl mx-auto mb-16">
@@ -83,8 +83,8 @@ export function FAQSection() {
                 key={idx}
                 className={`rounded-2xl transition-all duration-300 overflow-hidden ${
                   isOpen
-                    ? "bg-card border border-[var(--neu-line-strong)] shadow-[var(--neu-elev-3)]"
-                    : "bg-card border border-[var(--neu-line)] shadow-[var(--neu-elev-1)] hover:border-[var(--neu-line-strong)] hover:shadow-[var(--neu-elev-2)]"
+                    ? "bg-card border border-[var(--clay-line-strong)] shadow-[var(--clay-elev-3)]"
+                    : "bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-1)] hover:border-[var(--clay-line-strong)] hover:shadow-[var(--clay-elev-2)]"
                 }`}
               >
                 <h3>

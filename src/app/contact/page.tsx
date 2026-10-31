@@ -87,7 +87,7 @@ export default function ContactPage() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-16">
         {/* Hero */}
         <div className="max-w-3xl mx-auto text-center space-y-4 pt-6 sm:pt-12">
-          <div className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-muted-foreground bg-[var(--neu-sunken)] px-3 py-1 rounded-full border border-[var(--neu-line)]">
+          <div className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-muted-foreground bg-[var(--clay-sunken)] px-3 py-1 rounded-full border border-[var(--clay-line)]">
             <Mail className="w-3.5 h-3.5 text-foreground" />
             <span>GET IN TOUCH</span>
           </div>
@@ -111,14 +111,14 @@ export default function ContactPage() {
             return (
               <div
                 key={ch.id}
-                className="p-8 rounded-3xl bg-card border border-[var(--neu-line)] shadow-[0_4px_20px_rgba(0,0,0,0.02)] flex flex-col justify-between space-y-6"
+                className="p-8 rounded-3xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)] flex flex-col justify-between space-y-6"
               >
                 <div>
                   <div className="flex items-center justify-between gap-3 mb-4">
-                    <div className="w-12 h-12 rounded-2xl bg-[var(--neu-sunken)] border border-[var(--neu-line)] flex items-center justify-center text-foreground">
+                    <div className="w-12 h-12 rounded-2xl bg-[var(--clay-sunken)] border border-[var(--clay-line)] flex items-center justify-center text-foreground">
                       <Icon className="w-5 h-5" />
                     </div>
-                    <span className="text-[11px] font-semibold text-muted-foreground bg-[var(--neu-sunken)] px-2.5 py-0.5 rounded-full">
+                    <span className="text-[11px] font-semibold text-muted-foreground bg-[var(--clay-sunken)] px-2.5 py-0.5 rounded-full">
                       {ch.category}
                     </span>
                   </div>
@@ -129,8 +129,8 @@ export default function ContactPage() {
                   </p>
                 </div>
 
-                <div className="pt-4 border-t border-[var(--neu-line)] space-y-3">
-                  <div className="flex items-center justify-between gap-2 p-2.5 rounded-xl bg-[var(--neu-base)] border border-[var(--neu-line)]">
+                <div className="pt-4 border-t border-[var(--clay-line)] space-y-3">
+                  <div className="flex items-center justify-between gap-2 p-2.5 rounded-xl bg-[var(--clay-base)] border border-[var(--clay-line)]">
                     <div className="min-w-0 flex-1 pl-1">
                       <span className="block text-[10px] uppercase font-bold text-muted-foreground tracking-wider">
                         Email Address
@@ -145,7 +145,7 @@ export default function ContactPage() {
                     <button
                       type="button"
                       onClick={() => handleCopy(ch.email)}
-                      className="px-2.5 py-1.5 rounded-lg bg-card border border-[var(--neu-line)] text-xs font-medium text-foreground hover:text-black shadow-xs flex items-center gap-1.5 cursor-pointer"
+                      className="px-2.5 py-1.5 rounded-lg bg-card border border-[var(--clay-line)] text-xs font-medium text-foreground hover:text-black shadow-xs flex items-center gap-1.5 cursor-pointer"
                     >
                       {isCopied ? (
                         <>
@@ -175,7 +175,7 @@ export default function ContactPage() {
         </div>
 
         {/* Operating Hours & Response Notice */}
-        <div className="max-w-2xl mx-auto p-6 rounded-2xl bg-card border border-[var(--neu-line)] text-center space-y-2 text-xs">
+        <div className="max-w-2xl mx-auto p-6 rounded-2xl bg-card border border-[var(--clay-line)] text-center space-y-2 text-xs">
           <div className="flex items-center justify-center gap-2 text-foreground font-bold">
             <Clock className="w-4 h-4 text-foreground" />
             <span>Response Commitments</span>

@@ -36,7 +36,7 @@ export default function FeaturesPage() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-24">
         {/* 1. Hero Section */}
         <div className="max-w-3xl mx-auto text-center space-y-5 pt-6 sm:pt-12">
-          <div className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-muted-foreground bg-[var(--neu-sunken)] px-3 py-1 rounded-full border border-[var(--neu-line)]">
+          <div className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-muted-foreground bg-[var(--clay-sunken)] px-3 py-1 rounded-full border border-[var(--clay-line)]">
             <Sparkles className="w-3.5 h-3.5 text-foreground" />
             <span>THE MAVLY BUILDER</span>
           </div>
@@ -117,14 +117,14 @@ export default function FeaturesPage() {
               return (
                 <div
                   key={item.step}
-                  className="p-6 rounded-2xl bg-card border border-[var(--neu-line)] shadow-[0_4px_20px_rgba(0,0,0,0.02)] flex flex-col justify-between"
+                  className="p-6 rounded-2xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)] flex flex-col justify-between"
                 >
                   <div className="space-y-4">
                     <div className="flex items-center justify-between">
                       <span className="font-mono text-xs font-bold text-muted-foreground">
                         {item.step}
                       </span>
-                      <div className="p-2 rounded-xl bg-[var(--neu-sunken)] border border-[var(--neu-line)]">
+                      <div className="p-2 rounded-xl bg-[var(--clay-sunken)] border border-[var(--clay-line)]">
                         <Icon className="w-4 h-4 text-foreground" />
                       </div>
                     </div>
@@ -154,8 +154,8 @@ export default function FeaturesPage() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            <div className="p-6 rounded-2xl bg-card border border-[var(--neu-line)] shadow-[0_4px_20px_rgba(0,0,0,0.02)] space-y-3">
-              <div className="w-10 h-10 rounded-xl bg-blue-50 border border-blue-200/50 flex items-center justify-center text-blue-700">
+            <div className="p-6 rounded-2xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)] space-y-3">
+              <div className="w-10 h-10 rounded-xl bg-[var(--clay-sunken)] border border-[var(--clay-line)]/50 flex items-center justify-center text-foreground">
                 <Wand2 className="w-5 h-5" />
               </div>
               <h3 className="text-base font-bold text-foreground">Prompt-Based Website Generation</h3>
@@ -164,7 +164,7 @@ export default function FeaturesPage() {
               </p>
             </div>
 
-            <div className="p-6 rounded-2xl bg-card border border-[var(--neu-line)] shadow-[0_4px_20px_rgba(0,0,0,0.02)] space-y-3">
+            <div className="p-6 rounded-2xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)] space-y-3">
               <div className="w-10 h-10 rounded-xl bg-emerald-50 border border-emerald-200/50 flex items-center justify-center text-emerald-700">
                 <Eye className="w-5 h-5" />
               </div>
@@ -174,8 +174,8 @@ export default function FeaturesPage() {
               </p>
             </div>
 
-            <div className="p-6 rounded-2xl bg-card border border-[var(--neu-line)] shadow-[0_4px_20px_rgba(0,0,0,0.02)] space-y-3">
-              <div className="w-10 h-10 rounded-xl bg-purple-50 border border-purple-200/50 flex items-center justify-center text-purple-700">
+            <div className="p-6 rounded-2xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)] space-y-3">
+              <div className="w-10 h-10 rounded-xl bg-[var(--clay-sunken)] border border-[var(--clay-line)]/50 flex items-center justify-center text-foreground">
                 <Code2 className="w-5 h-5" />
               </div>
               <h3 className="text-base font-bold text-foreground">File Tree &amp; Code Inspector</h3>
@@ -184,8 +184,8 @@ export default function FeaturesPage() {
               </p>
             </div>
 
-            <div className="p-6 rounded-2xl bg-card border border-[var(--neu-line)] shadow-[0_4px_20px_rgba(0,0,0,0.02)] space-y-3">
-              <div className="w-10 h-10 rounded-xl bg-[var(--neu-sunken)] border border-[var(--neu-line)] flex items-center justify-center text-foreground">
+            <div className="p-6 rounded-2xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)] space-y-3">
+              <div className="w-10 h-10 rounded-xl bg-[var(--clay-sunken)] border border-[var(--clay-line)] flex items-center justify-center text-foreground">
                 <GitBranch className="w-5 h-5" />
               </div>
               <h3 className="text-base font-bold text-foreground">GitHub App Integration</h3>
@@ -194,8 +194,8 @@ export default function FeaturesPage() {
               </p>
             </div>
 
-            <div className="p-6 rounded-2xl bg-card border border-[var(--neu-line)] shadow-[0_4px_20px_rgba(0,0,0,0.02)] space-y-3">
-              <div className="w-10 h-10 rounded-xl bg-[var(--neu-sunken)] border border-[var(--neu-line)] flex items-center justify-center text-foreground">
+            <div className="p-6 rounded-2xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)] space-y-3">
+              <div className="w-10 h-10 rounded-xl bg-[var(--clay-sunken)] border border-[var(--clay-line)] flex items-center justify-center text-foreground">
                 <ShieldCheck className="w-5 h-5" />
               </div>
               <h3 className="text-base font-bold text-foreground">Durable Restore Points</h3>
@@ -207,7 +207,7 @@ export default function FeaturesPage() {
         </section>
 
         {/* 4. Section C: Designed for Different Needs */}
-        <section className="p-8 sm:p-12 rounded-3xl bg-card border border-[var(--neu-line)] shadow-[0_4px_20px_rgba(0,0,0,0.02)] space-y-8">
+        <section className="p-8 sm:p-12 rounded-3xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)] space-y-8">
           <div className="max-w-2xl">
             <span className="text-xs font-bold tracking-wider uppercase text-muted-foreground">
               Suitable Use Cases
@@ -247,7 +247,7 @@ export default function FeaturesPage() {
                 desc: "Structure responsive blog layouts, company announcements, and resource libraries.",
               },
             ].map((useCase) => (
-              <div key={useCase.title} className="p-5 rounded-xl bg-[var(--neu-sunken)]/70 border border-[var(--neu-line)] space-y-2">
+              <div key={useCase.title} className="p-5 rounded-xl bg-[var(--clay-sunken)]/70 border border-[var(--clay-line)] space-y-2">
                 <h4 className="text-sm font-bold text-foreground">{useCase.title}</h4>
                 <p className="text-xs text-muted-foreground leading-relaxed">{useCase.desc}</p>
               </div>
@@ -257,7 +257,7 @@ export default function FeaturesPage() {
 
         {/* 5. Section D & E: Control, Ownership & Getting Started */}
         <section className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          <div className="p-8 rounded-2xl bg-card border border-[var(--neu-line)] shadow-[0_4px_20px_rgba(0,0,0,0.02)] space-y-4">
+          <div className="p-8 rounded-2xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)] space-y-4">
             <h3 className="text-xl font-bold text-foreground">Control and Ownership</h3>
             <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
               We believe you should never be trapped in a proprietary closed sandbox. All generated project files belong to you:
@@ -278,7 +278,7 @@ export default function FeaturesPage() {
             </ul>
           </div>
 
-          <div className="p-8 rounded-2xl bg-card border border-[var(--neu-line)] shadow-[0_4px_20px_rgba(0,0,0,0.02)] space-y-4">
+          <div className="p-8 rounded-2xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)] space-y-4">
             <h3 className="text-xl font-bold text-foreground">Getting Started in 60 Seconds</h3>
             <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
               No developer environment configuration, Node runtime installations, or credit card required.
@@ -303,7 +303,7 @@ export default function FeaturesPage() {
           <div>
             <Link
               href="/dashboard"
-              className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-card text-black font-bold text-xs sm:text-sm hover:bg-[var(--neu-sunken)] transition-colors"
+              className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-card text-black font-bold text-xs sm:text-sm hover:bg-[var(--clay-sunken)] transition-colors"
             >
               <span>Launch Builder</span>
               <ArrowRight className="w-4 h-4" />

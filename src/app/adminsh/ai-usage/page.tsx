@@ -119,7 +119,7 @@ export default function AiUsageAdminPage() {
   return (
     <AdminShell activeNav="AI Usage & Cost">
       {/* 1. Gateway Status & Period Bar */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-5 rounded-2xl bg-card border border-[var(--neu-line)] shadow-[var(--neu-elev-2)]">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-5 rounded-2xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)]">
         <div className="flex items-start sm:items-center gap-3.5">
           <div className="w-10 h-10 rounded-xl bg-black text-white flex items-center justify-center shrink-0">
             <Cpu className="w-5 h-5" />
@@ -142,7 +142,7 @@ export default function AiUsageAdminPage() {
 
         <div className="flex items-center gap-2.5 self-start md:self-auto">
           {/* Segmented Timeframe Switcher */}
-          <div className="flex items-center bg-[var(--neu-sunken)] p-0.5 rounded-lg border border-[var(--neu-line)]">
+          <div className="flex items-center bg-[var(--clay-sunken)] p-0.5 rounded-lg border border-[var(--clay-line)]">
             {["7D", "30D", "3M", "YTD"].map((t) => (
               <button
                 key={t}
@@ -165,7 +165,7 @@ export default function AiUsageAdminPage() {
           <button
             type="button"
             onClick={() => handleRunPingTest("DeepSeek V4.1 Flash")}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-foreground bg-[var(--neu-sunken)] hover:bg-[var(--neu-sunken)] border border-[var(--neu-line)] rounded-lg transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-foreground bg-[var(--clay-sunken)] hover:bg-[var(--clay-sunken)] border border-[var(--clay-line)] rounded-lg transition-colors"
           >
             <Activity className="w-3.5 h-3.5 text-muted-foreground" />
             <span>Probe Gateway</span>
@@ -175,7 +175,7 @@ export default function AiUsageAdminPage() {
 
       {/* 2. Precision Enterprise KPI Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5">
-        <div className="p-4 rounded-xl bg-card border border-[var(--neu-line)] shadow-[var(--neu-elev-2)]">
+        <div className="p-4 rounded-xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)]">
           <div className="flex items-center justify-between text-xs text-muted-foreground font-medium">
             <span>Total Requests</span>
             <Zap className="w-3.5 h-3.5 text-amber-500" />
@@ -187,7 +187,7 @@ export default function AiUsageAdminPage() {
           </div>
         </div>
 
-        <div className="p-4 rounded-xl bg-card border border-[var(--neu-line)] shadow-[var(--neu-elev-2)]">
+        <div className="p-4 rounded-xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)]">
           <div className="flex items-center justify-between text-xs text-muted-foreground font-medium">
             <span>Success Rate</span>
             <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
@@ -196,7 +196,7 @@ export default function AiUsageAdminPage() {
           <p className="text-[11px] text-muted-foreground mt-1">1,38,000 successful runs</p>
         </div>
 
-        <div className="p-4 rounded-xl bg-card border border-[var(--neu-line)] shadow-[var(--neu-elev-2)]">
+        <div className="p-4 rounded-xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)]">
           <div className="flex items-center justify-between text-xs text-muted-foreground font-medium">
             <span>Error Rate</span>
             <AlertTriangle className="w-3.5 h-3.5 text-rose-500" />
@@ -205,19 +205,19 @@ export default function AiUsageAdminPage() {
           <p className="text-[11px] text-muted-foreground mt-1">4,500 timeouts / rate caps</p>
         </div>
 
-        <div className="p-4 rounded-xl bg-card border border-[var(--neu-line)] shadow-[var(--neu-elev-2)]">
+        <div className="p-4 rounded-xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)]">
           <div className="flex items-center justify-between text-xs text-muted-foreground font-medium">
             <span>Tokens Consumed</span>
-            <Coins className="w-3.5 h-3.5 text-blue-500" />
+            <Coins className="w-3.5 h-3.5 text-muted-foreground" />
           </div>
           <h3 className="text-xl font-bold tracking-tight text-foreground font-mono mt-1">102.8M</h3>
           <p className="text-[11px] text-muted-foreground mt-1">68.4M prompt · 34.4M compl</p>
         </div>
 
-        <div className="p-4 rounded-xl bg-card border border-[var(--neu-line)] shadow-[var(--neu-elev-2)] col-span-2 sm:col-span-1">
+        <div className="p-4 rounded-xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)] col-span-2 sm:col-span-1">
           <div className="flex items-center justify-between text-xs text-muted-foreground font-medium">
             <span>Est. Upstream Cost</span>
-            <TrendingUp className="w-3.5 h-3.5 text-purple-600" />
+            <TrendingUp className="w-3.5 h-3.5 text-foreground" />
           </div>
           <h3 className="text-xl font-bold tracking-tight text-foreground font-mono mt-1">₹1,02,800</h3>
           <p className="text-[11px] text-muted-foreground mt-1">~₹0.72 per build run</p>
@@ -225,8 +225,8 @@ export default function AiUsageAdminPage() {
       </div>
 
       {/* 3. Provider Share Visual Distribution */}
-      <div className="bg-card rounded-2xl p-5 sm:p-6 border border-[var(--neu-line)] shadow-[0_2px_8px_rgba(0,0,0,0.02)] space-y-5">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-[var(--neu-line)]">
+      <div className="bg-card rounded-2xl p-5 sm:p-6 border border-[var(--clay-line)] shadow-[var(--clay-elev-1)] space-y-5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-[var(--clay-line)]">
           <div>
             <h3 className="text-sm font-semibold tracking-tight text-foreground">
               Provider Workload Distribution & Unit Economics
@@ -244,10 +244,10 @@ export default function AiUsageAdminPage() {
 
         {/* Multi-segment Progress Bar */}
         <div className="space-y-2">
-          <div className="h-3 w-full bg-[var(--neu-sunken)] rounded-full overflow-hidden flex">
+          <div className="h-3 w-full bg-[var(--clay-sunken)] rounded-full overflow-hidden flex">
             <div className="bg-black h-full w-[45%]" title="DeepSeek V4.1: 45%" />
-            <div className="bg-blue-600 h-full w-[28%]" title="Claude 3.5 Sonnet: 28%" />
-            <div className="bg-purple-600 h-full w-[18%]" title="Gemini 1.5 Pro: 18%" />
+            <div className="bg-foreground h-full w-[28%]" title="Claude 3.5 Sonnet: 28%" />
+            <div className="bg-foreground h-full w-[18%]" title="Gemini 1.5 Pro: 18%" />
             <div className="bg-emerald-600 h-full w-[9%]" title="GPT-4o: 9%" />
           </div>
           <div className="flex flex-wrap items-center gap-4 text-xs pt-1 text-muted-foreground font-medium">
@@ -256,11 +256,11 @@ export default function AiUsageAdminPage() {
               <span>DeepSeek V4.1 (45%)</span>
             </div>
             <div className="flex items-center gap-1.5">
-              <span className="w-2.5 h-2.5 rounded-full bg-blue-600" />
+              <span className="w-2.5 h-2.5 rounded-full bg-foreground" />
               <span>Claude 3.5 (28%)</span>
             </div>
             <div className="flex items-center gap-1.5">
-              <span className="w-2.5 h-2.5 rounded-full bg-purple-600" />
+              <span className="w-2.5 h-2.5 rounded-full bg-foreground" />
               <span>Gemini 1.5 Pro (18%)</span>
             </div>
             <div className="flex items-center gap-1.5">
@@ -277,8 +277,8 @@ export default function AiUsageAdminPage() {
               key={m.name}
               className={`p-3 rounded-xl border transition-all ${
                 selectedModel === m.name
-                  ? "bg-[var(--neu-sunken)]/80 border-black/20"
-                  : "bg-card border-[var(--neu-line)] hover:border-black/10"
+                  ? "bg-[var(--clay-sunken)]/80 border-black/20"
+                  : "bg-card border-[var(--clay-line)] hover:border-black/10"
               }`}
               onClick={() => setSelectedModel(m.name)}
             >
@@ -300,8 +300,8 @@ export default function AiUsageAdminPage() {
       </div>
 
       {/* 4. Model Comparison & Gateway Matrix */}
-      <div className="bg-card rounded-2xl p-5 sm:p-6 border border-[var(--neu-line)] shadow-[0_2px_8px_rgba(0,0,0,0.02)] space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-[var(--neu-line)]">
+      <div className="bg-card rounded-2xl p-5 sm:p-6 border border-[var(--clay-line)] shadow-[var(--clay-elev-1)] space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-[var(--clay-line)]">
           <div>
             <h3 className="text-sm font-semibold tracking-tight text-foreground">
               Upstream Gateway & Model Audit Matrix
@@ -310,7 +310,7 @@ export default function AiUsageAdminPage() {
               Real-time latency percentiles (p50 / p95) and token split ratio
             </p>
           </div>
-          <span className="text-xs font-mono text-muted-foreground bg-[var(--neu-sunken)] px-2.5 py-1 rounded-md border border-[var(--neu-line)]">
+          <span className="text-xs font-mono text-muted-foreground bg-[var(--clay-sunken)] px-2.5 py-1 rounded-md border border-[var(--clay-line)]">
             Server-side OpenRouter Proxy
           </span>
         </div>
@@ -318,7 +318,7 @@ export default function AiUsageAdminPage() {
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
             <thead>
-              <tr className="border-b border-[var(--neu-line)] text-muted-foreground font-semibold uppercase text-[10px]">
+              <tr className="border-b border-[var(--clay-line)] text-muted-foreground font-semibold uppercase text-[10px]">
                 <th className="pb-3">Model & Provider</th>
                 <th className="pb-3">Gateway Endpoint</th>
                 <th className="pb-3 text-right">Requests</th>
@@ -332,7 +332,7 @@ export default function AiUsageAdminPage() {
             </thead>
             <tbody className="divide-y divide-black/[0.04]">
               {modelTableData.map((row) => (
-                <tr key={row.model} className="hover:bg-[var(--neu-sunken)]/70 transition-colors">
+                <tr key={row.model} className="hover:bg-[var(--clay-sunken)]/70 transition-colors">
                   <td className="py-3.5">
                     <p className="font-semibold text-foreground">{row.model}</p>
                     <p className="text-[11px] text-muted-foreground">{row.provider} · {row.tier}</p>
@@ -364,7 +364,7 @@ export default function AiUsageAdminPage() {
                     <button
                       type="button"
                       onClick={() => handleRunPingTest(row.model)}
-                      className="px-2.5 py-1 text-[11px] font-medium text-foreground bg-[var(--neu-sunken)] hover:bg-[var(--neu-sunken-deep)] rounded-md transition-colors"
+                      className="px-2.5 py-1 text-[11px] font-medium text-foreground bg-[var(--clay-sunken)] hover:bg-[var(--clay-sunken-deep)] rounded-md transition-colors"
                     >
                       Probe
                     </button>
@@ -380,7 +380,7 @@ export default function AiUsageAdminPage() {
       {isTestPingOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs animate-in fade-in">
           <div className="w-full max-w-md bg-card rounded-2xl border border-black/[0.1] shadow-2xl p-6 space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-[var(--neu-line)]">
+            <div className="flex items-center justify-between pb-3 border-b border-[var(--clay-line)]">
               <div className="flex items-center gap-2">
                 <Terminal className="w-4 h-4 text-foreground" />
                 <h3 className="text-sm font-bold text-foreground">Gateway Health Probe</h3>
@@ -418,14 +418,14 @@ export default function AiUsageAdminPage() {
                 type="button"
                 onClick={() => handleRunPingTest("DeepSeek V4.1 Flash")}
                 disabled={pingStatus === "running"}
-                className="px-3 py-1.5 text-xs font-medium text-foreground bg-[var(--neu-sunken)] hover:bg-[var(--neu-sunken-deep)] rounded-lg transition-colors"
+                className="px-3 py-1.5 text-xs font-medium text-foreground bg-[var(--clay-sunken)] hover:bg-[var(--clay-sunken-deep)] rounded-lg transition-colors"
               >
                 Re-test
               </button>
               <button
                 type="button"
                 onClick={() => setIsTestPingOpen(false)}
-                className="px-3.5 py-1.5 text-xs font-semibold text-white bg-primary hover:bg-[var(--neu-brand-hover)] rounded-lg"
+                className="px-3.5 py-1.5 text-xs font-semibold text-white bg-primary hover:bg-[var(--clay-brand-hover)] rounded-lg"
               >
                 Done
               </button>

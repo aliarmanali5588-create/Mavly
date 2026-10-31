@@ -11,13 +11,13 @@ export function HomeFooter() {
   };
 
   return (
-    <footer className="pt-20 pb-12 border-t border-[var(--neu-line)] bg-[var(--neu-base)] text-foreground">
+    <footer className="pt-20 pb-12 border-t border-[var(--clay-line)] bg-[var(--clay-base)] text-foreground">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 pb-16 border-b border-black/[0.06]">
           {/* Brand Column */}
           <div className="lg:col-span-4 max-w-sm space-y-4">
             <Link href="/" className="inline-flex items-center gap-2.5 group select-none">
-              <div className="w-8 h-8 rounded-xl overflow-hidden bg-card shadow-[var(--neu-elev-1)] p-0.5 border border-[var(--neu-line)] flex items-center justify-center transition-[transform,box-shadow] group-hover:scale-105 group-hover:shadow-[var(--neu-elev-2)] active:scale-95">
+              <div className="w-8 h-8 rounded-xl overflow-hidden bg-card shadow-[var(--clay-elev-1)] p-0.5 border border-[var(--clay-line)] flex items-center justify-center transition-[transform,box-shadow] group-hover:scale-105 group-hover:shadow-[var(--clay-elev-2)] active:scale-95">
                 <Image
                   src="/logo/Mavly.png"
                   alt="Mavly Logo"

@@ -31,7 +31,7 @@ export default function AboutPage() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-20">
         {/* Hero */}
         <div className="max-w-3xl mx-auto text-center space-y-5 pt-6 sm:pt-12">
-          <div className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-muted-foreground bg-[var(--neu-sunken)] px-3 py-1 rounded-full border border-[var(--neu-line)]">
+          <div className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-muted-foreground bg-[var(--clay-sunken)] px-3 py-1 rounded-full border border-[var(--clay-line)]">
             <Heart className="w-3.5 h-3.5 text-foreground" />
             <span>ABOUT MAVLY</span>
           </div>
@@ -58,7 +58,7 @@ export default function AboutPage() {
         {/* Story & Philosophy Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-5xl mx-auto">
           {/* Why Mavly Exists */}
-          <div className="p-8 rounded-3xl bg-card border border-[var(--neu-line)] shadow-[0_4px_20px_rgba(0,0,0,0.02)] space-y-4">
+          <div className="p-8 rounded-3xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)] space-y-4">
             <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-700 flex items-center justify-center">
               <Compass className="w-5 h-5" />
             </div>
@@ -72,8 +72,8 @@ export default function AboutPage() {
           </div>
 
           {/* Our Mission */}
-          <div className="p-8 rounded-3xl bg-card border border-[var(--neu-line)] shadow-[0_4px_20px_rgba(0,0,0,0.02)] space-y-4">
-            <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-700 flex items-center justify-center">
+          <div className="p-8 rounded-3xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)] space-y-4">
+            <div className="w-10 h-10 rounded-xl bg-[var(--clay-sunken)] text-foreground flex items-center justify-center">
               <Target className="w-5 h-5" />
             </div>
             <h2 className="text-xl font-bold text-foreground">Our Mission</h2>
@@ -87,7 +87,7 @@ export default function AboutPage() {
         </div>
 
         {/* How We Approach Building */}
-        <div className="p-8 sm:p-12 rounded-3xl bg-card border border-[var(--neu-line)] shadow-[0_4px_20px_rgba(0,0,0,0.02)] max-w-5xl mx-auto space-y-8">
+        <div className="p-8 sm:p-12 rounded-3xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)] max-w-5xl mx-auto space-y-8">
           <div className="max-w-2xl">
             <span className="text-xs font-bold tracking-wider uppercase text-muted-foreground">
               Core Principles
@@ -121,19 +121,19 @@ export default function AboutPage() {
         <div className="max-w-5xl mx-auto space-y-6">
           <h2 className="text-xl font-bold text-foreground text-center">Who Mavly is For</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-xs">
-            <div className="p-5 rounded-2xl bg-card border border-[var(--neu-line)] space-y-2 text-center">
+            <div className="p-5 rounded-2xl bg-card border border-[var(--clay-line)] space-y-2 text-center">
               <h3 className="font-bold text-foreground">Solo Founders</h3>
               <p className="text-muted-foreground">Launch MVPs and validate business ideas in hours instead of weeks.</p>
             </div>
-            <div className="p-5 rounded-2xl bg-card border border-[var(--neu-line)] space-y-2 text-center">
+            <div className="p-5 rounded-2xl bg-card border border-[var(--clay-line)] space-y-2 text-center">
               <h3 className="font-bold text-foreground">Freelancers</h3>
               <p className="text-muted-foreground">Deliver client concepts and rapid initial mockups with ease.</p>
             </div>
-            <div className="p-5 rounded-2xl bg-card border border-[var(--neu-line)] space-y-2 text-center">
+            <div className="p-5 rounded-2xl bg-card border border-[var(--clay-line)] space-y-2 text-center">
               <h3 className="font-bold text-foreground">Small Businesses</h3>
               <p className="text-muted-foreground">Establish a professional online presence without large agency costs.</p>
             </div>
-            <div className="p-5 rounded-2xl bg-card border border-[var(--neu-line)] space-y-2 text-center">
+            <div className="p-5 rounded-2xl bg-card border border-[var(--clay-line)] space-y-2 text-center">
               <h3 className="font-bold text-foreground">Creative Teams</h3>
               <p className="text-muted-foreground">Prototype landing pages and collaborate on web experiences quickly.</p>
             </div>
@@ -151,7 +151,7 @@ export default function AboutPage() {
           <div>
             <Link
               href="/dashboard"
-              className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-card text-black font-bold text-xs sm:text-sm hover:bg-[var(--neu-sunken)] transition-colors"
+              className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-card text-black font-bold text-xs sm:text-sm hover:bg-[var(--clay-sunken)] transition-colors"
             >
               <span>Launch Builder</span>
               <ArrowRight className="w-4 h-4" />

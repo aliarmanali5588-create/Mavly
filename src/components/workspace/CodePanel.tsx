@@ -384,13 +384,13 @@ function iconForFile(path: string) {
   if (kind === "binary") return <FileType2 className="w-3.5 h-3.5 text-amber-500 shrink-0" />;
   switch (ext) {
     case "ts": case "tsx": case "js": case "jsx": case "mjs": case "cjs": case "cts": case "mts":
-      return <FileCode2 className="w-3.5 h-3.5 text-sky-500 shrink-0" />;
+      return <FileCode2 className="w-3.5 h-3.5 text-muted-foreground shrink-0" />;
     case "json":
       return <FileJson className="w-3.5 h-3.5 text-yellow-500 shrink-0" />;
     case "md": case "mdx": case "txt":
       return <FileText className="w-3.5 h-3.5 text-muted-foreground shrink-0" />;
     case "css": case "scss": case "less":
-      return <FileCode2 className="w-3.5 h-3.5 text-indigo-500 shrink-0" />;
+      return <FileCode2 className="w-3.5 h-3.5 text-muted-foreground shrink-0" />;
     case "html": case "htm": case "xml":
       return <FileCode2 className="w-3.5 h-3.5 text-orange-500 shrink-0" />;
     default:
@@ -423,7 +423,7 @@ function TreeRow({
         <button
           onClick={() => toggle(node.path)}
           style={{ paddingLeft: pad }}
-          className="w-full flex items-center gap-1.5 pr-2 py-1 rounded-md text-[13px] text-foreground hover:bg-[var(--neu-sunken)] dark:hover:bg-foreground/70 transition-colors group"
+          className="w-full flex items-center gap-1.5 pr-2 py-1 rounded-md text-[13px] text-foreground hover:bg-[var(--clay-sunken)] dark:hover:bg-foreground/70 transition-colors group"
         >
           <ChevronRight
             className={`w-3.5 h-3.5 text-muted-foreground shrink-0 transition-transform ${isOpen ? "rotate-90" : ""}`}
@@ -461,8 +461,8 @@ function TreeRow({
       style={{ paddingLeft: pad + 18 }}
       className={`w-full flex items-center gap-1.5 pr-2 py-1 rounded-md text-[13px] transition-colors ${
         isSelected
-          ? "bg-[var(--neu-sunken-deep)]/70 text-foreground font-medium"
-          : "text-muted-foreground hover:bg-[var(--neu-sunken)] dark:hover:bg-foreground/70"
+          ? "bg-[var(--clay-sunken-deep)]/70 text-foreground font-medium"
+          : "text-muted-foreground hover:bg-[var(--clay-sunken)] dark:hover:bg-foreground/70"
       }`}
     >
       {iconForFile(node.path)}
@@ -843,7 +843,7 @@ export function CodePanel({ projectId, darkMode, onAskAiEdit, wake, sourceRevisi
   if (empty) {
     return (
       <div className="h-full flex flex-col items-center justify-center gap-4 px-6 text-center">
-        <div className="w-14 h-14 rounded-2xl bg-[var(--neu-sunken)] border border-[var(--neu-line)] shadow-[var(--neu-inset-2)] flex items-center justify-center">
+        <div className="w-14 h-14 rounded-2xl bg-[var(--clay-sunken)] border border-[var(--clay-line)] shadow-[var(--clay-well-2)] flex items-center justify-center">
           <FileCode2 className="w-6 h-6 text-muted-foreground" />
         </div>
         <div>
@@ -886,7 +886,7 @@ export function CodePanel({ projectId, darkMode, onAskAiEdit, wake, sourceRevisi
   return (
     <div className="h-full flex flex-col">
       {/* Header */}
-      <div className="px-3 py-2 border-b border-[var(--neu-line)] flex items-center gap-2 shrink-0">
+      <div className="px-3 py-2 border-b border-[var(--clay-line)] flex items-center gap-2 shrink-0">
         <FileCode2 className="w-4 h-4 text-foreground" />
         <span className="text-sm font-medium text-foreground ">{"Code Explorer"}</span>
         <span className="text-[11px] text-muted-foreground">· {filesCount} {"files"}</span>
@@ -905,7 +905,7 @@ export function CodePanel({ projectId, darkMode, onAskAiEdit, wake, sourceRevisi
           )}
           <button
             onClick={() => fetchCode(true)}
-            className="flex items-center gap-1.5 h-7 px-2.5 rounded-lg text-xs font-medium text-muted-foreground border border-[var(--neu-line)] hover:bg-[var(--neu-sunken)] dark:hover:bg-foreground transition-colors"
+            className="flex items-center gap-1.5 h-7 px-2.5 rounded-lg text-xs font-medium text-muted-foreground border border-[var(--clay-line)] hover:bg-[var(--clay-sunken)] dark:hover:bg-foreground transition-colors"
             title={"Refresh"}
           >
             <RefreshCw className="w-3.5 h-3.5" /> {"Refresh"}
@@ -916,16 +916,16 @@ export function CodePanel({ projectId, darkMode, onAskAiEdit, wake, sourceRevisi
       {/* Body: tree + viewer */}
       <div className="flex-1 flex min-h-0">
         {/* Tree sidebar */}
-        <div className="w-64 shrink-0 border-r border-[var(--neu-line)] flex flex-col bg-[var(--neu-sunken)]/40 ">
+        <div className="w-64 shrink-0 border-r border-[var(--clay-line)] flex flex-col bg-[var(--clay-sunken)]/40 ">
           {/* Search by file name or content */}
-          <div className="p-2 border-b border-[var(--neu-line)] shrink-0">
+          <div className="p-2 border-b border-[var(--clay-line)] shrink-0">
             <div className="relative">
               <Search className="w-3.5 h-3.5 text-muted-foreground absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
               <input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder={"Search by file name or content..."}
-                className="w-full h-8 pl-8 pr-7 rounded-lg text-xs bg-[var(--neu-sunken)] border border-[var(--neu-line)] text-foreground placeholder:text-muted-foreground shadow-[var(--neu-inset-1)] outline-none focus-visible:shadow-[var(--neu-inset-1),var(--neu-focus)] transition-shadow"
+                className="w-full h-8 pl-8 pr-7 rounded-lg text-xs bg-[var(--clay-sunken)] border border-[var(--clay-line)] text-foreground placeholder:text-muted-foreground shadow-[var(--clay-well-1)] outline-none focus-visible:shadow-[var(--clay-well-1),var(--clay-focus)] transition-shadow"
               />
               {search && (
                 <button
@@ -961,7 +961,7 @@ export function CodePanel({ projectId, darkMode, onAskAiEdit, wake, sourceRevisi
         <div className="flex-1 min-w-0 flex flex-col">
           {!selected ? (
             <div className="flex-1 flex flex-col items-center justify-center text-center gap-3 px-6">
-              <div className="w-14 h-14 rounded-2xl bg-[var(--neu-sunken)] border border-dashed border-[var(--neu-line)] flex items-center justify-center">
+              <div className="w-14 h-14 rounded-2xl bg-[var(--clay-sunken)] border border-dashed border-[var(--clay-line)] flex items-center justify-center">
                 <FileCode2 className="w-6 h-6 text-muted-foreground " />
               </div>
               <p className="text-sm text-muted-foreground">{"Select a file to view its contents"}</p>
@@ -969,7 +969,7 @@ export function CodePanel({ projectId, darkMode, onAskAiEdit, wake, sourceRevisi
           ) : (
             <>
               {/* Breadcrumb + the save control */}
-              <div className="px-3 py-1.5 border-b border-[var(--neu-line)] flex items-center gap-2 shrink-0">
+              <div className="px-3 py-1.5 border-b border-[var(--clay-line)] flex items-center gap-2 shrink-0">
                 <code className="text-xs font-mono text-muted-foreground truncate">{selected}</code>
                 {/* ⭐ The dot is the whole "unsaved" signal — see the `drafts` note. */}
                 {isDirty(selected) && (
@@ -1083,7 +1083,7 @@ export function CodePanel({ projectId, darkMode, onAskAiEdit, wake, sourceRevisi
 function PlaceholderBinary({ onDownload }: { onDownload: () => void }) {
   return (
     <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 text-center px-6">
-      <div className="w-16 h-16 rounded-2xl bg-[var(--neu-sunken)] border border-[var(--neu-line)] flex items-center justify-center">
+      <div className="w-16 h-16 rounded-2xl bg-[var(--clay-sunken)] border border-[var(--clay-line)] flex items-center justify-center">
         <FileWarning className="w-7 h-7 text-muted-foreground " />
       </div>
       <p className="text-sm text-muted-foreground max-w-xs">{"Preview not available for this file type"}</p>

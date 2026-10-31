@@ -33,6 +33,8 @@ const EXCLUDED_PATTERNS: readonly RegExp[] = [
   /(^|\/)coverage(\/|$)/i,
   /(^|\/)\.cache(\/|$)/i,
   /(^|\/)\.vercel(\/|$)/i,
+  /** Mavly's server-owned control files never enter a runtime sandbox. */
+  /(^|\/)\.mavly(\/|$)/i,
   /(^|\/)\.DS_Store$/i,
   /(^|\/)\.env(\.|$)/i,
   /(^|\/)\.npmrc$/i,

@@ -42,8 +42,8 @@ export function QuickActionsModal({
         )} queued`;
 
   return (
-    <div className="bg-card rounded-2xl p-5 sm:p-6 border border-[var(--neu-line)] shadow-[0_2px_8px_rgba(0,0,0,0.02)] space-y-4">
-      <div className="flex items-center justify-between pb-3 border-b border-[var(--neu-line)]">
+    <div className="bg-card rounded-2xl p-5 sm:p-6 border border-[var(--clay-line)] shadow-[var(--clay-elev-1)] space-y-4">
+      <div className="flex items-center justify-between pb-3 border-b border-[var(--clay-line)]">
         <div className="flex items-center gap-2">
           <div className="p-1.5 rounded-lg bg-black text-white">
             <Sparkles className="w-4 h-4" />
@@ -62,7 +62,7 @@ export function QuickActionsModal({
         />
         <Shortcut
           href="/adminsh/users"
-          icon={<Users className="w-5 h-5 text-blue-500 group-hover:text-white transition-colors" />}
+          icon={<Users className="w-5 h-5 text-muted-foreground group-hover:text-white transition-colors" />}
           title="User Management"
           hint={usersHint}
         />
@@ -97,7 +97,7 @@ function Shortcut({
   return (
     <Link
       href={href}
-      className="p-4 rounded-xl border border-[var(--neu-line)] bg-[var(--neu-sunken)]/70 hover:bg-primary hover:text-primary-foreground group transition-all text-left flex flex-col justify-between h-24 cursor-pointer"
+      className="p-4 rounded-xl border border-[var(--clay-line)] bg-[var(--clay-sunken)]/70 hover:bg-primary hover:text-primary-foreground group transition-all text-left flex flex-col justify-between h-24 cursor-pointer"
     >
       <div className="flex items-center justify-between w-full">
         {icon}

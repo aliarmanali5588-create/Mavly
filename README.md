@@ -49,7 +49,7 @@ audits listed at the end of this file; it is not a runtime dependency.
 | Figma design reference | Personal access token validated with Figma, encrypted per project, and a bounded design summary injected into generation |
 | Customer publishing | Retired; no deployment provider is configured. Publish, unpublish, and deployment-status actions fail closed with `BACKEND_NOT_CONFIGURED` and do not claim a live deployment or success. Source editing, static preview, source export, generation, and restore points remain available. Historical deployment rows and migrations are preserved rather than destructively rewritten. |
 | Shared tenant hosting (opt-in, off by default) | Immutable published versions stored in Supabase and served at `<project-id>.mavly.xyz` by Mavly's own tenant runtime. Enabled per project cohort with `MAVLY_HOSTING_MODE=shared` + `MAVLY_SHARED_HOSTING_PROJECTS`; the legacy Vercel path remains the default. See [`MAVLY_SHARED_HOSTING.md`](MAVLY_SHARED_HOSTING.md). |
-| Durable generation worker (Cloudflare Cron) | Every production generation admission is written to the durable `project_runs` queue and dispatched to the Cloudflare Worker scheduled once per minute. It uses atomic `FOR UPDATE SKIP LOCKED` claims, fenced leases, verified checkpoints, bounded retries and abandoned-lease recovery; there is no project allowlist, worker secret, or public invocation route. Local development and Vercel previews retain the inline `after()` path. The app and Cloudflare Worker use the existing server-side Supabase service-role key and URL. Production deployment/runtime compatibility is not verified; see [`docs/runbooks/generation-worker.md`](docs/runbooks/generation-worker.md). |
+| Durable generation worker (Render Background Worker) | Every production generation admission is written to the durable `project_runs` queue and dispatched to a continuously running Render Node.js worker. Its single serial loop calls the existing worker tick, which uses atomic `FOR UPDATE SKIP LOCKED` claims, fenced leases, verified checkpoints, bounded retries and abandoned-lease recovery; there is no second queue, project allowlist, worker secret, or public invocation route. Local development and Vercel previews retain the inline `after()` path. The app and Render worker use the existing server-side Supabase service-role key and URL plus `OPENROUTER_API_KEY`. The root `render.yaml` selects Singapore and Render's `0.5c-512mb` compute plan (0.5 CPU, 512 MB); staging memory and production operation remain unverified. See [`docs/runbooks/render-generation-worker.md`](docs/runbooks/render-generation-worker.md). |
 | Verification sandbox (opt-in, off by default) | Worker-dispatched runs enqueue one durable verification for their completed run and immutable snapshot. A later worker tick installs and builds the project's source in a Vercel Sandbox microVM, starts the validated `next start` on `127.0.0.1`, and requests `/` from inside the sandbox. `passed` requires the build to exit `0`, the runtime to start and the local health response to be `2xx`/`3xx`; a build-only success is never `passed`. Unsupported formats return `unsupported_runtime`. Detached stages span ticks, every terminal path destroys the sandbox, and cleanup failure never overwrites the outcome. An optional bounded AI repair (default 1, hard cap 2) may create one new immutable snapshot after a source-level `build_failed`/`runtime_start_failed`/`health_check_failed`, then rebuild and recheck. Preview remains unavailable: no public provider URL is stored or returned. Requires `MAVLY_VERIFICATION_SANDBOX_ENABLED`, `MAVLY_VERIFICATION_SANDBOX_PROJECTS`, Vercel provider credentials, migrations `17` then `19`, and a human-run `npm install` for `@vercel/sandbox`. No generated code runs on a Mavly host. See [`docs/architecture/phase-4-runtime-verification.md`](docs/architecture/phase-4-runtime-verification.md). |
 | `/api/config` | `200 { "ok": true, "data": { "configured": false } }` |
 | Visual shell | Dashboard, workspace, chat, composer, dialogs and preview frame render |
@@ -76,8 +76,9 @@ edits do not have a local implementation. Credit accounting exists only as the o
 off-by-default generation foundation above; it has no funding flow, pricing engine or
 billing integration. The workspace has no mobile-app management or runtime-log viewer;
 Android source generation and its isolated debug builds remain, but generated apps are
-never run on a Mavly host. The durable generation worker has a Cloudflare Cron Worker
-configuration; until it is deployed and observed, worker-dispatched runs stay queued. The
+never run on a Mavly host. The durable generation worker has a Render Background Worker
+Blueprint; until it is deployed and observed, worker-dispatched runs stay queued. Disable
+the retained Cloudflare Cron trigger before enabling the Render poller. The
 verification sandbox is
 implemented but off by default, applies only to worker-dispatched runs, and its `passed`
 status means the production build exited `0`, the validated runtime started, and a
@@ -124,8 +125,8 @@ browser ── src/lib/vcaas.ts (client catalog, same-origin only)
    │      └── src/lib/deployments/*      opt-in publish/unpublish orchestration
    │             ├── store.ts            project_deployments (RLS)
    │             └── service.ts → src/lib/vercel/provider.ts → api.vercel.com
-   ├── Cloudflare Cron Worker      scheduled trusted runtime → service-role worker tick
-   │      ├── workers/generation-scheduler.ts → src/lib/generation/worker.ts
+   ├── Render Background Worker    continuous Node process → service-role worker tick
+   │      ├── workers/render-generation-worker.ts → src/lib/generation/worker.ts
    │      └── run-agent → OpenRouter + durable checkpoints
    ├── /api/vcaas/source-code/{id} auth + ownership → generated ZIP
    ├── /api/preview/{id}/…         auth + ownership → sandboxed static site
@@ -144,14 +145,14 @@ browser ── src/lib/vcaas.ts (client catalog, same-origin only)
   through RLS.
 - **Generation:** `POST …/agent/start` atomically admits one run per project (and bounded
   per-user/global concurrency) through `create_generation_job`. Production admissions use
-  `dispatch_mode = 'worker'`; the Cloudflare Cron Worker invokes the existing worker
-  directly, adding a fenced lease, heartbeat renewal, expired-lease recovery, bounded
+  `dispatch_mode = 'worker'`; the Render Background Worker repeatedly invokes the existing
+  worker tick, adding a fenced lease, heartbeat renewal, expired-lease recovery, bounded
   retries and dead letters while reusing the same generator and checkpoints. Local
   development and Vercel previews retain the inline `after()` path. A truncated response is
   never written; a failed/interrupted run can be resumed from its verified checkpoints
   with `POST …/agent/resume`, and `POST …/agent/stop` cooperatively cancels it. See
   [Generation reliability](#generation-reliability) and the
-  [worker runbook](docs/runbooks/generation-worker.md).
+  [worker runbook](docs/runbooks/render-generation-worker.md).
 - **Publishing:** retired. The workspace does not expose a customer publish action, and
   the deployment API returns `503 BACKEND_NOT_CONFIGURED` without creating a provider
   deployment, changing a live URL, or reporting success. Source editing, static preview,
@@ -217,10 +218,10 @@ The invariants are:
 
 **The inline path has no autonomous worker.** `after()` is opportunistic and a serverless
 instance can be terminated after the response. Production admissions use the durable queue
-and Cloudflare Cron Worker (`docs/runbooks/generation-worker.md`), which executes under a
-lease and recovers crashed jobs. Until the Worker is deployed and Cron invocations are
-observed, do not claim automatic processing is operational. The service-role key remains
-server-only in both the app and scheduled Worker.
+and Render Background Worker (`docs/runbooks/render-generation-worker.md`), which executes
+under a lease and recovers crashed jobs. Do not claim automatic processing is operational
+until the Render runtime has passed an isolated startup check and repeated worker ticks
+have been observed. The service-role key remains server-only in both the app and worker.
 
 ### Metric definitions
 
@@ -323,7 +324,7 @@ Only the two `NEXT_PUBLIC_SUPABASE_*` values and `NEXT_PUBLIC_APP_URL` are publi
 `SUPABASE_SERVICE_ROLE_KEY` is server-only: never prefix it with `NEXT_PUBLIC_`, never
 commit them, and configure usage/spend limits in your OpenRouter account as
 appropriate. The service-role key is used by the durable worker and is confined to
-`src/lib/supabase/worker.ts`, the worker orchestrator, the scheduled Cloudflare entrypoint
+`src/lib/supabase/worker.ts`, the worker orchestrator, the Render worker entrypoint
 and the verification tick it invokes. Sandbox provider credentials
 are used only by the server-side adapter and are never uploaded into a sandbox. OpenRouter
 generation is billed to your OpenRouter account; confirm the current price for

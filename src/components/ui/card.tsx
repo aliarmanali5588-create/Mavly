@@ -3,16 +3,19 @@ import * as React from "react"
 import { cn } from "@/lib/utils"
 
 /**
- * Neumorphic card — an extruded slab of the same material as the page.
- * Nested cards step DOWN in elevation, never up, so hierarchy reads as
- * physical layering rather than a stack of competing shadows.
+ * Claymorphic card — an independent moulded object resting on the plane.
+ *
+ * It has its own volume and its own ambient shadow; it is not an
+ * extrusion of the page behind it. Nested cards step DOWN in elevation
+ * (handled in clay.css), never up, so hierarchy reads as physical
+ * layering rather than a stack of competing shadows.
  */
 function Card({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="card"
       className={cn(
-        "bg-card text-card-foreground flex flex-col gap-6 rounded-2xl border border-[var(--neu-line)] py-6 shadow-sm",
+        "bg-card text-card-foreground flex flex-col gap-6 rounded-[var(--clay-r-xl)] border border-[var(--clay-line)] py-6 shadow-[var(--clay-elev-2)]",
         className
       )}
       {...props}

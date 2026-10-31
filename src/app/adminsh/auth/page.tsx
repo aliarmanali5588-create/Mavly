@@ -26,9 +26,9 @@ export default function AdminAuthPage() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col justify-between bg-[var(--neu-base)] text-foreground font-sans mavly-page-enter antialiased">
+    <div className="min-h-screen flex flex-col justify-between bg-[var(--clay-base)] text-foreground font-sans mavly-page-enter antialiased">
       {/* ── Top Header Navigation ── */}
-      <header className="w-full border-b border-[var(--neu-line)] bg-card/80 backdrop-blur-md sticky top-0 z-20">
+      <header className="w-full border-b border-[var(--clay-line)] bg-card/80 backdrop-blur-md sticky top-0 z-20">
         <div className="max-w-6xl mx-auto px-4 sm:px-8 h-16 flex items-center justify-between">
           <Link
             href="/"
@@ -39,7 +39,7 @@ export default function AdminAuthPage() {
           </Link>
 
           <div className="flex items-center gap-2.5">
-            <div className="w-7 h-7 rounded-xl overflow-hidden bg-card shadow-xs p-0.5 border border-[var(--neu-line)] flex items-center justify-center shrink-0">
+            <div className="w-7 h-7 rounded-xl overflow-hidden bg-card shadow-xs p-0.5 border border-[var(--clay-line)] flex items-center justify-center shrink-0">
               <Image
                 src="/logo/Mavly.png"
                 alt="Mavly Logo"
@@ -64,11 +64,11 @@ export default function AdminAuthPage() {
 
       {/* ── Central Authentication Card ── */}
       <main className="flex-1 flex items-center justify-center px-4 py-12">
-        <div className="w-full max-w-[400px] bg-card rounded-3xl border border-[var(--neu-line)] shadow-[0_20px_50px_rgba(0,0,0,0.04),0_4px_12px_rgba(0,0,0,0.02)] p-8 sm:p-10 space-y-7 transition-all">
+        <div className="w-full max-w-[400px] bg-card rounded-3xl border border-[var(--clay-line)] shadow-[var(--clay-float)] p-8 sm:p-10 space-y-7 transition-all">
           {/* Card Header & Branding */}
           <div className="flex flex-col items-center text-center space-y-3">
             <div className="relative">
-              <div className="w-14 h-14 rounded-2xl overflow-hidden bg-card shadow-sm p-1 border border-[var(--neu-line)] flex items-center justify-center shrink-0 select-none">
+              <div className="w-14 h-14 rounded-2xl overflow-hidden bg-card shadow-sm p-1 border border-[var(--clay-line)] flex items-center justify-center shrink-0 select-none">
                 <Image
                   src="/logo/Mavly.png"
                   alt="Mavly Logo"
@@ -93,7 +93,7 @@ export default function AdminAuthPage() {
               </p>
             </div>
 
-            <span className="px-2.5 py-0.5 rounded text-[10px] font-mono font-bold tracking-wider uppercase bg-[var(--neu-sunken)] text-muted-foreground">
+            <span className="px-2.5 py-0.5 rounded text-[10px] font-mono font-bold tracking-wider uppercase bg-[var(--clay-sunken)] text-muted-foreground">
               SINGLE-TENANT PROTOTYPE
             </span>
           </div>
@@ -104,7 +104,7 @@ export default function AdminAuthPage() {
               type="button"
               disabled={isLoading}
               onClick={handleGoogleClick}
-              className="w-full h-11 px-4 rounded-xl bg-primary hover:bg-[var(--neu-brand-hover)] text-white font-semibold text-xs sm:text-sm flex items-center justify-center gap-3 shadow-[0_4px_14px_rgba(0,0,0,0.12)] hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] transition-all duration-200 disabled:opacity-70 disabled:pointer-events-none cursor-pointer select-none"
+              className="w-full h-11 px-4 rounded-xl bg-primary hover:bg-[var(--clay-brand-hover)] text-white font-semibold text-xs sm:text-sm flex items-center justify-center gap-3 shadow-[var(--clay-elev-ink-2)] hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] transition-all duration-200 disabled:opacity-70 disabled:pointer-events-none cursor-pointer select-none"
             >
               {isLoading ? (
                 <Loader2 className="w-4 h-4 animate-spin text-white" />

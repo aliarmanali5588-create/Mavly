@@ -39,7 +39,7 @@ VERCEL_PROJECT_ID=<project id>
 # Worker and database (required; builds are not claimed without these)
 SUPABASE_SERVICE_ROLE_KEY=<server-only service role key>
 NEXT_PUBLIC_SUPABASE_URL=https://<project>.supabase.co
-# Deploy the platform-wide Cloudflare Cron Worker once; no project worker settings are needed.
+# Deploy the platform-wide Render Background Worker; no project worker settings are needed.
 ```
 
 Semantics, all read by `src/lib/android/build-config.ts`:
@@ -54,11 +54,11 @@ Semantics, all read by `src/lib/android/build-config.ts`:
 | `VERCEL_OIDC_TOKEN` or the access-token triple | yes | Presence only is checked. Mavly does not probe the provider during admission; a rejected token surfaces as a typed provider error. |
 | `SUPABASE_SERVICE_ROLE_KEY` | yes | Worker and private storage only. Never `NEXT_PUBLIC_*`. |
 | `NEXT_PUBLIC_SUPABASE_URL` | yes | Project URL. |
-| Cloudflare Cron Worker | yes | The platform scheduler advances build jobs when no generation job is ready. |
+| Render Background Worker | yes | The worker advances build jobs when no generation job is ready. |
 
 **Only a presence check happens at request time.** Nothing in the API proves that
-the credentials work, that the image exists, that the bucket is private, or that Cron is
-calling the worker. Confirm scheduler operation in Cloudflare Worker logs.
+the credentials work, that the image exists, that the bucket is private, or that the
+worker is running. Confirm operation in the Render service logs.
 
 **Provider plan.** The worker creates each sandbox with the 24-hour session timeout
 in `ANDROID_BUILD_SESSION_TIMEOUT_MS` and a 22-minute build deadline. Vercel
@@ -127,11 +127,12 @@ pinned coordinate to `infra/android-build/seed/app/build.gradle.kts`, rebuild,
 re-verify, republish and update the digest. Never enable network access in the
 sandbox to paper over a cache miss.
 
-## Durable worker and scheduler
+## Durable worker
 
-Android builds do not have their own scheduler. They are advanced by the Cloudflare
-Cron Worker through the existing `src/lib/generation/worker.ts` tick. The scheduled
-runtime is trusted; there is no public worker route or worker-specific bearer secret.
+Android builds do not have their own worker. They are advanced by the Render
+Background Worker through the existing `src/lib/generation/worker.ts` tick. The
+worker process is trusted; there is no public worker route or worker-specific bearer
+secret.
 
 - **Ordering:** one invocation first recovers expired leases, then claims at most
   one generation job. Only when the generation queue is empty does it advance
@@ -142,19 +143,18 @@ runtime is trusted; there is no public worker route or worker-specific bearer se
   build lease (renewed while the tick runs) and 2 attempts for provider/storage
   failures. Concurrency is capped at 1 active build per project, 2 per user and 4
   globally, enforced in SQL.
-- **Scheduling:** Cloudflare Cron is configured once per minute. Overlapping
-  invocations are safe (`FOR UPDATE SKIP LOCKED` and fenced leases prevent
-  double claims) but consume the small global admission caps. The generation
-  lease is 420 seconds (renewed every 120 s), and an Android build holds a
-  shorter, separately fenced build lease. Cloudflare's default Cron CPU limit is
-  30 seconds on Paid; no limit increase is configured.
+- **Scheduling:** The Render Background Worker continuously polls, waiting five
+  seconds after an empty tick. Multiple instances are safe (`FOR UPDATE SKIP
+  LOCKED` and fenced leases prevent double claims) but consume the small global
+  admission caps. The generation lease is 420 seconds (renewed every 120 s), and
+  an Android build holds a shorter, separately fenced build lease.
 - **Pause/drain:** disabling the Android flag stops new claims but the tick still
-  runs DB-only recovery and retention. Stopping the scheduler entirely stops both,
+  runs DB-only recovery and retention. Stopping the worker entirely stops both,
   so cancel or finish active builds first; otherwise a `running` row stays
   `running` until a tick resumes.
 - **Capability reporting:** `GET …/mobile/builds` reports the exact blocker when
-  the engine is not available. A configured worker is not proof that a scheduler
-  is calling it.
+  the engine is not available. A configured worker is not proof that the Render
+  process is running.
 
 ## Private artifact bucket
 
@@ -249,11 +249,11 @@ queued → preparing → uploading → building → validating_artifact → uplo
 - **Storage authorization.** `artifact_storage_failed` means the upload was
   refused. Confirm the bucket exists, is private, and the service-role key is the
   one for this Supabase project. The build row never fabricates a download.
-- **Build never leaves `queued`.** Check that the Cloudflare Cron Worker is deployed
-  and ticking, and that the project is in `MAVLY_ANDROID_BUILD_PROJECTS`. Review its
+- **Build never leaves `queued`.** Check that the Render Background Worker is deployed
+  and running, and that the project is in `MAVLY_ANDROID_BUILD_PROJECTS`. Review its
   structured logs; there is no public worker HTTP response. A disabled Android flag
   still recovers DB-only state, but will not claim new builds.
-- **Build stuck in `running`.** Stop the scheduler only after cancelling. A pause
+- **Build stuck in `running`.** Stop the worker only after cancelling. A pause
   stops recovery too. On resume, recovery settles an expired lease and a
   cancel-requested row.
 
@@ -283,9 +283,8 @@ Run these as the human developer; agents must not run them under `AGENTS.md`.
 3. Set `OPENROUTER_API_KEY`, Vercel Sandbox credentials, `SUPABASE_SERVICE_ROLE_KEY`,
    `NEXT_PUBLIC_SUPABASE_URL`, the generation-worker variables, and the Android
    build variables above.
-4. Deploy `npm run deploy:generation-worker`, confirm the `* * * * *` Cron trigger,
-   and observe scheduler heartbeat/outcome events in Cloudflare Worker logs. Confirm
-   the trigger keeps firing after a Worker redeploy.
+4. Deploy the Render Background Worker from `render.yaml` and observe its start and
+   repeated tick logs. Confirm it resumes polling after a Render redeploy.
 5. `npm install`; `npm run dev`; create an Android project from the dashboard and
    generate source. Confirm the source contract passes.
 6. Edit/save a Kotlin file; reload and confirm persistence. Try an `.env`, `.apk`
@@ -317,7 +316,7 @@ Run these as the human developer; agents must not run them under `AGENTS.md`.
 1. Set `MAVLY_ANDROID_BUILD_ENABLED` false (or remove the cohort). New builds fail closed;
    existing source, snapshots and unexpired artifacts are preserved.
 2. Let active builds reach terminal or cancel them as owner **before** pausing the
-   scheduler; a paused worker performs no recovery, so a `running` row would stay
+   worker; a paused worker performs no recovery, so a `running` row would stay
    `running` until a tick resumes.
 3. If the migration must be removed, delete the migration-26 functions/table and the
    private bucket only after no worker is running. Do not delete projects, snapshots or

@@ -48,8 +48,8 @@ export function MockDataViews({ section }: MockDataViewProps) {
     );
 
     return (
-      <div className="bg-card rounded-2xl p-6 border border-[var(--neu-line)] shadow-xs space-y-5">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-[var(--neu-line)]">
+      <div className="bg-card rounded-2xl p-6 border border-[var(--clay-line)] shadow-xs space-y-5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-[var(--clay-line)]">
           <div>
             <div className="flex items-center gap-2">
               <Users className="w-5 h-5 text-foreground" />
@@ -68,7 +68,7 @@ export function MockDataViews({ section }: MockDataViewProps) {
                 placeholder="Search user email or name..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="h-9 pl-8 pr-3 text-xs rounded-xl bg-[var(--neu-sunken)] border border-[var(--neu-line)] text-foreground w-60"
+                className="h-9 pl-8 pr-3 text-xs rounded-xl bg-[var(--clay-sunken)] border border-[var(--clay-line)] text-foreground w-60"
               />
             </div>
             <button
@@ -85,7 +85,7 @@ export function MockDataViews({ section }: MockDataViewProps) {
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
             <thead>
-              <tr className="border-b border-[var(--neu-line)] text-muted-foreground font-semibold uppercase text-[10px]">
+              <tr className="border-b border-[var(--clay-line)] text-muted-foreground font-semibold uppercase text-[10px]">
                 <th className="pb-3">User</th>
                 <th className="pb-3">Plan</th>
                 <th className="pb-3">Projects</th>
@@ -97,13 +97,13 @@ export function MockDataViews({ section }: MockDataViewProps) {
             </thead>
             <tbody className="divide-y divide-black/[0.04]">
               {users.map((u) => (
-                <tr key={u.id} className="hover:bg-[var(--neu-sunken)]/80 transition-colors">
+                <tr key={u.id} className="hover:bg-[var(--clay-sunken)]/80 transition-colors">
                   <td className="py-3.5">
                     <p className="font-bold text-foreground">{u.name}</p>
                     <p className="text-[10px] text-muted-foreground">{u.email}</p>
                   </td>
                   <td className="py-3.5">
-                    <span className="px-2 py-0.5 text-[10px] font-bold rounded bg-[var(--neu-sunken)] border border-[var(--neu-line)]">
+                    <span className="px-2 py-0.5 text-[10px] font-bold rounded bg-[var(--clay-sunken)] border border-[var(--clay-line)]">
                       {u.plan}
                     </span>
                   </td>
@@ -115,7 +115,7 @@ export function MockDataViews({ section }: MockDataViewProps) {
                       className={`px-2 py-0.5 text-[10px] font-semibold rounded-full ${
                         u.status === "Active"
                           ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                          : "bg-[var(--neu-sunken)] text-muted-foreground"
+                          : "bg-[var(--clay-sunken)] text-muted-foreground"
                       }`}
                     >
                       {u.status}
@@ -141,13 +141,13 @@ export function MockDataViews({ section }: MockDataViewProps) {
 
   if (section === "Audit Logs") {
     return (
-      <div className="bg-card rounded-2xl p-6 border border-[var(--neu-line)] shadow-xs space-y-5">
-        <div className="flex items-center justify-between pb-4 border-b border-[var(--neu-line)]">
+      <div className="bg-card rounded-2xl p-6 border border-[var(--clay-line)] shadow-xs space-y-5">
+        <div className="flex items-center justify-between pb-4 border-b border-[var(--clay-line)]">
           <div className="flex items-center gap-2">
             <ShieldAlert className="w-5 h-5 text-foreground" />
             <h2 className="text-lg font-bold text-foreground">Administrative Audit Trail</h2>
           </div>
-          <span className="px-2 py-0.5 text-[10px] font-bold bg-[var(--neu-sunken)] text-muted-foreground rounded-md">
+          <span className="px-2 py-0.5 text-[10px] font-bold bg-[var(--clay-sunken)] text-muted-foreground rounded-md">
             Immutable Audit Trail (Demo)
           </span>
         </div>
@@ -156,7 +156,7 @@ export function MockDataViews({ section }: MockDataViewProps) {
           {MOCK_AUDIT_LOGS.map((log) => (
             <div
               key={log.id}
-              className="p-4 rounded-xl border border-[var(--neu-line)] bg-[var(--neu-sunken)]/50 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs"
+              className="p-4 rounded-xl border border-[var(--clay-line)] bg-[var(--clay-sunken)]/50 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs"
             >
               <div>
                 <div className="flex items-center gap-2 font-bold text-foreground">
@@ -184,8 +184,8 @@ export function MockDataViews({ section }: MockDataViewProps) {
 
   if (section === "Settings") {
     return (
-      <div className="bg-card rounded-2xl p-6 border border-[var(--neu-line)] shadow-xs space-y-6">
-        <div className="flex items-center justify-between pb-4 border-b border-[var(--neu-line)]">
+      <div className="bg-card rounded-2xl p-6 border border-[var(--clay-line)] shadow-xs space-y-6">
+        <div className="flex items-center justify-between pb-4 border-b border-[var(--clay-line)]">
           <div>
             <h2 className="text-lg font-bold text-foreground">Platform Settings & Controls</h2>
             <p className="text-xs text-muted-foreground mt-0.5">
@@ -203,7 +203,7 @@ export function MockDataViews({ section }: MockDataViewProps) {
         </div>
 
         <div className="space-y-5 text-xs text-foreground">
-          <div className="p-4 rounded-xl border border-[var(--neu-line)] bg-[var(--neu-sunken)]/50 space-y-2">
+          <div className="p-4 rounded-xl border border-[var(--clay-line)] bg-[var(--clay-sunken)]/50 space-y-2">
             <h3 className="font-bold text-sm text-foreground">Default AI Model</h3>
             <p className="text-muted-foreground">
               Select default model for newly initialized prompt generation runs.
@@ -216,7 +216,7 @@ export function MockDataViews({ section }: MockDataViewProps) {
             </select>
           </div>
 
-          <div className="p-4 rounded-xl border border-[var(--neu-line)] bg-[var(--neu-sunken)]/50 space-y-3">
+          <div className="p-4 rounded-xl border border-[var(--clay-line)] bg-[var(--clay-sunken)]/50 space-y-3">
             <h3 className="font-bold text-sm text-foreground">System Mode & Feature Flags</h3>
 
             <div className="flex items-center justify-between py-1">
@@ -229,7 +229,7 @@ export function MockDataViews({ section }: MockDataViewProps) {
               <input type="checkbox" defaultChecked className="w-4 h-4 accent-black" />
             </div>
 
-            <div className="flex items-center justify-between py-1 border-t border-[var(--neu-line)]">
+            <div className="flex items-center justify-between py-1 border-t border-[var(--clay-line)]">
               <div>
                 <p className="font-semibold text-foreground">GitHub Synchronization Integration</p>
                 <p className="text-[11px] text-muted-foreground">
@@ -246,8 +246,8 @@ export function MockDataViews({ section }: MockDataViewProps) {
 
   // Fallback view for other tabs
   return (
-    <div className="bg-card rounded-2xl p-8 border border-[var(--neu-line)] shadow-xs text-center space-y-3">
-      <div className="w-12 h-12 rounded-2xl bg-[var(--neu-sunken)] border border-[var(--neu-line)] mx-auto flex items-center justify-center text-foreground">
+    <div className="bg-card rounded-2xl p-8 border border-[var(--clay-line)] shadow-xs text-center space-y-3">
+      <div className="w-12 h-12 rounded-2xl bg-[var(--clay-sunken)] border border-[var(--clay-line)] mx-auto flex items-center justify-center text-foreground">
         <Sparkles className="w-6 h-6" />
       </div>
       <h2 className="text-lg font-bold text-foreground">{section} Control Panel</h2>
@@ -258,7 +258,7 @@ export function MockDataViews({ section }: MockDataViewProps) {
         <button
           type="button"
           onClick={() => toast.info(`Viewing ${section} analytics (Demo)`)}
-          className="px-4 py-2 text-xs font-semibold bg-[var(--neu-sunken)] hover:bg-[var(--neu-sunken-deep)] text-foreground rounded-xl transition-colors cursor-pointer"
+          className="px-4 py-2 text-xs font-semibold bg-[var(--clay-sunken)] hover:bg-[var(--clay-sunken-deep)] text-foreground rounded-xl transition-colors cursor-pointer"
         >
           Inspect {section} Metrics
         </button>

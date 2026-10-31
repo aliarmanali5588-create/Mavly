@@ -30,7 +30,8 @@ import {
   type SnapshotFile,
   type SnapshotResult,
 } from "./snapshots";
-import { isStoreFailure, listFiles, writeFiles } from "./store";
+import { getProject, isStoreFailure, listFiles, writeFiles } from "./store";
+import { isAgentControlPath } from "@/lib/project-rules/rules";
 
 export interface RestoreInput {
   userId: string;
@@ -64,6 +65,15 @@ export interface RestoreOutcome {
 export async function restoreSnapshot(
   input: RestoreInput,
 ): Promise<SnapshotResult<RestoreOutcome>> {
+  const project = await getProject(input.userId, input.projectId);
+  if (isStoreFailure(project)) {
+    return { ok: false, error: "Could not load the project", code: "store_unavailable" };
+  }
+  if (!project.data) {
+    return { ok: false, error: "Project not found", code: "snapshot_missing" };
+  }
+  const preserveControlFiles = project.data.project_type === "website";
+
   const target = await getSnapshot(input.projectId, input.snapshotId);
   if (isSnapshotFailure(target)) return target;
 
@@ -98,7 +108,21 @@ export async function restoreSnapshot(
     }
   }
 
-  const diff = diffSource(currentFiles, target.data.files);
+  /**
+   * ⚠️ THE CONTROL FILES ARE NOT PART OF A RESTORE. `.mavly/` is server-owned:
+   * restoring an older source state must not delete the rules or roll the
+   * bounded work history backwards. Older snapshots taken before the control
+   * files existed therefore restore the source without removing them.
+   */
+  const isControl = (file: SnapshotFile) =>
+    preserveControlFiles && isAgentControlPath(file.path);
+  const currentSource = currentFiles.filter((file) => !isControl(file));
+  const targetSource = target.data.files.filter((file) => !isControl(file));
+  const currentControl = currentFiles.filter(isControl);
+  // Snapshot contents can never create or replace a website control file.
+  const controlFiles = new Map(currentControl.map((file) => [file.path, file] as const));
+
+  const diff = diffSource(currentSource, targetSource);
 
   // The recovery point for the state we are about to replace.
   const recovery = await createSnapshot({
@@ -122,15 +146,15 @@ export async function restoreSnapshot(
     };
   }
 
-  const targetPaths = new Set(target.data.files.map((file) => file.path));
-  const removedPaths = currentFiles
+  const targetPaths = new Set(targetSource.map((file) => file.path));
+  const removedPaths = currentSource
     .map((file) => file.path)
     .filter((path) => !targetPaths.has(path));
 
   const written = await writeFiles(
     input.userId,
     input.projectId,
-    target.data.files,
+    targetSource,
     removedPaths,
   );
   if (isStoreFailure(written)) {
@@ -151,8 +175,13 @@ export async function restoreSnapshot(
       added: diff.added,
       modified: diff.modified,
       removed: diff.removed,
-      sourceHash: target.data.sourceHash || hashSource(target.data.files),
-      fileCount: target.data.files.length,
+      /**
+       * Current control files were deliberately preserved, so the resulting hash is
+       * the target source plus the control files that are still on disk — not
+       * the older snapshot's own `.mavly` content.
+       */
+      sourceHash: hashSource([...targetSource, ...controlFiles.values()]),
+      fileCount: targetSource.length + controlFiles.size,
     },
   };
 }

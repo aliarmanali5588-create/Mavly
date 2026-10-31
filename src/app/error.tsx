@@ -62,7 +62,7 @@ export default function Error({
         </div>
 
         {/* AI Help Section */}
-        <div className="mb-4 rounded-xl border border-[var(--neu-line)] bg-[var(--neu-sunken)]/80 p-4 dark:border-[var(--neu-line-strong)] dark:bg-foreground/50">
+        <div className="mb-4 rounded-xl border border-[var(--clay-line)] bg-[var(--clay-sunken)]/80 p-4 dark:border-[var(--clay-line-strong)] dark:bg-foreground/50">
           <div className="mb-2 flex items-center gap-2">
             <svg className="h-5 w-5 text-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
@@ -75,12 +75,12 @@ export default function Error({
             Copy this and paste it in the AI chat:
           </p>
           <div className="relative">
-            <div className="rounded-lg border border-[var(--neu-line)] bg-card p-3 pr-12 font-mono text-sm text-foreground dark:border-[var(--neu-line-strong)] dark:bg-[var(--neu-sunken-deep)]">
+            <div className="rounded-lg border border-[var(--clay-line)] bg-card p-3 pr-12 font-mono text-sm text-foreground dark:border-[var(--clay-line-strong)] dark:bg-[var(--clay-sunken-deep)]">
               {aiPrompt}
             </div>
             <button
               onClick={handleCopy}
-              className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md bg-black p-2 text-white transition-all hover:bg-foreground active:scale-95 dark:bg-card dark:text-black dark:hover:bg-[var(--neu-sunken-deep)]"
+              className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md bg-black p-2 text-white transition-all hover:bg-foreground active:scale-95 dark:bg-card dark:text-black dark:hover:bg-[var(--clay-sunken-deep)]"
               title="Copy to clipboard"
             >
               {copied ? (

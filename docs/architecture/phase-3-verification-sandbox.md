@@ -51,7 +51,7 @@ preview status contract; see the Phase 4 document.
 
 ### Explicit non-goals
 
-- Replacing or rewriting the Phase 2 queue, worker or scheduler.
+- Replacing or rewriting the Phase 2 queue or worker loop.
 - Running generated code on Mavly infrastructure.
 - Full backend runtime hosting, arbitrary deployments, public preview URLs.
 - Browser/health checks of a publicly running app. Phase 4 performs only a
@@ -99,7 +99,7 @@ instead of silently falling back.
 ## 3. Component map
 
 ```
-Cloudflare Cron generation worker tick
+Render Background Worker serial poll
   └─ runGenerationWorkerOnce
        ├─ generation queue (unchanged Phase 2)
        └─ when the generation claim is EMPTY:
@@ -128,7 +128,7 @@ Cloudflare Cron generation worker tick
 | `src/lib/runtime/*` | The one supported runtime profile (Next.js App Router), manifest/lockfile validation, the build plan and the fixed loopback runtime start. |
 | `supabase/migrations/17_verification_sandbox.sql` | Table, RLS, grants, queue/lease/recovery/cleanup/cancel RPCs, schema marker 17. |
 | `supabase/migrations/19_runtime_verification.sql` | Phase 4 build/runtime/health/preview/repair state, the runtime-enforced `passed` rule and schema marker 19. |
-| `workers/generation-scheduler.ts`, `wrangler.jsonc` | Schedules the existing worker tick and emits structured outcomes. |
+| `workers/render-generation-worker.ts`, `render.yaml` | Continuously polls and serially invokes the existing worker tick. The legacy `workers/generation-scheduler.ts` and `wrangler.jsonc` configuration must remain disabled. |
 | `src/lib/mavly/api.ts` | `agent/status` verification block; `agent/stop` cancels an in-flight verification. |
 
 ---
@@ -340,7 +340,8 @@ There is no new route, no new public URL and no preview endpoint.
   dependency/install/infrastructure problems, or prove the app correct.
 - **Verification yields to generation.** It advances only when the generation
   claim is empty, preserving Phase 2's order. Under constant generation load,
-  verification waits; the scheduler cadence is the scaling knob.
+  verification waits; the Render worker's polling cadence determines how quickly
+  the next empty tick advances verification.
 - **Retry semantics.** A verification row gets at most two *new* claim attempts;
   continuation ticks do not consume attempts. The 26-minute deadline is the
   hard stop; an applied repair extends it by at most 20 minutes.

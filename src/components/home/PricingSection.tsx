@@ -266,7 +266,7 @@ export function PricingSection({
   };
 
   return (
-    <section id={id} className={`py-24 sm:py-32 bg-[var(--neu-base)] relative ${className}`}>
+    <section id={id} className={`py-24 sm:py-32 bg-[var(--clay-base)] relative ${className}`}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Section Header */}
         <div className="text-center max-w-2xl mx-auto mb-12 sm:mb-16">
@@ -287,7 +287,7 @@ export function PricingSection({
               aria-label="Billing frequency"
               tabIndex={0}
               onKeyDown={handleKeyDown}
-              className="inline-flex items-center p-1.5 rounded-full bg-[var(--neu-sunken)] border border-[var(--neu-line)] shadow-[var(--neu-inset-2)] select-none outline-none focus-visible:shadow-[var(--neu-inset-2),var(--neu-focus)]"
+              className="inline-flex items-center p-1.5 rounded-full bg-[var(--clay-sunken)] border border-[var(--clay-line)] shadow-[var(--clay-well-2)] select-none outline-none focus-visible:shadow-[var(--clay-well-2),var(--clay-focus)]"
             >
               <button
                 type="button"
@@ -296,7 +296,7 @@ export function PricingSection({
                 onClick={() => setBillingCycle("monthly")}
                 className={`px-4 py-2 rounded-full text-xs font-semibold transition-all duration-200 cursor-pointer focus-visible:outline-none ${
                   billingCycle === "monthly"
-                    ? "bg-primary text-primary-foreground shadow-[var(--neu-elev-1)]"
+                    ? "bg-primary text-primary-foreground shadow-[var(--clay-elev-ink-1)]"
                     : "text-foreground hover:text-black"
                 }`}
               >
@@ -310,7 +310,7 @@ export function PricingSection({
                 onClick={() => setBillingCycle("yearly")}
                 className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-semibold transition-all duration-200 cursor-pointer focus-visible:outline-none ${
                   billingCycle === "yearly"
-                    ? "bg-primary text-primary-foreground shadow-[var(--neu-elev-1)]"
+                    ? "bg-primary text-primary-foreground shadow-[var(--clay-elev-ink-1)]"
                     : "text-foreground hover:text-black"
                 }`}
               >
@@ -339,8 +339,8 @@ export function PricingSection({
                 key={plan.id}
                 className={`p-6 sm:p-7 rounded-3xl bg-card flex flex-col justify-between relative transition-[box-shadow,transform,border-color] duration-300 ${
                   plan.isPrimaryChoice
-                    ? "border border-[var(--neu-line-strong)] shadow-[var(--neu-elev-4)] hover:shadow-[var(--neu-elev-5)] hover:-translate-y-1"
-                    : "border border-[var(--neu-line)] shadow-[var(--neu-elev-2)] hover:shadow-[var(--neu-elev-4)] hover:border-[var(--neu-line-strong)] hover:-translate-y-1"
+                    ? "border border-[var(--clay-line-strong)] shadow-[var(--clay-elev-4)] hover:shadow-[var(--clay-elev-5)] hover:-translate-y-1"
+                    : "border border-[var(--clay-line)] shadow-[var(--clay-elev-2)] hover:shadow-[var(--clay-elev-4)] hover:border-[var(--clay-line-strong)] hover:-translate-y-1"
                 }`}
               >
                 <div>
@@ -350,7 +350,7 @@ export function PricingSection({
                       {plan.tierLabel}
                     </span>
                     {plan.badge && (
-                      <span className="px-2.5 py-0.5 rounded-full bg-primary text-primary-foreground text-[10px] font-bold tracking-wide uppercase shadow-[var(--neu-elev-1)]">
+                      <span className="px-2.5 py-0.5 rounded-full bg-primary text-primary-foreground text-[10px] font-bold tracking-wide uppercase shadow-[var(--clay-elev-1)]">
                         {plan.badge}
                       </span>
                     )}
@@ -365,7 +365,7 @@ export function PricingSection({
                   </p>
 
                   {/* Price Block */}
-                  <div className="mt-5 pb-5 border-b border-[var(--neu-line)]">
+                  <div className="mt-5 pb-5 border-b border-[var(--clay-line)]">
                     <div className="flex items-baseline gap-0.5">
                       <span className="text-3xl sm:text-4xl font-black text-foreground tracking-tight">
                         {pricing.integerPart}
@@ -414,7 +414,7 @@ export function PricingSection({
                       </div>
                     ))}
                     {plan.id === "free" && (
-                      <div className="pt-2 mt-2 border-t border-[var(--neu-line)]">
+                      <div className="pt-2 mt-2 border-t border-[var(--clay-line)]">
                         <p className="text-[11px] text-muted-foreground leading-snug">
                           <span className="font-medium">Paid limits:</span> custom domains, advanced developer tools, and premium build capacity.
                         </p>
@@ -424,7 +424,7 @@ export function PricingSection({
                 </div>
 
                 {/* Bottom CTA Button Area */}
-                <div className="mt-8 pt-5 border-t border-[var(--neu-line)]">
+                <div className="mt-8 pt-5 border-t border-[var(--clay-line)]">
                   {isUpgradePage && userEmail && plan.id === "free" ? (
                     <Link
                       href="/dashboard"
@@ -481,7 +481,7 @@ export function PricingSection({
 
         {/* ── Agency and Custom Section (Advanced Business Requirements) ── */}
         {showEnterprise && (
-          <div className="mt-20 pt-16 border-t border-[var(--neu-line)]">
+          <div className="mt-20 pt-16 border-t border-[var(--clay-line)]">
             <div className="text-center max-w-xl mx-auto mb-10">
               <span className="text-xs font-bold tracking-widest uppercase text-muted-foreground mb-2 block">
                 Specialized Solutions
@@ -500,14 +500,14 @@ export function PricingSection({
                 return (
                   <div
                     key={item.id}
-                    className="p-6 sm:p-8 rounded-3xl bg-card border border-[var(--neu-line)] shadow-[var(--neu-elev-2)] hover:shadow-[var(--neu-elev-4)] hover:border-[var(--neu-line-strong)] transition-[box-shadow,border-color] duration-300 flex flex-col justify-between"
+                    className="p-6 sm:p-8 rounded-3xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)] hover:shadow-[var(--clay-elev-4)] hover:border-[var(--clay-line-strong)] transition-[box-shadow,border-color] duration-300 flex flex-col justify-between"
                   >
                     <div>
                       <div className="flex items-center justify-between mb-4">
-                        <div className="w-11 h-11 rounded-2xl bg-[var(--neu-sunken)] border border-[var(--neu-line)] shadow-[var(--neu-inset-2)] flex items-center justify-center text-foreground">
+                        <div className="w-11 h-11 rounded-2xl bg-[var(--clay-sunken)] border border-[var(--clay-line)] shadow-[var(--clay-well-2)] flex items-center justify-center text-foreground">
                           <Icon className="w-5 h-5" />
                         </div>
-                        <span className="px-2.5 py-0.5 rounded-full bg-[var(--neu-sunken)] text-foreground text-[10px] font-bold tracking-wide uppercase">
+                        <span className="px-2.5 py-0.5 rounded-full bg-[var(--clay-sunken)] text-foreground text-[10px] font-bold tracking-wide uppercase">
                           {item.badge}
                         </span>
                       </div>
@@ -526,7 +526,7 @@ export function PricingSection({
                         </span>
                       </div>
 
-                      <div className="mt-5 space-y-2 pt-4 border-t border-[var(--neu-line)]">
+                      <div className="mt-5 space-y-2 pt-4 border-t border-[var(--clay-line)]">
                         {item.features.map((feat, fIdx) => (
                           <div key={fIdx} className="flex items-start gap-2 text-xs text-foreground leading-snug">
                             <Check className="w-3.5 h-3.5 text-black shrink-0 mt-0.5" />
@@ -536,7 +536,7 @@ export function PricingSection({
                       </div>
                     </div>
 
-                    <div className="mt-6 pt-5 border-t border-[var(--neu-line)]">
+                    <div className="mt-6 pt-5 border-t border-[var(--clay-line)]">
                       <a
                         href={item.ctaHref}
                         className="mavly-btn-secondary w-full py-3 text-xs font-semibold"

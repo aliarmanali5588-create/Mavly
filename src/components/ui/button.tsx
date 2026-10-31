@@ -5,17 +5,20 @@ import { cva, type VariantProps } from "class-variance-authority"
 import { cn } from "@/lib/utils"
 
 /**
- * Neumorphic button.
+ * Claymorphic button.
  *
  * Every variant is the same physical material at a different elevation.
- * Hover raises the button (deeper shadow, 1px lift); press pushes it back
- * into the surface (inset shadow, no lift). Colour is never the signal —
- * depth is. Semantic colour is preserved for `default` (ink) and
- * `destructive` (ember) so meaning survives the redesign.
+ * Hover lifts the button; press compresses it. Colour never signals
+ * state — volume does. Semantic colour is preserved for `default` (ink)
+ * and `destructive` (ember) so meaning survives the material.
+ *
+ * The material itself (sheen, ink shadow recipe, press transform) is
+ * defined once in clay.css against `[data-slot="button"]`. These
+ * variants only choose elevation and colour.
  */
 const buttonVariants = cva(
   [
-    "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-xl text-sm font-semibold",
+    "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-[var(--clay-r-md)] text-sm font-semibold",
     "transition-[box-shadow,transform,background-color,border-color] duration-200 ease-[cubic-bezier(0.22,0.61,0.36,1)]",
     "disabled:pointer-events-none disabled:opacity-45 disabled:shadow-none",
     "[&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0",
@@ -24,27 +27,27 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        // Raised ink surface — the primary action.
+        // Raised ink clay — the primary action.
         default:
-          "bg-primary text-primary-foreground shadow-sm hover:shadow-md hover:-translate-y-px active:shadow-none active:translate-y-0 active:bg-primary/95",
+          "bg-primary text-primary-foreground shadow-[var(--clay-elev-ink-1)] hover:shadow-[var(--clay-elev-ink-2)] hover:-translate-y-px active:shadow-[var(--clay-elev-ink-1)] active:translate-y-0",
         // Ember — destructive stays unmistakably destructive.
         destructive:
-          "bg-destructive text-white shadow-sm hover:shadow-md hover:-translate-y-px active:shadow-none active:translate-y-0",
-        // Raised white surface with a carved edge.
+          "bg-destructive text-white shadow-[var(--clay-elev-ink-1)] hover:shadow-[var(--clay-elev-ink-2)] hover:-translate-y-px active:shadow-[var(--clay-elev-ink-1)] active:translate-y-0",
+        // Raised white clay with a soft moulded edge.
         outline:
-          "border border-[var(--neu-line)] bg-card text-foreground shadow-sm hover:shadow-md hover:-translate-y-px hover:border-[var(--neu-line-strong)] active:shadow-none active:translate-y-0",
-        // Recessed neutral — secondary weight.
+          "border border-[var(--clay-line)] bg-card text-foreground shadow-[var(--clay-elev-2)] hover:shadow-[var(--clay-elev-3)] hover:-translate-y-px hover:border-[var(--clay-line-strong)] active:shadow-[var(--clay-well-2)] active:translate-y-0",
+        // Raised white clay, secondary weight.
         secondary:
-          "border border-[var(--neu-line)] bg-secondary text-secondary-foreground shadow-[var(--neu-inset-1)] hover:shadow-sm hover:-translate-y-px active:shadow-[var(--neu-inset-2)] active:translate-y-0",
-        // No surface until touched; then it recesses.
+          "border border-[var(--clay-line)] bg-card text-foreground shadow-[var(--clay-elev-1)] hover:shadow-[var(--clay-elev-2)] hover:-translate-y-px active:shadow-[var(--clay-well-2)] active:translate-y-0",
+        // No surface until touched; then it presses into the clay.
         ghost:
-          "text-foreground shadow-none hover:bg-secondary hover:shadow-[var(--neu-inset-1)] active:shadow-[var(--neu-inset-2)]",
+          "text-foreground shadow-none hover:bg-[var(--clay-sunken)] hover:shadow-[var(--clay-well-1)] active:shadow-[var(--clay-well-2)]",
         link: "text-foreground underline-offset-4 hover:underline shadow-none",
       },
       size: {
         default: "h-9 px-4 py-2 has-[>svg]:px-3",
-        sm: "h-8 rounded-lg gap-1.5 px-3 has-[>svg]:px-2.5",
-        lg: "h-11 rounded-xl px-6 has-[>svg]:px-4",
+        sm: "h-8 rounded-[var(--clay-r-sm)] gap-1.5 px-3 has-[>svg]:px-2.5",
+        lg: "h-11 rounded-[var(--clay-r-lg)] px-6 has-[>svg]:px-4",
         icon: "size-9",
       },
     },

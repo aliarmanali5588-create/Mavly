@@ -11,7 +11,7 @@ interface MarketingPageShellProps {
 
 export function MarketingPageShell({ children }: MarketingPageShellProps) {
   return (
-    <div className="min-h-screen bg-[var(--neu-base)] text-foreground font-sans mavly-page-enter flex flex-col justify-between">
+    <div className="min-h-screen bg-[var(--clay-base)] text-foreground font-sans mavly-page-enter flex flex-col justify-between">
       {/* Top Edge Neon Scroll Progress Indicator */}
       <ScrollProgressIndicator />
 

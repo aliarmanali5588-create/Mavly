@@ -1,0 +1,24 @@
+services:
+  - type: worker
+    name: mavly-generation-worker
+    runtime: node
+    region: singapore
+    plan: 0.5c-512mb
+    branch: main
+    autoDeployTrigger: commit
+    maxShutdownDelaySeconds: 300
+    buildCommand: npm ci --include=dev
+    startCommand: node --import ./workers/register-node-ts-resolver.mjs ./workers/render-generation-worker.ts
+    envVars:
+      - key: NODE_VERSION
+        value: 24.22.1
+      - key: NODE_ENV
+        value: production
+      - key: MAVLY_RENDER_WORKER
+        value: "true"
+      - key: NEXT_PUBLIC_SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: OPENROUTER_API_KEY
+        sync: false

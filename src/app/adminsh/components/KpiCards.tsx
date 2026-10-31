@@ -46,7 +46,7 @@ export function KpiCards({ data, loading, error, onRetry, periodLabel }: KpiCard
 
   if (error && !data) {
     return (
-      <div className="bg-card rounded-2xl p-5 border border-[var(--neu-line)] shadow-[0_2px_8px_rgba(0,0,0,0.02)] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      <div className="bg-card rounded-2xl p-5 border border-[var(--clay-line)] shadow-[var(--clay-elev-1)] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <p className="text-sm font-bold text-foreground">Overview metrics are unavailable</p>
           <p className="text-xs text-muted-foreground mt-1">{error}</p>
@@ -54,7 +54,7 @@ export function KpiCards({ data, loading, error, onRetry, periodLabel }: KpiCard
         <button
           type="button"
           onClick={onRetry}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-black/[0.1] text-xs font-semibold text-foreground hover:bg-[var(--neu-sunken)]"
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-black/[0.1] text-xs font-semibold text-foreground hover:bg-[var(--clay-sunken)]"
         >
           <RefreshCw className="w-3.5 h-3.5" />
           <span>Try again</span>
@@ -136,12 +136,12 @@ export function KpiCards({ data, loading, error, onRetry, periodLabel }: KpiCard
         return (
           <div
             key={card.id}
-            className="group relative bg-card rounded-2xl p-5 border border-[var(--neu-line)] shadow-[0_2px_8px_rgba(0,0,0,0.02)] hover:shadow-[0_8px_24px_rgba(0,0,0,0.06)] hover:border-black/20 transition-all duration-200 overflow-hidden flex flex-col justify-between"
+            className="group relative bg-card rounded-2xl p-5 border border-[var(--clay-line)] shadow-[var(--clay-elev-1)] hover:shadow-[var(--clay-elev-3)] hover:border-black/20 transition-all duration-200 overflow-hidden flex flex-col justify-between"
           >
             <div>
               <div className="flex items-center justify-between">
                 <span className="text-xs font-semibold text-muted-foreground tracking-wide">{card.title}</span>
-                <div className="p-2 rounded-xl bg-[var(--neu-sunken)] border border-[var(--neu-line)] text-foreground group-hover:bg-black group-hover:text-white transition-colors duration-200 shrink-0">
+                <div className="p-2 rounded-xl bg-[var(--clay-sunken)] border border-[var(--clay-line)] text-foreground group-hover:bg-black group-hover:text-white transition-colors duration-200 shrink-0">
                   <Icon className="w-4 h-4" />
                 </div>
               </div>
@@ -157,7 +157,7 @@ export function KpiCards({ data, loading, error, onRetry, periodLabel }: KpiCard
               </div>
             </div>
 
-            <div className="mt-4 pt-3 border-t border-[var(--neu-line)] flex flex-col gap-1">
+            <div className="mt-4 pt-3 border-t border-[var(--clay-line)] flex flex-col gap-1">
               <div className="flex items-center gap-1.5">
                 {card.delta !== null ? (
                   <span
@@ -166,7 +166,7 @@ export function KpiCards({ data, loading, error, onRetry, periodLabel }: KpiCard
                         ? "bg-emerald-50 text-emerald-700 border-emerald-200/60"
                         : negative
                           ? "bg-rose-50 text-rose-700 border-rose-200/60"
-                          : "bg-[var(--neu-sunken)] text-muted-foreground border-[var(--neu-line)]"
+                          : "bg-[var(--clay-sunken)] text-muted-foreground border-[var(--clay-line)]"
                     }`}
                   >
                     {positive ? (
@@ -203,14 +203,14 @@ function KpiSkeletons() {
       {[0, 1, 2, 3].map((index) => (
         <div
           key={index}
-          className="bg-card rounded-2xl p-5 border border-[var(--neu-line)] shadow-[0_2px_8px_rgba(0,0,0,0.02)] animate-pulse"
+          className="bg-card rounded-2xl p-5 border border-[var(--clay-line)] shadow-[var(--clay-elev-1)] animate-pulse"
         >
           <div className="flex items-center justify-between">
-            <div className="h-3 w-24 rounded bg-[var(--neu-sunken)]" />
-            <div className="h-8 w-8 rounded-xl bg-[var(--neu-sunken)]" />
+            <div className="h-3 w-24 rounded bg-[var(--clay-sunken)]" />
+            <div className="h-8 w-8 rounded-xl bg-[var(--clay-sunken)]" />
           </div>
-          <div className="mt-4 h-8 w-28 rounded bg-[var(--neu-sunken)]" />
-          <div className="mt-4 pt-3 border-t border-[var(--neu-line)] h-3 w-36 rounded bg-[var(--neu-sunken)]" />
+          <div className="mt-4 h-8 w-28 rounded bg-[var(--clay-sunken)]" />
+          <div className="mt-4 pt-3 border-t border-[var(--clay-line)] h-3 w-36 rounded bg-[var(--clay-sunken)]" />
         </div>
       ))}
     </div>

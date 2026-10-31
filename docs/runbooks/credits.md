@@ -15,7 +15,7 @@ database. Treat every step below as unverified until you run it in staging.
    select public.credit_schema_version();  -- 32
    ```
 
-3. Configure and verify the platform-wide Cloudflare Cron Worker.
+3. Configure and verify the platform-wide Render Background Worker.
    Credit-aware runs are worker-only; they never fall back to `after()` inline execution.
    Production dispatch is automatic for every project; the credit feature still requires
    the existing service-managed policy and its explicit `MAVLY_CREDITS_PROJECTS` cohort.
@@ -164,7 +164,7 @@ no automatic customer refund policy in this build; a refund is an explicit opera
 ## Pause / rollback
 
 - To pause new admissions for one project, first remove it from
-  `MAVLY_CREDITS_PROJECTS` while leaving `MAVLY_CREDITS_ENABLED=1` and Cloudflare Cron running.
+  `MAVLY_CREDITS_PROJECTS` while leaving `MAVLY_CREDITS_ENABLED=1` and the Render worker running.
   The database policy continues to block the legacy unreserved path. Let active runs reach
   terminal states and confirm the worker sweep has cleared every live reservation for that
   project.

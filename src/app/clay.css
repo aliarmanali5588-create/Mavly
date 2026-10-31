@@ -1,0 +1,905 @@
+/* ══════════════════════════════════════════════════════════════════════
+   MAVLY CLAYMORPHISM — the one and only surface material
+
+   Every element is an independent piece of moulded clay. It has its own
+   volume, sits ON the plane, and casts a soft ambient shadow beneath it.
+
+   This is NOT neumorphism. Neumorphism extrudes a shape out of the same
+   background using a light/dark twin shadow, so the object has no edge
+   and no independent existence. Clay has:
+
+     · an outer ambient drop shadow  — the object floats above the plane
+     · a tighter contact shadow      — it touches the plane where it sits
+     · an inner top highlight        — light catching the rounded upper edge
+     · an inner bottom shade         — the underside curving away
+     · a volume gradient across the face — the curvature itself
+
+   One light source: upper-left, 145°. One material. One geometry language.
+   Colours are untouched — white surfaces, black interaction, neutral
+   hierarchy. Only the material changed.
+   ══════════════════════════════════════════════════════════════════════ */
+
+:root {
+  /* ── MATERIAL ───────────────────────────────────────────────────────
+     Warm white clay. The plane is very slightly warmer than the objects
+     resting on it, so a white card reads as a separate physical thing. */
+  /* The plane and the objects derive from the canonical Mavly palette in
+     globals.css, so there is exactly one source of truth for colour.
+     Clay only decides how those colours are lit. */
+  --clay-base: var(--background);        /* the plane everything sits on  */
+  --clay-surface: var(--card);           /* a moulded white clay object   */
+  --clay-surface-soft: color-mix(in oklab, var(--card) 92%, var(--background));
+  --clay-sunken: var(--muted);           /* a pressed-in clay well        */
+  --clay-sunken-deep: color-mix(in oklab, var(--muted) 88%, var(--foreground));
+  --clay-line: rgba(0, 0, 0, 0.055);      /* soft edge, never an outline */
+  --clay-line-strong: rgba(0, 0, 0, 0.11);
+
+  /* ── INK ────────────────────────────────────────────────────────── */
+  --clay-ink: #000000;
+  --clay-ink-soft: rgba(0, 0, 0, 0.62);
+  --clay-ink-faint: rgba(0, 0, 0, 0.42);
+
+  /* ── INTERACTION FAMILY (black, per the Mavly identity) ─────────── */
+  --clay-brand: #000000;
+  --clay-brand-hover: #1f1f1f;
+  --clay-brand-active: #000000;
+  --clay-brand-soft: #f2f2f2;
+  --clay-white: #ffffff;
+  --clay-black: #000000;
+
+  /* ── SEMANTIC (preserved) ───────────────────────────────────────── */
+  --clay-ember: #ed3500;
+  --clay-peach: #ffd8d8;
+  --clay-peach-soft: #fff0f0;
+
+  /* ── SHADOW MATERIAL ────────────────────────────────────────────── */
+  --clay-shade: 0 0 0;
+  --clay-glow: 255 255 255;
+
+  /* ── GEOMETRY ───────────────────────────────────────────────────────
+     Consistent per component type. Buttons are tighter than cards;
+     pills are pills. Nothing is arbitrarily rounded.                   */
+  --clay-r-xs: 0.5rem;
+  --clay-r-sm: 0.75rem;
+  --clay-r-md: 1rem;
+  --clay-r-lg: 1.25rem;
+  --clay-r-xl: 1.5rem;
+  --clay-r-2xl: 1.75rem;
+  --clay-r-pill: 9999px;
+
+  /* ── MOTION ─────────────────────────────────────────────────────── */
+  --clay-dur: 220ms;
+  --clay-dur-fast: 140ms;
+  --clay-ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+
+  /* ── ELEVATION LADDER ───────────────────────────────────────────────
+     Each level = ambient drop + contact shadow + inner top light +
+     inner bottom shade. Depth matches the clay reference: clearly
+     volumetric, never heavy, never a twin light/dark extrusion.        */
+
+  --clay-elev-0: none;
+
+  --clay-elev-1:
+    0 1px 1px rgb(var(--clay-shade) / 0.04),
+    0 2px 4px -1px rgb(var(--clay-shade) / 0.05),
+    0 4px 10px -3px rgb(var(--clay-shade) / 0.05),
+    inset 0 1.5px 1px rgb(var(--clay-glow) / 1),
+    inset 0 -1.5px 2px rgb(var(--clay-shade) / 0.035);
+
+  --clay-elev-2:
+    0 1px 2px rgb(var(--clay-shade) / 0.05),
+    0 3px 7px -1px rgb(var(--clay-shade) / 0.06),
+    0 8px 18px -4px rgb(var(--clay-shade) / 0.07),
+    0 14px 30px -10px rgb(var(--clay-shade) / 0.05),
+    inset 0 2px 2px rgb(var(--clay-glow) / 1),
+    inset 0 -2.5px 4px rgb(var(--clay-shade) / 0.045);
+
+  --clay-elev-3:
+    0 1px 2px rgb(var(--clay-shade) / 0.05),
+    0 5px 10px -2px rgb(var(--clay-shade) / 0.07),
+    0 12px 26px -5px rgb(var(--clay-shade) / 0.08),
+    0 22px 46px -14px rgb(var(--clay-shade) / 0.06),
+    inset 0 2.5px 3px rgb(var(--clay-glow) / 1),
+    inset 0 -3.5px 6px rgb(var(--clay-shade) / 0.05);
+
+  --clay-elev-4:
+    0 2px 3px rgb(var(--clay-shade) / 0.05),
+    0 8px 16px -3px rgb(var(--clay-shade) / 0.08),
+    0 18px 38px -8px rgb(var(--clay-shade) / 0.09),
+    0 34px 70px -20px rgb(var(--clay-shade) / 0.07),
+    inset 0 3px 4px rgb(var(--clay-glow) / 1),
+    inset 0 -4.5px 8px rgb(var(--clay-shade) / 0.055);
+
+  --clay-elev-5:
+    0 2px 4px rgb(var(--clay-shade) / 0.06),
+    0 12px 24px -4px rgb(var(--clay-shade) / 0.09),
+    0 26px 54px -10px rgb(var(--clay-shade) / 0.1),
+    0 48px 96px -28px rgb(var(--clay-shade) / 0.08),
+    inset 0 3.5px 5px rgb(var(--clay-glow) / 1),
+    inset 0 -5.5px 10px rgb(var(--clay-shade) / 0.06);
+
+  /* ── INK SURFACES ───────────────────────────────────────────────────
+     A black clay object needs its own shadow recipe: the ambient shadow
+     is darker (it is a dark object on a light plane) and the highlight
+     is a thin rim of light along the top edge.                         */
+
+  --clay-elev-ink-1:
+    0 1px 2px rgb(var(--clay-shade) / 0.16),
+    0 3px 8px -2px rgb(var(--clay-shade) / 0.2),
+    inset 0 1px 0 rgb(var(--clay-glow) / 0.18),
+    inset 0 -2px 3px rgb(var(--clay-shade) / 0.35);
+
+  --clay-elev-ink-2:
+    0 1px 2px rgb(var(--clay-shade) / 0.18),
+    0 4px 10px -2px rgb(var(--clay-shade) / 0.24),
+    0 10px 24px -6px rgb(var(--clay-shade) / 0.22),
+    inset 0 1.5px 0 rgb(var(--clay-glow) / 0.2),
+    inset 0 -2.5px 4px rgb(var(--clay-shade) / 0.4);
+
+  --clay-elev-ink-3:
+    0 2px 3px rgb(var(--clay-shade) / 0.2),
+    0 7px 16px -3px rgb(var(--clay-shade) / 0.26),
+    0 16px 34px -8px rgb(var(--clay-shade) / 0.24),
+    inset 0 2px 0 rgb(var(--clay-glow) / 0.22),
+    inset 0 -3.5px 6px rgb(var(--clay-shade) / 0.42);
+
+  /* ── WELLS ──────────────────────────────────────────────────────────
+     A pressed clay well still has volume: the rim catches light on the
+     lower edge, the floor falls into shade at the top. It is a moulded
+     cavity, not a flat inset. The outer 1px of light is the lip.       */
+
+  --clay-well-1:
+    inset 0 2px 3px rgb(var(--clay-shade) / 0.07),
+    inset 0 -1px 1px rgb(var(--clay-glow) / 0.95),
+    0 1px 0 rgb(var(--clay-glow) / 0.9);
+
+  --clay-well-2:
+    inset 0 3px 6px rgb(var(--clay-shade) / 0.09),
+    inset 0 -1.5px 2px rgb(var(--clay-glow) / 1),
+    0 1px 0 rgb(var(--clay-glow) / 0.95);
+
+  --clay-well-3:
+    inset 0 5px 11px rgb(var(--clay-shade) / 0.12),
+    inset 0 -2px 3px rgb(var(--clay-glow) / 1),
+    0 1px 0 rgb(var(--clay-glow) / 1);
+
+  /* Legacy aliases — the whole codebase already speaks this vocabulary.
+     They now resolve to clay wells, so every existing usage improves. */
+  --clay-inset-1: var(--clay-well-1);
+  --clay-inset-2: var(--clay-well-2);
+  --clay-inset-3: var(--clay-well-3);
+
+  /* ── FLOATING ───────────────────────────────────────────────────────
+     Menus, dialogs, popovers: lifted clear of the plane.               */
+
+  --clay-float:
+    0 2px 4px rgb(var(--clay-shade) / 0.06),
+    0 10px 22px -4px rgb(var(--clay-shade) / 0.1),
+    0 26px 52px -10px rgb(var(--clay-shade) / 0.12),
+    0 48px 96px -24px rgb(var(--clay-shade) / 0.1),
+    inset 0 2.5px 3px rgb(var(--clay-glow) / 1),
+    inset 0 -4px 8px rgb(var(--clay-shade) / 0.05);
+
+  /* ── VOLUME GRADIENTS ───────────────────────────────────────────────
+     The face of a clay object is not flat. One 145° wash from the
+     upper-left light gives it its rounded curvature.
+
+     Two recipes: one for white clay, one for ink clay. A white sheen
+     painted on a black button would destroy it, so ink surfaces get
+     their own.                                                         */
+
+  --clay-sheen:
+    linear-gradient(
+      145deg,
+      rgb(var(--clay-glow) / 1) 0%,
+      rgb(var(--clay-glow) / 0.55) 30%,
+      rgb(var(--clay-glow) / 0) 58%,
+      rgb(var(--clay-shade) / 0.014) 82%,
+      rgb(var(--clay-shade) / 0.028) 100%
+    );
+
+  --clay-sheen-ink:
+    linear-gradient(
+      145deg,
+      rgb(var(--clay-glow) / 0.2) 0%,
+      rgb(var(--clay-glow) / 0.06) 34%,
+      rgb(var(--clay-glow) / 0) 58%,
+      rgb(var(--clay-shade) / 0.16) 100%
+    );
+
+  /* ── FOCUS ──────────────────────────────────────────────────────── */
+  --clay-focus:
+    0 0 0 2px var(--clay-surface),
+    0 0 0 4.5px rgb(var(--clay-shade) / 0.55);
+
+  --clay-focus-ink:
+    0 0 0 2px var(--clay-surface),
+    0 0 0 4.5px rgb(var(--clay-shade) / 0.7);
+}
+
+/* ── DARK CLAY ────────────────────────────────────────────────────── */
+
+.dark {
+  --clay-base: var(--background);
+  --clay-surface: var(--card);
+  --clay-surface-soft: color-mix(in oklab, var(--card) 88%, var(--background));
+  --clay-sunken: var(--muted);
+  --clay-sunken-deep: color-mix(in oklab, var(--muted) 70%, #000000);
+  --clay-line: rgba(255, 255, 255, 0.065);
+  --clay-line-strong: rgba(255, 255, 255, 0.12);
+
+  --clay-ink: #ffffff;
+  --clay-ink-soft: rgba(255, 255, 255, 0.62);
+  --clay-ink-faint: rgba(255, 255, 255, 0.42);
+
+  --clay-brand: #ffffff;
+  --clay-brand-hover: #e6e6e6;
+  --clay-brand-active: #ffffff;
+  --clay-brand-soft: #1c1c1c;
+
+  --clay-shade: 0 0 0;
+  --clay-glow: 255 255 255;
+
+  --clay-elev-1:
+    0 1px 1px rgb(var(--clay-shade) / 0.4),
+    0 2px 4px -1px rgb(var(--clay-shade) / 0.45),
+    0 4px 10px -3px rgb(var(--clay-shade) / 0.4),
+    inset 0 1.5px 1px rgb(var(--clay-glow) / 0.07),
+    inset 0 -1.5px 2px rgb(var(--clay-shade) / 0.5);
+
+  --clay-elev-2:
+    0 1px 2px rgb(var(--clay-shade) / 0.45),
+    0 3px 7px -1px rgb(var(--clay-shade) / 0.5),
+    0 8px 18px -4px rgb(var(--clay-shade) / 0.45),
+    0 14px 30px -10px rgb(var(--clay-shade) / 0.4),
+    inset 0 2px 2px rgb(var(--clay-glow) / 0.08),
+    inset 0 -2.5px 4px rgb(var(--clay-shade) / 0.55);
+
+  --clay-elev-3:
+    0 1px 2px rgb(var(--clay-shade) / 0.5),
+    0 5px 10px -2px rgb(var(--clay-shade) / 0.55),
+    0 12px 26px -5px rgb(var(--clay-shade) / 0.5),
+    0 22px 46px -14px rgb(var(--clay-shade) / 0.45),
+    inset 0 2.5px 3px rgb(var(--clay-glow) / 0.09),
+    inset 0 -3.5px 6px rgb(var(--clay-shade) / 0.6);
+
+  --clay-elev-4:
+    0 2px 3px rgb(var(--clay-shade) / 0.55),
+    0 8px 16px -3px rgb(var(--clay-shade) / 0.6),
+    0 18px 38px -8px rgb(var(--clay-shade) / 0.55),
+    0 34px 70px -20px rgb(var(--clay-shade) / 0.5),
+    inset 0 3px 4px rgb(var(--clay-glow) / 0.1),
+    inset 0 -4.5px 8px rgb(var(--clay-shade) / 0.62);
+
+  --clay-elev-5:
+    0 2px 4px rgb(var(--clay-shade) / 0.6),
+    0 12px 24px -4px rgb(var(--clay-shade) / 0.65),
+    0 26px 54px -10px rgb(var(--clay-shade) / 0.6),
+    0 48px 96px -28px rgb(var(--clay-shade) / 0.55),
+    inset 0 3.5px 5px rgb(var(--clay-glow) / 0.11),
+    inset 0 -5.5px 10px rgb(var(--clay-shade) / 0.65);
+
+  /* On dark, the "ink" surface is WHITE, so it needs a light-object
+     recipe: a bright rim and a soft light halo. */
+  --clay-elev-ink-1:
+    0 1px 2px rgb(var(--clay-shade) / 0.5),
+    0 3px 8px -2px rgb(var(--clay-shade) / 0.5),
+    inset 0 1px 0 rgb(var(--clay-glow) / 0.9),
+    inset 0 -2px 3px rgb(var(--clay-shade) / 0.25);
+
+  --clay-elev-ink-2:
+    0 1px 2px rgb(var(--clay-shade) / 0.55),
+    0 4px 10px -2px rgb(var(--clay-shade) / 0.55),
+    0 10px 24px -6px rgb(var(--clay-shade) / 0.5),
+    inset 0 1.5px 0 rgb(var(--clay-glow) / 0.95),
+    inset 0 -2.5px 4px rgb(var(--clay-shade) / 0.3);
+
+  --clay-elev-ink-3:
+    0 2px 3px rgb(var(--clay-shade) / 0.6),
+    0 7px 16px -3px rgb(var(--clay-shade) / 0.6),
+    0 16px 34px -8px rgb(var(--clay-shade) / 0.55),
+    inset 0 2px 0 rgb(var(--clay-glow) / 1),
+    inset 0 -3.5px 6px rgb(var(--clay-shade) / 0.32);
+
+  --clay-well-1:
+    inset 0 2px 3px rgb(var(--clay-shade) / 0.55),
+    inset 0 -1px 1px rgb(var(--clay-glow) / 0.05),
+    0 1px 0 rgb(var(--clay-glow) / 0.04);
+
+  --clay-well-2:
+    inset 0 3px 6px rgb(var(--clay-shade) / 0.62),
+    inset 0 -1.5px 2px rgb(var(--clay-glow) / 0.06),
+    0 1px 0 rgb(var(--clay-glow) / 0.05);
+
+  --clay-well-3:
+    inset 0 5px 11px rgb(var(--clay-shade) / 0.7),
+    inset 0 -2px 3px rgb(var(--clay-glow) / 0.07),
+    0 1px 0 rgb(var(--clay-glow) / 0.06);
+
+  --clay-float:
+    0 2px 4px rgb(var(--clay-shade) / 0.5),
+    0 10px 22px -4px rgb(var(--clay-shade) / 0.55),
+    0 26px 52px -10px rgb(var(--clay-shade) / 0.6),
+    0 48px 96px -24px rgb(var(--clay-shade) / 0.55),
+    inset 0 2.5px 3px rgb(var(--clay-glow) / 0.09),
+    inset 0 -4px 8px rgb(var(--clay-shade) / 0.55);
+
+  --clay-sheen:
+    linear-gradient(
+      145deg,
+      rgb(var(--clay-glow) / 0.085) 0%,
+      rgb(var(--clay-glow) / 0.04) 30%,
+      rgb(var(--clay-glow) / 0) 58%,
+      rgb(var(--clay-shade) / 0.12) 82%,
+      rgb(var(--clay-shade) / 0.22) 100%
+    );
+
+  --clay-sheen-ink:
+    linear-gradient(
+      145deg,
+      rgb(var(--clay-shade) / 0.16) 0%,
+      rgb(var(--clay-shade) / 0.05) 34%,
+      rgb(var(--clay-shade) / 0) 58%,
+      rgb(var(--clay-glow) / 0.1) 100%
+    );
+
+  --clay-focus:
+    0 0 0 2px var(--clay-surface),
+    0 0 0 4.5px rgb(var(--clay-glow) / 0.75);
+
+  --clay-focus-ink:
+    0 0 0 2px var(--clay-surface),
+    0 0 0 4.5px rgb(var(--clay-glow) / 0.9);
+}
+
+/* ── WIRE THE TAILWIND ELEVATION SCALE TO THE CLAY LADDER ──────────────
+   Every existing `shadow-xs|sm|md|lg|xl|2xl` in the codebase resolves to
+   clay volume. One definition, applied everywhere, so no component can
+   drift into its own shadow recipe.                                    */
+
+@theme {
+  --shadow-2xs: var(--clay-elev-1);
+  --shadow-xs: var(--clay-elev-1);
+  --shadow-sm: var(--clay-elev-2);
+  --shadow-md: var(--clay-elev-3);
+  --shadow-lg: var(--clay-elev-4);
+  --shadow-xl: var(--clay-elev-5);
+  --shadow-2xl: var(--clay-elev-5);
+
+  --color-clay-base: var(--clay-base);
+  --color-clay-surface: var(--clay-surface);
+  --color-clay-sunken: var(--clay-sunken);
+  --color-clay-ink: var(--clay-ink);
+  --color-clay-brand: var(--clay-brand);
+  --color-clay-peach: var(--clay-peach);
+  --color-clay-ember: var(--clay-ember);
+
+  --radius-clay-sm: var(--clay-r-sm);
+  --radius-clay-md: var(--clay-r-md);
+  --radius-clay-lg: var(--clay-r-lg);
+  --radius-clay-xl: var(--clay-r-xl);
+  --radius-clay-2xl: var(--clay-r-2xl);
+}
+
+/* ── THE PLANE ────────────────────────────────────────────────────────── */
+
+@layer base {
+  body {
+    background-color: var(--clay-base);
+    /* One soft wash from the upper-left, matching the light source. */
+    background-image: radial-gradient(
+      120% 90% at 8% 0%,
+      rgb(var(--clay-glow) / 0.85) 0%,
+      transparent 62%
+    );
+    background-attachment: fixed;
+    color: var(--clay-ink);
+  }
+
+  ::selection {
+    background-color: var(--clay-ink) !important;
+    color: var(--clay-surface) !important;
+  }
+  *::selection {
+    background-color: var(--clay-ink) !important;
+    color: var(--clay-surface) !important;
+  }
+
+  :focus-visible {
+    outline: none;
+  }
+}
+
+/* ── CLAY SURFACE PRIMITIVES ──────────────────────────────────────────── */
+
+@layer components {
+  /* A moulded clay object resting on the plane. */
+  .clay-raised {
+    background-color: var(--clay-surface);
+    background-image: var(--clay-sheen);
+    border: 1px solid var(--clay-line);
+    border-radius: var(--clay-r-xl);
+    box-shadow: var(--clay-elev-2);
+  }
+
+  .clay-raised-1 {
+    background-color: var(--clay-surface);
+    background-image: var(--clay-sheen);
+    border: 1px solid var(--clay-line);
+    border-radius: var(--clay-r-md);
+    box-shadow: var(--clay-elev-1);
+  }
+
+  .clay-raised-3 {
+    background-color: var(--clay-surface);
+    background-image: var(--clay-sheen);
+    border: 1px solid var(--clay-line);
+    border-radius: var(--clay-r-2xl);
+    box-shadow: var(--clay-elev-3);
+  }
+
+  /* A pressed-in well: the volume inverts, but the lip still catches light. */
+  .clay-recessed {
+    background-color: var(--clay-sunken);
+    background-image: linear-gradient(
+      145deg,
+      rgb(var(--clay-shade) / 0.03) 0%,
+      transparent 55%
+    );
+    border: 1px solid var(--clay-line);
+    border-radius: var(--clay-r-md);
+    box-shadow: var(--clay-well-2);
+  }
+
+  .clay-recessed-deep {
+    background-color: var(--clay-sunken-deep);
+    border: 1px solid var(--clay-line);
+    border-radius: var(--clay-r-md);
+    box-shadow: var(--clay-well-3);
+  }
+
+  /* Pressed: compressed under a finger. */
+  .clay-pressed {
+    background-color: var(--clay-sunken);
+    border: 1px solid var(--clay-line);
+    box-shadow: var(--clay-well-2);
+  }
+
+  /* Floating clear of the plane. */
+  .clay-floating {
+    background-color: var(--clay-surface);
+    background-image: var(--clay-sheen);
+    border: 1px solid var(--clay-line);
+    border-radius: var(--clay-r-2xl);
+    box-shadow: var(--clay-float);
+  }
+
+  /* Same material, no elevation. */
+  .clay-flat {
+    background-color: var(--clay-surface-soft);
+    border: 1px solid var(--clay-line);
+    box-shadow: none;
+  }
+
+  /* Interactive clay: lifts on hover, compresses on press. */
+  .clay-interactive {
+    transition:
+      box-shadow var(--clay-dur) var(--clay-ease),
+      transform var(--clay-dur) var(--clay-ease),
+      border-color var(--clay-dur) var(--clay-ease);
+  }
+  .clay-interactive:hover {
+    box-shadow: var(--clay-elev-3);
+    border-color: var(--clay-line-strong);
+  }
+  .clay-interactive:active {
+    box-shadow: var(--clay-well-2);
+    transform: translateY(1px) scale(0.995);
+  }
+
+  /* A small moulded well for an icon. */
+  .clay-well {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background-color: var(--clay-sunken);
+    border: 1px solid var(--clay-line);
+    border-radius: var(--clay-r-md);
+    box-shadow: var(--clay-well-1);
+    color: var(--clay-ink-soft);
+  }
+
+  /* A soft seam between two clay surfaces. */
+  .clay-divider {
+    height: 1px;
+    border: 0;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      var(--clay-line-strong) 18%,
+      var(--clay-line-strong) 82%,
+      transparent
+    );
+    box-shadow: 0 1px 0 rgb(var(--clay-glow) / 0.75);
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   COMPONENT SKIN — every data-slot in the system
+
+   These live in `components` so a caller's utility class still wins.
+   This is the single place a component's material is defined; no page
+   should ever need its own shadow recipe.
+   ══════════════════════════════════════════════════════════════════════ */
+
+@layer components {
+  /* ── BUTTONS ───────────────────────────────────────────────────────
+     A button is a piece of clay you press. Resting: raised. Hover:
+     lifts a little. Pressed: compresses, loses elevation, gains the
+     well. Colour never signals state — volume does.                    */
+
+  [data-slot="button"] {
+    border-radius: var(--clay-r-md); font-weight: 600; letter-spacing: -0.005em; transition:
+      box-shadow var(--clay-dur) var(--clay-ease),
+      transform var(--clay-dur) var(--clay-ease),
+      background-color var(--clay-dur) var(--clay-ease),
+      border-color var(--clay-dur) var(--clay-ease); }
+
+  /* White clay buttons get the white sheen. */
+  [data-slot="button"]:not(.bg-primary):not(.bg-destructive):not(.bg-transparent) {
+    background-image: var(--clay-sheen); }
+
+  /* Ink clay buttons get the ink sheen and the ink shadow recipe. */
+  [data-slot="button"].bg-primary,
+  [data-slot="button"].bg-destructive {
+    background-image: var(--clay-sheen-ink); box-shadow: var(--clay-elev-ink-1); }
+  [data-slot="button"].bg-primary:hover,
+  [data-slot="button"].bg-destructive:hover {
+    box-shadow: var(--clay-elev-ink-2); }
+  [data-slot="button"].bg-primary:active,
+  [data-slot="button"].bg-destructive:active {
+    box-shadow: var(--clay-elev-ink-1); }
+  [data-slot="button"].bg-primary:focus-visible,
+  [data-slot="button"].bg-destructive:focus-visible {
+    box-shadow: var(--clay-elev-ink-1), var(--clay-focus-ink); }
+
+  [data-slot="button"]:focus-visible {
+    box-shadow: var(--clay-focus); }
+
+  /* The press: a controlled tactile compression, never an inset slab. */
+  [data-slot="button"]:active:not(:disabled) {
+    transform: translateY(1px) scale(0.985); }
+
+  /* ── CARDS ─────────────────────────────────────────────────────────
+     An independent clay object. It has its own volume and its own
+     shadow; it is not an extrusion of the page behind it.              */
+
+  [data-slot="card"] {
+    border-radius: var(--clay-r-xl); background-image: var(--clay-sheen); box-shadow: var(--clay-elev-2); transition:
+      box-shadow var(--clay-dur) var(--clay-ease),
+      border-color var(--clay-dur) var(--clay-ease),
+      transform var(--clay-dur) var(--clay-ease); }
+
+  /* Nested clay: a card inside a card steps DOWN, never up, so the
+     hierarchy reads as physical layering instead of competing shadows. */
+  [data-slot="card"] [data-slot="card"] {
+    box-shadow: var(--clay-elev-1); border-radius: var(--clay-r-lg); }
+
+  /* Any element that declares itself a card surface gets the material. */
+  .bg-card {
+    background-image: var(--clay-sheen); }
+
+  /* ── INPUTS ────────────────────────────────────────────────────────
+     A carefully moulded well. The recess is the resting state; focus
+     deepens it and adds the single global focus ring.                  */
+
+  [data-slot="input"],
+  [data-slot="textarea"],
+  [data-slot="select-trigger"] {
+    border-radius: var(--clay-r-md); color: var(--clay-ink); background-color: var(--clay-sunken); box-shadow: var(--clay-well-2); transition:
+      box-shadow var(--clay-dur) var(--clay-ease),
+      border-color var(--clay-dur) var(--clay-ease),
+      background-color var(--clay-dur) var(--clay-ease); }
+
+  [data-slot="input"]::placeholder,
+  [data-slot="textarea"]::placeholder {
+    color: var(--clay-ink-faint); }
+
+  [data-slot="input"]:hover:not(:disabled),
+  [data-slot="textarea"]:hover:not(:disabled),
+  [data-slot="select-trigger"]:hover:not(:disabled) {
+    box-shadow: var(--clay-well-3); }
+
+  [data-slot="input"]:focus-visible,
+  [data-slot="textarea"]:focus-visible,
+  [data-slot="select-trigger"]:focus-visible {
+    box-shadow: var(--clay-well-2), var(--clay-focus); border-color: transparent; }
+
+  [data-slot="input"][aria-invalid="true"],
+  [data-slot="textarea"][aria-invalid="true"] {
+    box-shadow: var(--clay-well-2), 0 0 0 2px rgb(237 53 0 / 0.28); }
+
+  /* ── FLOATING SURFACES ─────────────────────────────────────────────
+     Menus, popovers, dialogs, sheets: lifted clear of the plane.       */
+
+  [data-slot="dropdown-menu-content"],
+  [data-slot="select-content"],
+  [data-slot="popover-content"],
+  [data-slot="context-menu-content"],
+  [data-slot="menubar-content"],
+  [data-slot="command"],
+  [data-slot="hover-card-content"],
+  [data-slot="navigation-menu-content"],
+  [data-slot="navigation-menu-viewport"] {
+    border-radius: var(--clay-r-lg); box-shadow: var(--clay-float); background-image: var(--clay-sheen); }
+
+  [data-slot="dialog-content"],
+  [data-slot="alert-dialog-content"],
+  [data-slot="sheet-content"],
+  [data-slot="modal-content"] {
+    border-radius: var(--clay-r-2xl); box-shadow: var(--clay-float); background-image: var(--clay-sheen); }
+
+  /* Menu items: a soft pressed highlight, never a recolour. */
+  [data-slot="dropdown-menu-item"],
+  [data-slot="select-item"],
+  [data-slot="context-menu-item"],
+  [data-slot="context-menu-checkbox-item"],
+  [data-slot="context-menu-radio-item"],
+  [data-slot="menubar-item"],
+  [data-slot="dropdown-menu-checkbox-item"],
+  [data-slot="dropdown-menu-radio-item"],
+  [data-slot="command-item"] {
+    border-radius: var(--clay-r-sm); transition:
+      box-shadow var(--clay-dur-fast) var(--clay-ease),
+      background-color var(--clay-dur-fast) var(--clay-ease); }
+
+  [data-slot="dropdown-menu-item"]:focus,
+  [data-slot="select-item"]:focus,
+  [data-slot="context-menu-item"]:focus,
+  [data-slot="context-menu-checkbox-item"]:focus,
+  [data-slot="context-menu-radio-item"]:focus,
+  [data-slot="menubar-item"]:focus,
+  [data-slot="dropdown-menu-checkbox-item"]:focus,
+  [data-slot="dropdown-menu-radio-item"]:focus,
+  [data-slot="command-item"][data-selected="true"] {
+    background-color: var(--clay-sunken); box-shadow: var(--clay-well-1); }
+
+  /* ── TABS ──────────────────────────────────────────────────────────
+     The list is a well; the active tab is a small clay object lifted
+     out of it.                                                         */
+
+  [data-slot="tabs-list"] {
+    border-radius: var(--clay-r-md); padding: 4px; gap: 2px; background-color: var(--clay-sunken); box-shadow: var(--clay-well-2); }
+
+  [data-slot="tabs-trigger"] {
+    border-radius: var(--clay-r-sm); transition:
+      box-shadow var(--clay-dur) var(--clay-ease),
+      background-color var(--clay-dur) var(--clay-ease),
+      color var(--clay-dur) var(--clay-ease); }
+
+  [data-slot="tabs-trigger"][data-state="active"] {
+    background-image: var(--clay-sheen); box-shadow: var(--clay-elev-1); }
+
+  /* ── SWITCH ────────────────────────────────────────────────────────
+     A soft pill track with a clearly raised knob. Black when on.       */
+
+  [data-slot="switch"] {
+    box-shadow: var(--clay-well-2); border-radius: var(--clay-r-pill); transition:
+      background-color var(--clay-dur) var(--clay-ease),
+      box-shadow var(--clay-dur) var(--clay-ease); }
+
+  [data-slot="switch"][data-state="checked"] {
+    background-image: var(--clay-sheen-ink); box-shadow: var(--clay-elev-ink-1); }
+
+  [data-slot="switch-thumb"] {
+    box-shadow: var(--clay-elev-2); border-radius: var(--clay-r-pill); }
+
+  /* ── SLIDER ────────────────────────────────────────────────────── */
+
+  [data-slot="slider-track"] {
+    box-shadow: var(--clay-well-1); background-color: var(--clay-sunken); }
+
+  [data-slot="slider-range"] {
+    box-shadow: var(--clay-elev-ink-1); }
+
+  [data-slot="slider-thumb"] {
+    box-shadow: var(--clay-elev-2); border-color: transparent; transition:
+      box-shadow var(--clay-dur) var(--clay-ease),
+      transform var(--clay-dur) var(--clay-ease); }
+
+  [data-slot="slider-thumb"]:hover {
+    box-shadow: var(--clay-elev-3); }
+
+  /* ── PROGRESS ──────────────────────────────────────────────────── */
+
+  [data-slot="progress"] {
+    box-shadow: var(--clay-well-1); background-color: var(--clay-sunken); border-radius: var(--clay-r-pill); }
+
+  [data-slot="progress-indicator"] {
+    box-shadow: var(--clay-elev-ink-1); border-radius: var(--clay-r-pill); }
+
+  /* ── CHECKBOX / RADIO ──────────────────────────────────────────────
+     A small moulded well that becomes a raised black clay chip.       */
+
+  [data-slot="checkbox"],
+  [data-slot="radio-group-item"] {
+    border-radius: var(--clay-r-xs); box-shadow: var(--clay-well-1); transition:
+      box-shadow var(--clay-dur) var(--clay-ease),
+      background-color var(--clay-dur) var(--clay-ease); }
+
+  [data-slot="radio-group-item"] {
+    border-radius: var(--clay-r-pill); }
+
+  [data-slot="checkbox"][data-state="checked"],
+  [data-slot="radio-group-item"][data-state="checked"] {
+    box-shadow: var(--clay-elev-ink-1); }
+
+  [data-slot="checkbox"]:focus-visible,
+  [data-slot="radio-group-item"]:focus-visible {
+    box-shadow: var(--clay-well-1), var(--clay-focus); }
+
+  /* ── BADGES ────────────────────────────────────────────────────── */
+
+  [data-slot="badge"] {
+    border-radius: var(--clay-r-pill); font-weight: 600; letter-spacing: 0.005em; }
+
+  /* ── TABLES ────────────────────────────────────────────────────── */
+
+  [data-slot="table-header"] {
+    background-color: var(--clay-sunken); }
+
+  [data-slot="table-row"] {
+    transition: background-color var(--clay-dur-fast) var(--clay-ease); }
+
+  [data-slot="table-row"]:hover {
+    background-color: var(--clay-surface-soft); }
+
+  /* ── SKELETONS ─────────────────────────────────────────────────── */
+
+  [data-slot="skeleton"] {
+    background-color: var(--clay-sunken); box-shadow: var(--clay-well-1); border-radius: var(--clay-r-md); }
+
+  /* ── TOOLTIP ───────────────────────────────────────────────────── */
+
+  [data-slot="tooltip-content"] {
+    border-radius: var(--clay-r-sm); box-shadow: var(--clay-float); }
+
+  /* ── TOGGLE ────────────────────────────────────────────────────── */
+
+  [data-slot="toggle"] {
+    border-radius: var(--clay-r-md); transition:
+      box-shadow var(--clay-dur) var(--clay-ease),
+      background-color var(--clay-dur) var(--clay-ease); }
+
+  [data-slot="toggle"][data-state="on"] {
+    box-shadow: var(--clay-well-2); }
+
+  /* ── ALERT ─────────────────────────────────────────────────────── */
+
+  [data-slot="alert"] {
+    border-radius: var(--clay-r-lg); box-shadow: var(--clay-elev-1); }
+
+  /* ── AVATAR ────────────────────────────────────────────────────── */
+
+  [data-slot="avatar"] {
+    box-shadow: var(--clay-elev-1); }
+
+  /* ── SEPARATOR ─────────────────────────────────────────────────── */
+
+  [data-slot="separator"] {
+    background-color: var(--clay-line-strong); box-shadow: 0 1px 0 rgb(var(--clay-glow) / 0.8); }
+
+  /* ── SCROLL AREA ───────────────────────────────────────────────── */
+
+  [data-slot="scroll-area-thumb"] {
+    border-radius: var(--clay-r-pill); background-color: rgb(var(--clay-shade) / 0.22); }
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   LEGACY COMPATIBILITY — the `mavly-*` classes
+
+   These are still referenced across ~40 call sites. They are no longer
+   neumorphic: they now resolve to the same clay material as the
+   primitives, so an untouched page cannot drift from the system.
+   ══════════════════════════════════════════════════════════════════════ */
+
+@layer components {
+  .mavly-btn-primary,
+  .mavly-btn-secondary {
+    display: inline-flex; align-items: center; justify-content: center; gap: 0.375rem; font-weight: 600; border-radius: var(--clay-r-pill); cursor: pointer; user-select: none; transition:
+      box-shadow var(--clay-dur) var(--clay-ease),
+      transform var(--clay-dur) var(--clay-ease),
+      background-color var(--clay-dur) var(--clay-ease),
+      border-color var(--clay-dur) var(--clay-ease); }
+
+  .mavly-btn-primary {
+    background-color: var(--clay-brand); background-image: var(--clay-sheen-ink); color: var(--clay-white); border: 1px solid transparent; box-shadow: var(--clay-elev-ink-2); }
+  .mavly-btn-primary:hover {
+    background-color: var(--clay-brand-hover); box-shadow: var(--clay-elev-ink-3); transform: translateY(-1px); }
+  .mavly-btn-primary:active {
+    transform: translateY(1px) scale(0.985); box-shadow: var(--clay-elev-ink-1); }
+  .mavly-btn-primary:focus-visible {
+    outline: none; box-shadow: var(--clay-elev-ink-2), var(--clay-focus-ink); }
+
+  .mavly-btn-secondary {
+    background-color: var(--clay-surface); background-image: var(--clay-sheen); color: var(--clay-ink); border: 1px solid var(--clay-line); box-shadow: var(--clay-elev-2); }
+  .mavly-btn-secondary:hover {
+    box-shadow: var(--clay-elev-3); border-color: var(--clay-line-strong); transform: translateY(-1px); }
+  .mavly-btn-secondary:active {
+    transform: translateY(1px) scale(0.985); box-shadow: var(--clay-well-2); }
+  .mavly-btn-secondary:focus-visible {
+    outline: none; box-shadow: var(--clay-elev-2), var(--clay-focus); }
+
+  .mavly-soft-card {
+    background-color: var(--clay-surface); background-image: var(--clay-sheen); border-radius: var(--clay-r-xl); border: 1px solid var(--clay-line); box-shadow: var(--clay-elev-2); transition:
+      box-shadow var(--clay-dur) var(--clay-ease),
+      transform var(--clay-dur) var(--clay-ease),
+      border-color var(--clay-dur) var(--clay-ease); }
+
+  .mavly-soft-card-hover:hover {
+    border-color: var(--clay-line-strong); box-shadow: var(--clay-elev-4); transform: translateY(-2px); }
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   RESPONSIVE DEPTH — clay softens on small screens so it never reads heavy
+   ══════════════════════════════════════════════════════════════════════ */
+
+@media (max-width: 640px) {
+  :root {
+    --clay-elev-2:
+      0 1px 2px rgb(var(--clay-shade) / 0.05),
+      0 3px 6px -1px rgb(var(--clay-shade) / 0.06),
+      0 6px 14px -4px rgb(var(--clay-shade) / 0.06),
+      inset 0 2px 2px rgb(var(--clay-glow) / 1),
+      inset 0 -2px 3px rgb(var(--clay-shade) / 0.04); --clay-elev-3:
+      0 1px 2px rgb(var(--clay-shade) / 0.05),
+      0 4px 9px -2px rgb(var(--clay-shade) / 0.07),
+      0 9px 20px -5px rgb(var(--clay-shade) / 0.07),
+      inset 0 2.5px 3px rgb(var(--clay-glow) / 1),
+      inset 0 -3px 5px rgb(var(--clay-shade) / 0.045); --clay-elev-4:
+      0 2px 3px rgb(var(--clay-shade) / 0.05),
+      0 6px 14px -3px rgb(var(--clay-shade) / 0.08),
+      0 16px 34px -10px rgb(var(--clay-shade) / 0.08),
+      inset 0 3px 4px rgb(var(--clay-glow) / 1),
+      inset 0 -4px 7px rgb(var(--clay-shade) / 0.05); --clay-elev-5:
+      0 2px 4px rgb(var(--clay-shade) / 0.06),
+      0 10px 22px -5px rgb(var(--clay-shade) / 0.09),
+      0 24px 48px -14px rgb(var(--clay-shade) / 0.09),
+      inset 0 3.5px 5px rgb(var(--clay-glow) / 1),
+      inset 0 -5px 9px rgb(var(--clay-shade) / 0.055); --clay-float:
+      0 2px 4px rgb(var(--clay-shade) / 0.05),
+      0 8px 18px -4px rgb(var(--clay-shade) / 0.09),
+      0 20px 40px -10px rgb(var(--clay-shade) / 0.1),
+      inset 0 2.5px 3px rgb(var(--clay-glow) / 1),
+      inset 0 -4px 8px rgb(var(--clay-shade) / 0.05); }
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   MOTION — respect the setting, and never bounce
+   ══════════════════════════════════════════════════════════════════════ */
+
+@media (prefers-reduced-motion: reduce) {
+  .clay-interactive,
+  [data-slot="button"],
+  [data-slot="card"],
+  [data-slot="tabs-trigger"],
+  .mavly-btn-primary,
+  .mavly-btn-secondary,
+  .mavly-soft-card {
+    transition: none !important; }
+  .clay-interactive:hover,
+  .clay-interactive:active,
+  [data-slot="button"]:active:not(:disabled),
+  .mavly-btn-primary:hover,
+  .mavly-btn-primary:active,
+  .mavly-btn-secondary:hover,
+  .mavly-btn-secondary:active {
+    transform: none !important; }
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   SCROLLBARS — moulded into the clay
+   ══════════════════════════════════════════════════════════════════════ */
+
+* {
+  scrollbar-color: rgb(var(--clay-shade) / 0.26) transparent; scrollbar-width: thin; }

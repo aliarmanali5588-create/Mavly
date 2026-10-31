@@ -13,12 +13,12 @@ import { ArrowRight, CreditCard, Download, Info, Search } from "lucide-react";
  */
 export function TransactionsTable() {
   return (
-    <div className="bg-card rounded-2xl p-5 sm:p-6 border border-[var(--neu-line)] shadow-[0_2px_8px_rgba(0,0,0,0.02)] space-y-4">
+    <div className="bg-card rounded-2xl p-5 sm:p-6 border border-[var(--clay-line)] shadow-[var(--clay-elev-1)] space-y-4">
       {/* ── Table Header Controls ── */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-[var(--neu-line)]">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-[var(--clay-line)]">
         <div>
           <div className="flex items-center gap-2">
-            <div className="p-1.5 rounded-lg bg-[var(--neu-sunken)] text-muted-foreground border border-[var(--neu-line)]">
+            <div className="p-1.5 rounded-lg bg-[var(--clay-sunken)] text-muted-foreground border border-[var(--clay-line)]">
               <CreditCard className="w-4 h-4" />
             </div>
             <h2 className="text-base font-bold text-foreground">Recent Billing Transactions</h2>
@@ -46,7 +46,7 @@ export function TransactionsTable() {
             disabled
             placeholder="Billing search unavailable"
             aria-label="Billing search unavailable"
-            className="w-full h-8 pl-8 pr-3 text-xs rounded-xl bg-[var(--neu-sunken)] border border-[var(--neu-line)] text-muted-foreground placeholder:text-muted-foreground cursor-not-allowed"
+            className="w-full h-8 pl-8 pr-3 text-xs rounded-xl bg-[var(--clay-sunken)] border border-[var(--clay-line)] text-muted-foreground placeholder:text-muted-foreground cursor-not-allowed"
           />
         </div>
 
@@ -54,7 +54,7 @@ export function TransactionsTable() {
           type="button"
           disabled
           title="There are no billing records to export"
-          className="flex items-center gap-1 px-3 py-1.5 rounded-xl border border-[var(--neu-line)] text-xs font-semibold text-muted-foreground cursor-not-allowed"
+          className="flex items-center gap-1 px-3 py-1.5 rounded-xl border border-[var(--clay-line)] text-xs font-semibold text-muted-foreground cursor-not-allowed"
         >
           <Download className="w-3.5 h-3.5 text-muted-foreground" />
           <span>Export CSV</span>
@@ -62,10 +62,10 @@ export function TransactionsTable() {
       </div>
 
       {/* ── Table ── */}
-      <div className="overflow-x-auto rounded-xl border border-[var(--neu-line)]">
+      <div className="overflow-x-auto rounded-xl border border-[var(--clay-line)]">
         <table className="w-full text-left border-collapse text-xs">
           <thead>
-            <tr className="bg-[var(--neu-sunken)]/60 border-b border-[var(--neu-line)] text-muted-foreground font-bold uppercase tracking-wider text-[10px]">
+            <tr className="bg-[var(--clay-sunken)]/60 border-b border-[var(--clay-line)] text-muted-foreground font-bold uppercase tracking-wider text-[10px]">
               <th className="py-2.5 px-4">Invoice</th>
               <th className="py-2.5 px-4">Customer</th>
               <th className="py-2.5 px-4">Plan Tier</th>

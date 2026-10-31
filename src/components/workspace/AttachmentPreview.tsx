@@ -61,21 +61,21 @@ import { cn } from "@/lib/utils";
  */
 
 const KIND_STYLE: Record<AttachmentKind, { Icon: typeof FileIcon; plate: string; glyph: string }> = {
-    image: { Icon: FileImageIcon, plate: "bg-violet-500/10", glyph: "text-violet-600 dark:text-violet-400" },
-    video: { Icon: FileVideoIcon, plate: "bg-fuchsia-500/10", glyph: "text-fuchsia-600 dark:text-fuchsia-400" },
+    image: { Icon: FileImageIcon, plate: "bg-[var(--clay-sunken)]", glyph: "text-foreground" },
+    video: { Icon: FileVideoIcon, plate: "bg-[var(--clay-sunken)]", glyph: "text-foreground" },
     audio: { Icon: FileAudioIcon, plate: "bg-pink-500/10", glyph: "text-pink-600 dark:text-pink-400" },
     pdf: { Icon: FileTextIcon, plate: "bg-red-500/10", glyph: "text-red-600 dark:text-red-400" },
     sheet: { Icon: FileSpreadsheetIcon, plate: "bg-emerald-500/10", glyph: "text-emerald-600 dark:text-emerald-400" },
-    doc: { Icon: FileTextIcon, plate: "bg-sky-500/10", glyph: "text-sky-600 dark:text-sky-400" },
+    doc: { Icon: FileTextIcon, plate: "bg-[var(--clay-sunken)]", glyph: "text-foreground" },
     slides: { Icon: PresentationIcon, plate: "bg-orange-500/10", glyph: "text-orange-600 dark:text-orange-400" },
-    text: { Icon: FileTextIcon, plate: "bg-[var(--neu-sunken-deep)]", glyph: "text-muted-foreground" },
-    code: { Icon: FileCodeIcon, plate: "bg-blue-500/10", glyph: "text-blue-600 dark:text-blue-400" },
-    data: { Icon: BracesIcon, plate: "bg-teal-500/10", glyph: "text-teal-600 dark:text-teal-400" },
+    text: { Icon: FileTextIcon, plate: "bg-[var(--clay-sunken-deep)]", glyph: "text-muted-foreground" },
+    code: { Icon: FileCodeIcon, plate: "bg-[var(--clay-sunken)]", glyph: "text-foreground dark:text-muted-foreground" },
+    data: { Icon: BracesIcon, plate: "bg-[var(--clay-sunken)]", glyph: "text-foreground" },
     archive: { Icon: FileArchiveIcon, plate: "bg-amber-500/10", glyph: "text-amber-600 dark:text-amber-400" },
-    model3d: { Icon: BoxIcon, plate: "bg-cyan-500/10", glyph: "text-cyan-600 dark:text-cyan-400" },
-    font: { Icon: TypeIcon, plate: "bg-indigo-500/10", glyph: "text-indigo-600 dark:text-indigo-400" },
+    model3d: { Icon: BoxIcon, plate: "bg-[var(--clay-sunken)]", glyph: "text-foreground" },
+    font: { Icon: TypeIcon, plate: "bg-[var(--clay-sunken)]", glyph: "text-foreground" },
     design: { Icon: PaletteIcon, plate: "bg-rose-500/10", glyph: "text-rose-600 dark:text-rose-400" },
-    file: { Icon: FileIcon, plate: "bg-[var(--neu-sunken)]0/10", glyph: "text-muted-foreground " },
+    file: { Icon: FileIcon, plate: "bg-[var(--clay-sunken)]", glyph: "text-muted-foreground " },
 };
 
 /** What a chip needs, whichever of the three surfaces it is on. */
@@ -175,7 +175,7 @@ function AttachmentChip({
     );
 
     const shell =
-        "flex items-center gap-2 rounded-lg border border-[var(--neu-line)] bg-card/70 p-1.5 pr-2 shadow-[var(--neu-elev-1)]";
+        "flex items-center gap-2 rounded-lg border border-[var(--clay-line)] bg-card/70 p-1.5 pr-2 shadow-[var(--clay-elev-1)]";
     const width = compact ? "max-w-[190px]" : "max-w-[220px]";
 
     // In history there is nothing to remove, and the whole chip opens the file.
@@ -186,7 +186,7 @@ function AttachmentChip({
                 target="_blank"
                 rel="noopener noreferrer"
                 title={item.name}
-                className={cn(shell, width, "transition-[box-shadow] hover:shadow-[var(--neu-elev-2)]")}
+                className={cn(shell, width, "transition-[box-shadow] hover:shadow-[var(--clay-elev-2)]")}
             >
                 {body}
             </a>

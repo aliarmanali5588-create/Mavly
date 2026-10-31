@@ -88,7 +88,7 @@ export function ErrorState({
     >
       <span
         aria-hidden
-        className="mb-4 grid size-12 place-items-center rounded-2xl border border-[var(--neu-line)] bg-[var(--neu-sunken)] text-destructive shadow-[var(--neu-inset-2)]"
+        className="mb-4 grid size-12 place-items-center rounded-2xl border border-[var(--clay-line)] bg-[var(--clay-sunken)] text-destructive shadow-[var(--clay-well-2)]"
       >
         <AlertTriangleIcon className="size-5" />
       </span>

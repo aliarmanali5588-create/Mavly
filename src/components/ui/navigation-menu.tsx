@@ -59,7 +59,7 @@ function NavigationMenuItem({
 }
 
 const navigationMenuTriggerStyle = cva(
-  "group inline-flex h-9 w-max items-center justify-center rounded-xl border border-transparent px-4 py-2 text-sm font-medium text-foreground outline-none transition-[box-shadow,background-color] duration-200 hover:bg-[var(--neu-sunken)] hover:shadow-[var(--neu-inset-1)] focus-visible:shadow-[var(--neu-focus)] disabled:pointer-events-none disabled:opacity-50 data-[state=open]:bg-[var(--neu-sunken)] data-[state=open]:shadow-[var(--neu-inset-1)]"
+  "group inline-flex h-9 w-max items-center justify-center rounded-xl border border-transparent px-4 py-2 text-sm font-medium text-foreground outline-none transition-[box-shadow,background-color] duration-200 hover:bg-[var(--clay-sunken)] hover:shadow-[var(--clay-well-1)] focus-visible:shadow-[var(--clay-focus)] disabled:pointer-events-none disabled:opacity-50 data-[state=open]:bg-[var(--clay-sunken)] data-[state=open]:shadow-[var(--clay-well-1)]"
 )
 
 function NavigationMenuTrigger({
@@ -112,7 +112,7 @@ function NavigationMenuViewport({
       <NavigationMenuPrimitive.Viewport
         data-slot="navigation-menu-viewport"
         className={cn(
-          "origin-top-center bg-card text-popover-foreground data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-90 relative mt-1.5 h-[var(--radix-navigation-menu-viewport-height)] w-full overflow-hidden rounded-2xl border border-[var(--neu-line)] shadow-[var(--neu-float)] md:w-[var(--radix-navigation-menu-viewport-width)]",
+          "origin-top-center bg-card text-popover-foreground data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-90 relative mt-1.5 h-[var(--radix-navigation-menu-viewport-height)] w-full overflow-hidden rounded-2xl border border-[var(--clay-line)] shadow-[var(--clay-float)] md:w-[var(--radix-navigation-menu-viewport-width)]",
           className
         )}
         {...props}
@@ -129,7 +129,7 @@ function NavigationMenuLink({
     <NavigationMenuPrimitive.Link
       data-slot="navigation-menu-link"
       className={cn(
-        "data-[active=true]:bg-[var(--neu-sunken)] data-[active=true]:shadow-[var(--neu-inset-1)] data-[active=true]:text-accent-foreground hover:bg-[var(--neu-sunken)] hover:shadow-[var(--neu-inset-1)] focus:bg-[var(--neu-sunken)] focus:text-accent-foreground [&_svg:not([class*='text-'])]:text-muted-foreground flex flex-col gap-1 rounded-xl p-2.5 text-sm transition-[box-shadow,background-color] duration-200 outline-none focus-visible:shadow-[var(--neu-focus)] [&_svg:not([class*='size-'])]:size-4",
+        "data-[active=true]:bg-[var(--clay-sunken)] data-[active=true]:shadow-[var(--clay-well-1)] data-[active=true]:text-accent-foreground hover:bg-[var(--clay-sunken)] hover:shadow-[var(--clay-well-1)] focus:bg-[var(--clay-sunken)] focus:text-accent-foreground [&_svg:not([class*='text-'])]:text-muted-foreground flex flex-col gap-1 rounded-xl p-2.5 text-sm transition-[box-shadow,background-color] duration-200 outline-none focus-visible:shadow-[var(--clay-focus)] [&_svg:not([class*='size-'])]:size-4",
         className
       )}
       {...props}

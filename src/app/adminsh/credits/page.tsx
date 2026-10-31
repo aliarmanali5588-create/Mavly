@@ -96,22 +96,22 @@ export default function CreditsAdminPage() {
         );
       case "Grant":
         return (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-blue-50 text-blue-700 border border-blue-200/60 font-mono">
-            <Sparkles className="w-3 h-3 text-blue-600" />
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-[var(--clay-sunken)] text-foreground border border-[var(--clay-line)]/60 font-mono">
+            <Sparkles className="w-3 h-3 text-foreground" />
             Grant
           </span>
         );
       case "Usage":
         return (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-[var(--neu-sunken)] text-foreground border border-[var(--neu-line)] font-mono">
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-[var(--clay-sunken)] text-foreground border border-[var(--clay-line)] font-mono">
             <ArrowDownLeft className="w-3 h-3 text-muted-foreground" />
             Usage
           </span>
         );
       case "Refund":
         return (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-purple-50 text-purple-700 border border-purple-200/60 font-mono">
-            <RefreshCw className="w-3 h-3 text-purple-600" />
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-[var(--clay-sunken)] text-foreground border border-[var(--clay-line)]/60 font-mono">
+            <RefreshCw className="w-3 h-3 text-foreground" />
             Refund
           </span>
         );
@@ -129,7 +129,7 @@ export default function CreditsAdminPage() {
     <AdminShell activeNav="Credits">
       {/* 1. Credit Economics Overview Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
-        <div className="p-4 rounded-xl bg-card border border-[var(--neu-line)] shadow-[var(--neu-elev-2)]">
+        <div className="p-4 rounded-xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)]">
           <div className="flex items-center justify-between text-xs text-muted-foreground font-medium">
             <span>Total Issued</span>
             <Coins className="w-3.5 h-3.5 text-amber-500" />
@@ -141,25 +141,25 @@ export default function CreditsAdminPage() {
           </div>
         </div>
 
-        <div className="p-4 rounded-xl bg-card border border-[var(--neu-line)] shadow-[var(--neu-elev-2)]">
+        <div className="p-4 rounded-xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)]">
           <div className="flex items-center justify-between text-xs text-muted-foreground font-medium">
             <span>Monthly Consumption</span>
-            <ArrowDownLeft className="w-3.5 h-3.5 text-blue-500" />
+            <ArrowDownLeft className="w-3.5 h-3.5 text-muted-foreground" />
           </div>
           <h3 className="text-xl font-bold tracking-tight text-foreground font-mono mt-1">620,400</h3>
           <p className="text-[11px] text-muted-foreground mt-1">Avg 42 credits / prompt run</p>
         </div>
 
-        <div className="p-4 rounded-xl bg-card border border-[var(--neu-line)] shadow-[var(--neu-elev-2)]">
+        <div className="p-4 rounded-xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)]">
           <div className="flex items-center justify-between text-xs text-muted-foreground font-medium">
             <span>Outstanding Balance</span>
-            <CreditCard className="w-3.5 h-3.5 text-purple-500" />
+            <CreditCard className="w-3.5 h-3.5 text-muted-foreground" />
           </div>
           <h3 className="text-xl font-bold tracking-tight text-foreground font-mono mt-1">1,222,100</h3>
           <p className="text-[11px] text-muted-foreground mt-1">Across 2,410 active wallets</p>
         </div>
 
-        <div className="p-4 rounded-xl bg-card border border-[var(--neu-line)] shadow-[var(--neu-elev-2)]">
+        <div className="p-4 rounded-xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)]">
           <div className="flex items-center justify-between text-xs text-muted-foreground font-medium">
             <span>Refunds & Goodwill</span>
             <RefreshCw className="w-3.5 h-3.5 text-emerald-500" />
@@ -170,14 +170,14 @@ export default function CreditsAdminPage() {
       </div>
 
       {/* 2. Credit Allocation Breakdown Bar */}
-      <div className="p-5 rounded-2xl bg-card border border-[var(--neu-line)] shadow-[var(--neu-elev-2)] space-y-3">
+      <div className="p-5 rounded-2xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)] space-y-3">
         <div className="flex items-center justify-between text-xs">
           <h4 className="text-sm font-semibold tracking-tight text-foreground">Active Pool Distribution</h4>
           <span className="text-muted-foreground font-mono">100% capacity managed</span>
         </div>
-        <div className="h-3 w-full bg-[var(--neu-sunken)] rounded-full overflow-hidden flex">
+        <div className="h-3 w-full bg-[var(--clay-sunken)] rounded-full overflow-hidden flex">
           <div className="bg-black h-full w-[65%]" title="Agency & Pro: 65%" />
-          <div className="bg-blue-600 h-full w-[22%]" title="Starter: 22%" />
+          <div className="bg-foreground h-full w-[22%]" title="Starter: 22%" />
           <div className="bg-amber-500 h-full w-[9%]" title="Creator: 9%" />
           <div className="bg-muted-foreground h-full w-[4%]" title="Free Trials: 4%" />
         </div>
@@ -187,7 +187,7 @@ export default function CreditsAdminPage() {
             <span>Agency & Pro (65%)</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <span className="w-2.5 h-2.5 rounded-full bg-blue-600" />
+            <span className="w-2.5 h-2.5 rounded-full bg-foreground" />
             <span>Starter Tier (22%)</span>
           </div>
           <div className="flex items-center gap-1.5">
@@ -202,10 +202,10 @@ export default function CreditsAdminPage() {
       </div>
 
       {/* 3. Search, Filter & Action Bar */}
-      <div className="bg-card rounded-2xl p-5 sm:p-6 border border-[var(--neu-line)] shadow-[0_2px_8px_rgba(0,0,0,0.02)] space-y-4">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pb-3 border-b border-[var(--neu-line)]">
+      <div className="bg-card rounded-2xl p-5 sm:p-6 border border-[var(--clay-line)] shadow-[var(--clay-elev-1)] space-y-4">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pb-3 border-b border-[var(--clay-line)]">
           {/* Segmented Filter */}
-          <div className="flex flex-wrap items-center gap-1 bg-[var(--neu-sunken)] p-0.5 rounded-lg border border-[var(--neu-line)] text-xs">
+          <div className="flex flex-wrap items-center gap-1 bg-[var(--clay-sunken)] p-0.5 rounded-lg border border-[var(--clay-line)] text-xs">
             {["All", "Purchase", "Usage", "Grant", "Refund", "Adjustment"].map((tf) => (
               <button
                 key={tf}
@@ -230,7 +230,7 @@ export default function CreditsAdminPage() {
                 placeholder="Search user, reason, TX..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full h-8 pl-8 pr-3 text-xs rounded-lg bg-[var(--neu-sunken)] border border-[var(--neu-line)] text-foreground placeholder:text-muted-foreground focus:bg-card focus:outline-none focus:ring-1 focus:ring-black"
+                className="w-full h-8 pl-8 pr-3 text-xs rounded-lg bg-[var(--clay-sunken)] border border-[var(--clay-line)] text-foreground placeholder:text-muted-foreground focus:bg-card focus:outline-none focus:ring-1 focus:ring-black"
               />
             </div>
 
@@ -238,7 +238,7 @@ export default function CreditsAdminPage() {
               onClick={() => {
                 toast.info("Exporting credit transactions ledger (demo)");
               }}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-foreground bg-[var(--neu-sunken)] hover:bg-[var(--neu-sunken)] border border-[var(--neu-line)] rounded-lg transition-colors"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-foreground bg-[var(--clay-sunken)] hover:bg-[var(--clay-sunken)] border border-[var(--clay-line)] rounded-lg transition-colors"
             >
               <Download className="w-3.5 h-3.5" />
               <span>CSV</span>
@@ -246,7 +246,7 @@ export default function CreditsAdminPage() {
 
             <button
               onClick={() => setIsAdjustModalOpen(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-primary hover:bg-[var(--neu-brand-hover)] rounded-lg transition-colors shadow-xs"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-primary hover:bg-[var(--clay-brand-hover)] rounded-lg transition-colors shadow-[var(--clay-elev-ink-1)]"
             >
               <PlusCircle className="w-3.5 h-3.5" />
               <span>Adjust Credits</span>
@@ -258,7 +258,7 @@ export default function CreditsAdminPage() {
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
             <thead>
-              <tr className="border-b border-[var(--neu-line)] text-muted-foreground font-semibold uppercase text-[10px]">
+              <tr className="border-b border-[var(--clay-line)] text-muted-foreground font-semibold uppercase text-[10px]">
                 <th className="pb-3">TX Hash</th>
                 <th className="pb-3">Target User</th>
                 <th className="pb-3 text-center">Operation</th>
@@ -278,7 +278,7 @@ export default function CreditsAdminPage() {
                 </tr>
               ) : (
                 filtered.map((tx) => (
-                  <tr key={tx.id} className="hover:bg-[var(--neu-sunken)]/70 transition-colors">
+                  <tr key={tx.id} className="hover:bg-[var(--clay-sunken)]/70 transition-colors">
                     <td className="py-3.5 font-mono">
                       <div className="flex items-center gap-1.5">
                         <span className="font-semibold text-foreground">{tx.id}</span>
@@ -316,7 +316,7 @@ export default function CreditsAdminPage() {
                     <td className="py-3.5 text-right">
                       <button
                         onClick={() => setSelectedTx(tx)}
-                        className="px-2.5 py-1 text-[11px] font-medium text-foreground bg-[var(--neu-sunken)] hover:bg-[var(--neu-sunken-deep)] rounded-md transition-colors"
+                        className="px-2.5 py-1 text-[11px] font-medium text-foreground bg-[var(--clay-sunken)] hover:bg-[var(--clay-sunken-deep)] rounded-md transition-colors"
                       >
                         Details
                       </button>
@@ -333,7 +333,7 @@ export default function CreditsAdminPage() {
       {isAdjustModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs animate-in fade-in">
           <div className="bg-card rounded-2xl max-w-md w-full border border-black/[0.1] shadow-2xl p-6 relative space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-[var(--neu-line)]">
+            <div className="flex items-center justify-between pb-3 border-b border-[var(--clay-line)]">
               <div className="flex items-center gap-2">
                 <Coins className="w-4 h-4 text-amber-500" />
                 <h3 className="text-sm font-bold text-foreground">Adjust User Credit Balance</h3>
@@ -354,7 +354,7 @@ export default function CreditsAdminPage() {
                 <select
                   value={targetUserEmail}
                   onChange={(e) => setTargetUserEmail(e.target.value)}
-                  className="w-full px-3 py-2 bg-[var(--neu-sunken)] border border-[var(--neu-line)] rounded-xl focus:outline-none focus:bg-card"
+                  className="w-full px-3 py-2 bg-[var(--clay-sunken)] border border-[var(--clay-line)] rounded-xl focus:outline-none focus:bg-card"
                 >
                   {MOCK_USERS_LIST.map((u) => (
                     <option key={u.id} value={u.email}>
@@ -374,7 +374,7 @@ export default function CreditsAdminPage() {
                     onChange={(e) =>
                       setAdjustType(e.target.value as "Grant" | "Adjustment" | "Refund")
                     }
-                    className="w-full px-3 py-2 bg-[var(--neu-sunken)] border border-[var(--neu-line)] rounded-xl focus:outline-none focus:bg-card"
+                    className="w-full px-3 py-2 bg-[var(--clay-sunken)] border border-[var(--clay-line)] rounded-xl focus:outline-none focus:bg-card"
                   >
                     <option value="Grant">Grant (Bonus)</option>
                     <option value="Adjustment">Adjustment</option>
@@ -390,7 +390,7 @@ export default function CreditsAdminPage() {
                     value={adjustAmount}
                     onChange={(e) => setAdjustAmount(e.target.value)}
                     min="1"
-                    className="w-full px-3 py-2 bg-[var(--neu-sunken)] border border-[var(--neu-line)] rounded-xl focus:outline-none focus:bg-card font-mono"
+                    className="w-full px-3 py-2 bg-[var(--clay-sunken)] border border-[var(--clay-line)] rounded-xl focus:outline-none focus:bg-card font-mono"
                   />
                 </div>
               </div>
@@ -403,22 +403,22 @@ export default function CreditsAdminPage() {
                   rows={2}
                   value={adjustReason}
                   onChange={(e) => setAdjustReason(e.target.value)}
-                  className="w-full px-3 py-2 bg-[var(--neu-sunken)] border border-[var(--neu-line)] rounded-xl focus:outline-none focus:bg-card"
+                  className="w-full px-3 py-2 bg-[var(--clay-sunken)] border border-[var(--clay-line)] rounded-xl focus:outline-none focus:bg-card"
                   placeholder="e.g. VIP onboarding gift or service downtime compensation"
                 />
               </div>
 
-              <div className="pt-2 flex items-center justify-end gap-2 border-t border-[var(--neu-line)]">
+              <div className="pt-2 flex items-center justify-end gap-2 border-t border-[var(--clay-line)]">
                 <button
                   type="button"
                   onClick={() => setIsAdjustModalOpen(false)}
-                  className="px-3.5 py-1.5 text-xs font-medium text-foreground bg-[var(--neu-sunken)] hover:bg-[var(--neu-sunken-deep)] rounded-lg transition-colors"
+                  className="px-3.5 py-1.5 text-xs font-medium text-foreground bg-[var(--clay-sunken)] hover:bg-[var(--clay-sunken-deep)] rounded-lg transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-1.5 text-xs font-semibold text-white bg-primary hover:bg-[var(--neu-brand-hover)] rounded-lg transition-colors"
+                  className="px-4 py-1.5 text-xs font-semibold text-white bg-primary hover:bg-[var(--clay-brand-hover)] rounded-lg transition-colors"
                 >
                   Apply Credit Adjustment
                 </button>
@@ -432,7 +432,7 @@ export default function CreditsAdminPage() {
       {selectedTx && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs animate-in fade-in">
           <div className="bg-card rounded-2xl max-w-md w-full border border-black/[0.1] shadow-2xl p-6 relative space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-[var(--neu-line)]">
+            <div className="flex items-center justify-between pb-3 border-b border-[var(--clay-line)]">
               <div className="flex items-center gap-2">
                 <History className="w-4 h-4 text-foreground" />
                 <h3 className="text-sm font-bold text-foreground">Transaction Details</h3>
@@ -445,45 +445,45 @@ export default function CreditsAdminPage() {
               </button>
             </div>
 
-            <div className="space-y-2 bg-[var(--neu-sunken)] p-4 rounded-xl border border-[var(--neu-line)] text-xs">
-              <div className="flex justify-between py-1 border-b border-[var(--neu-line)]">
+            <div className="space-y-2 bg-[var(--clay-sunken)] p-4 rounded-xl border border-[var(--clay-line)] text-xs">
+              <div className="flex justify-between py-1 border-b border-[var(--clay-line)]">
                 <span className="text-muted-foreground">TX Hash:</span>
                 <span className="font-mono font-semibold text-foreground">{selectedTx.id}</span>
               </div>
-              <div className="flex justify-between py-1 border-b border-[var(--neu-line)]">
+              <div className="flex justify-between py-1 border-b border-[var(--clay-line)]">
                 <span className="text-muted-foreground">User:</span>
                 <span className="font-semibold text-foreground">{selectedTx.user} ({selectedTx.email})</span>
               </div>
-              <div className="flex justify-between py-1 border-b border-[var(--neu-line)]">
+              <div className="flex justify-between py-1 border-b border-[var(--clay-line)]">
                 <span className="text-muted-foreground">Operation:</span>
                 <span>{getTypeBadge(selectedTx.type)}</span>
               </div>
-              <div className="flex justify-between py-1 border-b border-[var(--neu-line)]">
+              <div className="flex justify-between py-1 border-b border-[var(--clay-line)]">
                 <span className="text-muted-foreground">Delta Amount:</span>
                 <span className="font-mono font-bold text-emerald-600">
                   {selectedTx.amount > 0 ? `+${selectedTx.amount}` : selectedTx.amount}
                 </span>
               </div>
-              <div className="flex justify-between py-1 border-b border-[var(--neu-line)]">
+              <div className="flex justify-between py-1 border-b border-[var(--clay-line)]">
                 <span className="text-muted-foreground">Balance After:</span>
                 <span className="font-mono font-bold text-foreground">{selectedTx.balanceAfter}</span>
               </div>
-              <div className="flex justify-between py-1 border-b border-[var(--neu-line)]">
+              <div className="flex justify-between py-1 border-b border-[var(--clay-line)]">
                 <span className="text-muted-foreground">Timestamp:</span>
                 <span className="text-foreground">{selectedTx.timestamp}</span>
               </div>
               <div className="pt-1">
                 <span className="text-muted-foreground block mb-1">Reason / Note:</span>
-                <p className="text-foreground bg-card p-2 rounded-lg border border-[var(--neu-line)]">
+                <p className="text-foreground bg-card p-2 rounded-lg border border-[var(--clay-line)]">
                   {selectedTx.reason}
                 </p>
               </div>
             </div>
 
-            <div className="flex justify-end pt-2 border-t border-[var(--neu-line)]">
+            <div className="flex justify-end pt-2 border-t border-[var(--clay-line)]">
               <button
                 onClick={() => setSelectedTx(null)}
-                className="px-4 py-1.5 text-xs font-semibold text-foreground bg-[var(--neu-sunken)] hover:bg-[var(--neu-sunken-deep)] rounded-lg"
+                className="px-4 py-1.5 text-xs font-semibold text-foreground bg-[var(--clay-sunken)] hover:bg-[var(--clay-sunken-deep)] rounded-lg"
               >
                 Close
               </button>

@@ -32,16 +32,16 @@ export function UpgradeClient({ profile }: UpgradeClientProps) {
   };
 
   return (
-    <div className="min-h-screen bg-[var(--neu-base)] text-foreground flex flex-col mavly-page-enter">
+    <div className="min-h-screen bg-[var(--clay-base)] text-foreground flex flex-col mavly-page-enter">
       {/* Top Navigation Bar */}
-      <header className="sticky top-0 z-50 bg-[color-mix(in_srgb,var(--neu-base)_86%,transparent)] backdrop-blur-md border-b border-[var(--neu-line)]">
+      <header className="sticky top-0 z-50 bg-[color-mix(in_srgb,var(--clay-base)_86%,transparent)] backdrop-blur-md border-b border-[var(--clay-line)]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <div className="flex items-center gap-6">
             <Link
               href={userEmail ? "/dashboard" : "/"}
               className="flex items-center gap-2.5 group select-none"
             >
-              <div className="w-8 h-8 rounded-xl overflow-hidden bg-card shadow-xs p-0.5 border border-[var(--neu-line)] flex items-center justify-center transition-transform duration-200 group-hover:scale-105 active:scale-95">
+              <div className="w-8 h-8 rounded-xl overflow-hidden bg-card shadow-xs p-0.5 border border-[var(--clay-line)] flex items-center justify-center transition-transform duration-200 group-hover:scale-105 active:scale-95">
                 <Image
                   src="/logo/Mavly.png"
                   alt="Mavly Logo"
@@ -93,7 +93,7 @@ export function UpgradeClient({ profile }: UpgradeClientProps) {
 
         {/* On-demand Credit Top-up Banner */}
         <section className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 pb-20">
-          <div className="p-6 sm:p-8 rounded-3xl bg-card border border-[var(--neu-line)] shadow-[0_4px_20px_-2px_rgba(0,0,0,0.03)] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
+          <div className="p-6 sm:p-8 rounded-3xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
             <div className="max-w-xl">
               <div className="flex items-center gap-2 mb-2">
                 <Sparkles className="w-4 h-4 text-black" />
@@ -141,7 +141,7 @@ export function UpgradeClient({ profile }: UpgradeClientProps) {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="my-4 p-3.5 rounded-xl bg-[var(--neu-base)] border border-[var(--neu-line)] text-xs text-foreground space-y-1.5">
+          <div className="my-4 p-3.5 rounded-xl bg-[var(--clay-base)] border border-[var(--clay-line)] text-xs text-foreground space-y-1.5">
             <div className="flex justify-between font-medium">
               <span>Selected Tier:</span>
               <span className="font-bold text-foreground">{selectedPlanForNotice?.name}</span>
@@ -150,7 +150,7 @@ export function UpgradeClient({ profile }: UpgradeClientProps) {
               <span>Base Monthly Price:</span>
               <span>₹{selectedPlanForNotice?.monthlyPrice} / month</span>
             </div>
-            <p className="text-[11px] text-muted-foreground pt-1 border-t border-[var(--neu-line)]">
+            <p className="text-[11px] text-muted-foreground pt-1 border-t border-[var(--clay-line)]">
               To request early access or volume agency billing, please contact our team directly.
             </p>
           </div>
@@ -177,7 +177,7 @@ export function UpgradeClient({ profile }: UpgradeClientProps) {
       </Dialog>
 
       {/* Footer */}
-      <footer className="py-8 border-t border-[var(--neu-line)] text-xs text-muted-foreground">
+      <footer className="py-8 border-t border-[var(--clay-line)] text-xs text-muted-foreground">
         <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-4">
           <p>© {new Date().getFullYear()} Mavly. All rights reserved.</p>
           <div className="flex items-center gap-5">

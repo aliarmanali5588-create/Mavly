@@ -20,7 +20,7 @@ export default function TermsPage() {
     <MarketingPageShell>
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 space-y-12">
         {/* Header */}
-        <div className="space-y-3 border-b border-[var(--neu-line)] pb-6">
+        <div className="space-y-3 border-b border-[var(--clay-line)] pb-6">
           <div className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-muted-foreground">
             <FileText className="w-3.5 h-3.5" />
             <span>LEGAL AGREEMENT</span>
@@ -124,12 +124,12 @@ export default function TermsPage() {
             </p>
           </section>
 
-          <section id="contact" className="space-y-2 border-t border-[var(--neu-line)] pt-6">
+          <section id="contact" className="space-y-2 border-t border-[var(--clay-line)] pt-6">
             <h2 className="text-base font-bold text-foreground">13. Contact Information</h2>
             <p>
               For legal questions, general notices, or compliance inquiries, please reach out directly:
             </p>
-            <div className="p-4 rounded-xl bg-[var(--neu-sunken)] border border-black/[0.04] inline-block font-mono text-xs">
+            <div className="p-4 rounded-xl bg-[var(--clay-sunken)] border border-black/[0.04] inline-block font-mono text-xs">
               <a href="mailto:hello@mavly.xyz" className="text-black font-semibold hover:underline">
                 hello@mavly.xyz
               </a>

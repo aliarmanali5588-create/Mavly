@@ -33,7 +33,7 @@ export default function IntegrationsPage() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-20">
         {/* Hero */}
         <div className="max-w-3xl mx-auto text-center space-y-5 pt-6 sm:pt-12">
-          <div className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-muted-foreground bg-[var(--neu-sunken)] px-3 py-1 rounded-full border border-[var(--neu-line)]">
+          <div className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-muted-foreground bg-[var(--clay-sunken)] px-3 py-1 rounded-full border border-[var(--clay-line)]">
             <Layers className="w-3.5 h-3.5 text-foreground" />
             <span>CONNECTED WORKFLOWS</span>
           </div>
@@ -60,7 +60,7 @@ export default function IntegrationsPage() {
         {/* Core Integrations Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
           {/* GitHub App */}
-          <div className="p-8 rounded-3xl bg-card border border-[var(--neu-line)] shadow-[0_4px_20px_rgba(0,0,0,0.02)] space-y-6">
+          <div className="p-8 rounded-3xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)] space-y-6">
             <div className="flex items-center justify-between">
               <div className="w-12 h-12 rounded-2xl bg-black text-white flex items-center justify-center">
                 <GitBranch className="w-6 h-6" />
@@ -77,7 +77,7 @@ export default function IntegrationsPage() {
               </p>
             </div>
 
-            <div className="space-y-2.5 text-xs text-foreground border-t border-[var(--neu-line)] pt-4">
+            <div className="space-y-2.5 text-xs text-foreground border-t border-[var(--clay-line)] pt-4">
               <h4 className="font-semibold text-foreground">Supported Capabilities:</h4>
               <ul className="space-y-2">
                 <li className="flex items-start gap-2">
@@ -99,18 +99,18 @@ export default function IntegrationsPage() {
               </ul>
             </div>
 
-            <div className="p-3.5 rounded-xl bg-[var(--neu-sunken)] border border-[var(--neu-line)] text-[11px] text-muted-foreground">
+            <div className="p-3.5 rounded-xl bg-[var(--clay-sunken)] border border-[var(--clay-line)] text-[11px] text-muted-foreground">
               <strong>Security Invariant:</strong> Tokens are encrypted using AES-256-GCM and never exposed to client browsers or model prompts.
             </div>
           </div>
 
           {/* Vercel Publishing */}
-          <div className="p-8 rounded-3xl bg-card border border-[var(--neu-line)] shadow-[0_4px_20px_rgba(0,0,0,0.02)] space-y-6">
+          <div className="p-8 rounded-3xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)] space-y-6">
             <div className="flex items-center justify-between">
               <div className="w-12 h-12 rounded-2xl bg-black text-white flex items-center justify-center font-bold">
                 ▲
               </div>
-              <span className="text-[11px] font-bold text-blue-700 bg-blue-50 border border-blue-200 px-2.5 py-0.5 rounded-full">
+              <span className="text-[11px] font-bold text-foreground bg-[var(--clay-sunken)] border border-[var(--clay-line)] px-2.5 py-0.5 rounded-full">
                 Operator Configured
               </span>
             </div>
@@ -122,15 +122,15 @@ export default function IntegrationsPage() {
               </p>
             </div>
 
-            <div className="space-y-2.5 text-xs text-foreground border-t border-[var(--neu-line)] pt-4">
+            <div className="space-y-2.5 text-xs text-foreground border-t border-[var(--clay-line)] pt-4">
               <h4 className="font-semibold text-foreground">Publishing Prerequisites:</h4>
               <ul className="space-y-2">
                 <li className="flex items-start gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+                  <CheckCircle2 className="w-4 h-4 text-foreground shrink-0 mt-0.5" />
                   <span>Attaches server-derived <code>&lt;project-id&gt;.mavly.xyz</code> domain upon build completion.</span>
                 </li>
                 <li className="flex items-start gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+                  <CheckCircle2 className="w-4 h-4 text-foreground shrink-0 mt-0.5" />
                   <span>Requires operator token activation and verified DNS wildcard resolution.</span>
                 </li>
                 <li className="flex items-start gap-2">
@@ -144,9 +144,9 @@ export default function IntegrationsPage() {
           </div>
 
           {/* OpenRouter code generation */}
-          <div className="p-8 rounded-3xl bg-card border border-[var(--neu-line)] shadow-[0_4px_20px_rgba(0,0,0,0.02)] space-y-6">
+          <div className="p-8 rounded-3xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)] space-y-6">
             <div className="flex items-center justify-between">
-              <div className="w-12 h-12 rounded-2xl bg-purple-600 text-white flex items-center justify-center">
+              <div className="w-12 h-12 rounded-2xl bg-foreground text-white flex items-center justify-center">
                 <Cpu className="w-6 h-6" />
               </div>
               <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-full">
@@ -161,7 +161,7 @@ export default function IntegrationsPage() {
               </p>
             </div>
 
-            <div className="space-y-2.5 text-xs text-foreground border-t border-[var(--neu-line)] pt-4">
+            <div className="space-y-2.5 text-xs text-foreground border-t border-[var(--clay-line)] pt-4">
               <h4 className="font-semibold text-foreground">Configured Model:</h4>
               <ul className="space-y-2">
                 <li className="flex items-start gap-2">
@@ -182,7 +182,7 @@ export default function IntegrationsPage() {
         </div>
 
         {/* Integration Setup Checklist */}
-        <div className="p-8 sm:p-12 rounded-3xl bg-card border border-[var(--neu-line)] shadow-[0_4px_20px_rgba(0,0,0,0.02)] space-y-6">
+        <div className="p-8 sm:p-12 rounded-3xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)] space-y-6">
           <div className="max-w-2xl">
             <h3 className="text-xl font-bold text-foreground">Quick Integration Checklist</h3>
             <p className="text-xs sm:text-sm text-muted-foreground mt-1">
@@ -191,19 +191,19 @@ export default function IntegrationsPage() {
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 text-xs text-foreground">
-            <div className="p-4 rounded-xl bg-[var(--neu-sunken)] border border-[var(--neu-line)] space-y-2">
+            <div className="p-4 rounded-xl bg-[var(--clay-sunken)] border border-[var(--clay-line)] space-y-2">
               <span className="font-bold text-foreground">1. Authorize Service</span>
               <p className="text-muted-foreground leading-relaxed">
                 Open the workspace settings or integrations panel and authorize the GitHub App through its secure OAuth flow.
               </p>
             </div>
-            <div className="p-4 rounded-xl bg-[var(--neu-sunken)] border border-[var(--neu-line)] space-y-2">
+            <div className="p-4 rounded-xl bg-[var(--clay-sunken)] border border-[var(--clay-line)] space-y-2">
               <span className="font-bold text-foreground">2. Select Project / Repo</span>
               <p className="text-muted-foreground leading-relaxed">
                 Choose the exact repository and branch where project files should synchronize or initialize an empty repo.
               </p>
             </div>
-            <div className="p-4 rounded-xl bg-[var(--neu-sunken)] border border-[var(--neu-line)] space-y-2">
+            <div className="p-4 rounded-xl bg-[var(--clay-sunken)] border border-[var(--clay-line)] space-y-2">
               <span className="font-bold text-foreground">3. Review and Push</span>
               <p className="text-muted-foreground leading-relaxed">
                 Verify generated changes in the diff viewer and trigger an automated commit push anytime.

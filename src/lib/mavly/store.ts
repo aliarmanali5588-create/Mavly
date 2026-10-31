@@ -673,6 +673,32 @@ export async function writeFiles(
   return { ok: true, data: undefined };
 }
 
+export async function insertFilesIfMissing(
+  userId: string,
+  projectId: string,
+  files: readonly AgentFile[],
+  supabase?: SupabaseClient | null,
+): Promise<StoreResult<void>> {
+  const dbc = await db(supabase);
+  if (!dbc) return { ok: false, error: "Supabase is not configured", code: "UNAVAILABLE" };
+  if (files.length === 0) return { ok: true, data: undefined };
+
+  const now = new Date().toISOString();
+  const rows = files.map((file) => ({
+    project_id: projectId,
+    path: file.path,
+    content: file.content,
+    updated_at: now,
+  }));
+  const { error } = await dbc
+    .from("project_files")
+    .upsert(rows, { onConflict: "project_id,path", ignoreDuplicates: true });
+  if (error) return dbError("insert missing files", error.message, error.code);
+
+  await touchProject(userId, projectId, dbc);
+  return { ok: true, data: undefined };
+}
+
 export async function hasFile(projectId: string, path: string): Promise<boolean> {
   const supabase = await client();
   if (!supabase) return false;

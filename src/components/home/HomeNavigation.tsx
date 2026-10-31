@@ -27,14 +27,14 @@ export function HomeNavigation() {
     <header
       className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
         scrolled
-          ? "bg-[color-mix(in_srgb,var(--neu-base)_88%,transparent)] backdrop-blur-xl border-b border-[var(--neu-line)] shadow-[0_8px_28px_-18px_rgb(150_128_118/0.55)]"
+          ? "bg-[color-mix(in_srgb,var(--clay-base)_88%,transparent)] backdrop-blur-xl border-b border-[var(--clay-line)] shadow-[var(--clay-elev-2)]"
           : "bg-transparent border-b border-transparent"
       }`}
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-8 h-16 sm:h-20 flex items-center justify-between">
         {/* Brand Logo */}
         <Link href="/" className="flex items-center gap-2.5 group select-none">
-          <div className="w-8 h-8 rounded-xl overflow-hidden bg-card shadow-[var(--neu-elev-1)] p-0.5 border border-[var(--neu-line)] flex items-center justify-center transition-[box-shadow,transform] duration-200 group-hover:shadow-[var(--neu-elev-2)] active:shadow-[var(--neu-inset-1)]">
+          <div className="w-8 h-8 rounded-xl overflow-hidden bg-card shadow-[var(--clay-elev-1)] p-0.5 border border-[var(--clay-line)] flex items-center justify-center transition-[box-shadow,transform] duration-200 group-hover:shadow-[var(--clay-elev-2)] active:shadow-[var(--clay-well-1)]">
             <Image
               src="/logo/Mavly.png"
               alt="Mavly Logo"

@@ -57,7 +57,7 @@ export function FeaturesSection() {
   ];
 
   return (
-    <section id="features" className="py-24 sm:py-32 bg-[var(--neu-base)]">
+    <section id="features" className="py-24 sm:py-32 bg-[var(--clay-base)]">
       <div className="max-w-6xl mx-auto px-4 sm:px-6">
         {/* Section Header */}
         <div className="text-center max-w-2xl mx-auto mb-16 sm:mb-20">
@@ -79,10 +79,10 @@ export function FeaturesSection() {
             return (
               <div
                 key={idx}
-                className="p-8 sm:p-10 rounded-3xl bg-card border border-[var(--neu-line)] shadow-[var(--neu-elev-2)] hover:shadow-[var(--neu-elev-4)] hover:border-[var(--neu-line-strong)] hover:-translate-y-1 active:translate-y-0 active:shadow-[var(--neu-elev-1)] transition-[box-shadow,transform,border-color] duration-300 flex flex-col justify-between"
+                className="p-8 sm:p-10 rounded-3xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)] hover:shadow-[var(--clay-elev-4)] hover:border-[var(--clay-line-strong)] hover:-translate-y-1 active:translate-y-0 active:shadow-[var(--clay-elev-1)] transition-[box-shadow,transform,border-color] duration-300 flex flex-col justify-between"
               >
                 <div>
-                  <div className="w-12 h-12 rounded-2xl bg-card border border-[var(--neu-line)] shadow-[var(--neu-elev-2)] flex items-center justify-center text-foreground mb-6 transition-[transform,box-shadow] duration-200 group-hover:scale-105 group-hover:shadow-[var(--neu-elev-3)]">
+                  <div className="w-12 h-12 rounded-2xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)] flex items-center justify-center text-foreground mb-6 transition-[transform,box-shadow] duration-200 group-hover:scale-105 group-hover:shadow-[var(--clay-elev-3)]">
                     <Icon className="w-6 h-6" />
                   </div>
                   <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
@@ -109,7 +109,7 @@ export function FeaturesSection() {
         </div>
 
         {/* Bottom Callout Banner */}
-        <div className="mt-16 p-8 sm:p-12 rounded-3xl bg-black text-white text-center flex flex-col items-center justify-center shadow-[0_16px_40px_rgba(0,0,0,0.18)]">
+        <div className="mt-16 p-8 sm:p-12 rounded-3xl bg-black text-white text-center flex flex-col items-center justify-center shadow-[var(--clay-float)]">
           <h3 className="text-2xl sm:text-3xl font-bold tracking-tight">
             Ready to bring your ideas to life?
           </h3>

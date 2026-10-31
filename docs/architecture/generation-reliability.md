@@ -197,10 +197,12 @@ Interpretation rules that keep the number honest:
 
 Production website and Android admissions now write `dispatch_mode = 'worker'` for every
 project; no worker-specific flag or project allowlist gates dispatch. Local development and
-Vercel previews retain the inline `after()` path. The Cloudflare Cron Worker directly
-invokes the existing durable worker once per minute; it uses the existing Supabase queue,
-atomic claim, lease and checkpoint machinery. The code/configuration change does not
-establish that Cloudflare has been deployed or that Cron is running.
+Vercel previews retain the inline `after()` path. The Render Background Worker repeatedly
+invokes the existing durable worker through a single serial loop and uses the existing
+Supabase queue, atomic claim, lease and checkpoint machinery. The code/configuration change
+does not establish that Render has been deployed or that the process is running. The
+legacy Cloudflare Cron configuration remains in the repository and must be disabled before
+the Render worker is enabled.
 
 Migration 36 remains useful for legacy inline runs that cannot finish:
 

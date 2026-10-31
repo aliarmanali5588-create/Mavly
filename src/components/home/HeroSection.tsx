@@ -294,7 +294,7 @@ function HeroCard({
       aria-hidden={isClone}
     >
       <div
-        className={`relative w-full ${card.aspectClass} rounded-xl sm:rounded-2xl overflow-hidden bg-white shadow-[0_12px_32px_rgba(0,0,0,0.07),0_2px_6px_rgba(0,0,0,0.03)] ring-1 ring-black/[0.06] transition-opacity duration-500 ease-out ${
+        className={`relative w-full ${card.aspectClass} rounded-xl sm:rounded-2xl overflow-hidden bg-white shadow-[var(--clay-elev-3)] ring-1 ring-black/[0.06] transition-opacity duration-500 ease-out ${
           isLoaded ? "opacity-100" : "opacity-0"
         }`}
       >
@@ -408,7 +408,7 @@ export function HeroSection() {
   };
 
   return (
-    <section className="relative pt-24 pb-20 sm:pt-32 sm:pb-28 md:pt-36 md:pb-36 overflow-hidden bg-[var(--neu-base)]">
+    <section className="relative pt-24 pb-20 sm:pt-32 sm:pb-28 md:pt-36 md:pb-36 overflow-hidden bg-[var(--clay-base)]">
       {/* Ambient Radial Depth Glow */}
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[550px] bg-gradient-to-b from-black/[0.02] to-transparent rounded-full blur-3xl pointer-events-none -z-10" />
 
@@ -418,7 +418,7 @@ export function HeroSection() {
       <div className="relative max-w-3xl mx-auto px-4 sm:px-6 text-center z-20 pointer-events-auto">
         {/* Official Mavly Logo */}
         <div className="flex items-center justify-center mb-6 sm:mb-8">
-          <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl sm:rounded-3xl overflow-hidden bg-card shadow-[var(--neu-elev-3)] p-1.5 border border-[var(--neu-line)] flex items-center justify-center shrink-0 transition-[transform,box-shadow] duration-300 hover:scale-105 hover:shadow-[var(--neu-elev-4)] select-none">
+          <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl sm:rounded-3xl overflow-hidden bg-card shadow-[var(--clay-elev-3)] p-1.5 border border-[var(--clay-line)] flex items-center justify-center shrink-0 transition-[transform,box-shadow] duration-300 hover:scale-105 hover:shadow-[var(--clay-elev-4)] select-none">
             <Image
               src="/logo/Mavly.png"
               alt="Mavly Logo"
@@ -449,7 +449,7 @@ export function HeroSection() {
             href="/login?provider=google"
             onClick={(event) => void handleProviderClick(event, "google")}
             aria-busy={loadingProvider === "google"}
-            className="w-full h-12 rounded-full bg-primary hover:bg-[var(--neu-brand-hover)] text-white font-medium text-sm flex items-center justify-center gap-3 shadow-[0_4px_14px_rgba(0,0,0,0.14),0_1px_2px_rgba(0,0,0,0.06)] hover:shadow-[0_6px_20px_rgba(0,0,0,0.2)] hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] active:shadow-[inset_0_2px_4px_rgba(0,0,0,0.25)] transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black focus-visible:ring-offset-2 select-none"
+            className="w-full h-12 rounded-full bg-primary hover:bg-[var(--clay-brand-hover)] text-white font-medium text-sm flex items-center justify-center gap-3 shadow-[var(--clay-elev-ink-2)] hover:shadow-[var(--clay-elev-ink-3)] hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] active:shadow-[var(--clay-elev-ink-1)] transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black focus-visible:ring-offset-2 select-none"
           >
             <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" aria-hidden="true">
               <path
@@ -477,7 +477,7 @@ export function HeroSection() {
             href="/login?provider=github"
             onClick={(event) => void handleProviderClick(event, "github")}
             aria-busy={loadingProvider === "github"}
-            className="w-full h-12 rounded-full bg-card text-foreground border border-[var(--neu-line)] font-medium text-sm flex items-center justify-center gap-3 shadow-[var(--neu-elev-2)] hover:shadow-[var(--neu-elev-3)] hover:-translate-y-0.5 active:translate-y-0 active:shadow-[var(--neu-inset-2)] transition-[box-shadow,transform] duration-200 outline-none focus-visible:shadow-[var(--neu-focus)] select-none"
+            className="w-full h-12 rounded-full bg-card text-foreground border border-[var(--clay-line)] font-medium text-sm flex items-center justify-center gap-3 shadow-[var(--clay-elev-2)] hover:shadow-[var(--clay-elev-3)] hover:-translate-y-0.5 active:translate-y-0 active:shadow-[var(--clay-well-2)] transition-[box-shadow,transform] duration-200 outline-none focus-visible:shadow-[var(--clay-focus)] select-none"
           >
             <svg className="w-4 h-4 shrink-0 fill-current text-foreground" viewBox="0 0 24 24" aria-hidden="true">
               <path

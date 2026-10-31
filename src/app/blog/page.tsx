@@ -99,7 +99,7 @@ export default function BlogPage() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-16">
         {/* Hero */}
         <div className="max-w-3xl mx-auto text-center space-y-4 pt-6 sm:pt-12">
-          <div className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-muted-foreground bg-[var(--neu-sunken)] px-3 py-1 rounded-full border border-[var(--neu-line)]">
+          <div className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-muted-foreground bg-[var(--clay-sunken)] px-3 py-1 rounded-full border border-[var(--clay-line)]">
             <BookOpen className="w-3.5 h-3.5 text-foreground" />
             <span>IDEAS AND UPDATES</span>
           </div>
@@ -123,7 +123,7 @@ export default function BlogPage() {
               className={`px-3.5 py-1.5 text-xs font-semibold rounded-xl transition-all cursor-pointer ${
                 selectedCategory === cat
                   ? "bg-black text-white shadow-xs"
-                  : "bg-card text-muted-foreground hover:text-black border border-[var(--neu-line)]"
+                  : "bg-card text-muted-foreground hover:text-black border border-[var(--clay-line)]"
               }`}
             >
               {cat}
@@ -136,7 +136,7 @@ export default function BlogPage() {
           {filteredPosts.map((post) => (
             <article
               key={post.id}
-              className="p-8 rounded-3xl bg-card border border-[var(--neu-line)] shadow-[0_4px_20px_rgba(0,0,0,0.02)] hover:border-black/20 transition-all flex flex-col justify-between space-y-6"
+              className="p-8 rounded-3xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)] hover:border-black/20 transition-all flex flex-col justify-between space-y-6"
             >
               <div className="space-y-3">
                 <div className="flex items-center gap-2 text-xs text-muted-foreground font-medium">
@@ -156,7 +156,7 @@ export default function BlogPage() {
                 </p>
               </div>
 
-              <div className="pt-4 border-t border-[var(--neu-line)] flex items-center justify-between">
+              <div className="pt-4 border-t border-[var(--clay-line)] flex items-center justify-between">
                 <button
                   type="button"
                   onClick={() => setReadingPost(post)}
@@ -174,11 +174,11 @@ export default function BlogPage() {
         {/* Article Reader Modal */}
         {readingPost && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
-            <div className="bg-card rounded-3xl max-w-2xl w-full max-h-[85vh] overflow-y-auto border border-[var(--neu-line)] shadow-2xl p-6 sm:p-8 relative space-y-6">
+            <div className="bg-card rounded-3xl max-w-2xl w-full max-h-[85vh] overflow-y-auto border border-[var(--clay-line)] shadow-2xl p-6 sm:p-8 relative space-y-6">
               <button
                 type="button"
                 onClick={() => setReadingPost(null)}
-                className="absolute top-6 right-6 p-2 rounded-xl text-muted-foreground hover:text-foreground hover:bg-[var(--neu-sunken)] transition-colors"
+                className="absolute top-6 right-6 p-2 rounded-xl text-muted-foreground hover:text-foreground hover:bg-[var(--clay-sunken)] transition-colors"
                 aria-label="Close article"
               >
                 <X className="w-5 h-5" />
@@ -197,13 +197,13 @@ export default function BlogPage() {
                 </h2>
               </div>
 
-              <div className="space-y-4 text-xs sm:text-sm text-foreground leading-relaxed border-t border-[var(--neu-line)] pt-6">
+              <div className="space-y-4 text-xs sm:text-sm text-foreground leading-relaxed border-t border-[var(--clay-line)] pt-6">
                 {readingPost.content.map((paragraph, idx) => (
                   <p key={idx}>{paragraph}</p>
                 ))}
               </div>
 
-              <div className="pt-4 border-t border-[var(--neu-line)] flex items-center justify-between">
+              <div className="pt-4 border-t border-[var(--clay-line)] flex items-center justify-between">
                 <span className="text-xs text-muted-foreground">Written by the Mavly Engineering Team</span>
                 <button
                   type="button"

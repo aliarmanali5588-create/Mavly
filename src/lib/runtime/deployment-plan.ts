@@ -19,6 +19,7 @@
  */
 
 import { hashSource } from "@/lib/mavly/source-hash";
+import { isAgentControlPath } from "@/lib/project-rules/rules";
 
 import { planNextAppRouter } from "./next-app-router";
 import type { SourceFile } from "./profile";
@@ -138,8 +139,19 @@ export function planFullstackDeployment(
     );
   }
 
+  /**
+   * ⚠️ `.mavly` IS HASHED BUT NEVER UPLOADED. The control files are part of the
+   * snapshot (so restore and the verification hash stay consistent), but they
+   * are Mavly's server-owned notes, not website source. They are excluded from
+   * the provider upload without changing the hash the verification recorded.
+   */
+  const deployable = files.filter((file) => !isAgentControlPath(file.path));
+  if (deployable.length === 0) {
+    return failure("invalid_snapshot", "The verified snapshot has no deployable files.");
+  }
+
   let totalBytes = 0;
-  for (const file of files) {
+  for (const file of deployable) {
     if (unsafeDeploymentPath(file.path)) {
       return failure(
         "invalid_snapshot",
@@ -169,7 +181,7 @@ export function planFullstackDeployment(
    * Deploying it would look like success and serve a site with every backend
    * endpoint missing, so it is refused here rather than discovered later.
    */
-  const nextConfig = files.find((file) => NEXT_CONFIG.test(file.path));
+  const nextConfig = deployable.find((file) => NEXT_CONFIG.test(file.path));
   if (nextConfig && STATIC_EXPORT.test(nextConfig.content)) {
     return failure(
       "unsupported_runtime",
@@ -178,12 +190,12 @@ export function planFullstackDeployment(
     );
   }
 
-  const resolved = planNextAppRouter(files);
+  const resolved = planNextAppRouter(deployable);
   if ("code" in resolved) {
     return failure(resolved.code, resolved.summary, resolved.diagnostics);
   }
 
-  const serverRoutePaths = files
+  const serverRoutePaths = deployable
     .map((file) => file.path)
     .filter((path) => isHttpSafePath(path))
     .sort();
@@ -193,19 +205,20 @@ export function planFullstackDeployment(
     plan: {
       profile: "next-app-router",
       nodeImage: resolved.plan.nodeImage,
+      /** The full snapshot hash, including the control files the verification saw. */
       sourceHash: hashSource(files),
-      fileCount: files.length,
+      fileCount: deployable.length,
       totalBytes,
       serverRoutePaths,
-      hasMiddleware: files.some((file) => MIDDLEWARE.test(file.path)),
-      usesServerActions: files.some(
+      hasMiddleware: deployable.some((file) => MIDDLEWARE.test(file.path)),
+      usesServerActions: deployable.some(
         (file) => /\.(?:ts|tsx|js|jsx)$/.test(file.path) && scan(file, SERVER_ACTION),
       ),
-      requiresDatabase: files.some(
+      requiresDatabase: deployable.some(
         (file) =>
           /\.(?:ts|tsx|js|jsx)$/.test(file.path) && scan(file, DATABASE_REFERENCE),
       ),
-      files: files.map((file) => ({ path: file.path, content: file.content })),
+      files: deployable.map((file) => ({ path: file.path, content: file.content })),
     },
   };
 }

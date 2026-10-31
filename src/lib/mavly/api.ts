@@ -131,6 +131,8 @@ import {
   type RunStage,
 } from "./store";
 import { runAgent } from "./run-agent";
+import { ensureProjectRuleFiles } from "@/lib/project-rules/service";
+import { isAgentControlPath } from "@/lib/project-rules/rules";
 import { dispatchModeForProject } from "@/lib/generation/worker-config";
 import { emitGenerationEvent } from "@/lib/observability/events";
 import {
@@ -753,6 +755,24 @@ async function createProjectResponse(userId: string, body: unknown): Promise<Nex
   );
   if (isStoreFailure(created)) return fail(created.code === "CONFLICT" ? 409 : 500, created.code ?? "UNKNOWN", created.error);
 
+  /**
+   * ⚠️ EVERY WEBSITE PROJECT OWNS ITS CONTROL FILES FROM CREATION. The rules
+   * file and the (initially empty) work log live in `project_files`, so the
+   * explorer shows them before the first generation. A failure is reported, not
+   * skipped: a project without rules would let the agents plan unconstrained.
+   */
+  if (projectType === "website") {
+    const rules = await ensureProjectRuleFiles({
+      userId,
+      projectId: created.data.project_id,
+      projectType,
+    });
+    if (!rules.ok) {
+      await deleteProject(userId, created.data.project_id);
+      return fail(500, "GENERATION_PERSIST_FAILED", rules.error);
+    }
+  }
+
   return ok(projectFromRow(created.data, null, false, null, null));
 }
 
@@ -816,6 +836,23 @@ async function launchProjectResponse(userId: string, body: unknown): Promise<Nex
    * request's project, so no failure path below may delete it.
    */
   const mayReuseExistingProject = creationRequestId.length > 0;
+
+  /**
+   * Persist the two control files BEFORE the run is admitted, so the rules are
+   * on disk before the planner can be called and a failure is reported instead
+   * of silently planning without them.
+   */
+  if (projectType === "website") {
+    const rules = await ensureProjectRuleFiles({
+      userId,
+      projectId: created.data.project_id,
+      projectType,
+    });
+    if (!rules.ok) {
+      if (!mayReuseExistingProject) await deleteProject(userId, created.data.project_id);
+      return fail(500, "GENERATION_PERSIST_FAILED", rules.error);
+    }
+  }
 
   if (
     requestedModel === COHERE_NORTH_MINI_CODE_MODEL_ID &&
@@ -2083,6 +2120,25 @@ async function startAgentResponse(userId: string, projectId: string, body: unkno
     );
   }
 
+  /**
+   * Read the project type before admission so a website follow-up cannot be
+   * accepted without its rules and work-state files. The run engine re-checks
+   * this for legacy projects and for worker-dispatched runs.
+   */
+  const projectRecord = await getProject(userId, projectId);
+  if (isStoreFailure(projectRecord)) {
+    return fail(500, "UNKNOWN", "Could not read this project before generation.");
+  }
+  if (!projectRecord.data) return fail(404, "PROJECT_NOT_FOUND", "Project not found.");
+  if (projectRecord.data.project_type !== "android") {
+    const rules = await ensureProjectRuleFiles({
+      userId,
+      projectId,
+      projectType: "website",
+    });
+    if (!rules.ok) return fail(500, "GENERATION_PERSIST_FAILED", rules.error);
+  }
+
   const record = recordOf(body);
   const prompt = (stringOf(record.prompt)?.trim() ?? "").slice(0, 32_000);
   if (!prompt) return fail(400, "VALIDATION", "A prompt is required.");
@@ -2254,6 +2310,20 @@ async function resumeAgentResponse(userId: string, projectId: string): Promise<N
   }
   if (!isAiConfigured()) {
     return fail(503, "BACKEND_NOT_CONFIGURED", generationConfigurationError());
+  }
+
+  const projectRecord = await getProject(userId, projectId);
+  if (isStoreFailure(projectRecord)) {
+    return fail(500, "UNKNOWN", "Could not read this project before resuming.");
+  }
+  if (!projectRecord.data) return fail(404, "PROJECT_NOT_FOUND", "Project not found.");
+  if (projectRecord.data.project_type !== "android") {
+    const rules = await ensureProjectRuleFiles({
+      userId,
+      projectId,
+      projectType: "website",
+    });
+    if (!rules.ok) return fail(500, "GENERATION_PERSIST_FAILED", rules.error);
   }
 
   const current = await latestRun(projectId);
@@ -3015,7 +3085,29 @@ async function fileWriteResponse(userId: string, projectId: string, body: unknow
    */
   const project = await getProject(userId, projectId);
   if (isStoreFailure(project)) return fail(500, "UNKNOWN", "Could not load this project.");
-  if (project.data?.project_type === "android") {
+  if (!project.data) return fail(404, "PROJECT_NOT_FOUND", "Project not found.");
+  if (project.data.project_type === "website") {
+    if (isAgentControlPath(path)) {
+      return fail(
+        403,
+        "FORBIDDEN",
+        "Mavly-managed project rules and work-state files cannot be edited from the source editor.",
+      );
+    }
+
+    const currentRun = await latestRun(projectId);
+    if (isStoreFailure(currentRun)) {
+      return fail(500, "UNKNOWN", "Could not check whether this project is being generated.");
+    }
+    if (currentRun.data && !currentRun.data.finished_at) {
+      return fail(
+        409,
+        "CONFLICT",
+        "This website is being generated. Wait for the run to finish before editing source files.",
+      );
+    }
+  }
+  if (project.data.project_type === "android") {
     const rejection = androidPathRejection(path);
     if (rejection) {
       return fail(400, "VALIDATION", `That path is not allowed in an Android project: ${rejection}.`);

@@ -1,6 +1,6 @@
 @import "tailwindcss";
 @import "tw-animate-css";
-@import "./neumorphic.css";
+@import "./clay.css";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -56,19 +56,19 @@
 :root {
   --radius: 0.75rem;
 
-  /* ── Canonical Mavly palette ──────────────────────────────────────
-     Royal Blue #093FB4 · Pure White #FFFFFF · Pure Black #000000
-     Soft Peach #FFD8D8 · Vivid Orange-Red #ED3500 · Warm White #FFFCFB
+  /* ── Mavly black & white system ───────────────────────────────────
+     White surfaces · black interaction · neutral hierarchy.
 
-     Surfaces are the canonical whites; depth comes from shadow, never
-     from a tinted or darkened canvas. */
+     --primary is Pure Black: every primary action (Build, Generate,
+     Continue, Sign In, Purchase) is solid black on white text.
+     Semantic destructive / warning / success tokens are preserved. */
   --background: #fffcfb;        /* Warm White — app canvas            */
   --foreground: #000000;        /* Pure Black — primary text          */
   --card: #ffffff;              /* Pure White — raised surface        */
   --card-foreground: #000000;
   --popover: #ffffff;
   --popover-foreground: #000000;
-  --primary: #093fb4;           /* Royal Blue — primary action        */
+  --primary: #000000;           /* Pure Black — primary action        */
   --primary-foreground: #ffffff;
   --secondary: #ffffff;         /* Pure White — secondary surface     */
   --secondary-foreground: #000000;
@@ -79,20 +79,20 @@
   --destructive: #ed3500;       /* Vivid Orange-Red                   */
   --border: rgba(0, 0, 0, 0.06);
   --input: rgba(0, 0, 0, 0.08);
-  --ring: #093fb4;              /* Royal Blue focus                   */
-  --chart-1: #093fb4;
+  --ring: #000000;              /* Pure Black focus                   */
+  --chart-1: #000000;
   --chart-2: #ed3500;
   --chart-3: rgba(0, 0, 0, 0.62);
   --chart-4: #ffd8d8;
   --chart-5: #000000;
   --sidebar: #ffffff;
   --sidebar-foreground: #000000;
-  --sidebar-primary: #093fb4;
+  --sidebar-primary: #000000;
   --sidebar-primary-foreground: #ffffff;
   --sidebar-accent: #f7f2f0;
   --sidebar-accent-foreground: #000000;
   --sidebar-border: rgba(0, 0, 0, 0.06);
-  --sidebar-ring: #093fb4;
+  --sidebar-ring: #000000;
   --warning: #b4791a;
   --warning-foreground: #2a1c05;
   --warning-subtle: #fdf3e0;
@@ -107,7 +107,7 @@
   --card-foreground: #ffffff;
   --popover: #141414;
   --popover-foreground: #ffffff;
-  --primary: #4d7fef;
+  --primary: #ffffff;
   --primary-foreground: #ffffff;
   --secondary: #1c1c1c;
   --secondary-foreground: #ffffff;
@@ -118,20 +118,20 @@
   --destructive: #ed3500;
   --border: rgba(255, 255, 255, 0.08);
   --input: rgba(255, 255, 255, 0.12);
-  --ring: #4d7fef;
-  --chart-1: #4d7fef;
+  --ring: #ffffff;
+  --chart-1: #ffffff;
   --chart-2: #ed3500;
   --chart-3: rgba(255, 255, 255, 0.62);
   --chart-4: #ffd8d8;
   --chart-5: #ffffff;
   --sidebar: #0a0a0a;
   --sidebar-foreground: #ffffff;
-  --sidebar-primary: #4d7fef;
+  --sidebar-primary: #ffffff;
   --sidebar-primary-foreground: #ffffff;
   --sidebar-accent: #1c1c1c;
   --sidebar-accent-foreground: #ffffff;
   --sidebar-border: rgba(255, 255, 255, 0.08);
-  --sidebar-ring: #4d7fef;
+  --sidebar-ring: #ffffff;
 }
 
 @layer base {
@@ -892,7 +892,9 @@ button {
   }
 }
 
-/* ── Mavly Unified Soft UI & Neumorphic Design System ──────────────── */
+/* ── Mavly page transition ──────────────────────────────────────────
+   Surface material lives in clay.css. This file only owns motion and
+   layout utilities; it must never define a shadow recipe of its own. */
 
 @keyframes mavly-page-fade {
   0% {
@@ -907,82 +909,6 @@ button {
 
 .mavly-page-enter {
   animation: mavly-page-fade 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-}
-
-/* Tactile button states — the neumorphic material, applied. */
-.mavly-btn-primary {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.375rem;
-  font-weight: 600;
-  border-radius: 9999px;
-  background-color: var(--neu-brand);
-  color: var(--neu-white);
-  border: 1px solid transparent;
-  box-shadow: var(--neu-elev-2);
-  transition: box-shadow var(--neu-dur) var(--neu-ease),
-    transform var(--neu-dur) var(--neu-ease);
-  cursor: pointer;
-  user-select: none;
-}
-.mavly-btn-primary:hover {
-  box-shadow: var(--neu-elev-3);
-  transform: translateY(-1px);
-}
-.mavly-btn-primary:active {
-  transform: translateY(0);
-  box-shadow: var(--neu-inset-2);
-}
-.mavly-btn-primary:focus-visible {
-  outline: none;
-  box-shadow: var(--neu-elev-2), var(--neu-focus);
-}
-
-.mavly-btn-secondary {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.375rem;
-  font-weight: 600;
-  border-radius: 9999px;
-  background-color: var(--neu-surface);
-  color: var(--neu-ink);
-  border: 1px solid var(--neu-line);
-  box-shadow: var(--neu-elev-1);
-  transition: box-shadow var(--neu-dur) var(--neu-ease),
-    transform var(--neu-dur) var(--neu-ease);
-  cursor: pointer;
-  user-select: none;
-}
-.mavly-btn-secondary:hover {
-  box-shadow: var(--neu-elev-2);
-  border-color: var(--neu-line-strong);
-  transform: translateY(-1px);
-}
-.mavly-btn-secondary:active {
-  transform: translateY(0);
-  box-shadow: var(--neu-inset-2);
-}
-.mavly-btn-secondary:focus-visible {
-  outline: none;
-  box-shadow: var(--neu-elev-1), var(--neu-focus);
-}
-
-/* Soft UI card — an extruded slab of the same material. */
-.mavly-soft-card {
-  background-color: var(--neu-surface);
-  border-radius: 1.5rem;
-  border: 1px solid var(--neu-line);
-  box-shadow: var(--neu-elev-2);
-  transition: box-shadow var(--neu-dur) var(--neu-ease),
-    transform var(--neu-dur) var(--neu-ease),
-    border-color var(--neu-dur) var(--neu-ease);
-}
-.mavly-soft-card-hover:hover {
-  border-color: var(--neu-line-strong);
-  box-shadow: var(--neu-elev-4);
-  transform: translateY(-2px);
 }
 
 /* ── Mavly Accordion Smooth Dropdown / Collapse ───────────────────────── */
@@ -1007,12 +933,6 @@ button {
   .mavly-page-enter {
     animation: none !important;
     opacity: 1 !important;
-    transform: none !important;
-  }
-  .mavly-btn-primary,
-  .mavly-btn-secondary,
-  .mavly-soft-card-hover {
-    transition: none !important;
     transform: none !important;
   }
 }

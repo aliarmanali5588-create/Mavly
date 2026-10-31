@@ -59,7 +59,7 @@ export default function BillingAdminPage() {
     switch (plan) {
       case "Agency":
         return (
-          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-purple-50 text-purple-700 border border-purple-200">
+          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-[var(--clay-sunken)] text-foreground border border-[var(--clay-line)]">
             Agency
           </span>
         );
@@ -71,19 +71,19 @@ export default function BillingAdminPage() {
         );
       case "Starter":
         return (
-          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-[var(--neu-sunken)] text-foreground border border-[var(--neu-line)]">
+          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-[var(--clay-sunken)] text-foreground border border-[var(--clay-line)]">
             Starter
           </span>
         );
       case "Free":
         return (
-          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-[var(--neu-sunken)] text-muted-foreground border border-black/[0.05]">
+          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-[var(--clay-sunken)] text-muted-foreground border border-black/[0.05]">
             Free
           </span>
         );
       default:
         return (
-          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
+          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-[var(--clay-sunken)] text-foreground border border-[var(--clay-line)]">
             {plan}
           </span>
         );
@@ -120,7 +120,7 @@ export default function BillingAdminPage() {
     <AdminShell activeNav="Billing & Revenue">
       {/* ── Metric Cards ── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="p-5 rounded-2xl bg-card border border-[var(--neu-line)] shadow-[var(--neu-elev-2)]">
+        <div className="p-5 rounded-2xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)]">
           <p className="text-xs font-semibold text-muted-foreground tracking-wide">Gross Platform Revenue</p>
           <h3 className="text-2xl sm:text-3xl font-extrabold text-foreground mt-1.5 font-mono">₹14,22,500</h3>
           <span className="text-[11px] text-emerald-600 font-semibold mt-2 inline-flex items-center gap-1">
@@ -128,7 +128,7 @@ export default function BillingAdminPage() {
           </span>
         </div>
 
-        <div className="p-5 rounded-2xl bg-card border border-[var(--neu-line)] shadow-[var(--neu-elev-2)]">
+        <div className="p-5 rounded-2xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)]">
           <p className="text-xs font-semibold text-muted-foreground tracking-wide">Monthly Recurring (MRR)</p>
           <h3 className="text-2xl sm:text-3xl font-extrabold text-foreground mt-1.5 font-mono">₹2,84,500</h3>
           <span className="text-[11px] text-emerald-600 font-semibold mt-2 inline-block">
@@ -136,7 +136,7 @@ export default function BillingAdminPage() {
           </span>
         </div>
 
-        <div className="p-5 rounded-2xl bg-card border border-[var(--neu-line)] shadow-[var(--neu-elev-2)]">
+        <div className="p-5 rounded-2xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)]">
           <p className="text-xs font-semibold text-muted-foreground tracking-wide">Active Paid Subscriptions</p>
           <h3 className="text-2xl sm:text-3xl font-extrabold text-foreground mt-1.5 font-mono">3,420</h3>
           <span className="text-[11px] text-muted-foreground font-medium mt-2 inline-block">
@@ -144,7 +144,7 @@ export default function BillingAdminPage() {
           </span>
         </div>
 
-        <div className="p-5 rounded-2xl bg-card border border-[var(--neu-line)] shadow-[var(--neu-elev-2)]">
+        <div className="p-5 rounded-2xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)]">
           <p className="text-xs font-semibold text-muted-foreground tracking-wide">Gross Churn Rate</p>
           <h3 className="text-2xl sm:text-3xl font-extrabold text-emerald-700 mt-1.5 font-mono">0.82%</h3>
           <span className="text-[11px] text-muted-foreground font-medium mt-2 inline-block">
@@ -160,7 +160,7 @@ export default function BillingAdminPage() {
         </div>
 
         {/* Plan Revenue Breakdown */}
-        <div className="bg-card rounded-2xl p-5 sm:p-6 border border-[var(--neu-line)] shadow-[0_2px_8px_rgba(0,0,0,0.02)] flex flex-col justify-between space-y-4">
+        <div className="bg-card rounded-2xl p-5 sm:p-6 border border-[var(--clay-line)] shadow-[var(--clay-elev-1)] flex flex-col justify-between space-y-4">
           <div>
             <h3 className="text-base font-bold text-foreground">Plan Distribution</h3>
             <p className="text-xs text-muted-foreground mt-0.5">Share of monthly subscription MRR</p>
@@ -172,8 +172,8 @@ export default function BillingAdminPage() {
                 <span className="font-bold text-foreground">Agency Tier (₹1,999/mo)</span>
                 <span className="font-mono text-foreground">48%</span>
               </div>
-              <div className="w-full h-2 rounded-full bg-[var(--neu-sunken)] overflow-hidden">
-                <div className="h-full bg-purple-600 rounded-full" style={{ width: "48%" }} />
+              <div className="w-full h-2 rounded-full bg-[var(--clay-sunken)] overflow-hidden">
+                <div className="h-full bg-foreground rounded-full" style={{ width: "48%" }} />
               </div>
             </div>
 
@@ -182,7 +182,7 @@ export default function BillingAdminPage() {
                 <span className="font-bold text-foreground">Pro Tier (₹899/mo)</span>
                 <span className="font-mono text-foreground">32%</span>
               </div>
-              <div className="w-full h-2 rounded-full bg-[var(--neu-sunken)] overflow-hidden">
+              <div className="w-full h-2 rounded-full bg-[var(--clay-sunken)] overflow-hidden">
                 <div className="h-full bg-black rounded-full" style={{ width: "32%" }} />
               </div>
             </div>
@@ -192,8 +192,8 @@ export default function BillingAdminPage() {
                 <span className="font-bold text-foreground">Creator Tier (₹599/mo)</span>
                 <span className="font-mono text-foreground">12%</span>
               </div>
-              <div className="w-full h-2 rounded-full bg-[var(--neu-sunken)] overflow-hidden">
-                <div className="h-full bg-blue-500 rounded-full" style={{ width: "12%" }} />
+              <div className="w-full h-2 rounded-full bg-[var(--clay-sunken)] overflow-hidden">
+                <div className="h-full bg-[var(--clay-sunken)]0 rounded-full" style={{ width: "12%" }} />
               </div>
             </div>
 
@@ -202,21 +202,21 @@ export default function BillingAdminPage() {
                 <span className="font-bold text-foreground">Starter Tier (₹399/mo)</span>
                 <span className="font-mono text-foreground">8%</span>
               </div>
-              <div className="w-full h-2 rounded-full bg-[var(--neu-sunken)] overflow-hidden">
+              <div className="w-full h-2 rounded-full bg-[var(--clay-sunken)] overflow-hidden">
                 <div className="h-full bg-amber-400 rounded-full" style={{ width: "8%" }} />
               </div>
             </div>
           </div>
 
-          <div className="p-3 rounded-xl bg-[var(--neu-sunken)] border border-[var(--neu-line)] text-[11px] text-muted-foreground">
+          <div className="p-3 rounded-xl bg-[var(--clay-sunken)] border border-[var(--clay-line)] text-[11px] text-muted-foreground">
             <strong>Payment Gateway:</strong> Razorpay auto-debit &amp; UPI Mandates configured.
           </div>
         </div>
       </div>
 
       {/* ── Transactions Table Container ── */}
-      <div className="bg-card rounded-2xl p-5 sm:p-6 border border-[var(--neu-line)] shadow-[0_2px_8px_rgba(0,0,0,0.02)] space-y-4">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-4 border-b border-[var(--neu-line)]">
+      <div className="bg-card rounded-2xl p-5 sm:p-6 border border-[var(--clay-line)] shadow-[var(--clay-elev-1)] space-y-4">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-4 border-b border-[var(--clay-line)]">
           <div>
             <h2 className="text-base font-bold text-foreground">Payment Transactions Ledger</h2>
             <p className="text-xs text-muted-foreground mt-0.5">
@@ -232,14 +232,14 @@ export default function BillingAdminPage() {
                 placeholder="Search invoice ID, customer, email..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full h-8 pl-8 pr-3 text-xs rounded-xl bg-[var(--neu-sunken)] border border-[var(--neu-line)] text-foreground focus:bg-card focus:outline-none focus:ring-2 focus:ring-black"
+                className="w-full h-8 pl-8 pr-3 text-xs rounded-xl bg-[var(--clay-sunken)] border border-[var(--clay-line)] text-foreground focus:bg-card focus:outline-none focus:ring-2 focus:ring-black"
               />
             </div>
 
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
-              className="h-8 px-2.5 text-xs font-medium bg-[var(--neu-sunken)] border border-[var(--neu-line)] rounded-xl text-foreground focus:outline-none focus:ring-2 focus:ring-black cursor-pointer"
+              className="h-8 px-2.5 text-xs font-medium bg-[var(--clay-sunken)] border border-[var(--clay-line)] rounded-xl text-foreground focus:outline-none focus:ring-2 focus:ring-black cursor-pointer"
             >
               <option value="All">All Statuses</option>
               <option value="Paid">Paid</option>
@@ -250,7 +250,7 @@ export default function BillingAdminPage() {
             <button
               type="button"
               onClick={() => toast.info("Demo CSV download initiated")}
-              className="h-8 px-3 rounded-xl border border-[var(--neu-line)] bg-card hover:bg-[var(--neu-sunken)] text-xs font-semibold text-foreground flex items-center gap-1.5 shadow-xs"
+              className="h-8 px-3 rounded-xl border border-[var(--clay-line)] bg-card hover:bg-[var(--clay-sunken)] text-xs font-semibold text-foreground flex items-center gap-1.5 shadow-xs"
             >
               <Download className="w-3.5 h-3.5" />
               <span>Export CSV</span>
@@ -259,10 +259,10 @@ export default function BillingAdminPage() {
         </div>
 
         {/* ── Dense Table ── */}
-        <div className="overflow-x-auto rounded-xl border border-[var(--neu-line)]">
+        <div className="overflow-x-auto rounded-xl border border-[var(--clay-line)]">
           <table className="w-full text-left border-collapse text-xs">
             <thead>
-              <tr className="bg-[var(--neu-sunken)]/60 border-b border-[var(--neu-line)] text-muted-foreground font-bold uppercase tracking-wider text-[10px]">
+              <tr className="bg-[var(--clay-sunken)]/60 border-b border-[var(--clay-line)] text-muted-foreground font-bold uppercase tracking-wider text-[10px]">
                 <th className="py-2.5 px-4">Invoice ID</th>
                 <th className="py-2.5 px-4">Customer</th>
                 <th className="py-2.5 px-4">Plan Tier</th>
@@ -281,7 +281,7 @@ export default function BillingAdminPage() {
                 </tr>
               ) : (
                 filteredTxns.map((tx) => (
-                  <tr key={tx.id} className="hover:bg-[var(--neu-sunken)]/60 transition-colors">
+                  <tr key={tx.id} className="hover:bg-[var(--clay-sunken)]/60 transition-colors">
                     <td className="py-2.5 px-4 font-mono font-medium text-muted-foreground">
                       {tx.id}
                     </td>
@@ -302,7 +302,7 @@ export default function BillingAdminPage() {
                         <button
                           type="button"
                           onClick={() => setSelectedTxn(tx)}
-                          className="px-2 py-1 rounded-lg text-[11px] font-semibold text-foreground bg-[var(--neu-sunken)] hover:bg-[var(--neu-sunken-deep)] transition-colors"
+                          className="px-2 py-1 rounded-lg text-[11px] font-semibold text-foreground bg-[var(--clay-sunken)] hover:bg-[var(--clay-sunken-deep)] transition-colors"
                         >
                           Invoice
                         </button>
@@ -328,8 +328,8 @@ export default function BillingAdminPage() {
       {/* ── Invoice Details Modal ── */}
       {selectedTxn && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-in fade-in">
-          <div className="w-full max-w-md bg-card rounded-2xl border border-[var(--neu-line)] shadow-2xl p-6 space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-[var(--neu-line)]">
+          <div className="w-full max-w-md bg-card rounded-2xl border border-[var(--clay-line)] shadow-2xl p-6 space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-[var(--clay-line)]">
               <div className="flex items-center gap-2">
                 <FileText className="w-4 h-4 text-foreground" />
                 <h3 className="text-base font-bold text-foreground">Invoice Details</h3>
@@ -343,30 +343,30 @@ export default function BillingAdminPage() {
               </button>
             </div>
 
-            <div className="space-y-2.5 text-xs bg-[var(--neu-sunken)] p-4 rounded-xl border border-[var(--neu-line)]">
-              <div className="flex justify-between py-1 border-b border-[var(--neu-line)]">
+            <div className="space-y-2.5 text-xs bg-[var(--clay-sunken)] p-4 rounded-xl border border-[var(--clay-line)]">
+              <div className="flex justify-between py-1 border-b border-[var(--clay-line)]">
                 <span className="text-muted-foreground">Invoice Number:</span>
                 <span className="font-mono font-bold text-foreground">{selectedTxn.id}</span>
               </div>
-              <div className="flex justify-between py-1 border-b border-[var(--neu-line)]">
+              <div className="flex justify-between py-1 border-b border-[var(--clay-line)]">
                 <span className="text-muted-foreground">Customer:</span>
                 <span className="font-semibold text-foreground">{selectedTxn.customer}</span>
               </div>
-              <div className="flex justify-between py-1 border-b border-[var(--neu-line)]">
+              <div className="flex justify-between py-1 border-b border-[var(--clay-line)]">
                 <span className="text-muted-foreground">Billing Email:</span>
                 <span className="font-mono text-foreground">{selectedTxn.email}</span>
               </div>
-              <div className="flex justify-between py-1 border-b border-[var(--neu-line)]">
+              <div className="flex justify-between py-1 border-b border-[var(--clay-line)]">
                 <span className="text-muted-foreground">Subscription Tier:</span>
                 <span>{getPlanBadge(selectedTxn.plan)}</span>
               </div>
-              <div className="flex justify-between py-1 border-b border-[var(--neu-line)]">
+              <div className="flex justify-between py-1 border-b border-[var(--clay-line)]">
                 <span className="text-muted-foreground">Total Billed:</span>
                 <span className="font-mono font-extrabold text-foreground text-sm">
                   {selectedTxn.amount}
                 </span>
               </div>
-              <div className="flex justify-between py-1 border-b border-[var(--neu-line)]">
+              <div className="flex justify-between py-1 border-b border-[var(--clay-line)]">
                 <span className="text-muted-foreground">Settlement Status:</span>
                 <span>{getStatusBadge(selectedTxn.status)}</span>
               </div>

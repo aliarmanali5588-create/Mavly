@@ -12,7 +12,7 @@ approval gate disabled.
 | Migration 29 | Workflows, tasks, events, proposals, RPCs and the schema marker. |
 | `SUPABASE_SERVICE_ROLE_KEY`, `NEXT_PUBLIC_SUPABASE_URL` | Worker persistence. |
 | `OPENROUTER_API_KEY` | Planner/UI-UX/repair model calls. |
-| Cloudflare Cron Worker deployed and observed | Required for worker-only workflows; see `docs/runbooks/generation-worker.md`. |
+| Render Background Worker deployed and observed | Required for worker-only workflows; see `docs/runbooks/render-generation-worker.md`. |
 
 A half-configured deployment stays off. `GET …/agent/workflow` reports `enabled:
 false` and an exact `note`, and a generation keeps the existing pipeline.
@@ -171,7 +171,7 @@ leases, dead letters and cancellation.
 - [ ] `npm test` (Node 22.6+) including `tests/multi-agent-orchestration.test.ts`
 - [ ] `npm run lint` and `npm run build`
 - [ ] Migration 29 applied; `multi_agent_schema_version()` returns 29
-- [ ] Worker scheduled; a cohort run records a workflow with tasks
+- [ ] Render worker running; a cohort run records a workflow with tasks
 - [ ] An inline/non-cohort run records no workflow and still generates
 - [ ] QA shows `pending` when the sandbox is off (never `passed`)
 - [ ] A critical static finding fails the workflow

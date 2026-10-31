@@ -15,7 +15,7 @@ the baseline and provider decision. Where they disagree, Phase 4 and migration
 
 ## 1. Prerequisites
 
-- The platform-wide Cloudflare Cron Worker is deployed and its scheduled tick is healthy.
+- The platform-wide Render Background Worker is deployed and its polling loop is healthy.
 - A human has run `npm install`, so `@vercel/sandbox` is present in
   `node_modules` and the lockfile. It is declared in `package.json` but has not
   been installed by the agent that wrote this code.
@@ -61,7 +61,7 @@ VERCEL_TOKEN=...
 VERCEL_TEAM_ID=...
 VERCEL_PROJECT_ID=...
 
-# already required by the production application and scheduled worker:
+# already required by the production application and Render worker:
 SUPABASE_SERVICE_ROLE_KEY=...
 NEXT_PUBLIC_SUPABASE_URL=...
 ```
@@ -74,7 +74,7 @@ and never implies verification. `MAVLY_VERIFICATION_MAX_REPAIRS` is clamped to
 `0..2`, defaults to `1` when repair is enabled, and `0` disables repair even if
 the flag is on.
 
-**Order matters:** deploy and observe the Cloudflare Cron Worker first, confirm
+**Order matters:** deploy and observe the Render Background Worker first, confirm
 one production generation completes, then enable verification for the desired
 verification cohort. Verification only enqueues after a *worker-dispatched* run
 completes.
@@ -83,8 +83,8 @@ completes.
 
 ## 3. Verify the first run
 
-Observe the scheduled Cloudflare Worker logs. Verification runs only when no
-generation job is ready; expected progression spans several Cron ticks:
+Observe the Render worker logs. Verification runs only when no generation job is
+ready; expected progression spans several worker ticks:
 
 1. `{"ok":true,"status":"empty","verification":{"status":"advanced","reason":"installing"}}`
 2. `... "reason":"building"`
@@ -210,7 +210,7 @@ resources) until the project is brought back into the cohort.
 
 **Drain:** leave the flag on until `finished_at is null` reaches zero **and** the
 orphan query in §6 returns no rows, then turn it off. Verifications advance only
-on empty generation ticks, so allow scheduler time.
+on empty generation ticks, so allow the worker time to poll.
 
 **Cancel one:** the owner can call `agent/stop`; a terminal run with an
 in-flight verification returns `{ "verificationCancelled": true }`. A pending

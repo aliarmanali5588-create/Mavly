@@ -134,6 +134,14 @@ import {
   failWorkflowForRun,
 } from "@/lib/orchestration/store";
 import { subordinateContextBlock } from "@/lib/orchestration/roles";
+import { isAgentControlPath, AGENT_WORK_PATH } from "@/lib/project-rules/rules";
+import { classifyChange } from "@/lib/project-rules/scope";
+import {
+  applySelectionRule,
+  ensureProjectRuleFiles,
+  updateProjectWorkState,
+} from "@/lib/project-rules/service";
+import { runStaticVerification } from "@/lib/verification/static";
 import { loadFigmaDesignContext } from "@/lib/integrations/figma/service";
 import {
   classifyGenerationFailure,
@@ -842,6 +850,25 @@ async function execute(
 
   await assertRunOwned(input, guard);
 
+  /**
+   * ⚠️ THE RULES ARE PERSISTED AND READ BEFORE PLANNING. A website run without
+   * them would be an unconstrained plan, so a read/write failure fails the run
+   * with a truthful message instead of silently continuing. Android is untouched.
+   * This runs while this attempt still owns the run's fence.
+   */
+  const ruleFiles = await ensureProjectRuleFiles({
+    userId: input.userId,
+    projectId: input.projectId,
+    projectType,
+    client,
+  });
+  if (!ruleFiles.ok) {
+    return fail(input, guard, {
+      message: ruleFiles.error,
+      signals: { code: "GENERATION_PERSIST_FAILED" },
+    });
+  }
+
   const current = await listFiles(input.projectId, client);
   if (isStoreFailure(current)) {
     return fail(input, guard, {
@@ -861,6 +888,28 @@ async function execute(
     existingPaths.has(path),
   );
   const mode = isComplete ? "update" : "create";
+
+  /**
+   * The backend classifies the change size ONCE. The same class is used by the
+   * prompt, the scope guard and the work log, so they cannot disagree.
+   */
+  const changeClass =
+    projectType === "website"
+      ? classifyChange({
+          mode,
+          prompt: input.prompt,
+          existingFileCount: before.filter((file) => !isAgentControlPath(file.path))
+            .length,
+        })
+      : null;
+  const projectRules =
+    projectType === "website" && changeClass
+      ? {
+          rules: ruleFiles.files.rules,
+          workState: ruleFiles.files.workState,
+          changeClass,
+        }
+      : null;
 
   /**
    * ⭐ THE BASELINE OF THIS RUN. Created once, before the first write. On a
@@ -911,6 +960,7 @@ async function execute(
           leaseToken: input.worker.leaseToken,
           trackProviderUsage: guard.trackProviderUsage,
           runtimeEvidence: runtimeEvidenceProvider,
+          projectRules,
         })
       : null;
   } catch (error) {
@@ -1527,7 +1577,10 @@ async function execute(
     userId: input.userId,
     projectId: input.projectId,
     prompt: input.prompt,
-    files: before,
+    files:
+      projectType === "website"
+        ? before.filter((file) => !isAgentControlPath(file.path))
+        : before,
   });
 
   /**
@@ -1615,6 +1668,7 @@ async function execute(
     projectType,
     androidPackage,
     existingFiles: before,
+    projectRules,
     budgetMs: generationBudgetMs,
     managedBackendContext,
     ...(backendContract ? { backendContract } : {}),
@@ -1813,6 +1867,51 @@ async function execute(
   }
 
   /**
+   * ═══ GLOBAL SELECTION STYLING — SERVER POST-PROCESSING ═════════════════════
+   *
+   * The prompt asks for the black-background/white-text selection rule, but a
+   * model can forget. This adds it to the project's EXISTING global stylesheet
+   * after the generated files are persisted. It never creates a stylesheet the
+   * project does not have and never rewrites the rest of the file.
+   */
+  let selectionRuleEnsured = false;
+  let selectionRulePath: string | null = null;
+  let selectionRuleError: string | null = null;
+  if (projectType === "website") {
+    const afterGeneration = await readCurrentFiles(input.projectId, client);
+    const selection = await applySelectionRule({
+      userId: input.userId,
+      projectId: input.projectId,
+      client,
+      files: afterGeneration,
+    });
+    if (selection.ok === false) {
+      selectionRulePath = null;
+      selectionRuleError = selection.error;
+      console.warn(
+        `[mavly] run ${runId}: global selection rule could not be added:`,
+        selection.error,
+      );
+    } else {
+      selectionRulePath = selection.path;
+      if (selection.updated && selection.path) {
+        selectionRuleEnsured = true;
+        writtenPaths.add(selection.path);
+      }
+    }
+    if (selectionRuleError || !selectionRulePath) {
+      return fail(input, guard, {
+        message:
+          selectionRuleError ??
+          "The website has no recognized global stylesheet, so Mavly could not apply the required text-selection styling.",
+        before,
+        baseline,
+        signals: { code: "GENERATION_PERSIST_FAILED" },
+      });
+    }
+  }
+
+  /**
    * ⚠️ THE IMAGE OUTCOME IS STATED SEPARATELY FROM THE GENERATION OUTCOME. A
    * partial or deferred image set must never read as a complete website image
    * set, and a failed image must not be hidden behind "built successfully".
@@ -1834,7 +1933,12 @@ async function execute(
     writtenPaths.size,
     latestProviderRequestId,
     projectType,
+    mode,
     orchestration,
+    changeClass,
+    selectionRuleEnsured,
+    selectionRulePath,
+    selectionRuleError,
   );
 }
 
@@ -1857,21 +1961,99 @@ async function complete(
   filesWritten: number,
   latestProviderRequestId: string | null,
   projectType: AgentProjectType,
+  mode: "create" | "update",
   orchestration: OrchestrationHandle | null,
+  changeClass: ReturnType<typeof classifyChange> | null,
+  selectionRuleEnsured: boolean,
+  selectionRulePath: string | null,
+  selectionRuleError: string | null,
 ): Promise<RunAgentOutcome> {
   await assertRunOwned(input, guard);
 
   const after = await readCurrentFiles(input.projectId, guard.client);
   const diff = diffSource(before, after);
-  const changed = !diff.unchanged;
+
+  const websiteVerification =
+    projectType === "website"
+      ? runStaticVerification({
+          files: after.filter((file) => !isAgentControlPath(file.path)),
+          projectType: "website",
+          ...(mode === "create"
+            ? { requiredPaths: requiredCreatePathsFor("website") }
+            : {}),
+        })
+      : null;
+  if (websiteVerification && websiteVerification.status !== "structurally_valid") {
+    return fail(input, guard, {
+      message: `The generated website did not pass Mavly's static verification: ${websiteVerification.summary}`,
+      before,
+      baseline,
+      signals: { code: "GENERATION_INCOMPLETE" },
+    });
+  }
+
+  /**
+   * ═══ THE WORK LOG IS WRITTEN BEFORE TERMINAL SUCCESS ═══════════════════════
+   *
+   * `.mavly/.agentwork.md` is Mavly's bounded work history. The run supplies the
+   * paths it actually persisted and the static checks it actually performed; no
+   * model writes this file, and no build/render/test claim is invented here. A
+   * failure to persist the required record fails the run rather than claiming
+   * a completed website update without its required project state.
+   */
+  let afterWithWork = after;
+  if (projectType === "website" && changeClass) {
+    const work = await updateProjectWorkState({
+      userId: input.userId,
+      projectId: input.projectId,
+      client: guard.client,
+      entry: {
+        runId: input.runId,
+        prompt: input.prompt,
+        changeClass,
+        summary: result.message,
+        changedPaths: diffPaths(diff).filter((path) => !isAgentControlPath(path)),
+        deletedPaths: diff.removed.filter((path) => !isAgentControlPath(path)),
+        verification: {
+          status: websiteVerification?.status ?? "unavailable",
+          summary: websiteVerification?.summary ?? "Static website verification was unavailable.",
+        },
+        selectionRuleEnsured,
+        selectionRulePath,
+        selectionRuleError,
+      },
+    });
+    if (work.ok) {
+      afterWithWork = [
+        ...after.filter((file) => file.path !== AGENT_WORK_PATH),
+        { path: AGENT_WORK_PATH, content: work.content },
+      ];
+    } else {
+      return fail(input, guard, {
+        message: `The website was generated, but its required work-state file could not be saved: ${work.error}`,
+        before,
+        baseline,
+        signals: { code: "GENERATION_PERSIST_FAILED" },
+      });
+    }
+  }
+
+  /**
+   * ⚠️ SNAPSHOT THE FINAL STATE, INCLUDING THE WORK LOG. The work log is
+   * written after generation, so the diff taken before it would omit the log
+   * from `changed_paths` and a run whose only change is the log would capture
+   * no result snapshot at all.
+   */
+  const finalDiff = diffSource(before, afterWithWork);
+  const changed = !finalDiff.unchanged;
 
   let resultSnapshot: SnapshotSummary | null = null;
   if (changed) {
     resultSnapshot = await captureResult(
       input,
       guard.client,
-      after,
-      diffPaths(diff),
+      afterWithWork,
+      diffPaths(finalDiff),
       "The source this run produced",
     );
   }
@@ -1948,7 +2130,7 @@ async function complete(
     try {
       reviewOutcome = await recordCodingCompleted(orchestration, {
         allFiles: after,
-        changedPaths: diffPaths(diff),
+        changedPaths: diffPaths(finalDiff).filter((path) => !isAgentControlPath(path)),
       });
     } catch (error) {
       reviewRecordFailed = true;

@@ -126,6 +126,7 @@ export type GenerationErrorClass =
   | "too_many_files"
   | "no_files"
   | "source_contract_invalid"
+  | "scope_violation"
   | "persistence_failed"
   | "lease_lost"
   | "cancelled"
@@ -278,6 +279,8 @@ export function classifyGenerationFailure(signals: FailureSignals): FailureClass
       return { retryable: false, errorClass: "no_files", summary };
     case "GENERATION_CONTRACT_INVALID":
       return { retryable: false, errorClass: "source_contract_invalid", summary };
+    case "GENERATION_SCOPE_VIOLATION":
+      return { retryable: false, errorClass: "scope_violation", summary };
     case "GENERATION_PROVIDER_FAILED":
       return classifyProviderAttempt(attempt, summary, signals.retryAfterSeconds);
     default:
