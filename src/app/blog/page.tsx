@@ -99,16 +99,16 @@ export default function BlogPage() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-16">
         {/* Hero */}
         <div className="max-w-3xl mx-auto text-center space-y-4 pt-6 sm:pt-12">
-          <div className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-stone-600 bg-stone-100 px-3 py-1 rounded-full border border-black/[0.04]">
+          <div className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-stone-600 bg-stone-100 px-3 py-1 rounded-full border border-[var(--neu-line)]">
             <BookOpen className="w-3.5 h-3.5 text-stone-800" />
             <span>IDEAS AND UPDATES</span>
           </div>
 
-          <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight text-gray-950 leading-[1.1]">
+          <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight text-foreground leading-[1.1]">
             Notes on building websites with AI.
           </h1>
 
-          <p className="text-base sm:text-lg text-gray-600 leading-relaxed font-normal max-w-2xl mx-auto">
+          <p className="text-base sm:text-lg text-muted-foreground leading-relaxed font-normal max-w-2xl mx-auto">
             Practical ideas, product learnings, and updates from the Mavly website-building workflow.
           </p>
         </div>
@@ -123,7 +123,7 @@ export default function BlogPage() {
               className={`px-3.5 py-1.5 text-xs font-semibold rounded-xl transition-all cursor-pointer ${
                 selectedCategory === cat
                   ? "bg-black text-white shadow-xs"
-                  : "bg-white text-gray-600 hover:text-black border border-black/[0.08]"
+                  : "bg-card text-muted-foreground hover:text-black border border-[var(--neu-line)]"
               }`}
             >
               {cat}
@@ -136,10 +136,10 @@ export default function BlogPage() {
           {filteredPosts.map((post) => (
             <article
               key={post.id}
-              className="p-8 rounded-3xl bg-white border border-black/[0.08] shadow-[0_4px_20px_rgba(0,0,0,0.02)] hover:border-black/20 transition-all flex flex-col justify-between space-y-6"
+              className="p-8 rounded-3xl bg-card border border-[var(--neu-line)] shadow-[0_4px_20px_rgba(0,0,0,0.02)] hover:border-black/20 transition-all flex flex-col justify-between space-y-6"
             >
               <div className="space-y-3">
-                <div className="flex items-center gap-2 text-xs text-gray-500 font-medium">
+                <div className="flex items-center gap-2 text-xs text-muted-foreground font-medium">
                   <span>{post.category}</span>
                   <span aria-hidden="true">·</span>
                   <span>{post.date}</span>
@@ -147,16 +147,16 @@ export default function BlogPage() {
                   <span>{post.readTime}</span>
                 </div>
 
-                <h2 className="text-xl font-bold text-gray-950 tracking-tight leading-snug">
+                <h2 className="text-xl font-bold text-foreground tracking-tight leading-snug">
                   {post.title}
                 </h2>
 
-                <p className="text-xs sm:text-sm text-gray-600 leading-relaxed font-normal">
+                <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed font-normal">
                   {post.excerpt}
                 </p>
               </div>
 
-              <div className="pt-4 border-t border-black/[0.06] flex items-center justify-between">
+              <div className="pt-4 border-t border-[var(--neu-line)] flex items-center justify-between">
                 <button
                   type="button"
                   onClick={() => setReadingPost(post)}
@@ -165,7 +165,7 @@ export default function BlogPage() {
                   <span>Read Article</span>
                   <ChevronRight className="w-3.5 h-3.5" />
                 </button>
-                <span className="text-[11px] text-gray-400">Engineering Blog</span>
+                <span className="text-[11px] text-muted-foreground">Engineering Blog</span>
               </div>
             </article>
           ))}
@@ -174,37 +174,37 @@ export default function BlogPage() {
         {/* Article Reader Modal */}
         {readingPost && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
-            <div className="bg-white rounded-3xl max-w-2xl w-full max-h-[85vh] overflow-y-auto border border-black/[0.08] shadow-2xl p-6 sm:p-8 relative space-y-6">
+            <div className="bg-card rounded-3xl max-w-2xl w-full max-h-[85vh] overflow-y-auto border border-[var(--neu-line)] shadow-2xl p-6 sm:p-8 relative space-y-6">
               <button
                 type="button"
                 onClick={() => setReadingPost(null)}
-                className="absolute top-6 right-6 p-2 rounded-xl text-gray-400 hover:text-gray-900 hover:bg-gray-100 transition-colors"
+                className="absolute top-6 right-6 p-2 rounded-xl text-muted-foreground hover:text-foreground hover:bg-[var(--neu-sunken)] transition-colors"
                 aria-label="Close article"
               >
                 <X className="w-5 h-5" />
               </button>
 
               <div className="space-y-2">
-                <div className="flex items-center gap-2 text-xs text-gray-500 font-medium">
+                <div className="flex items-center gap-2 text-xs text-muted-foreground font-medium">
                   <span>{readingPost.category}</span>
                   <span aria-hidden="true">·</span>
                   <span>{readingPost.date}</span>
                   <span aria-hidden="true">·</span>
                   <span>{readingPost.readTime}</span>
                 </div>
-                <h2 className="text-2xl sm:text-3xl font-extrabold text-gray-950 tracking-tight leading-snug pr-8">
+                <h2 className="text-2xl sm:text-3xl font-extrabold text-foreground tracking-tight leading-snug pr-8">
                   {readingPost.title}
                 </h2>
               </div>
 
-              <div className="space-y-4 text-xs sm:text-sm text-gray-700 leading-relaxed border-t border-black/[0.06] pt-6">
+              <div className="space-y-4 text-xs sm:text-sm text-foreground leading-relaxed border-t border-[var(--neu-line)] pt-6">
                 {readingPost.content.map((paragraph, idx) => (
                   <p key={idx}>{paragraph}</p>
                 ))}
               </div>
 
-              <div className="pt-4 border-t border-black/[0.06] flex items-center justify-between">
-                <span className="text-xs text-gray-400">Written by the Mavly Engineering Team</span>
+              <div className="pt-4 border-t border-[var(--neu-line)] flex items-center justify-between">
+                <span className="text-xs text-muted-foreground">Written by the Mavly Engineering Team</span>
                 <button
                   type="button"
                   onClick={() => setReadingPost(null)}

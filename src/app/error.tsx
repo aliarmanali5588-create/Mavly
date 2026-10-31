@@ -75,12 +75,12 @@ export default function Error({
             Copy this and paste it in the AI chat:
           </p>
           <div className="relative">
-            <div className="rounded-lg border border-neutral-200 bg-white p-3 pr-12 font-mono text-sm text-foreground dark:border-neutral-800 dark:bg-neutral-950">
+            <div className="rounded-lg border border-neutral-200 bg-card p-3 pr-12 font-mono text-sm text-foreground dark:border-neutral-800 dark:bg-neutral-950">
               {aiPrompt}
             </div>
             <button
               onClick={handleCopy}
-              className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md bg-black p-2 text-white transition-all hover:bg-neutral-800 active:scale-95 dark:bg-white dark:text-black dark:hover:bg-neutral-200"
+              className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md bg-black p-2 text-white transition-all hover:bg-neutral-800 active:scale-95 dark:bg-card dark:text-black dark:hover:bg-neutral-200"
               title="Copy to clipboard"
             >
               {copied ? (
@@ -110,13 +110,13 @@ export default function Error({
           </button>
           <button
             onClick={() => window.history.back()}
-            className="w-full rounded-md border border-red-300 bg-white px-4 py-2 text-sm font-medium text-red-700 transition-colors hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 dark:border-red-800 dark:bg-transparent dark:text-red-300 dark:hover:bg-red-900/30"
+            className="w-full rounded-md border border-red-300 bg-card px-4 py-2 text-sm font-medium text-red-700 transition-colors hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 dark:border-red-800 dark:bg-transparent dark:text-red-300 dark:hover:bg-red-900/30"
           >
             Go back
           </button>
           <button
             onClick={() => setShowDetails(!showDetails)}
-            className="w-full rounded-md border border-red-300 bg-white px-4 py-2 text-sm font-medium text-red-700 transition-colors hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 dark:border-red-800 dark:bg-transparent dark:text-red-300 dark:hover:bg-red-900/30"
+            className="w-full rounded-md border border-red-300 bg-card px-4 py-2 text-sm font-medium text-red-700 transition-colors hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 dark:border-red-800 dark:bg-transparent dark:text-red-300 dark:hover:bg-red-900/30"
           >
             {showDetails ? "Hide details" : "Show details"}
           </button>
@@ -128,7 +128,7 @@ export default function Error({
               {error.stack || "No stack trace available"}
             </pre>
             {error.digest && (
-              <p className="mt-2 text-xs text-gray-500">
+              <p className="mt-2 text-xs text-muted-foreground">
                 Digest: {error.digest}
               </p>
             )}

@@ -101,8 +101,8 @@ function formatProjectDate(project: { createdAt: string; lastModifiedAt?: string
 
 function PreviewPlaceholder({ name, text, isRow }: { name: string; text: string; isRow: boolean }) {
   return (
-    <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-1.5 bg-[#f7f6f3] px-3 text-center">
-      <div className={`rounded-lg border border-black/[0.06] bg-white flex items-center justify-center shadow-[0_1px_2px_rgba(0,0,0,0.03)] ${isRow ? "w-5 h-5" : "w-8 h-8"}`}>
+    <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-1.5 bg-[var(--neu-sunken)] px-3 text-center">
+      <div className={`rounded-lg border border-[var(--neu-line)] bg-card flex items-center justify-center shadow-[var(--neu-elev-1)] ${isRow ? "w-5 h-5" : "w-8 h-8"}`}>
         <Monitor className={`text-gray-300 ${isRow ? "w-3 h-3" : "w-4 h-4"}`} />
       </div>
       <span className={`font-medium text-gray-600 line-clamp-2 leading-snug ${isRow ? "text-[8px]" : "text-[11px]"}`} title={name}>
@@ -115,8 +115,8 @@ function PreviewPlaceholder({ name, text, isRow }: { name: string; text: string;
 
 function AndroidProjectPlaceholder({ isRow }: { isRow: boolean }) {
   return (
-    <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-1.5 bg-[#f7f6f3] px-3 text-center">
-      <div className={`rounded-lg border border-black/[0.06] bg-white flex items-center justify-center shadow-[0_1px_2px_rgba(0,0,0,0.03)] ${isRow ? "w-5 h-5" : "w-8 h-8"}`}>
+    <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-1.5 bg-[var(--neu-sunken)] px-3 text-center">
+      <div className={`rounded-lg border border-[var(--neu-line)] bg-card flex items-center justify-center shadow-[var(--neu-elev-1)] ${isRow ? "w-5 h-5" : "w-8 h-8"}`}>
         <Smartphone className={`text-gray-400 ${isRow ? "w-3 h-3" : "w-4 h-4"}`} aria-hidden="true" />
       </div>
       <span className={`font-medium text-gray-600 ${isRow ? "text-[8px]" : "text-[11px]"}`}>Android app</span>
@@ -242,7 +242,7 @@ function ProjectPreview({
   return (
     <div
       ref={hostRef}
-      className="w-full h-full relative overflow-hidden bg-[#f7f6f3]"
+      className="w-full h-full relative overflow-hidden bg-[var(--neu-sunken)]"
       aria-busy={!hasPreview && !unavailable}
     >
       {hasPreview && (
@@ -996,10 +996,10 @@ export default function DashboardPage({ profile }: { profile: ProfileSummary }) 
 
   return (
     <div className="min-h-screen relative overflow-hidden mavly-page-enter">
-      <div className="fixed inset-0 -z-10" style={{ background: "#fcfbf8" }} />
+      <div className="fixed inset-0 -z-10" style={{ background: "var(--neu-base)" }} />
 
       {/* Header */}
-      <header className="sticky top-0 z-50 bg-[#fcfbf8]/80 backdrop-blur-md border-b border-black/[0.04]">
+      <header className="sticky top-0 z-50 bg-[color-mix(in_srgb,var(--neu-base)_86%,transparent)] backdrop-blur-xl border-b border-[var(--neu-line)]">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
           <Link href="/dashboard" className="flex items-center gap-2.5 group select-none">
             <Image
@@ -1007,11 +1007,11 @@ export default function DashboardPage({ profile }: { profile: ProfileSummary }) 
               alt="Mavly Logo"
               width={28}
               height={28}
-              className="w-7 h-7 rounded-lg object-contain shadow-xs shrink-0 transition-transform group-hover:scale-105 active:scale-95"
+              className="w-7 h-7 rounded-lg object-contain shrink-0 transition-transform group-hover:scale-105 active:scale-95"
               priority
               referrerPolicy="no-referrer"
             />
-            <span className="font-semibold tracking-tight text-gray-900 text-sm">Mavly</span>
+            <span className="font-semibold tracking-tight text-foreground text-sm">Mavly</span>
           </Link>
           <div className="flex items-center gap-2">
             <AuthNav profile={profile} />
@@ -1024,7 +1024,7 @@ export default function DashboardPage({ profile }: { profile: ProfileSummary }) 
         <div className="mb-10">
           <div className="w-full max-w-3xl mx-auto">
             <div className="text-center mb-6">
-              <div className="w-14 h-14 rounded-2xl mx-auto mb-4 shadow-[0_4px_16px_rgba(0,0,0,0.06)] overflow-hidden flex items-center justify-center p-1 bg-white border border-black/[0.06]">
+              <div className="w-14 h-14 rounded-2xl mx-auto mb-4 shadow-[var(--neu-elev-2)] overflow-hidden flex items-center justify-center p-1 bg-card border border-[var(--neu-line)]">
                 <Image
                   src="/logo/Mavly.png"
                   alt="Mavly Logo"
@@ -1041,13 +1041,13 @@ export default function DashboardPage({ profile }: { profile: ProfileSummary }) 
               <p className="text-gray-500 max-w-md mx-auto mt-2 text-sm">Describe your app and AI will build it in minutes.</p>
             </div>
             <div className="mb-2 px-4 sm:px-5">
-              <div role="group" aria-label="Project type" className="inline-flex max-w-full gap-1 rounded-xl bg-gray-100 p-1">
+              <div role="group" aria-label="Project type" className="inline-flex max-w-full gap-1 rounded-xl border border-[var(--neu-line)] bg-[var(--neu-sunken)] p-1 shadow-[var(--neu-inset-2)]">
                 <button
                   type="button"
                   aria-pressed={promptMode === "website"}
                   onClick={() => chooseProjectType("website")}
                   disabled={buildCreating}
-                  className={`inline-flex h-10 min-w-[100px] items-center justify-center gap-1.5 rounded-lg border px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:min-w-[116px] ${
+                  className={`inline-flex h-10 min-w-[100px] items-center justify-center gap-1.5 rounded-lg border px-3 text-sm font-medium transition-[box-shadow,background-color,color] duration-200 outline-none focus-visible:shadow-[var(--neu-focus)] sm:min-w-[116px] ${
                     promptMode === "website"
                       ? "border-black/[0.06] bg-white text-gray-900 shadow-sm"
                       : "border-transparent bg-transparent text-gray-500 hover:bg-white/70 hover:text-gray-800"
@@ -1061,7 +1061,7 @@ export default function DashboardPage({ profile }: { profile: ProfileSummary }) 
                   aria-pressed={promptMode === "android"}
                   onClick={() => chooseProjectType("android")}
                   disabled={buildCreating}
-                  className={`inline-flex h-10 min-w-[100px] items-center justify-center gap-1.5 rounded-lg border px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:min-w-[116px] ${
+                  className={`inline-flex h-10 min-w-[100px] items-center justify-center gap-1.5 rounded-lg border px-3 text-sm font-medium transition-[box-shadow,background-color,color] duration-200 outline-none focus-visible:shadow-[var(--neu-focus)] sm:min-w-[116px] ${
                     promptMode === "android"
                       ? "border-black/[0.06] bg-white text-gray-900 shadow-sm"
                       : "border-transparent bg-transparent text-gray-500 hover:bg-white/70 hover:text-gray-800"
@@ -1072,7 +1072,7 @@ export default function DashboardPage({ profile }: { profile: ProfileSummary }) 
                 </button>
               </div>
             </div>
-            <div className="relative bg-white rounded-2xl sm:rounded-3xl shadow-[0_8px_30px_rgba(0,0,0,0.04),0_2px_8px_rgba(0,0,0,0.02)] border border-black/[0.08] overflow-hidden transition-all duration-200 focus-within:border-black/40 focus-within:shadow-[0_12px_36px_rgba(0,0,0,0.06)]">
+            <div className="relative bg-card rounded-2xl sm:rounded-3xl shadow-[var(--neu-elev-3)] border border-[var(--neu-line)] overflow-hidden transition-[box-shadow,border-color] duration-200 focus-within:shadow-[var(--neu-elev-4)] focus-within:border-[var(--neu-line-strong)]">
               <div className="relative">
                 <textarea
                   ref={heroTextareaRef}
@@ -1183,7 +1183,7 @@ export default function DashboardPage({ profile }: { profile: ProfileSummary }) 
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
                     placeholder="Search by name or description..."
-                    className="w-full h-8 pl-8 pr-7 text-xs rounded-lg border border-gray-200 bg-white/70 text-gray-700 outline-none focus:ring-2 focus:ring-gray-200"
+                    className="w-full h-8 pl-8 pr-7 text-xs rounded-lg border border-[var(--neu-line)] bg-[var(--neu-sunken)] text-foreground shadow-[var(--neu-inset-1)] outline-none focus-visible:shadow-[var(--neu-inset-1),var(--neu-focus)]"
                   />
                   {search && (
                     <button onClick={() => setSearch("")} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
@@ -1198,7 +1198,7 @@ export default function DashboardPage({ profile }: { profile: ProfileSummary }) 
                   <select
                     value={sortKey}
                     onChange={(e) => setSortKey(e.target.value as SortKey)}
-                    className="h-8 pl-8 pr-6 text-xs rounded-lg border border-gray-200 bg-white/70 text-gray-700 outline-none focus:ring-2 focus:ring-gray-200 appearance-none cursor-pointer"
+                    className="h-8 pl-8 pr-6 text-xs rounded-lg border border-[var(--neu-line)] bg-[var(--neu-sunken)] text-foreground shadow-[var(--neu-inset-1)] outline-none focus-visible:shadow-[var(--neu-inset-1),var(--neu-focus)] appearance-none cursor-pointer"
                   >
                     <option value="date-desc">Newest first</option>
                     <option value="date-asc">Oldest first</option>
@@ -1208,18 +1208,18 @@ export default function DashboardPage({ profile }: { profile: ProfileSummary }) 
                 </div>
 
                 {/* View toggle */}
-                <div className="flex items-center rounded-lg border border-gray-200 bg-white/70 p-0.5">
+                <div className="flex items-center rounded-lg border border-[var(--neu-line)] bg-[var(--neu-sunken)] p-0.5 shadow-[var(--neu-inset-1)]">
                   <button
                     onClick={() => chooseView("cards")}
                     title="Card view"
-                    className={`h-7 w-7 flex items-center justify-center rounded-md transition-colors ${resolvedView === "cards" ? "bg-gray-900 text-white" : "text-gray-400 hover:text-gray-600"}`}
+                    className={`h-7 w-7 flex items-center justify-center rounded-md transition-[box-shadow,color] duration-200 ${resolvedView === "cards" ? "bg-card text-foreground shadow-[var(--neu-elev-1)]" : "text-muted-foreground hover:text-foreground"}`}
                   >
                     <LayoutGrid className="w-3.5 h-3.5" />
                   </button>
                   <button
                     onClick={() => chooseView("table")}
                     title="Table view"
-                    className={`h-7 w-7 flex items-center justify-center rounded-md transition-colors ${resolvedView === "table" ? "bg-gray-900 text-white" : "text-gray-400 hover:text-gray-600"}`}
+                    className={`h-7 w-7 flex items-center justify-center rounded-md transition-[box-shadow,color] duration-200 ${resolvedView === "table" ? "bg-card text-foreground shadow-[var(--neu-elev-1)]" : "text-muted-foreground hover:text-foreground"}`}
                   >
                     <TableIcon className="w-3.5 h-3.5" />
                   </button>
@@ -1229,7 +1229,7 @@ export default function DashboardPage({ profile }: { profile: ProfileSummary }) 
 
             {loading ? (
               <div aria-live="polite" className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {[1, 2, 3].map((i) => <Skeleton key={i} className="h-48 rounded-xl bg-gray-200/60 dark:bg-gray-800/60" />)}
+                {[1, 2, 3].map((i) => <Skeleton key={i} className="h-48 rounded-xl" />)}
               </div>
             ) : projectLoadError ? (
               <div role="alert" className="rounded-2xl border border-red-200 bg-red-50 px-5 py-8 text-center">
@@ -1243,7 +1243,7 @@ export default function DashboardPage({ profile }: { profile: ProfileSummary }) 
                 </button>
               </div>
             ) : projects.length === 0 ? (
-              <div className="rounded-2xl border border-black/[0.06] bg-white/70 px-5 py-10 text-center">
+              <div className="rounded-2xl border border-[var(--neu-line)] bg-[var(--neu-sunken)] px-5 py-10 text-center shadow-[var(--neu-inset-2)]">
                 <p className="font-medium text-gray-700">
                   No {promptMode === "website" ? "websites" : "Android apps"} yet
                 </p>
@@ -1274,14 +1274,14 @@ export default function DashboardPage({ profile }: { profile: ProfileSummary }) 
                   const updated = formatProjectDate(p);
                   return (
                     <Link key={p.projectId} href={`/project/${p.projectId}`} className="block h-full">
-                      <div className="bg-white rounded-2xl border border-black/[0.06] shadow-[0_4px_20px_-2px_rgba(0,0,0,0.03)] hover:shadow-[0_12px_32px_-4px_rgba(0,0,0,0.08)] hover:border-black/[0.12] hover:-translate-y-1 active:translate-y-0 transition-all duration-300 overflow-hidden cursor-pointer group h-full flex flex-col">
+                      <div className="bg-card rounded-2xl border border-[var(--neu-line)] shadow-[var(--neu-elev-2)] hover:shadow-[var(--neu-elev-4)] hover:border-[var(--neu-line-strong)] hover:-translate-y-1 active:translate-y-0 active:shadow-[var(--neu-elev-1)] transition-[box-shadow,transform,border-color] duration-300 overflow-hidden cursor-pointer group h-full flex flex-col">
                         <div className="aspect-[16/10] relative overflow-hidden border-b border-black/[0.04]">
                           {p.projectType === "android" ? (
                             <AndroidProjectPlaceholder isRow={false} />
                           ) : (
                             <ProjectPreview project={p} />
                           )}
-                          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/5 transition-colors pointer-events-none" />
+                          <div className="absolute inset-0 bg-transparent group-hover:bg-[rgb(28_20_17/0.03)] transition-colors duration-300 pointer-events-none" />
                         </div>
                         <div className="p-4 flex-1">
                           <div className="flex items-start justify-between mb-1">
@@ -1341,7 +1341,7 @@ export default function DashboardPage({ profile }: { profile: ProfileSummary }) 
               </div>
             ) : (
               /* ── TABLE VIEW ── */
-              <div className="bg-white/70 backdrop-blur-sm border border-gray-200/60 rounded-xl overflow-hidden">
+              <div className="bg-card border border-[var(--neu-line)] rounded-2xl overflow-hidden shadow-[var(--neu-elev-1)]">
                 <div className="overflow-x-auto">
                   <table className="w-full text-left">
                     <thead>
@@ -1432,7 +1432,7 @@ export default function DashboardPage({ profile }: { profile: ProfileSummary }) 
                 <button
                   onClick={() => setPage((p) => Math.max(1, p - 1))}
                   disabled={safePage <= 1}
-                  className="h-8 w-8 flex items-center justify-center rounded-lg border border-gray-200 bg-white/70 text-gray-500 hover:bg-white disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  className="h-8 w-8 flex items-center justify-center rounded-lg border border-[var(--neu-line)] bg-card text-muted-foreground shadow-[var(--neu-elev-1)] hover:shadow-[var(--neu-elev-2)] active:shadow-[var(--neu-inset-1)] disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none transition-[box-shadow] duration-200"
                 >
                   <ChevronLeft className="w-4 h-4" />
                 </button>
@@ -1440,7 +1440,7 @@ export default function DashboardPage({ profile }: { profile: ProfileSummary }) 
                 <button
                   onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                   disabled={safePage >= totalPages}
-                  className="h-8 w-8 flex items-center justify-center rounded-lg border border-gray-200 bg-white/70 text-gray-500 hover:bg-white disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  className="h-8 w-8 flex items-center justify-center rounded-lg border border-[var(--neu-line)] bg-card text-muted-foreground shadow-[var(--neu-elev-1)] hover:shadow-[var(--neu-elev-2)] active:shadow-[var(--neu-inset-1)] disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none transition-[box-shadow] duration-200"
                 >
                   <ChevronRight className="w-4 h-4" />
                 </button>
@@ -1507,7 +1507,7 @@ export default function DashboardPage({ profile }: { profile: ProfileSummary }) 
         <DialogContent className="sm:max-w-md overflow-hidden p-0 gap-0">
           {/* Red accent header */}
           <div className="relative bg-gradient-to-br from-red-50 to-rose-100/60 px-6 pt-7 pb-6 text-center">
-            <div className="mx-auto w-14 h-14 rounded-2xl bg-white shadow-sm ring-1 ring-red-100 flex items-center justify-center">
+            <div className="mx-auto w-14 h-14 rounded-2xl bg-[var(--neu-sunken)] border border-[var(--neu-line)] shadow-[var(--neu-inset-2)] flex items-center justify-center">
               <AlertTriangle className="w-7 h-7 text-red-500" />
             </div>
             <DialogHeader className="mt-4">

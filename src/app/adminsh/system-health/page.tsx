@@ -41,9 +41,9 @@ export default function SystemHealthAdminPage() {
   };
 
   const getServiceIcon = (name: string) => {
-    if (name.includes("Application")) return <Server className="w-4 h-4 text-gray-700" />;
-    if (name.includes("Database")) return <Database className="w-4 h-4 text-gray-700" />;
-    if (name.includes("Worker")) return <Cpu className="w-4 h-4 text-gray-700" />;
+    if (name.includes("Application")) return <Server className="w-4 h-4 text-foreground" />;
+    if (name.includes("Database")) return <Database className="w-4 h-4 text-foreground" />;
+    if (name.includes("Worker")) return <Cpu className="w-4 h-4 text-foreground" />;
     if (name.includes("Model") || name.includes("OpenRouter"))
       return <Zap className="w-4 h-4 text-amber-500" />;
     if (name.includes("Domain") || name.includes("DNS"))
@@ -80,19 +80,19 @@ export default function SystemHealthAdminPage() {
   return (
     <AdminShell activeNav="System Health">
       {/* 1. Global Platform Uptime Banner */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-5 rounded-2xl bg-white border border-black/[0.08] shadow-[0_2px_8px_rgba(0,0,0,0.02)]">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-5 rounded-2xl bg-card border border-[var(--neu-line)] shadow-[var(--neu-elev-2)]">
         <div className="flex items-start sm:items-center gap-3.5">
           <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 border border-emerald-200/60 flex items-center justify-center shrink-0">
             <ShieldCheck className="w-5 h-5" />
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h2 className="text-sm font-semibold tracking-tight text-gray-950">
+              <h2 className="text-sm font-semibold tracking-tight text-foreground">
                 All Core Services Fully Operational
               </h2>
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
             </div>
-            <p className="text-xs text-gray-500 mt-0.5">
+            <p className="text-xs text-muted-foreground mt-0.5">
               99.98% composite availability recorded across the last 90 calendar days
             </p>
           </div>
@@ -101,7 +101,7 @@ export default function SystemHealthAdminPage() {
         <button
           onClick={handlePingAll}
           disabled={isRefreshing}
-          className="self-start md:self-auto flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-700 bg-gray-50 hover:bg-gray-100 border border-black/[0.08] rounded-lg transition-colors shrink-0"
+          className="self-start md:self-auto flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-foreground bg-[var(--neu-sunken)] hover:bg-[var(--neu-sunken)] border border-[var(--neu-line)] rounded-lg transition-colors shrink-0"
         >
           <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? "animate-spin" : ""}`} />
           <span>{isRefreshing ? "Probing..." : "Probe All Services"}</span>
@@ -110,80 +110,80 @@ export default function SystemHealthAdminPage() {
 
       {/* 2. Key Diagnostic Metrics */}
       <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
-        <div className="p-4 rounded-xl bg-white border border-black/[0.08] shadow-[0_2px_8px_rgba(0,0,0,0.02)]">
-          <div className="flex items-center justify-between text-xs text-gray-500 font-medium">
+        <div className="p-4 rounded-xl bg-card border border-[var(--neu-line)] shadow-[var(--neu-elev-2)]">
+          <div className="flex items-center justify-between text-xs text-muted-foreground font-medium">
             <span>Avg Global Latency</span>
             <Activity className="w-3.5 h-3.5 text-blue-500" />
           </div>
-          <h3 className="text-xl font-bold tracking-tight text-gray-950 font-mono mt-1">24ms</h3>
+          <h3 className="text-xl font-bold tracking-tight text-foreground font-mono mt-1">24ms</h3>
           <p className="text-[11px] text-emerald-600 font-medium mt-1">Edge routed via Cloudflare</p>
         </div>
 
-        <div className="p-4 rounded-xl bg-white border border-black/[0.08] shadow-[0_2px_8px_rgba(0,0,0,0.02)]">
-          <div className="flex items-center justify-between text-xs text-gray-500 font-medium">
+        <div className="p-4 rounded-xl bg-card border border-[var(--neu-line)] shadow-[var(--neu-elev-2)]">
+          <div className="flex items-center justify-between text-xs text-muted-foreground font-medium">
             <span>Worker Pool</span>
             <Cpu className="w-3.5 h-3.5 text-purple-500" />
           </div>
-          <h3 className="text-xl font-bold tracking-tight text-gray-950 font-mono mt-1">4 / 4 Online</h3>
-          <p className="text-[11px] text-gray-400 mt-1">Background agent concurrency</p>
+          <h3 className="text-xl font-bold tracking-tight text-foreground font-mono mt-1">4 / 4 Online</h3>
+          <p className="text-[11px] text-muted-foreground mt-1">Background agent concurrency</p>
         </div>
 
-        <div className="p-4 rounded-xl bg-white border border-black/[0.08] shadow-[0_2px_8px_rgba(0,0,0,0.02)]">
-          <div className="flex items-center justify-between text-xs text-gray-500 font-medium">
+        <div className="p-4 rounded-xl bg-card border border-[var(--neu-line)] shadow-[var(--neu-elev-2)]">
+          <div className="flex items-center justify-between text-xs text-muted-foreground font-medium">
             <span>DB Connection Pool</span>
-            <Database className="w-3.5 h-3.5 text-gray-600" />
+            <Database className="w-3.5 h-3.5 text-muted-foreground" />
           </div>
-          <h3 className="text-xl font-bold tracking-tight text-gray-950 font-mono mt-1">42 / 200</h3>
-          <p className="text-[11px] text-gray-400 mt-1">79% headroom buffer</p>
+          <h3 className="text-xl font-bold tracking-tight text-foreground font-mono mt-1">42 / 200</h3>
+          <p className="text-[11px] text-muted-foreground mt-1">79% headroom buffer</p>
         </div>
 
-        <div className="p-4 rounded-xl bg-white border border-black/[0.08] shadow-[0_2px_8px_rgba(0,0,0,0.02)]">
-          <div className="flex items-center justify-between text-xs text-gray-500 font-medium">
+        <div className="p-4 rounded-xl bg-card border border-[var(--neu-line)] shadow-[var(--neu-elev-2)]">
+          <div className="flex items-center justify-between text-xs text-muted-foreground font-medium">
             <span>Static Cache Ratio</span>
             <Sparkles className="w-3.5 h-3.5 text-emerald-500" />
           </div>
           <h3 className="text-xl font-bold tracking-tight text-emerald-700 font-mono mt-1">98.4%</h3>
-          <p className="text-[11px] text-gray-400 mt-1">Vercel edge preview hits</p>
+          <p className="text-[11px] text-muted-foreground mt-1">Vercel edge preview hits</p>
         </div>
       </div>
 
       {/* 3. Detailed Services Status Grid */}
       <div className="space-y-3">
         <div className="flex items-center justify-between text-xs">
-          <h3 className="text-sm font-semibold tracking-tight text-gray-950">Service Infrastructure Topology</h3>
-          <span className="text-gray-500 font-mono">6 of 6 Healthy</span>
+          <h3 className="text-sm font-semibold tracking-tight text-foreground">Service Infrastructure Topology</h3>
+          <span className="text-muted-foreground font-mono">6 of 6 Healthy</span>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
           {services.map((svc) => (
             <div
               key={svc.name}
-              className="p-5 rounded-2xl bg-white border border-black/[0.08] shadow-[0_2px_8px_rgba(0,0,0,0.02)] hover:border-black/20 transition-all flex flex-col justify-between space-y-4"
+              className="p-5 rounded-2xl bg-card border border-[var(--neu-line)] shadow-[var(--neu-elev-2)] hover:border-black/20 transition-all flex flex-col justify-between space-y-4"
             >
               <div>
                 <div className="flex items-start justify-between gap-2">
-                  <div className="p-2 rounded-lg bg-gray-50 border border-black/[0.04]">
+                  <div className="p-2 rounded-lg bg-[var(--neu-sunken)] border border-[var(--neu-line)]">
                     {getServiceIcon(svc.name)}
                   </div>
                   {getStatusBadge(svc.status)}
                 </div>
 
-                <h4 className="text-sm font-semibold text-gray-950 mt-3">{svc.name}</h4>
-                <p className="text-xs text-gray-500 mt-1 leading-relaxed">
+                <h4 className="text-sm font-semibold text-foreground mt-3">{svc.name}</h4>
+                <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
                   {svc.description}
                 </p>
               </div>
 
-              <div className="pt-3 border-t border-black/[0.04] flex items-center justify-between text-xs">
+              <div className="pt-3 border-t border-[var(--neu-line)] flex items-center justify-between text-xs">
                 <div>
-                  <span className="text-gray-400 block text-[10px] uppercase font-semibold">
+                  <span className="text-muted-foreground block text-[10px] uppercase font-semibold">
                     Uptime
                   </span>
-                  <span className="font-mono font-bold text-gray-900">{svc.uptime}</span>
+                  <span className="font-mono font-bold text-foreground">{svc.uptime}</span>
                 </div>
 
                 <div>
-                  <span className="text-gray-400 block text-[10px] uppercase font-semibold">
+                  <span className="text-muted-foreground block text-[10px] uppercase font-semibold">
                     Response
                   </span>
                   <span className="font-mono font-bold text-emerald-600">{svc.latency}</span>
@@ -195,7 +195,7 @@ export default function SystemHealthAdminPage() {
                       description: `Response time: ${svc.latency} (HTTP 200)`,
                     });
                   }}
-                  className="px-2.5 py-1 text-[11px] font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors"
+                  className="px-2.5 py-1 text-[11px] font-medium text-foreground bg-[var(--neu-sunken)] hover:bg-gray-200 rounded-md transition-colors"
                 >
                   Ping
                 </button>
@@ -206,11 +206,11 @@ export default function SystemHealthAdminPage() {
       </div>
 
       {/* 4. Recent Incident History */}
-      <div className="rounded-2xl bg-white border border-black/[0.08] shadow-[0_2px_8px_rgba(0,0,0,0.02)] overflow-hidden">
-        <div className="p-4 border-b border-black/[0.06] flex items-center justify-between">
+      <div className="rounded-2xl bg-card border border-[var(--neu-line)] shadow-[var(--neu-elev-2)] overflow-hidden">
+        <div className="p-4 border-b border-[var(--neu-line)] flex items-center justify-between">
           <div>
-            <h4 className="text-sm font-semibold tracking-tight text-gray-950">Past Postmortems & Incident History</h4>
-            <p className="text-xs text-gray-400">Zero active alerts or degradations currently ongoing</p>
+            <h4 className="text-sm font-semibold tracking-tight text-foreground">Past Postmortems & Incident History</h4>
+            <p className="text-xs text-muted-foreground">Zero active alerts or degradations currently ongoing</p>
           </div>
           <span className="text-[11px] font-mono text-emerald-700 bg-emerald-50 border border-emerald-200/60 px-2 py-0.5 rounded">
             All Resolved
@@ -221,28 +221,28 @@ export default function SystemHealthAdminPage() {
           {incidents.map((inc) => (
             <div
               key={inc.id}
-              className="p-4 hover:bg-gray-50/70 transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs"
+              className="p-4 hover:bg-[var(--neu-sunken)]/70 transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs"
             >
               <div className="space-y-1">
                 <div className="flex items-center gap-2">
-                  <span className="font-mono text-gray-400 text-[11px]">{inc.id}</span>
+                  <span className="font-mono text-muted-foreground text-[11px]">{inc.id}</span>
                   <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200/60 font-mono">
                     <CheckCircle2 className="w-3 h-3 text-emerald-600" />
                     {inc.status}
                   </span>
-                  <span className="font-semibold text-gray-950">{inc.title}</span>
+                  <span className="font-semibold text-foreground">{inc.title}</span>
                 </div>
-                <p className="text-gray-500 text-[11px]">
-                  Impact: <strong className="text-gray-700">{inc.impact}</strong> · Duration:{" "}
+                <p className="text-muted-foreground text-[11px]">
+                  Impact: <strong className="text-foreground">{inc.impact}</strong> · Duration:{" "}
                   {inc.duration} · Component: {inc.service}
                 </p>
               </div>
 
               <div className="flex items-center gap-3 self-end sm:self-center shrink-0">
-                <span className="text-gray-400 text-[11px] whitespace-nowrap">{inc.timestamp}</span>
+                <span className="text-muted-foreground text-[11px] whitespace-nowrap">{inc.timestamp}</span>
                 <button
                   onClick={() => setSelectedIncident(inc)}
-                  className="px-2.5 py-1 text-[11px] font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors"
+                  className="px-2.5 py-1 text-[11px] font-medium text-foreground bg-[var(--neu-sunken)] hover:bg-gray-200 rounded-md transition-colors"
                 >
                   Postmortem
                 </button>
@@ -255,54 +255,54 @@ export default function SystemHealthAdminPage() {
       {/* Incident Detail Modal */}
       {selectedIncident && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs animate-in fade-in">
-          <div className="bg-white rounded-2xl max-w-lg w-full border border-black/[0.1] shadow-2xl p-6 relative space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-black/[0.06]">
+          <div className="bg-card rounded-2xl max-w-lg w-full border border-black/[0.1] shadow-2xl p-6 relative space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-[var(--neu-line)]">
               <div className="flex items-center gap-2">
-                <Info className="w-4 h-4 text-gray-900" />
-                <h3 className="text-sm font-bold text-gray-950">Incident Postmortem {selectedIncident.id}</h3>
+                <Info className="w-4 h-4 text-foreground" />
+                <h3 className="text-sm font-bold text-foreground">Incident Postmortem {selectedIncident.id}</h3>
               </div>
               <button
                 onClick={() => setSelectedIncident(null)}
-                className="p-1 rounded-lg text-gray-400 hover:text-black"
+                className="p-1 rounded-lg text-muted-foreground hover:text-black"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            <div className="space-y-3 bg-gray-50 p-4 rounded-xl border border-black/[0.04] text-xs">
+            <div className="space-y-3 bg-[var(--neu-sunken)] p-4 rounded-xl border border-[var(--neu-line)] text-xs">
               <div>
-                <span className="text-gray-400 block text-[10px] uppercase font-bold">Event Summary</span>
-                <p className="font-bold text-gray-950 mt-0.5">{selectedIncident.title}</p>
+                <span className="text-muted-foreground block text-[10px] uppercase font-bold">Event Summary</span>
+                <p className="font-bold text-foreground mt-0.5">{selectedIncident.title}</p>
               </div>
 
-              <div className="grid grid-cols-2 gap-2 pt-2 border-t border-black/[0.04]">
+              <div className="grid grid-cols-2 gap-2 pt-2 border-t border-[var(--neu-line)]">
                 <div>
-                  <span className="text-gray-400 block text-[10px] uppercase font-bold">Incident Time</span>
-                  <span className="text-gray-700">{selectedIncident.timestamp}</span>
+                  <span className="text-muted-foreground block text-[10px] uppercase font-bold">Incident Time</span>
+                  <span className="text-foreground">{selectedIncident.timestamp}</span>
                 </div>
                 <div>
-                  <span className="text-gray-400 block text-[10px] uppercase font-bold">Duration</span>
-                  <span className="text-gray-700">{selectedIncident.duration}</span>
+                  <span className="text-muted-foreground block text-[10px] uppercase font-bold">Duration</span>
+                  <span className="text-foreground">{selectedIncident.duration}</span>
                 </div>
               </div>
 
-              <div className="pt-2 border-t border-black/[0.04]">
-                <span className="text-gray-400 block text-[10px] uppercase font-bold">Customer Impact</span>
-                <p className="text-gray-700 mt-0.5">{selectedIncident.impact}</p>
+              <div className="pt-2 border-t border-[var(--neu-line)]">
+                <span className="text-muted-foreground block text-[10px] uppercase font-bold">Customer Impact</span>
+                <p className="text-foreground mt-0.5">{selectedIncident.impact}</p>
               </div>
 
-              <div className="pt-2 border-t border-black/[0.04]">
-                <span className="text-gray-400 block text-[10px] uppercase font-bold">Technical Root Cause & Fix</span>
-                <p className="text-gray-800 bg-white p-2.5 rounded-lg border border-black/[0.06] mt-1 leading-relaxed">
+              <div className="pt-2 border-t border-[var(--neu-line)]">
+                <span className="text-muted-foreground block text-[10px] uppercase font-bold">Technical Root Cause & Fix</span>
+                <p className="text-foreground bg-card p-2.5 rounded-lg border border-[var(--neu-line)] mt-1 leading-relaxed">
                   {selectedIncident.details}
                 </p>
               </div>
             </div>
 
-            <div className="flex justify-end pt-2 border-t border-black/[0.06]">
+            <div className="flex justify-end pt-2 border-t border-[var(--neu-line)]">
               <button
                 onClick={() => setSelectedIncident(null)}
-                className="px-4 py-1.5 text-xs font-semibold text-gray-800 bg-gray-100 hover:bg-gray-200 rounded-lg"
+                className="px-4 py-1.5 text-xs font-semibold text-foreground bg-[var(--neu-sunken)] hover:bg-gray-200 rounded-lg"
               >
                 Close Report
               </button>

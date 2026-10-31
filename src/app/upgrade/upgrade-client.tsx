@@ -32,16 +32,16 @@ export function UpgradeClient({ profile }: UpgradeClientProps) {
   };
 
   return (
-    <div className="min-h-screen bg-[#faf9f6] text-gray-950 flex flex-col mavly-page-enter">
+    <div className="min-h-screen bg-[var(--neu-base)] text-foreground flex flex-col mavly-page-enter">
       {/* Top Navigation Bar */}
-      <header className="sticky top-0 z-50 bg-[#faf9f6]/85 backdrop-blur-md border-b border-black/[0.06]">
+      <header className="sticky top-0 z-50 bg-[color-mix(in_srgb,var(--neu-base)_86%,transparent)] backdrop-blur-md border-b border-[var(--neu-line)]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <div className="flex items-center gap-6">
             <Link
               href={userEmail ? "/dashboard" : "/"}
               className="flex items-center gap-2.5 group select-none"
             >
-              <div className="w-8 h-8 rounded-xl overflow-hidden bg-white shadow-xs p-0.5 border border-black/[0.08] flex items-center justify-center transition-transform duration-200 group-hover:scale-105 active:scale-95">
+              <div className="w-8 h-8 rounded-xl overflow-hidden bg-card shadow-xs p-0.5 border border-[var(--neu-line)] flex items-center justify-center transition-transform duration-200 group-hover:scale-105 active:scale-95">
                 <Image
                   src="/logo/Mavly.png"
                   alt="Mavly Logo"
@@ -52,12 +52,12 @@ export function UpgradeClient({ profile }: UpgradeClientProps) {
                   referrerPolicy="no-referrer"
                 />
               </div>
-              <span className="font-bold tracking-tight text-gray-950 text-base sm:text-lg leading-none">
+              <span className="font-bold tracking-tight text-foreground text-base sm:text-lg leading-none">
                 Mavly
               </span>
             </Link>
 
-            <nav className="hidden sm:flex items-center gap-4 text-xs font-medium text-gray-600">
+            <nav className="hidden sm:flex items-center gap-4 text-xs font-medium text-muted-foreground">
               <Link
                 href={userEmail ? "/dashboard" : "/"}
                 className="hover:text-black transition-colors flex items-center gap-1.5"
@@ -66,7 +66,7 @@ export function UpgradeClient({ profile }: UpgradeClientProps) {
                 <span>{userEmail ? "Dashboard" : "Home"}</span>
               </Link>
               <span className="text-gray-300">/</span>
-              <span className="text-gray-900 font-semibold">Upgrade</span>
+              <span className="text-foreground font-semibold">Upgrade</span>
             </nav>
           </div>
 
@@ -93,7 +93,7 @@ export function UpgradeClient({ profile }: UpgradeClientProps) {
 
         {/* On-demand Credit Top-up Banner */}
         <section className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 pb-20">
-          <div className="p-6 sm:p-8 rounded-3xl bg-white border border-black/[0.08] shadow-[0_4px_20px_-2px_rgba(0,0,0,0.03)] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
+          <div className="p-6 sm:p-8 rounded-3xl bg-card border border-[var(--neu-line)] shadow-[0_4px_20px_-2px_rgba(0,0,0,0.03)] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
             <div className="max-w-xl">
               <div className="flex items-center gap-2 mb-2">
                 <Sparkles className="w-4 h-4 text-black" />
@@ -101,10 +101,10 @@ export function UpgradeClient({ profile }: UpgradeClientProps) {
                   On-Demand AI Credits
                 </span>
               </div>
-              <h3 className="text-xl font-extrabold text-gray-950 tracking-tight">
+              <h3 className="text-xl font-extrabold text-foreground tracking-tight">
                 Need extra credits without changing your monthly plan?
               </h3>
-              <p className="mt-1 text-xs sm:text-sm text-gray-600 leading-relaxed font-normal">
+              <p className="mt-1 text-xs sm:text-sm text-muted-foreground leading-relaxed font-normal">
                 Purchase flexible one-time AI credit packages anytime to keep building, iterating, and polishing without interruption.
               </p>
             </div>
@@ -126,31 +126,31 @@ export function UpgradeClient({ profile }: UpgradeClientProps) {
           if (!open) setSelectedPlanForNotice(null);
         }}
       >
-        <DialogContent className="max-w-md bg-white p-6 sm:p-8 rounded-3xl border border-black/[0.1] shadow-2xl">
+        <DialogContent className="max-w-md bg-card p-6 sm:p-8 rounded-3xl border border-black/[0.1] shadow-2xl">
           <DialogHeader>
             <div className="w-10 h-10 rounded-2xl bg-amber-50 border border-amber-200/60 flex items-center justify-center text-amber-800 mb-2">
               <ShieldAlert className="w-5 h-5" />
             </div>
-            <DialogTitle className="text-xl font-bold tracking-tight text-gray-950">
+            <DialogTitle className="text-xl font-bold tracking-tight text-foreground">
               Checkout Not Yet Configured
             </DialogTitle>
-            <DialogDescription className="text-xs sm:text-sm text-gray-600 leading-relaxed pt-2">
+            <DialogDescription className="text-xs sm:text-sm text-muted-foreground leading-relaxed pt-2">
               Automated subscription checkout for the{" "}
-              <strong className="text-gray-950">{selectedPlanForNotice?.name}</strong> plan is currently in development.
+              <strong className="text-foreground">{selectedPlanForNotice?.name}</strong> plan is currently in development.
               No payment provider is active on this deployment, and no charges have been made. Your account remains safely on the Free tier.
             </DialogDescription>
           </DialogHeader>
 
-          <div className="my-4 p-3.5 rounded-xl bg-[#faf9f6] border border-black/[0.06] text-xs text-gray-700 space-y-1.5">
+          <div className="my-4 p-3.5 rounded-xl bg-[var(--neu-base)] border border-[var(--neu-line)] text-xs text-foreground space-y-1.5">
             <div className="flex justify-between font-medium">
               <span>Selected Tier:</span>
-              <span className="font-bold text-gray-950">{selectedPlanForNotice?.name}</span>
+              <span className="font-bold text-foreground">{selectedPlanForNotice?.name}</span>
             </div>
             <div className="flex justify-between font-medium">
               <span>Base Monthly Price:</span>
               <span>₹{selectedPlanForNotice?.monthlyPrice} / month</span>
             </div>
-            <p className="text-[11px] text-gray-500 pt-1 border-t border-black/[0.06]">
+            <p className="text-[11px] text-muted-foreground pt-1 border-t border-[var(--neu-line)]">
               To request early access or volume agency billing, please contact our team directly.
             </p>
           </div>
@@ -177,17 +177,17 @@ export function UpgradeClient({ profile }: UpgradeClientProps) {
       </Dialog>
 
       {/* Footer */}
-      <footer className="py-8 border-t border-black/[0.06] text-xs text-gray-500">
+      <footer className="py-8 border-t border-[var(--neu-line)] text-xs text-muted-foreground">
         <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-4">
           <p>© {new Date().getFullYear()} Mavly. All rights reserved.</p>
           <div className="flex items-center gap-5">
-            <Link href="/support" className="text-gray-600 hover:text-black transition-colors">
+            <Link href="/support" className="text-muted-foreground hover:text-black transition-colors">
               Help &amp; Support
             </Link>
-            <Link href="/terms" className="text-gray-600 hover:text-black transition-colors">
+            <Link href="/terms" className="text-muted-foreground hover:text-black transition-colors">
               Terms
             </Link>
-            <Link href="/privacy" className="text-gray-600 hover:text-black transition-colors">
+            <Link href="/privacy" className="text-muted-foreground hover:text-black transition-colors">
               Privacy
             </Link>
           </div>

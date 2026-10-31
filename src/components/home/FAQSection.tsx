@@ -83,8 +83,8 @@ export function FAQSection() {
                 key={idx}
                 className={`rounded-2xl transition-all duration-300 overflow-hidden ${
                   isOpen
-                    ? "bg-[#faf9f6] border border-black/[0.14] shadow-[0_4px_16px_-2px_rgba(0,0,0,0.04)]"
-                    : "bg-[#faf9f6] border border-black/[0.06] hover:border-black/[0.14] hover:shadow-[0_2px_10px_-2px_rgba(0,0,0,0.03)]"
+                    ? "bg-card border border-[var(--neu-line-strong)] shadow-[var(--neu-elev-3)]"
+                    : "bg-card border border-[var(--neu-line)] shadow-[var(--neu-elev-1)] hover:border-[var(--neu-line-strong)] hover:shadow-[var(--neu-elev-2)]"
                 }`}
               >
                 <h3>

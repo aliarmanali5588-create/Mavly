@@ -99,9 +99,9 @@ export function SupportClient({ profile }: SupportClientProps) {
   };
 
   return (
-    <div className="min-h-screen bg-[#faf9f6] text-gray-950 flex flex-col mavly-page-enter">
+    <div className="min-h-screen bg-[var(--neu-base)] text-foreground flex flex-col mavly-page-enter">
       {/* Top Header Navigation */}
-      <header className="sticky top-0 z-50 bg-[#faf9f6]/85 backdrop-blur-md border-b border-black/[0.06]">
+      <header className="sticky top-0 z-50 bg-[color-mix(in_srgb,var(--neu-base)_86%,transparent)] backdrop-blur-md border-b border-[var(--neu-line)]">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <div className="flex items-center gap-4 sm:gap-6">
             <Link
@@ -109,7 +109,7 @@ export function SupportClient({ profile }: SupportClientProps) {
               className="flex items-center gap-2.5 group select-none"
               aria-label="Mavly Home"
             >
-              <div className="w-8 h-8 rounded-xl overflow-hidden bg-white shadow-xs p-0.5 border border-black/[0.08] flex items-center justify-center transition-transform duration-200 group-hover:scale-105 active:scale-95">
+              <div className="w-8 h-8 rounded-xl overflow-hidden bg-card shadow-xs p-0.5 border border-[var(--neu-line)] flex items-center justify-center transition-transform duration-200 group-hover:scale-105 active:scale-95">
                 <Image
                   src="/logo/Mavly.png"
                   alt="Mavly Logo"
@@ -120,14 +120,14 @@ export function SupportClient({ profile }: SupportClientProps) {
                   referrerPolicy="no-referrer"
                 />
               </div>
-              <span className="font-bold tracking-tight text-gray-950 text-base sm:text-lg leading-none">
+              <span className="font-bold tracking-tight text-foreground text-base sm:text-lg leading-none">
                 Mavly
               </span>
             </Link>
 
-            <nav className="flex items-center gap-2 text-xs font-medium text-gray-600">
+            <nav className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
               <span className="text-gray-300">/</span>
-              <span className="text-gray-900 font-semibold">Support</span>
+              <span className="text-foreground font-semibold">Support</span>
             </nav>
           </div>
 
@@ -161,14 +161,14 @@ export function SupportClient({ profile }: SupportClientProps) {
       <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-10 sm:py-16 flex-1 w-full">
         {/* Page Heading & Introduction */}
         <div className="max-w-3xl mb-10 sm:mb-14">
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-stone-100 border border-black/[0.06] text-[11px] font-bold text-stone-700 tracking-wide uppercase mb-3">
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-stone-100 border border-[var(--neu-line)] text-[11px] font-bold text-stone-700 tracking-wide uppercase mb-3">
             <LifeBuoy className="w-3.5 h-3.5 text-stone-600" aria-hidden="true" />
             <span>MAVLY SUPPORT</span>
           </div>
-          <h1 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tight text-gray-950">
+          <h1 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tight text-foreground">
             Let&apos;s get you back to building.
           </h1>
-          <p className="mt-3.5 text-sm sm:text-base text-gray-600 leading-relaxed font-normal">
+          <p className="mt-3.5 text-sm sm:text-base text-muted-foreground leading-relaxed font-normal">
             Find guidance for your workspace, website generation, integrations, publishing, and account questions.
           </p>
 
@@ -199,35 +199,35 @@ export function SupportClient({ profile }: SupportClientProps) {
               >
                 <div>
                   <div className="flex items-center justify-between gap-3 mb-4">
-                    <div className="w-11 h-11 rounded-2xl bg-white border border-black/[0.08] shadow-xs flex items-center justify-center text-gray-900 shrink-0">
-                      <Icon className="w-5 h-5 text-gray-900" aria-hidden="true" />
+                    <div className="w-11 h-11 rounded-2xl bg-card border border-[var(--neu-line)] shadow-xs flex items-center justify-center text-foreground shrink-0">
+                      <Icon className="w-5 h-5 text-foreground" aria-hidden="true" />
                     </div>
-                    <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-stone-100 text-stone-700 border border-black/[0.04]">
+                    <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-stone-100 text-stone-700 border border-[var(--neu-line)]">
                       {channel.category}
                     </span>
                   </div>
 
                   <h2
                     id={`channel-title-${channel.id}`}
-                    className="text-lg font-bold text-gray-950 tracking-tight mb-2"
+                    className="text-lg font-bold text-foreground tracking-tight mb-2"
                   >
                     {channel.title}
                   </h2>
 
-                  <p className="text-xs sm:text-sm text-gray-600 leading-relaxed font-normal mb-6">
+                  <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed font-normal mb-6">
                     {channel.purpose}
                   </p>
                 </div>
 
-                <div className="pt-5 border-t border-black/[0.06] space-y-3.5">
-                  <div className="flex items-center justify-between gap-2 p-2 sm:p-2.5 rounded-xl bg-[#faf9f6] border border-black/[0.05]">
+                <div className="pt-5 border-t border-[var(--neu-line)] space-y-3.5">
+                  <div className="flex items-center justify-between gap-2 p-2 sm:p-2.5 rounded-xl bg-[var(--neu-base)] border border-black/[0.05]">
                     <div className="min-w-0 flex-1 pl-1">
-                      <span className="block text-[10px] uppercase font-bold tracking-wider text-gray-400">
+                      <span className="block text-[10px] uppercase font-bold tracking-wider text-muted-foreground">
                         Recipient Address
                       </span>
                       <a
                         href={mailtoHref}
-                        className="font-mono text-xs sm:text-[13px] font-medium text-gray-900 hover:underline truncate block"
+                        className="font-mono text-xs sm:text-[13px] font-medium text-foreground hover:underline truncate block"
                         title={`Open email to ${channel.email}`}
                       >
                         {channel.email}
@@ -236,7 +236,7 @@ export function SupportClient({ profile }: SupportClientProps) {
                     <button
                       type="button"
                       onClick={() => handleCopy(channel.email)}
-                      className="px-2.5 py-1.5 rounded-lg bg-white border border-black/[0.08] text-xs font-medium text-gray-700 hover:text-black hover:bg-neutral-50 shadow-xs active:scale-95 transition-all flex items-center gap-1.5 shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-400"
+                      className="px-2.5 py-1.5 rounded-lg bg-card border border-[var(--neu-line)] text-xs font-medium text-foreground hover:text-black hover:bg-neutral-50 shadow-xs active:scale-95 transition-all flex items-center gap-1.5 shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-400"
                       aria-label={`Copy ${channel.email} to clipboard`}
                     >
                       {isCopied ? (
@@ -246,7 +246,7 @@ export function SupportClient({ profile }: SupportClientProps) {
                         </>
                       ) : (
                         <>
-                          <Copy className="w-3.5 h-3.5 text-gray-500" aria-hidden="true" />
+                          <Copy className="w-3.5 h-3.5 text-muted-foreground" aria-hidden="true" />
                           <span className="text-[11px]">Copy</span>
                         </>
                       )}
@@ -268,11 +268,11 @@ export function SupportClient({ profile }: SupportClientProps) {
         </div>
 
         {/* Diagnostic Problem Reporting Guidance */}
-        <div className="mavly-soft-card p-6 sm:p-8 mb-8 border border-black/[0.06] space-y-3">
-          <h3 className="text-sm font-bold text-gray-950">
+        <div className="mavly-soft-card p-6 sm:p-8 mb-8 border border-[var(--neu-line)] space-y-3">
+          <h3 className="text-sm font-bold text-foreground">
             Frequently Encountered Problems &amp; How to Report
           </h3>
-          <p className="text-xs text-gray-600 leading-relaxed">
+          <p className="text-xs text-muted-foreground leading-relaxed">
             When reporting a bug or generation issue, please provide your <strong>Project ID</strong> (from the URL <code>/project/&#123;id&#125;</code>), the prompt text that caused the error, and any visible message in the chat panel.
           </p>
           <div className="p-3 rounded-xl bg-amber-50/70 border border-amber-200/60 text-[11px] text-amber-900">
@@ -281,16 +281,16 @@ export function SupportClient({ profile }: SupportClientProps) {
         </div>
 
         {/* Self-Service Resources Section */}
-        <div className="mavly-soft-card p-6 sm:p-8 mb-10 border border-black/[0.06]">
+        <div className="mavly-soft-card p-6 sm:p-8 mb-10 border border-[var(--neu-line)]">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
             <div className="max-w-xl">
               <div className="flex items-center gap-2 mb-2">
                 <Sparkles className="w-4 h-4 text-stone-700" aria-hidden="true" />
-                <h3 className="text-base font-bold text-gray-950 tracking-tight">
+                <h3 className="text-base font-bold text-foreground tracking-tight">
                   Guides, Documentation &amp; Frequently Asked Questions
                 </h3>
               </div>
-              <p className="text-xs sm:text-sm text-gray-600 leading-relaxed font-normal">
+              <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed font-normal">
                 Looking for self-service help? Follow our step-by-step documentation, browse practical tutorials, or review plan details.
               </p>
             </div>
@@ -324,12 +324,12 @@ export function SupportClient({ profile }: SupportClientProps) {
         </div>
 
         {/* Return to Dashboard / Return to Mavly Banner */}
-        <div className="rounded-3xl bg-white border border-black/[0.08] shadow-sm p-6 sm:p-8 flex flex-col sm:flex-row items-center justify-between gap-6">
+        <div className="rounded-3xl bg-card border border-[var(--neu-line)] shadow-sm p-6 sm:p-8 flex flex-col sm:flex-row items-center justify-between gap-6">
           <div>
-            <h3 className="text-base font-bold text-gray-950 tracking-tight">
+            <h3 className="text-base font-bold text-foreground tracking-tight">
               {isAuthenticated ? "Ready to continue building?" : "Ready to start building with Mavly?"}
             </h3>
-            <p className="mt-1 text-xs sm:text-sm text-gray-600 leading-relaxed font-normal">
+            <p className="mt-1 text-xs sm:text-sm text-muted-foreground leading-relaxed font-normal">
               {isAuthenticated
                 ? "Return to your workspace to generate, edit, and publish your websites."
                 : "Describe your dream website in plain text and watch Mavly turn your ideas into functional websites."}
@@ -367,17 +367,17 @@ export function SupportClient({ profile }: SupportClientProps) {
       </main>
 
       {/* Footer */}
-      <footer className="py-8 border-t border-black/[0.06] text-xs text-gray-500 bg-white/40">
+      <footer className="py-8 border-t border-[var(--neu-line)] text-xs text-muted-foreground bg-card/40">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4">
           <p>© {new Date().getFullYear()} Mavly. All rights reserved.</p>
           <div className="flex items-center gap-5">
-            <Link href="/" className="text-gray-600 hover:text-black transition-colors">
+            <Link href="/" className="text-muted-foreground hover:text-black transition-colors">
               Home
             </Link>
-            <Link href="/terms" className="text-gray-600 hover:text-black transition-colors">
+            <Link href="/terms" className="text-muted-foreground hover:text-black transition-colors">
               Terms
             </Link>
-            <Link href="/privacy" className="text-gray-600 hover:text-black transition-colors">
+            <Link href="/privacy" className="text-muted-foreground hover:text-black transition-colors">
               Privacy
             </Link>
           </div>

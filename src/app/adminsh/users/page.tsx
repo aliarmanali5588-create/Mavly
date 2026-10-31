@@ -154,13 +154,13 @@ export default function UsersAdminPage() {
         );
       case "Starter":
         return (
-          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-gray-100 text-gray-800 border border-black/[0.08]">
+          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-[var(--neu-sunken)] text-foreground border border-[var(--neu-line)]">
             Starter
           </span>
         );
       case "Free":
         return (
-          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-gray-50 text-gray-500 border border-black/[0.05]">
+          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-[var(--neu-sunken)] text-muted-foreground border border-black/[0.05]">
             Free
           </span>
         );
@@ -171,46 +171,46 @@ export default function UsersAdminPage() {
     <AdminShell activeNav="Users">
       {/* ── Summary Counters Strip ── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="p-5 rounded-2xl bg-white border border-black/[0.08] shadow-[0_2px_8px_rgba(0,0,0,0.02)]">
-          <p className="text-xs font-semibold text-gray-500 tracking-wide">Total Users</p>
-          <h3 className="text-2xl sm:text-3xl font-extrabold text-gray-950 mt-1.5 font-mono">12,480</h3>
+        <div className="p-5 rounded-2xl bg-card border border-[var(--neu-line)] shadow-[var(--neu-elev-2)]">
+          <p className="text-xs font-semibold text-muted-foreground tracking-wide">Total Users</p>
+          <h3 className="text-2xl sm:text-3xl font-extrabold text-foreground mt-1.5 font-mono">12,480</h3>
           <span className="text-[11px] text-emerald-600 font-semibold mt-2 inline-block">
             +14.2% growth this month
           </span>
         </div>
 
-        <div className="p-5 rounded-2xl bg-white border border-black/[0.08] shadow-[0_2px_8px_rgba(0,0,0,0.02)]">
-          <p className="text-xs font-semibold text-gray-500 tracking-wide">Active Tenants</p>
-          <h3 className="text-2xl sm:text-3xl font-extrabold text-gray-950 mt-1.5 font-mono">9,840</h3>
+        <div className="p-5 rounded-2xl bg-card border border-[var(--neu-line)] shadow-[var(--neu-elev-2)]">
+          <p className="text-xs font-semibold text-muted-foreground tracking-wide">Active Tenants</p>
+          <h3 className="text-2xl sm:text-3xl font-extrabold text-foreground mt-1.5 font-mono">9,840</h3>
           <span className="text-[11px] text-emerald-600 font-semibold mt-2 inline-block">
             Active in last 7 days
           </span>
         </div>
 
-        <div className="p-5 rounded-2xl bg-white border border-black/[0.08] shadow-[0_2px_8px_rgba(0,0,0,0.02)]">
-          <p className="text-xs font-semibold text-gray-500 tracking-wide">Paid Subscribers</p>
-          <h3 className="text-2xl sm:text-3xl font-extrabold text-gray-950 mt-1.5 font-mono">2,840</h3>
-          <span className="text-[11px] text-gray-400 font-medium mt-2 inline-block">
+        <div className="p-5 rounded-2xl bg-card border border-[var(--neu-line)] shadow-[var(--neu-elev-2)]">
+          <p className="text-xs font-semibold text-muted-foreground tracking-wide">Paid Subscribers</p>
+          <h3 className="text-2xl sm:text-3xl font-extrabold text-foreground mt-1.5 font-mono">2,840</h3>
+          <span className="text-[11px] text-muted-foreground font-medium mt-2 inline-block">
             22.7% paid conversion
           </span>
         </div>
 
-        <div className="p-5 rounded-2xl bg-white border border-black/[0.08] shadow-[0_2px_8px_rgba(0,0,0,0.02)]">
-          <p className="text-xs font-semibold text-gray-500 tracking-wide">Account Health SLA</p>
+        <div className="p-5 rounded-2xl bg-card border border-[var(--neu-line)] shadow-[var(--neu-elev-2)]">
+          <p className="text-xs font-semibold text-muted-foreground tracking-wide">Account Health SLA</p>
           <h3 className="text-2xl sm:text-3xl font-extrabold text-emerald-700 mt-1.5 font-mono">99.8%</h3>
-          <span className="text-[11px] text-gray-400 font-medium mt-2 inline-block">
+          <span className="text-[11px] text-muted-foreground font-medium mt-2 inline-block">
             16 suspended accounts
           </span>
         </div>
       </div>
 
       {/* ── Table & Command Bar Container ── */}
-      <div className="bg-white rounded-2xl p-5 sm:p-6 border border-black/[0.08] shadow-[0_2px_8px_rgba(0,0,0,0.02)] space-y-4">
+      <div className="bg-card rounded-2xl p-5 sm:p-6 border border-[var(--neu-line)] shadow-[0_2px_8px_rgba(0,0,0,0.02)] space-y-4">
         {/* Controls Bar */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-4 border-b border-black/[0.06]">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-4 border-b border-[var(--neu-line)]">
           <div>
-            <h2 className="text-base font-bold text-gray-950">Customer Directory</h2>
-            <p className="text-xs text-gray-500 mt-0.5">
+            <h2 className="text-base font-bold text-foreground">Customer Directory</h2>
+            <p className="text-xs text-muted-foreground mt-0.5">
               Showing {filteredUsers.length} total matched customer accounts
             </p>
           </div>
@@ -218,7 +218,7 @@ export default function UsersAdminPage() {
           <div className="flex flex-wrap items-center gap-2">
             {/* Search */}
             <div className="relative w-full sm:w-60">
-              <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
               <input
                 type="text"
                 placeholder="Search user, email, role..."
@@ -227,7 +227,7 @@ export default function UsersAdminPage() {
                   setSearchQuery(e.target.value);
                   setCurrentPage(1);
                 }}
-                className="w-full h-8 pl-8 pr-3 text-xs rounded-xl bg-gray-50 border border-black/[0.08] text-gray-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-black"
+                className="w-full h-8 pl-8 pr-3 text-xs rounded-xl bg-[var(--neu-sunken)] border border-[var(--neu-line)] text-foreground focus:bg-card focus:outline-none focus:ring-2 focus:ring-black"
               />
             </div>
 
@@ -238,7 +238,7 @@ export default function UsersAdminPage() {
                 setPlanFilter(e.target.value);
                 setCurrentPage(1);
               }}
-              className="h-8 px-2.5 text-xs font-medium bg-gray-50 border border-black/[0.08] rounded-xl text-gray-800 focus:outline-none focus:ring-2 focus:ring-black cursor-pointer"
+              className="h-8 px-2.5 text-xs font-medium bg-[var(--neu-sunken)] border border-[var(--neu-line)] rounded-xl text-foreground focus:outline-none focus:ring-2 focus:ring-black cursor-pointer"
             >
               <option value="All">All Plans</option>
               <option value="Agency">Agency</option>
@@ -255,7 +255,7 @@ export default function UsersAdminPage() {
                 setStatusFilter(e.target.value);
                 setCurrentPage(1);
               }}
-              className="h-8 px-2.5 text-xs font-medium bg-gray-50 border border-black/[0.08] rounded-xl text-gray-800 focus:outline-none focus:ring-2 focus:ring-black cursor-pointer"
+              className="h-8 px-2.5 text-xs font-medium bg-[var(--neu-sunken)] border border-[var(--neu-line)] rounded-xl text-foreground focus:outline-none focus:ring-2 focus:ring-black cursor-pointer"
             >
               <option value="All">All Statuses</option>
               <option value="Active">Active Only</option>
@@ -275,10 +275,10 @@ export default function UsersAdminPage() {
         </div>
 
         {/* ── High-Density Directory Table ── */}
-        <div className="overflow-x-auto rounded-xl border border-black/[0.06]">
+        <div className="overflow-x-auto rounded-xl border border-[var(--neu-line)]">
           <table className="w-full text-left border-collapse text-xs">
             <thead>
-              <tr className="bg-gray-50/60 border-b border-black/[0.06] text-gray-400 font-bold uppercase tracking-wider text-[10px]">
+              <tr className="bg-[var(--neu-sunken)]/60 border-b border-[var(--neu-line)] text-muted-foreground font-bold uppercase tracking-wider text-[10px]">
                 <th className="py-2.5 px-4">User</th>
                 <th className="py-2.5 px-4">Role</th>
                 <th className="py-2.5 px-4">Plan</th>
@@ -292,32 +292,32 @@ export default function UsersAdminPage() {
             <tbody className="divide-y divide-black/[0.04]">
               {paginatedUsers.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="py-8 text-center text-gray-400">
+                  <td colSpan={8} className="py-8 text-center text-muted-foreground">
                     No users found matching your search or filters.
                   </td>
                 </tr>
               ) : (
                 paginatedUsers.map((user) => (
-                  <tr key={user.id} className="hover:bg-gray-50/60 transition-colors">
+                  <tr key={user.id} className="hover:bg-[var(--neu-sunken)]/60 transition-colors">
                     <td className="py-2.5 px-4">
                       <div className="flex items-center gap-2.5">
                         <div className="w-7 h-7 rounded-full bg-gray-900 text-white flex items-center justify-center font-bold text-[10px] shrink-0">
                           {user.name.slice(0, 2).toUpperCase()}
                         </div>
                         <div>
-                          <p className="font-bold text-gray-950 leading-tight">{user.name}</p>
-                          <p className="text-[11px] text-gray-400 leading-tight">{user.email}</p>
+                          <p className="font-bold text-foreground leading-tight">{user.name}</p>
+                          <p className="text-[11px] text-muted-foreground leading-tight">{user.email}</p>
                         </div>
                       </div>
                     </td>
-                    <td className="py-2.5 px-4 text-gray-600 font-medium">
+                    <td className="py-2.5 px-4 text-muted-foreground font-medium">
                       {user.role || "Member"}
                     </td>
                     <td className="py-2.5 px-4">{getPlanBadge(user.plan)}</td>
-                    <td className="py-2.5 px-4 text-center font-mono font-semibold text-gray-700">
+                    <td className="py-2.5 px-4 text-center font-mono font-semibold text-foreground">
                       {user.projectsCount}
                     </td>
-                    <td className="py-2.5 px-4 text-right font-mono font-bold text-gray-950">
+                    <td className="py-2.5 px-4 text-right font-mono font-bold text-foreground">
                       {user.creditsRemaining.toLocaleString()}
                     </td>
                     <td className="py-2.5 px-4">
@@ -333,7 +333,7 @@ export default function UsersAdminPage() {
                         </span>
                       )}
                     </td>
-                    <td className="py-2.5 px-4 text-gray-400 whitespace-nowrap">
+                    <td className="py-2.5 px-4 text-muted-foreground whitespace-nowrap">
                       {user.lastActive || "Recently"}
                     </td>
                     <td className="py-2.5 px-4 text-right">
@@ -341,7 +341,7 @@ export default function UsersAdminPage() {
                         <button
                           type="button"
                           onClick={() => setSelectedUser(user)}
-                          className="px-2 py-1 rounded-lg text-[11px] font-semibold text-gray-700 bg-gray-100 hover:bg-gray-200 transition-colors"
+                          className="px-2 py-1 rounded-lg text-[11px] font-semibold text-foreground bg-[var(--neu-sunken)] hover:bg-gray-200 transition-colors"
                         >
                           View
                         </button>
@@ -351,7 +351,7 @@ export default function UsersAdminPage() {
                             setEditingPlanUser(user);
                             setSelectedNewPlan(user.plan);
                           }}
-                          className="px-2 py-1 rounded-lg text-[11px] font-semibold text-gray-700 bg-gray-100 hover:bg-gray-200 transition-colors"
+                          className="px-2 py-1 rounded-lg text-[11px] font-semibold text-foreground bg-[var(--neu-sunken)] hover:bg-gray-200 transition-colors"
                         >
                           Plan
                         </button>
@@ -377,7 +377,7 @@ export default function UsersAdminPage() {
         </div>
 
         {/* Pagination Controls */}
-        <div className="flex items-center justify-between pt-3 border-t border-black/[0.06] text-xs text-gray-500">
+        <div className="flex items-center justify-between pt-3 border-t border-[var(--neu-line)] text-xs text-muted-foreground">
           <div>
             Showing {(currentPage - 1) * usersPerPage + 1} to{" "}
             {Math.min(currentPage * usersPerPage, filteredUsers.length)} of{" "}
@@ -389,18 +389,18 @@ export default function UsersAdminPage() {
               type="button"
               disabled={currentPage === 1}
               onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-              className="p-1.5 rounded-lg border border-black/[0.08] hover:bg-gray-100 disabled:opacity-40 disabled:pointer-events-none transition-colors"
+              className="p-1.5 rounded-lg border border-[var(--neu-line)] hover:bg-[var(--neu-sunken)] disabled:opacity-40 disabled:pointer-events-none transition-colors"
             >
               <ChevronLeft className="w-3.5 h-3.5" />
             </button>
-            <span className="px-2.5 font-semibold text-gray-800">
+            <span className="px-2.5 font-semibold text-foreground">
               {currentPage} / {totalPages}
             </span>
             <button
               type="button"
               disabled={currentPage === totalPages}
               onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-              className="p-1.5 rounded-lg border border-black/[0.08] hover:bg-gray-100 disabled:opacity-40 disabled:pointer-events-none transition-colors"
+              className="p-1.5 rounded-lg border border-[var(--neu-line)] hover:bg-[var(--neu-sunken)] disabled:opacity-40 disabled:pointer-events-none transition-colors"
             >
               <ChevronRight className="w-3.5 h-3.5" />
             </button>
@@ -411,56 +411,56 @@ export default function UsersAdminPage() {
       {/* ── User Details Modal ── */}
       {selectedUser && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-in fade-in">
-          <div className="w-full max-w-md bg-white rounded-2xl border border-black/[0.08] shadow-2xl p-6 space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-black/[0.06]">
+          <div className="w-full max-w-md bg-card rounded-2xl border border-[var(--neu-line)] shadow-2xl p-6 space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-[var(--neu-line)]">
               <div className="flex items-center gap-3">
                 <div className="w-9 h-9 rounded-full bg-black text-white flex items-center justify-center font-bold text-xs">
                   {selectedUser.name.slice(0, 2).toUpperCase()}
                 </div>
                 <div>
-                  <h3 className="text-base font-bold text-gray-950">{selectedUser.name}</h3>
-                  <p className="text-xs text-gray-400 font-mono">{selectedUser.id}</p>
+                  <h3 className="text-base font-bold text-foreground">{selectedUser.name}</h3>
+                  <p className="text-xs text-muted-foreground font-mono">{selectedUser.id}</p>
                 </div>
               </div>
               <button
                 type="button"
                 onClick={() => setSelectedUser(null)}
-                className="p-1 text-gray-400 hover:text-black rounded-lg hover:bg-black/5"
+                className="p-1 text-muted-foreground hover:text-black rounded-lg hover:bg-black/5"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            <div className="space-y-2.5 text-xs bg-gray-50 p-4 rounded-xl border border-black/[0.04]">
-              <div className="flex justify-between py-1 border-b border-black/[0.04]">
-                <span className="text-gray-500">Email:</span>
-                <span className="font-mono text-gray-800">{selectedUser.email}</span>
+            <div className="space-y-2.5 text-xs bg-[var(--neu-sunken)] p-4 rounded-xl border border-[var(--neu-line)]">
+              <div className="flex justify-between py-1 border-b border-[var(--neu-line)]">
+                <span className="text-muted-foreground">Email:</span>
+                <span className="font-mono text-foreground">{selectedUser.email}</span>
               </div>
-              <div className="flex justify-between py-1 border-b border-black/[0.04]">
-                <span className="text-gray-500">Role:</span>
-                <span className="font-semibold text-gray-900">{selectedUser.role || "Member"}</span>
+              <div className="flex justify-between py-1 border-b border-[var(--neu-line)]">
+                <span className="text-muted-foreground">Role:</span>
+                <span className="font-semibold text-foreground">{selectedUser.role || "Member"}</span>
               </div>
-              <div className="flex justify-between py-1 border-b border-black/[0.04]">
-                <span className="text-gray-500">Current Plan:</span>
+              <div className="flex justify-between py-1 border-b border-[var(--neu-line)]">
+                <span className="text-muted-foreground">Current Plan:</span>
                 <span>{getPlanBadge(selectedUser.plan)}</span>
               </div>
-              <div className="flex justify-between py-1 border-b border-black/[0.04]">
-                <span className="text-gray-500">Credits Remaining:</span>
-                <span className="font-mono font-extrabold text-gray-950">
+              <div className="flex justify-between py-1 border-b border-[var(--neu-line)]">
+                <span className="text-muted-foreground">Credits Remaining:</span>
+                <span className="font-mono font-extrabold text-foreground">
                   {selectedUser.creditsRemaining.toLocaleString()}
                 </span>
               </div>
-              <div className="flex justify-between py-1 border-b border-black/[0.04]">
-                <span className="text-gray-500">Active Projects:</span>
-                <span className="font-mono font-bold text-gray-900">{selectedUser.projectsCount}</span>
+              <div className="flex justify-between py-1 border-b border-[var(--neu-line)]">
+                <span className="text-muted-foreground">Active Projects:</span>
+                <span className="font-mono font-bold text-foreground">{selectedUser.projectsCount}</span>
               </div>
-              <div className="flex justify-between py-1 border-b border-black/[0.04]">
-                <span className="text-gray-500">Account Status:</span>
+              <div className="flex justify-between py-1 border-b border-[var(--neu-line)]">
+                <span className="text-muted-foreground">Account Status:</span>
                 <span className="font-semibold text-emerald-700">{selectedUser.status}</span>
               </div>
               <div className="flex justify-between pt-1">
-                <span className="text-gray-500">Joined Date:</span>
-                <span className="text-gray-700">{selectedUser.joinedDate}</span>
+                <span className="text-muted-foreground">Joined Date:</span>
+                <span className="text-foreground">{selectedUser.joinedDate}</span>
               </div>
             </div>
 
@@ -487,17 +487,17 @@ export default function UsersAdminPage() {
       {/* ── Edit Plan Modal ── */}
       {editingPlanUser && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-in fade-in">
-          <div className="w-full max-w-sm bg-white rounded-2xl border border-black/[0.08] shadow-2xl p-6 space-y-4">
-            <h3 className="text-base font-bold text-gray-950">
+          <div className="w-full max-w-sm bg-card rounded-2xl border border-[var(--neu-line)] shadow-2xl p-6 space-y-4">
+            <h3 className="text-base font-bold text-foreground">
               Change Plan for {editingPlanUser.name}
             </h3>
             <form onSubmit={handleUpdatePlan} className="space-y-4 text-xs">
               <div>
-                <label className="block text-gray-700 font-semibold mb-1">Select New Tier</label>
+                <label className="block text-foreground font-semibold mb-1">Select New Tier</label>
                 <select
                   value={selectedNewPlan}
                   onChange={(e) => setSelectedNewPlan(e.target.value as UserRecord["plan"])}
-                  className="w-full h-9 px-3 text-xs rounded-xl border border-black/[0.1] bg-white text-gray-900"
+                  className="w-full h-9 px-3 text-xs rounded-xl border border-black/[0.1] bg-card text-foreground"
                 >
                   <option value="Free">Free Starter (₹0)</option>
                   <option value="Starter">Starter Tier (₹399/mo)</option>
@@ -511,7 +511,7 @@ export default function UsersAdminPage() {
                 <button
                   type="button"
                   onClick={() => setEditingPlanUser(null)}
-                  className="px-3 py-2 text-xs text-gray-600 hover:bg-gray-100 rounded-xl"
+                  className="px-3 py-2 text-xs text-muted-foreground hover:bg-[var(--neu-sunken)] rounded-xl"
                 >
                   Cancel
                 </button>
@@ -530,13 +530,13 @@ export default function UsersAdminPage() {
       {/* ── Invite Member Modal ── */}
       {showInviteModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-in fade-in">
-          <div className="w-full max-w-md bg-white rounded-2xl border border-black/[0.08] shadow-2xl p-6 space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-black/[0.06]">
-              <h3 className="text-base font-bold text-gray-950">Invite Team Member</h3>
+          <div className="w-full max-w-md bg-card rounded-2xl border border-[var(--neu-line)] shadow-2xl p-6 space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-[var(--neu-line)]">
+              <h3 className="text-base font-bold text-foreground">Invite Team Member</h3>
               <button
                 type="button"
                 onClick={() => setShowInviteModal(false)}
-                className="p-1 text-gray-400 hover:text-black rounded-lg hover:bg-black/5"
+                className="p-1 text-muted-foreground hover:text-black rounded-lg hover:bg-black/5"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -544,33 +544,33 @@ export default function UsersAdminPage() {
 
             <form onSubmit={handleInviteUser} className="space-y-4 text-xs">
               <div>
-                <label className="block text-gray-700 font-semibold mb-1">Full Name</label>
+                <label className="block text-foreground font-semibold mb-1">Full Name</label>
                 <input
                   type="text"
                   placeholder="e.g. Vikram Malhotra"
                   value={inviteName}
                   onChange={(e) => setInviteName(e.target.value)}
-                  className="w-full h-9 px-3 text-xs rounded-xl border border-black/[0.1] focus:ring-2 focus:ring-black text-gray-900"
+                  className="w-full h-9 px-3 text-xs rounded-xl border border-black/[0.1] focus:ring-2 focus:ring-black text-foreground"
                 />
               </div>
 
               <div>
-                <label className="block text-gray-700 font-semibold mb-1">Email Address</label>
+                <label className="block text-foreground font-semibold mb-1">Email Address</label>
                 <input
                   type="email"
                   placeholder="vikram@enterprise.in"
                   value={inviteEmail}
                   onChange={(e) => setInviteEmail(e.target.value)}
-                  className="w-full h-9 px-3 text-xs rounded-xl border border-black/[0.1] focus:ring-2 focus:ring-black text-gray-900"
+                  className="w-full h-9 px-3 text-xs rounded-xl border border-black/[0.1] focus:ring-2 focus:ring-black text-foreground"
                 />
               </div>
 
               <div>
-                <label className="block text-gray-700 font-semibold mb-1">Assigned Plan Tier</label>
+                <label className="block text-foreground font-semibold mb-1">Assigned Plan Tier</label>
                 <select
                   value={invitePlan}
                   onChange={(e) => setInvitePlan(e.target.value as UserRecord["plan"])}
-                  className="w-full h-9 px-3 text-xs rounded-xl border border-black/[0.1] bg-white text-gray-900"
+                  className="w-full h-9 px-3 text-xs rounded-xl border border-black/[0.1] bg-card text-foreground"
                 >
                   <option value="Starter">Starter Tier (₹399/mo)</option>
                   <option value="Creator">Creator Tier (₹599/mo)</option>
@@ -583,7 +583,7 @@ export default function UsersAdminPage() {
                 <button
                   type="button"
                   onClick={() => setShowInviteModal(false)}
-                  className="px-3 py-2 text-xs text-gray-600 hover:bg-gray-100 rounded-xl"
+                  className="px-3 py-2 text-xs text-muted-foreground hover:bg-[var(--neu-sunken)] rounded-xl"
                 >
                   Cancel
                 </button>

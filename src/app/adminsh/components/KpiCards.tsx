@@ -46,15 +46,15 @@ export function KpiCards({ data, loading, error, onRetry, periodLabel }: KpiCard
 
   if (error && !data) {
     return (
-      <div className="bg-white rounded-2xl p-5 border border-black/[0.08] shadow-[0_2px_8px_rgba(0,0,0,0.02)] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      <div className="bg-card rounded-2xl p-5 border border-[var(--neu-line)] shadow-[0_2px_8px_rgba(0,0,0,0.02)] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <p className="text-sm font-bold text-gray-950">Overview metrics are unavailable</p>
-          <p className="text-xs text-gray-500 mt-1">{error}</p>
+          <p className="text-sm font-bold text-foreground">Overview metrics are unavailable</p>
+          <p className="text-xs text-muted-foreground mt-1">{error}</p>
         </div>
         <button
           type="button"
           onClick={onRetry}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-black/[0.1] text-xs font-semibold text-gray-800 hover:bg-gray-50"
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-black/[0.1] text-xs font-semibold text-foreground hover:bg-[var(--neu-sunken)]"
         >
           <RefreshCw className="w-3.5 h-3.5" />
           <span>Try again</span>
@@ -136,12 +136,12 @@ export function KpiCards({ data, loading, error, onRetry, periodLabel }: KpiCard
         return (
           <div
             key={card.id}
-            className="group relative bg-white rounded-2xl p-5 border border-black/[0.08] shadow-[0_2px_8px_rgba(0,0,0,0.02)] hover:shadow-[0_8px_24px_rgba(0,0,0,0.06)] hover:border-black/20 transition-all duration-200 overflow-hidden flex flex-col justify-between"
+            className="group relative bg-card rounded-2xl p-5 border border-[var(--neu-line)] shadow-[0_2px_8px_rgba(0,0,0,0.02)] hover:shadow-[0_8px_24px_rgba(0,0,0,0.06)] hover:border-black/20 transition-all duration-200 overflow-hidden flex flex-col justify-between"
           >
             <div>
               <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold text-gray-500 tracking-wide">{card.title}</span>
-                <div className="p-2 rounded-xl bg-gray-50 border border-black/[0.04] text-gray-700 group-hover:bg-black group-hover:text-white transition-colors duration-200 shrink-0">
+                <span className="text-xs font-semibold text-muted-foreground tracking-wide">{card.title}</span>
+                <div className="p-2 rounded-xl bg-[var(--neu-sunken)] border border-[var(--neu-line)] text-foreground group-hover:bg-black group-hover:text-white transition-colors duration-200 shrink-0">
                   <Icon className="w-4 h-4" />
                 </div>
               </div>
@@ -149,7 +149,7 @@ export function KpiCards({ data, loading, error, onRetry, periodLabel }: KpiCard
               <div className="mt-2 flex items-baseline justify-between">
                 <h3
                   className={`text-2xl sm:text-3xl font-extrabold tracking-tight font-sans tabular-nums ${
-                    card.muted ? "text-gray-400" : "text-gray-950"
+                    card.muted ? "text-muted-foreground" : "text-foreground"
                   }`}
                 >
                   {card.value}
@@ -157,7 +157,7 @@ export function KpiCards({ data, loading, error, onRetry, periodLabel }: KpiCard
               </div>
             </div>
 
-            <div className="mt-4 pt-3 border-t border-black/[0.04] flex flex-col gap-1">
+            <div className="mt-4 pt-3 border-t border-[var(--neu-line)] flex flex-col gap-1">
               <div className="flex items-center gap-1.5">
                 {card.delta !== null ? (
                   <span
@@ -166,7 +166,7 @@ export function KpiCards({ data, loading, error, onRetry, periodLabel }: KpiCard
                         ? "bg-emerald-50 text-emerald-700 border-emerald-200/60"
                         : negative
                           ? "bg-rose-50 text-rose-700 border-rose-200/60"
-                          : "bg-gray-50 text-gray-600 border-gray-200"
+                          : "bg-[var(--neu-sunken)] text-muted-foreground border-[var(--neu-line)]"
                     }`}
                   >
                     {positive ? (
@@ -181,13 +181,13 @@ export function KpiCards({ data, loading, error, onRetry, periodLabel }: KpiCard
                     </span>
                   </span>
                 ) : (
-                  <span className="text-[11px] font-bold font-mono text-gray-400">No comparable period</span>
+                  <span className="text-[11px] font-bold font-mono text-muted-foreground">No comparable period</span>
                 )}
                 {card.deltaSuffix ? (
-                  <span className="text-[11px] text-gray-400 font-medium">{card.deltaSuffix}</span>
+                  <span className="text-[11px] text-muted-foreground font-medium">{card.deltaSuffix}</span>
                 ) : null}
               </div>
-              <p className="text-[11px] text-gray-400 font-medium">{card.context}</p>
+              <p className="text-[11px] text-muted-foreground font-medium">{card.context}</p>
             </div>
           </div>
         );
@@ -203,14 +203,14 @@ function KpiSkeletons() {
       {[0, 1, 2, 3].map((index) => (
         <div
           key={index}
-          className="bg-white rounded-2xl p-5 border border-black/[0.08] shadow-[0_2px_8px_rgba(0,0,0,0.02)] animate-pulse"
+          className="bg-card rounded-2xl p-5 border border-[var(--neu-line)] shadow-[0_2px_8px_rgba(0,0,0,0.02)] animate-pulse"
         >
           <div className="flex items-center justify-between">
-            <div className="h-3 w-24 rounded bg-gray-100" />
-            <div className="h-8 w-8 rounded-xl bg-gray-100" />
+            <div className="h-3 w-24 rounded bg-[var(--neu-sunken)]" />
+            <div className="h-8 w-8 rounded-xl bg-[var(--neu-sunken)]" />
           </div>
-          <div className="mt-4 h-8 w-28 rounded bg-gray-100" />
-          <div className="mt-4 pt-3 border-t border-black/[0.04] h-3 w-36 rounded bg-gray-100" />
+          <div className="mt-4 h-8 w-28 rounded bg-[var(--neu-sunken)]" />
+          <div className="mt-4 pt-3 border-t border-[var(--neu-line)] h-3 w-36 rounded bg-[var(--neu-sunken)]" />
         </div>
       ))}
     </div>

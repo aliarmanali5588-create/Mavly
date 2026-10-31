@@ -266,7 +266,7 @@ export function PricingSection({
   };
 
   return (
-    <section id={id} className={`py-24 sm:py-32 bg-[#faf9f6] border-t border-black/[0.06] relative ${className}`}>
+    <section id={id} className={`py-24 sm:py-32 bg-[var(--neu-base)] relative ${className}`}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Section Header */}
         <div className="text-center max-w-2xl mx-auto mb-12 sm:mb-16">
@@ -287,7 +287,7 @@ export function PricingSection({
               aria-label="Billing frequency"
               tabIndex={0}
               onKeyDown={handleKeyDown}
-              className="inline-flex items-center p-1.5 rounded-full bg-stone-200/70 border border-black/[0.08] shadow-inner select-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black"
+              className="inline-flex items-center p-1.5 rounded-full bg-[var(--neu-sunken)] border border-[var(--neu-line)] shadow-[var(--neu-inset-2)] select-none outline-none focus-visible:shadow-[var(--neu-inset-2),var(--neu-focus)]"
             >
               <button
                 type="button"
@@ -337,10 +337,10 @@ export function PricingSection({
             return (
               <div
                 key={plan.id}
-                className={`p-6 sm:p-7 rounded-3xl bg-white flex flex-col justify-between relative transition-all duration-300 ${
+                className={`p-6 sm:p-7 rounded-3xl bg-card flex flex-col justify-between relative transition-[box-shadow,transform,border-color] duration-300 ${
                   plan.isPrimaryChoice
-                    ? "border-2 border-black shadow-[0_12px_36px_-6px_rgba(0,0,0,0.08)] hover:shadow-[0_16px_44px_-6px_rgba(0,0,0,0.12)] hover:-translate-y-1"
-                    : "border border-black/[0.08] shadow-[0_4px_20px_-2px_rgba(0,0,0,0.03)] hover:shadow-[0_10px_30px_-4px_rgba(0,0,0,0.07)] hover:border-black/[0.14] hover:-translate-y-1"
+                    ? "border border-[var(--neu-line-strong)] shadow-[var(--neu-elev-4)] hover:shadow-[var(--neu-elev-5)] hover:-translate-y-1"
+                    : "border border-[var(--neu-line)] shadow-[var(--neu-elev-2)] hover:shadow-[var(--neu-elev-4)] hover:border-[var(--neu-line-strong)] hover:-translate-y-1"
                 }`}
               >
                 <div>
@@ -365,7 +365,7 @@ export function PricingSection({
                   </p>
 
                   {/* Price Block */}
-                  <div className="mt-5 pb-5 border-b border-black/[0.06]">
+                  <div className="mt-5 pb-5 border-b border-[var(--neu-line)]">
                     <div className="flex items-baseline gap-0.5">
                       <span className="text-3xl sm:text-4xl font-black text-gray-950 tracking-tight">
                         {pricing.integerPart}
@@ -414,7 +414,7 @@ export function PricingSection({
                       </div>
                     ))}
                     {plan.id === "free" && (
-                      <div className="pt-2 mt-2 border-t border-black/[0.04]">
+                      <div className="pt-2 mt-2 border-t border-[var(--neu-line)]">
                         <p className="text-[11px] text-gray-500 leading-snug">
                           <span className="font-medium">Paid limits:</span> custom domains, advanced developer tools, and premium build capacity.
                         </p>
@@ -424,7 +424,7 @@ export function PricingSection({
                 </div>
 
                 {/* Bottom CTA Button Area */}
-                <div className="mt-8 pt-5 border-t border-black/[0.06]">
+                <div className="mt-8 pt-5 border-t border-[var(--neu-line)]">
                   {isUpgradePage && userEmail && plan.id === "free" ? (
                     <Link
                       href="/dashboard"
@@ -481,7 +481,7 @@ export function PricingSection({
 
         {/* ── Agency and Custom Section (Advanced Business Requirements) ── */}
         {showEnterprise && (
-          <div className="mt-20 pt-16 border-t border-black/[0.06]">
+          <div className="mt-20 pt-16 border-t border-[var(--neu-line)]">
             <div className="text-center max-w-xl mx-auto mb-10">
               <span className="text-xs font-bold tracking-widest uppercase text-stone-500 mb-2 block">
                 Specialized Solutions
@@ -500,11 +500,11 @@ export function PricingSection({
                 return (
                   <div
                     key={item.id}
-                    className="p-6 sm:p-8 rounded-3xl bg-white border border-black/[0.08] shadow-[0_4px_20px_-2px_rgba(0,0,0,0.03)] hover:shadow-[0_10px_30px_-4px_rgba(0,0,0,0.07)] hover:border-black/[0.14] transition-all duration-300 flex flex-col justify-between"
+                    className="p-6 sm:p-8 rounded-3xl bg-card border border-[var(--neu-line)] shadow-[var(--neu-elev-2)] hover:shadow-[var(--neu-elev-4)] hover:border-[var(--neu-line-strong)] transition-[box-shadow,border-color] duration-300 flex flex-col justify-between"
                   >
                     <div>
                       <div className="flex items-center justify-between mb-4">
-                        <div className="w-10 h-10 rounded-2xl bg-[#faf9f6] border border-black/[0.06] flex items-center justify-center text-black">
+                        <div className="w-11 h-11 rounded-2xl bg-[var(--neu-sunken)] border border-[var(--neu-line)] shadow-[var(--neu-inset-2)] flex items-center justify-center text-foreground">
                           <Icon className="w-5 h-5" />
                         </div>
                         <span className="px-2.5 py-0.5 rounded-full bg-stone-100 text-stone-700 text-[10px] font-bold tracking-wide uppercase">
@@ -526,7 +526,7 @@ export function PricingSection({
                         </span>
                       </div>
 
-                      <div className="mt-5 space-y-2 pt-4 border-t border-black/[0.06]">
+                      <div className="mt-5 space-y-2 pt-4 border-t border-[var(--neu-line)]">
                         {item.features.map((feat, fIdx) => (
                           <div key={fIdx} className="flex items-start gap-2 text-xs text-gray-700 leading-snug">
                             <Check className="w-3.5 h-3.5 text-black shrink-0 mt-0.5" />
@@ -536,7 +536,7 @@ export function PricingSection({
                       </div>
                     </div>
 
-                    <div className="mt-6 pt-5 border-t border-black/[0.06]">
+                    <div className="mt-6 pt-5 border-t border-[var(--neu-line)]">
                       <a
                         href={item.ctaHref}
                         className="mavly-btn-secondary w-full py-3 text-xs font-semibold"

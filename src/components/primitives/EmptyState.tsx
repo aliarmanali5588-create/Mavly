@@ -37,7 +37,7 @@ export function EmptyState({
       className={cn(
         "relative flex flex-col items-center justify-center overflow-hidden text-center",
         variant === "page"
-          ? "bg-card min-h-[26rem] rounded-2xl border px-6 py-16 shadow-2xs"
+          ? "bg-card min-h-[26rem] rounded-3xl border border-[var(--neu-line)] px-6 py-16 shadow-[var(--neu-elev-2)]"
           : "px-6 py-12",
         className,
       )}
@@ -50,7 +50,7 @@ export function EmptyState({
         {icon ? (
           <span
             aria-hidden
-            className="bg-primary-subtle text-primary-subtle-foreground mb-5 grid size-12 place-items-center rounded-xl [&_svg]:size-5"
+            className="mb-5 grid size-14 place-items-center rounded-2xl border border-[var(--neu-line)] bg-[var(--neu-sunken)] text-foreground shadow-[var(--neu-inset-2)] [&_svg]:size-5"
           >
             {icon}
           </span>

@@ -1,0 +1,543 @@
+/* ═══════════════════════════════════════════════════════════════════════
+   MAVLY — ULTRA-DEEP NEUMORPHIC DESIGN SYSTEM
+   ───────────────────────────────────────────────────────────────────────
+   ONE MATERIAL. ONE LIGHT SOURCE. ONE PALETTE.
+
+   Light source: upper-left, always.
+     · Highlight  → upper-left edges  (glow)
+     · Shadow     → lower-right       (shade)
+     · Ambient    → surrounding, soft
+
+   Every surface in the product is the same physical material. Depth is
+   expressed through layered light and shadow, never through borders or
+   colour changes. Hover changes ELEVATION, not hue.
+
+   Palette is derived from the canonical Mavly brand colours:
+     Royal Blue  #093FB4 · Pure White #FFFFFF · Pure Black #000000
+     Soft Peach  #FFD8D8 · Ember      #ED3500 · Warm White #FFFCFB
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* ── 1. ELEVATION + MATERIAL TOKENS ──────────────────────────────────── */
+
+:root {
+  /* Material ------------------------------------------------------- */
+  --neu-base: #fffcfb;          /* the canvas everything is carved from */
+  --neu-surface: #ffffff;       /* raised surface                        */
+  --neu-surface-soft: #fdfaf9;  /* barely-raised surface                 */
+  --neu-sunken: #f6efeb;        /* recessed well                         */
+  --neu-sunken-deep: #f0e7e2;   /* deep recess                           */
+  --neu-line: rgba(28, 20, 17, 0.055);   /* edge definition, not a border */
+  --neu-line-strong: rgba(28, 20, 17, 0.09);
+
+  /* Ink ------------------------------------------------------------ */
+  --neu-ink: #0b0908;
+  --neu-ink-soft: #6d605a;
+  --neu-ink-faint: #9c8f88;
+
+  /* Brand ---------------------------------------------------------- */
+  --neu-brand: #093fb4;
+  --neu-brand-soft: #e8edfa;
+  --neu-peach: #ffd8d8;
+  --neu-peach-soft: #fff2f2;
+  --neu-ember: #ed3500;
+
+  /* Shadow material ------------------------------------------------ */
+  --neu-shade: 146 121 110;     /* warm shadow, never grey            */
+  --neu-glow: 255 255 255;      /* highlight                          */
+
+  /* Elevation ladder — upper-left light ---------------------------- */
+  --neu-elev-0: none;
+  --neu-elev-1:
+    2px 2px 6px rgb(var(--neu-shade) / 0.2),
+    -2px -2px 6px rgb(var(--neu-glow) / 1);
+  --neu-elev-2:
+    6px 6px 14px rgb(var(--neu-shade) / 0.24),
+    -6px -6px 14px rgb(var(--neu-glow) / 1);
+  --neu-elev-3:
+    11px 11px 26px rgb(var(--neu-shade) / 0.27),
+    -10px -10px 24px rgb(var(--neu-glow) / 0.98);
+  --neu-elev-4:
+    17px 17px 40px rgb(var(--neu-shade) / 0.3),
+    -14px -14px 34px rgb(var(--neu-glow) / 0.95);
+  --neu-elev-5:
+    26px 26px 60px rgb(var(--neu-shade) / 0.33),
+    -19px -19px 46px rgb(var(--neu-glow) / 0.92);
+
+  /* Recess --------------------------------------------------------- */
+  --neu-inset-1:
+    inset 2px 2px 4px rgb(var(--neu-shade) / 0.16),
+    inset -2px -2px 4px rgb(var(--neu-glow) / 0.92);
+  --neu-inset-2:
+    inset 4px 4px 9px rgb(var(--neu-shade) / 0.2),
+    inset -3px -3px 8px rgb(var(--neu-glow) / 0.9);
+  --neu-inset-3:
+    inset 6px 6px 14px rgb(var(--neu-shade) / 0.24),
+    inset -5px -5px 12px rgb(var(--neu-glow) / 0.85);
+
+  /* Floating (menus, dialogs, popovers) ---------------------------- */
+  --neu-float:
+    0 2px 4px rgb(var(--neu-shade) / 0.06),
+    0 10px 24px -6px rgb(var(--neu-shade) / 0.16),
+    0 28px 60px -18px rgb(var(--neu-shade) / 0.22),
+    -6px -6px 16px rgb(var(--neu-glow) / 0.85);
+
+  /* Focus ---------------------------------------------------------- */
+  --neu-focus:
+    0 0 0 2px var(--neu-base),
+    0 0 0 4px rgb(9 63 180 / 0.45);
+
+  /* Motion --------------------------------------------------------- */
+  --neu-ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+  --neu-dur: 220ms;
+
+  /* Continuous surface gradient — same direction everywhere -------- */
+  --neu-sheen: linear-gradient(
+    145deg,
+    rgb(var(--neu-glow) / 0.9) 0%,
+    rgb(var(--neu-glow) / 0.25) 38%,
+    rgb(var(--neu-shade) / 0.05) 100%
+  );
+}
+
+.dark {
+  --neu-base: #14100f;
+  --neu-surface: #1a1514;
+  --neu-surface-soft: #181312;
+  --neu-sunken: #100c0b;
+  --neu-sunken-deep: #0b0807;
+  --neu-line: rgba(255, 245, 240, 0.07);
+  --neu-line-strong: rgba(255, 245, 240, 0.12);
+
+  --neu-ink: #fbf7f5;
+  --neu-ink-soft: #a89a93;
+  --neu-ink-faint: #7d706a;
+
+  --neu-brand: #6f96ff;
+  --neu-brand-soft: #1b2540;
+  --neu-peach: #5a3a3a;
+  --neu-peach-soft: #2a1e1e;
+  --neu-ember: #ff6a3d;
+
+  --neu-shade: 0 0 0;
+  --neu-glow: 255 244 238;
+
+  --neu-elev-1:
+    2px 2px 5px rgb(var(--neu-shade) / 0.55),
+    -2px -2px 5px rgb(var(--neu-glow) / 0.05);
+  --neu-elev-2:
+    5px 5px 12px rgb(var(--neu-shade) / 0.6),
+    -5px -5px 12px rgb(var(--neu-glow) / 0.055);
+  --neu-elev-3:
+    9px 9px 22px rgb(var(--neu-shade) / 0.65),
+    -8px -8px 20px rgb(var(--neu-glow) / 0.06);
+  --neu-elev-4:
+    14px 14px 34px rgb(var(--neu-shade) / 0.7),
+    -11px -11px 28px rgb(var(--neu-glow) / 0.065);
+  --neu-elev-5:
+    22px 22px 52px rgb(var(--neu-shade) / 0.75),
+    -15px -15px 38px rgb(var(--neu-glow) / 0.07);
+
+  --neu-inset-1:
+    inset 2px 2px 4px rgb(var(--neu-shade) / 0.6),
+    inset -2px -2px 4px rgb(var(--neu-glow) / 0.05);
+  --neu-inset-2:
+    inset 4px 4px 9px rgb(var(--neu-shade) / 0.65),
+    inset -3px -3px 8px rgb(var(--neu-glow) / 0.055);
+  --neu-inset-3:
+    inset 6px 6px 14px rgb(var(--neu-shade) / 0.7),
+    inset -5px -5px 12px rgb(var(--neu-glow) / 0.06);
+
+  --neu-float:
+    0 2px 4px rgb(var(--neu-shade) / 0.4),
+    0 10px 24px -6px rgb(var(--neu-shade) / 0.55),
+    0 28px 60px -18px rgb(var(--neu-shade) / 0.7),
+    -6px -6px 16px rgb(var(--neu-glow) / 0.05);
+
+  --neu-focus:
+    0 0 0 2px var(--neu-base),
+    0 0 0 4px rgb(111 150 255 / 0.55);
+
+  --neu-sheen: linear-gradient(
+    145deg,
+    rgb(var(--neu-glow) / 0.07) 0%,
+    rgb(var(--neu-glow) / 0.02) 38%,
+    rgb(var(--neu-shade) / 0.18) 100%
+  );
+}
+
+/* ── 2. WIRE THE TAILWIND ELEVATION SCALE TO THE LADDER ──────────────
+   Every existing `shadow-xs|sm|md|lg|xl|2xl` in the codebase now resolves
+   to the neumorphic ladder. One definition, applied everywhere.        */
+
+@theme {
+  --shadow-2xs: var(--neu-elev-1);
+  --shadow-xs: var(--neu-elev-1);
+  --shadow-sm: var(--neu-elev-2);
+  --shadow-md: var(--neu-elev-3);
+  --shadow-lg: var(--neu-elev-4);
+  --shadow-xl: var(--neu-elev-5);
+  --shadow-2xl: var(--neu-elev-5);
+
+  --color-neu-base: var(--neu-base);
+  --color-neu-surface: var(--neu-surface);
+  --color-neu-sunken: var(--neu-sunken);
+  --color-neu-ink: var(--neu-ink);
+  --color-neu-brand: var(--neu-brand);
+  --color-neu-peach: var(--neu-peach);
+  --color-neu-ember: var(--neu-ember);
+}
+
+/* ── 3. THE CANVAS ──────────────────────────────────────────────────── */
+
+@layer base {
+  body {
+    background-color: var(--neu-base);
+    /* A single ambient wash from the upper-left, matching the light source. */
+    background-image: radial-gradient(
+      120% 90% at 8% 0%,
+      rgb(var(--neu-glow) / 0.85) 0%,
+      transparent 62%
+    );
+    background-attachment: fixed;
+    color: var(--neu-ink);
+  }
+
+  ::selection {
+    background-color: var(--neu-ink) !important;
+    color: var(--neu-surface) !important;
+  }
+  *::selection {
+    background-color: var(--neu-ink) !important;
+    color: var(--neu-surface) !important;
+  }
+
+  /* One focus treatment for the entire product. */
+  :focus-visible {
+    outline: none;
+  }
+}
+
+/* ── 4. SURFACE PRIMITIVES ───────────────────────────────────────────── */
+
+@layer components {
+  /* Raised — the default panel material. */
+  .neu-raised {
+    background-color: var(--neu-surface);
+    background-image: var(--neu-sheen);
+    border: 1px solid var(--neu-line);
+    box-shadow: var(--neu-elev-2);
+  }
+
+  .neu-raised-1 {
+    background-color: var(--neu-surface);
+    background-image: var(--neu-sheen);
+    border: 1px solid var(--neu-line);
+    box-shadow: var(--neu-elev-1);
+  }
+
+  .neu-raised-3 {
+    background-color: var(--neu-surface);
+    background-image: var(--neu-sheen);
+    border: 1px solid var(--neu-line);
+    box-shadow: var(--neu-elev-3);
+  }
+
+  /* Recessed — inputs, wells, tracks, tab rails. */
+  .neu-recessed {
+    background-color: var(--neu-sunken);
+    background-image: linear-gradient(
+      145deg,
+      rgb(var(--neu-shade) / 0.045) 0%,
+      transparent 55%
+    );
+    border: 1px solid var(--neu-line);
+    box-shadow: var(--neu-inset-2);
+  }
+
+  .neu-recessed-deep {
+    background-color: var(--neu-sunken-deep);
+    border: 1px solid var(--neu-line);
+    box-shadow: var(--neu-inset-3);
+  }
+
+  /* Pressed — an element pushed into the material. */
+  .neu-pressed {
+    background-color: var(--neu-sunken);
+    border: 1px solid var(--neu-line);
+    box-shadow: var(--neu-inset-2);
+  }
+
+  /* Floating — above the plane: menus, dialogs, popovers. */
+  .neu-floating {
+    background-color: var(--neu-surface);
+    background-image: var(--neu-sheen);
+    border: 1px solid var(--neu-line);
+    box-shadow: var(--neu-float);
+  }
+
+  /* Flat — same material, no elevation. */
+  .neu-flat {
+    background-color: var(--neu-surface-soft);
+    border: 1px solid var(--neu-line);
+    box-shadow: none;
+  }
+
+  /* Interactive — hover raises, press recesses. Colour never changes. */
+  .neu-interactive {
+    transition:
+      box-shadow var(--neu-dur) var(--neu-ease),
+      transform var(--neu-dur) var(--neu-ease),
+      border-color var(--neu-dur) var(--neu-ease);
+    will-change: box-shadow;
+  }
+  .neu-interactive:hover {
+    box-shadow: var(--neu-elev-3);
+    border-color: var(--neu-line-strong);
+  }
+  .neu-interactive:active {
+    box-shadow: var(--neu-inset-2);
+    transform: translateY(0.5px);
+  }
+
+  /* Icon well — a small recessed container for an icon. */
+  .neu-well {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background-color: var(--neu-sunken);
+    border: 1px solid var(--neu-line);
+    box-shadow: var(--neu-inset-1);
+    color: var(--neu-ink-soft);
+  }
+
+  /* Divider — a carved line, not a drawn border. */
+  .neu-divider {
+    height: 1px;
+    border: 0;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      var(--neu-line-strong) 18%,
+      var(--neu-line-strong) 82%,
+      transparent
+    );
+    box-shadow: 0 1px 0 rgb(var(--neu-glow) / 0.7);
+  }
+}
+
+/* ── 5. PRIMITIVE SKIN — every data-slot in the system ───────────────
+   These live in `components` so a caller's utility class still wins.
+   The primitive files carry the neu-* classes for their base material. */
+
+@layer components {
+  /* Buttons ------------------------------------------------------- */
+  [data-slot="button"] {
+    border-radius: 0.75rem;
+    font-weight: 600;
+    letter-spacing: -0.005em;
+    transition:
+      box-shadow var(--neu-dur) var(--neu-ease),
+      transform var(--neu-dur) var(--neu-ease),
+      background-color var(--neu-dur) var(--neu-ease);
+  }
+  [data-slot="button"]:focus-visible {
+    box-shadow: var(--neu-focus);
+  }
+  [data-slot="button"]:active:not(:disabled) {
+    transform: translateY(0.5px);
+  }
+
+  /* Cards --------------------------------------------------------- */
+  [data-slot="card"] {
+    border-radius: 1.25rem;
+  }
+
+  /* Inputs -------------------------------------------------------- */
+  [data-slot="input"],
+  [data-slot="textarea"],
+  [data-slot="select-trigger"] {
+    border-radius: 0.75rem;
+    color: var(--neu-ink);
+  }
+  [data-slot="input"]::placeholder,
+  [data-slot="textarea"]::placeholder {
+    color: var(--neu-ink-faint);
+  }
+  [data-slot="input"]:focus-visible,
+  [data-slot="textarea"]:focus-visible,
+  [data-slot="select-trigger"]:focus-visible {
+    box-shadow: var(--neu-inset-2), var(--neu-focus);
+    border-color: transparent;
+  }
+  [data-slot="input"][aria-invalid="true"],
+  [data-slot="textarea"][aria-invalid="true"] {
+    box-shadow: var(--neu-inset-2), 0 0 0 2px rgb(237 53 0 / 0.28);
+  }
+
+  /* Menus, popovers, dialogs -------------------------------------- */
+  [data-slot="dropdown-menu-content"],
+  [data-slot="select-content"],
+  [data-slot="popover-content"],
+  [data-slot="context-menu-content"],
+  [data-slot="menubar-content"],
+  [data-slot="command"],
+  [data-slot="hover-card-content"] {
+    border-radius: 0.875rem;
+  }
+
+  [data-slot="dialog-content"],
+  [data-slot="alert-dialog-content"],
+  [data-slot="sheet-content"] {
+    border-radius: 1.5rem;
+  }
+
+  /* Menu items: hover recesses, never recolours. */
+  [data-slot="dropdown-menu-item"],
+  [data-slot="select-item"],
+  [data-slot="context-menu-item"],
+  [data-slot="menubar-item"],
+  [data-slot="command-item"] {
+    border-radius: 0.5rem;
+    transition: box-shadow 140ms var(--neu-ease), background-color 140ms var(--neu-ease);
+  }
+  [data-slot="dropdown-menu-item"]:focus,
+  [data-slot="select-item"]:focus,
+  [data-slot="context-menu-item"]:focus,
+  [data-slot="menubar-item"]:focus,
+  [data-slot="command-item"][data-selected="true"] {
+    background-color: var(--neu-sunken);
+    box-shadow: var(--neu-inset-1);
+  }
+
+  /* Tabs ---------------------------------------------------------- */
+  [data-slot="tabs-list"] {
+    border-radius: 0.875rem;
+    padding: 4px;
+    gap: 2px;
+  }
+  [data-slot="tabs-trigger"] {
+    border-radius: 0.625rem;
+    transition: box-shadow var(--neu-dur) var(--neu-ease);
+  }
+
+  /* Switch / slider / progress ------------------------------------ */
+  [data-slot="switch"] {
+    box-shadow: var(--neu-inset-2);
+  }
+  [data-slot="switch-thumb"] {
+    box-shadow: var(--neu-elev-1);
+  }
+  [data-slot="slider-track"] {
+    box-shadow: var(--neu-inset-1);
+  }
+  [data-slot="slider-thumb"] {
+    box-shadow: var(--neu-elev-1);
+    border-color: transparent;
+  }
+  [data-slot="progress"] {
+    box-shadow: var(--neu-inset-1);
+  }
+
+  /* Checkbox / radio ---------------------------------------------- */
+  [data-slot="checkbox"],
+  [data-slot="radio-group-item"] {
+    border-radius: 0.375rem;
+    box-shadow: var(--neu-inset-1);
+  }
+  [data-slot="radio-group-item"] {
+    border-radius: 9999px;
+  }
+  [data-slot="checkbox"]:focus-visible,
+  [data-slot="radio-group-item"]:focus-visible {
+    box-shadow: var(--neu-inset-1), var(--neu-focus);
+  }
+
+  /* Badges -------------------------------------------------------- */
+  [data-slot="badge"] {
+    border-radius: 9999px;
+    font-weight: 600;
+    letter-spacing: 0.005em;
+  }
+
+  /* Tables -------------------------------------------------------- */
+  [data-slot="table-header"] {
+    background-color: var(--neu-sunken);
+  }
+  [data-slot="table-row"] {
+    transition: box-shadow 160ms var(--neu-ease);
+  }
+  [data-slot="table-row"]:hover {
+    background-color: var(--neu-surface-soft);
+  }
+
+  /* Skeletons ----------------------------------------------------- */
+  [data-slot="skeleton"] {
+    background-color: var(--neu-sunken);
+    box-shadow: var(--neu-inset-1);
+    border-radius: 0.75rem;
+  }
+
+  /* Tooltip ------------------------------------------------------- */
+  [data-slot="tooltip-content"] {
+    border-radius: 0.625rem;
+    box-shadow: var(--neu-float);
+  }
+}
+
+/* ── 6. RESPONSIVE DEPTH ─────────────────────────────────────────────
+   Shadows soften on small screens so the interface never reads heavy. */
+
+@media (max-width: 640px) {
+  :root {
+    --neu-elev-2:
+      4px 4px 10px rgb(var(--neu-shade) / 0.22),
+      -4px -4px 10px rgb(var(--neu-glow) / 1);
+    --neu-elev-3:
+      6px 6px 16px rgb(var(--neu-shade) / 0.24),
+      -6px -6px 15px rgb(var(--neu-glow) / 0.98);
+    --neu-elev-4:
+      9px 9px 22px rgb(var(--neu-shade) / 0.26),
+      -8px -8px 20px rgb(var(--neu-glow) / 0.96);
+    --neu-elev-5:
+      13px 13px 32px rgb(var(--neu-shade) / 0.28),
+      -10px -10px 26px rgb(var(--neu-glow) / 0.94);
+  }
+}
+
+/* ── 7. MOTION ─────────────────────────────────────────────────────── */
+
+@media (prefers-reduced-motion: reduce) {
+  .neu-interactive,
+  [data-slot="button"],
+  [data-slot="card"],
+  [data-slot="tabs-trigger"] {
+    transition: none !important;
+  }
+  .neu-interactive:hover,
+  [data-slot="button"]:active:not(:disabled) {
+    transform: none !important;
+  }
+}
+
+/* ── 8. SCROLLBARS — carved into the material ────────────────────── */
+
+* {
+  scrollbar-color: rgb(var(--neu-shade) / 0.28) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+  background-color: rgb(var(--neu-shade) / 0.24);
+  border: 3px solid transparent;
+  border-radius: 9999px;
+  background-clip: content-box;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background-color: rgb(var(--neu-shade) / 0.38);
+}

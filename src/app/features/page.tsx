@@ -36,16 +36,16 @@ export default function FeaturesPage() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-24">
         {/* 1. Hero Section */}
         <div className="max-w-3xl mx-auto text-center space-y-5 pt-6 sm:pt-12">
-          <div className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-stone-600 bg-stone-100 px-3 py-1 rounded-full border border-black/[0.04]">
+          <div className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-stone-600 bg-stone-100 px-3 py-1 rounded-full border border-[var(--neu-line)]">
             <Sparkles className="w-3.5 h-3.5 text-stone-800" />
             <span>THE MAVLY BUILDER</span>
           </div>
 
-          <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight text-gray-950 leading-[1.1]">
+          <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight text-foreground leading-[1.1]">
             From your idea to a website, with AI.
           </h1>
 
-          <p className="text-base sm:text-lg text-gray-600 leading-relaxed font-normal max-w-2xl mx-auto">
+          <p className="text-base sm:text-lg text-muted-foreground leading-relaxed font-normal max-w-2xl mx-auto">
             Describe what you want to build, shape the result in your workspace, and refine your website with an AI-assisted workflow.
           </p>
 
@@ -69,13 +69,13 @@ export default function FeaturesPage() {
         {/* 2. Section A: The 5-Step Workflow */}
         <section id="workflow" className="scroll-mt-28 space-y-10">
           <div className="max-w-2xl">
-            <span className="text-xs font-bold tracking-wider uppercase text-gray-400">
+            <span className="text-xs font-bold tracking-wider uppercase text-muted-foreground">
               Step-by-Step Architecture
             </span>
-            <h2 className="text-2xl sm:text-3xl font-extrabold text-gray-950 mt-1">
+            <h2 className="text-2xl sm:text-3xl font-extrabold text-foreground mt-1">
               How website generation works in Mavly
             </h2>
-            <p className="text-sm text-gray-600 mt-2">
+            <p className="text-sm text-muted-foreground mt-2">
               Every project follows an intentional 5-stage lifecycle from plain English requirements to a published static build.
             </p>
           </div>
@@ -117,19 +117,19 @@ export default function FeaturesPage() {
               return (
                 <div
                   key={item.step}
-                  className="p-6 rounded-2xl bg-white border border-black/[0.08] shadow-[0_4px_20px_rgba(0,0,0,0.02)] flex flex-col justify-between"
+                  className="p-6 rounded-2xl bg-card border border-[var(--neu-line)] shadow-[0_4px_20px_rgba(0,0,0,0.02)] flex flex-col justify-between"
                 >
                   <div className="space-y-4">
                     <div className="flex items-center justify-between">
-                      <span className="font-mono text-xs font-bold text-gray-400">
+                      <span className="font-mono text-xs font-bold text-muted-foreground">
                         {item.step}
                       </span>
-                      <div className="p-2 rounded-xl bg-gray-50 border border-black/[0.04]">
-                        <Icon className="w-4 h-4 text-gray-800" />
+                      <div className="p-2 rounded-xl bg-[var(--neu-sunken)] border border-[var(--neu-line)]">
+                        <Icon className="w-4 h-4 text-foreground" />
                       </div>
                     </div>
-                    <h3 className="text-base font-bold text-gray-950">{item.title}</h3>
-                    <p className="text-xs text-gray-600 leading-relaxed font-normal">
+                    <h3 className="text-base font-bold text-foreground">{item.title}</h3>
+                    <p className="text-xs text-muted-foreground leading-relaxed font-normal">
                       {item.desc}
                     </p>
                   </div>
@@ -142,64 +142,64 @@ export default function FeaturesPage() {
         {/* 3. Section B: Builder Capabilities */}
         <section className="space-y-10">
           <div className="max-w-2xl">
-            <span className="text-xs font-bold tracking-wider uppercase text-gray-400">
+            <span className="text-xs font-bold tracking-wider uppercase text-muted-foreground">
               Verified Technical Features
             </span>
-            <h2 className="text-2xl sm:text-3xl font-extrabold text-gray-950 mt-1">
+            <h2 className="text-2xl sm:text-3xl font-extrabold text-foreground mt-1">
               Core platform capabilities
             </h2>
-            <p className="text-sm text-gray-600 mt-2">
+            <p className="text-sm text-muted-foreground mt-2">
               Built on Next.js 16 and Supabase with clear operational boundaries.
             </p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            <div className="p-6 rounded-2xl bg-white border border-black/[0.08] shadow-[0_4px_20px_rgba(0,0,0,0.02)] space-y-3">
+            <div className="p-6 rounded-2xl bg-card border border-[var(--neu-line)] shadow-[0_4px_20px_rgba(0,0,0,0.02)] space-y-3">
               <div className="w-10 h-10 rounded-xl bg-blue-50 border border-blue-200/50 flex items-center justify-center text-blue-700">
                 <Wand2 className="w-5 h-5" />
               </div>
-              <h3 className="text-base font-bold text-gray-950">Prompt-Based Website Generation</h3>
-              <p className="text-xs text-gray-600 leading-relaxed">
+              <h3 className="text-base font-bold text-foreground">Prompt-Based Website Generation</h3>
+              <p className="text-xs text-muted-foreground leading-relaxed">
                 The server-side OpenRouter model (DeepSeek V4.1 Flash) translates conversational prompts into complete HTML, CSS, and component files.
               </p>
             </div>
 
-            <div className="p-6 rounded-2xl bg-white border border-black/[0.08] shadow-[0_4px_20px_rgba(0,0,0,0.02)] space-y-3">
+            <div className="p-6 rounded-2xl bg-card border border-[var(--neu-line)] shadow-[0_4px_20px_rgba(0,0,0,0.02)] space-y-3">
               <div className="w-10 h-10 rounded-xl bg-emerald-50 border border-emerald-200/50 flex items-center justify-center text-emerald-700">
                 <Eye className="w-5 h-5" />
               </div>
-              <h3 className="text-base font-bold text-gray-950">Sandboxed Live Preview</h3>
-              <p className="text-xs text-gray-600 leading-relaxed">
+              <h3 className="text-base font-bold text-foreground">Sandboxed Live Preview</h3>
+              <p className="text-xs text-muted-foreground leading-relaxed">
                 Static generated outputs render safely within an isolated, sandboxed preview iframe with zero unauthorized script execution.
               </p>
             </div>
 
-            <div className="p-6 rounded-2xl bg-white border border-black/[0.08] shadow-[0_4px_20px_rgba(0,0,0,0.02)] space-y-3">
+            <div className="p-6 rounded-2xl bg-card border border-[var(--neu-line)] shadow-[0_4px_20px_rgba(0,0,0,0.02)] space-y-3">
               <div className="w-10 h-10 rounded-xl bg-purple-50 border border-purple-200/50 flex items-center justify-center text-purple-700">
                 <Code2 className="w-5 h-5" />
               </div>
-              <h3 className="text-base font-bold text-gray-950">File Tree &amp; Code Inspector</h3>
-              <p className="text-xs text-gray-600 leading-relaxed">
+              <h3 className="text-base font-bold text-foreground">File Tree &amp; Code Inspector</h3>
+              <p className="text-xs text-muted-foreground leading-relaxed">
                 Browse project files, inspect raw HTML/CSS, make custom edits, and download complete source ZIP archives anytime.
               </p>
             </div>
 
-            <div className="p-6 rounded-2xl bg-white border border-black/[0.08] shadow-[0_4px_20px_rgba(0,0,0,0.02)] space-y-3">
-              <div className="w-10 h-10 rounded-xl bg-gray-100 border border-gray-200 flex items-center justify-center text-gray-900">
+            <div className="p-6 rounded-2xl bg-card border border-[var(--neu-line)] shadow-[0_4px_20px_rgba(0,0,0,0.02)] space-y-3">
+              <div className="w-10 h-10 rounded-xl bg-[var(--neu-sunken)] border border-[var(--neu-line)] flex items-center justify-center text-foreground">
                 <GitBranch className="w-5 h-5" />
               </div>
-              <h3 className="text-base font-bold text-gray-950">GitHub App Integration</h3>
-              <p className="text-xs text-gray-600 leading-relaxed">
+              <h3 className="text-base font-bold text-foreground">GitHub App Integration</h3>
+              <p className="text-xs text-muted-foreground leading-relaxed">
                 Connect your personal GitHub account, select existing repositories, or commit the initial codebase with automated first-push tracking.
               </p>
             </div>
 
-            <div className="p-6 rounded-2xl bg-white border border-black/[0.08] shadow-[0_4px_20px_rgba(0,0,0,0.02)] space-y-3">
+            <div className="p-6 rounded-2xl bg-card border border-[var(--neu-line)] shadow-[0_4px_20px_rgba(0,0,0,0.02)] space-y-3">
               <div className="w-10 h-10 rounded-xl bg-stone-100 border border-stone-200 flex items-center justify-center text-stone-800">
                 <ShieldCheck className="w-5 h-5" />
               </div>
-              <h3 className="text-base font-bold text-gray-950">Durable Restore Points</h3>
-              <p className="text-xs text-gray-600 leading-relaxed">
+              <h3 className="text-base font-bold text-foreground">Durable Restore Points</h3>
+              <p className="text-xs text-muted-foreground leading-relaxed">
                 Every prompt execution that modifies source code automatically snapshots the project baseline, allowing instant point-in-time code rollbacks.
               </p>
             </div>
@@ -207,15 +207,15 @@ export default function FeaturesPage() {
         </section>
 
         {/* 4. Section C: Designed for Different Needs */}
-        <section className="p-8 sm:p-12 rounded-3xl bg-white border border-black/[0.08] shadow-[0_4px_20px_rgba(0,0,0,0.02)] space-y-8">
+        <section className="p-8 sm:p-12 rounded-3xl bg-card border border-[var(--neu-line)] shadow-[0_4px_20px_rgba(0,0,0,0.02)] space-y-8">
           <div className="max-w-2xl">
-            <span className="text-xs font-bold tracking-wider uppercase text-gray-400">
+            <span className="text-xs font-bold tracking-wider uppercase text-muted-foreground">
               Suitable Use Cases
             </span>
-            <h2 className="text-2xl sm:text-3xl font-extrabold text-gray-950 mt-1">
+            <h2 className="text-2xl sm:text-3xl font-extrabold text-foreground mt-1">
               Built for ideas that need to become real
             </h2>
-            <p className="text-sm text-gray-600 mt-2">
+            <p className="text-sm text-muted-foreground mt-2">
               Mavly works particularly well for websites requiring rapid visual iteration and clear structural copy.
             </p>
           </div>
@@ -247,9 +247,9 @@ export default function FeaturesPage() {
                 desc: "Structure responsive blog layouts, company announcements, and resource libraries.",
               },
             ].map((useCase) => (
-              <div key={useCase.title} className="p-5 rounded-xl bg-gray-50/70 border border-black/[0.04] space-y-2">
-                <h4 className="text-sm font-bold text-gray-950">{useCase.title}</h4>
-                <p className="text-xs text-gray-600 leading-relaxed">{useCase.desc}</p>
+              <div key={useCase.title} className="p-5 rounded-xl bg-[var(--neu-sunken)]/70 border border-[var(--neu-line)] space-y-2">
+                <h4 className="text-sm font-bold text-foreground">{useCase.title}</h4>
+                <p className="text-xs text-muted-foreground leading-relaxed">{useCase.desc}</p>
               </div>
             ))}
           </div>
@@ -257,12 +257,12 @@ export default function FeaturesPage() {
 
         {/* 5. Section D & E: Control, Ownership & Getting Started */}
         <section className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          <div className="p-8 rounded-2xl bg-white border border-black/[0.08] shadow-[0_4px_20px_rgba(0,0,0,0.02)] space-y-4">
-            <h3 className="text-xl font-bold text-gray-950">Control and Ownership</h3>
-            <p className="text-xs sm:text-sm text-gray-600 leading-relaxed">
+          <div className="p-8 rounded-2xl bg-card border border-[var(--neu-line)] shadow-[0_4px_20px_rgba(0,0,0,0.02)] space-y-4">
+            <h3 className="text-xl font-bold text-foreground">Control and Ownership</h3>
+            <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
               We believe you should never be trapped in a proprietary closed sandbox. All generated project files belong to you:
             </p>
-            <ul className="space-y-2.5 text-xs text-gray-700">
+            <ul className="space-y-2.5 text-xs text-foreground">
               <li className="flex items-start gap-2">
                 <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
                 <span>Export clean HTML and CSS as a downloadable ZIP package anytime.</span>
@@ -278,12 +278,12 @@ export default function FeaturesPage() {
             </ul>
           </div>
 
-          <div className="p-8 rounded-2xl bg-white border border-black/[0.08] shadow-[0_4px_20px_rgba(0,0,0,0.02)] space-y-4">
-            <h3 className="text-xl font-bold text-gray-950">Getting Started in 60 Seconds</h3>
-            <p className="text-xs sm:text-sm text-gray-600 leading-relaxed">
+          <div className="p-8 rounded-2xl bg-card border border-[var(--neu-line)] shadow-[0_4px_20px_rgba(0,0,0,0.02)] space-y-4">
+            <h3 className="text-xl font-bold text-foreground">Getting Started in 60 Seconds</h3>
+            <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
               No developer environment configuration, Node runtime installations, or credit card required.
             </p>
-            <ol className="space-y-2.5 text-xs text-gray-700 list-decimal list-inside font-medium">
+            <ol className="space-y-2.5 text-xs text-foreground list-decimal list-inside font-medium">
               <li>Sign in with your Google or GitHub account on the homepage.</li>
               <li>Type your website vision in the workspace prompt bar.</li>
               <li>Watch the live preview assemble before your eyes in real time.</li>
@@ -297,13 +297,13 @@ export default function FeaturesPage() {
           <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight">
             Your next website starts with an idea.
           </h2>
-          <p className="text-xs sm:text-sm text-gray-400 max-w-xl mx-auto leading-relaxed">
+          <p className="text-xs sm:text-sm text-muted-foreground max-w-xl mx-auto leading-relaxed">
             Join thousands of creators turning concepts into live, responsive websites without touching complex build tooling.
           </p>
           <div>
             <Link
               href="/dashboard"
-              className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-white text-black font-bold text-xs sm:text-sm hover:bg-gray-100 transition-colors"
+              className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-card text-black font-bold text-xs sm:text-sm hover:bg-[var(--neu-sunken)] transition-colors"
             >
               <span>Launch Builder</span>
               <ArrowRight className="w-4 h-4" />

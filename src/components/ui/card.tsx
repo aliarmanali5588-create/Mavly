@@ -2,12 +2,17 @@ import * as React from "react"
 
 import { cn } from "@/lib/utils"
 
+/**
+ * Neumorphic card — an extruded slab of the same material as the page.
+ * Nested cards step DOWN in elevation, never up, so hierarchy reads as
+ * physical layering rather than a stack of competing shadows.
+ */
 function Card({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="card"
       className={cn(
-        "bg-card text-card-foreground flex flex-col gap-6 rounded-xl border py-6 shadow-sm",
+        "bg-card text-card-foreground flex flex-col gap-6 rounded-2xl border border-[var(--neu-line)] py-6 shadow-sm",
         className
       )}
       {...props}
@@ -32,7 +37,7 @@ function CardTitle({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="card-title"
-      className={cn("leading-none font-semibold", className)}
+      className={cn("leading-none font-semibold tracking-[-0.01em]", className)}
       {...props}
     />
   )

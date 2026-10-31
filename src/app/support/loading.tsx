@@ -3,9 +3,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 export default function SupportLoading() {
   return (
-    <div className="min-h-screen bg-[#faf9f6] text-gray-950 flex flex-col">
+    <div className="min-h-screen bg-[var(--neu-base)] text-foreground flex flex-col">
       {/* Top Header Placeholder */}
-      <header className="sticky top-0 z-50 bg-[#faf9f6]/85 backdrop-blur-md border-b border-black/[0.06]">
+      <header className="sticky top-0 z-50 bg-[color-mix(in_srgb,var(--neu-base)_86%,transparent)] backdrop-blur-md border-b border-[var(--neu-line)]">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <Skeleton className="w-8 h-8 rounded-xl bg-black/[0.06]" />
@@ -32,7 +32,7 @@ export default function SupportLoading() {
           {[1, 2, 3, 4].map((i) => (
             <div
               key={i}
-              className="bg-white rounded-3xl p-6 sm:p-7 border border-black/[0.06] shadow-xs flex flex-col justify-between h-64"
+              className="bg-card rounded-3xl p-6 sm:p-7 border border-[var(--neu-line)] shadow-xs flex flex-col justify-between h-64"
             >
               <div>
                 <div className="flex items-center justify-between mb-4">
@@ -43,7 +43,7 @@ export default function SupportLoading() {
                 <Skeleton className="w-full h-4 rounded-md bg-black/[0.06] mb-2" />
                 <Skeleton className="w-3/4 h-4 rounded-md bg-black/[0.06]" />
               </div>
-              <div className="pt-6 border-t border-black/[0.06] flex items-center justify-between">
+              <div className="pt-6 border-t border-[var(--neu-line)] flex items-center justify-between">
                 <Skeleton className="w-36 h-5 rounded-md bg-black/[0.06]" />
                 <Skeleton className="w-24 h-9 rounded-full bg-black/[0.06]" />
               </div>

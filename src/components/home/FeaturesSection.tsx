@@ -79,7 +79,7 @@ export function FeaturesSection() {
             return (
               <div
                 key={idx}
-                className="p-8 sm:p-10 rounded-3xl bg-[#faf9f6] border border-black/[0.06] shadow-[0_4px_20px_-2px_rgba(0,0,0,0.03)] hover:shadow-[0_10px_30px_-4px_rgba(0,0,0,0.07)] hover:border-black/[0.12] hover:-translate-y-1 active:translate-y-0 transition-all duration-300 flex flex-col justify-between"
+                className="p-8 sm:p-10 rounded-3xl bg-card border border-[var(--neu-line)] shadow-[var(--neu-elev-2)] hover:shadow-[var(--neu-elev-4)] hover:border-[var(--neu-line-strong)] hover:-translate-y-1 active:translate-y-0 active:shadow-[var(--neu-elev-1)] transition-[box-shadow,transform,border-color] duration-300 flex flex-col justify-between"
               >
                 <div>
                   <div className="w-12 h-12 rounded-2xl bg-white border border-black/[0.08] shadow-[0_2px_8px_rgba(0,0,0,0.04)] flex items-center justify-center text-black mb-6 transition-transform duration-200 group-hover:scale-105">

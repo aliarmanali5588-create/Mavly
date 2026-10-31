@@ -109,14 +109,14 @@ export default function GenerationMonitorAdminPage() {
   return (
     <AdminShell activeNav="Generation Monitor">
       {/* 1. Worker Telemetry & Pipeline Status */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-5 rounded-2xl bg-white border border-black/[0.08] shadow-[0_2px_8px_rgba(0,0,0,0.02)]">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-5 rounded-2xl bg-card border border-[var(--neu-line)] shadow-[var(--neu-elev-2)]">
         <div className="flex items-start sm:items-center gap-3.5">
           <div className="w-10 h-10 rounded-xl bg-black text-white flex items-center justify-center shrink-0">
             <Terminal className="w-5 h-5" />
           </div>
           <div>
             <div className="flex flex-wrap items-center gap-2">
-              <h2 className="text-sm font-semibold tracking-tight text-gray-950">
+              <h2 className="text-sm font-semibold tracking-tight text-foreground">
                 AI Generation & Build Queue Engine
               </h2>
               <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200/60 font-mono">
@@ -124,35 +124,35 @@ export default function GenerationMonitorAdminPage() {
                 Worker Pool: 4/4 Available
               </span>
             </div>
-            <p className="text-xs text-gray-500 mt-0.5">
+            <p className="text-xs text-muted-foreground mt-0.5">
               Live AST file synthesis, code generation stream, and static preview bundling
             </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-3 text-xs text-gray-500 font-mono self-start md:self-auto">
+        <div className="flex items-center gap-3 text-xs text-muted-foreground font-mono self-start md:self-auto">
           <div>
-            <span className="text-gray-400 block text-[10px] uppercase font-semibold">Active Jobs</span>
-            <span className="font-bold text-gray-950">6 Running</span>
+            <span className="text-muted-foreground block text-[10px] uppercase font-semibold">Active Jobs</span>
+            <span className="font-bold text-foreground">6 Running</span>
           </div>
           <div className="h-6 w-px bg-black/[0.08]" />
           <div>
-            <span className="text-gray-400 block text-[10px] uppercase font-semibold">Queue Depth</span>
+            <span className="text-muted-foreground block text-[10px] uppercase font-semibold">Queue Depth</span>
             <span className="font-bold text-amber-700">14 in Buffer</span>
           </div>
           <div className="h-6 w-px bg-black/[0.08]" />
           <div>
-            <span className="text-gray-400 block text-[10px] uppercase font-semibold">Avg Latency</span>
+            <span className="text-muted-foreground block text-[10px] uppercase font-semibold">Avg Latency</span>
             <span className="font-bold text-emerald-700">12.4s</span>
           </div>
         </div>
       </div>
 
       {/* 2. Real-Time Generation Queue & Jobs Table */}
-      <div className="bg-white rounded-2xl p-5 sm:p-6 border border-black/[0.08] shadow-[0_2px_8px_rgba(0,0,0,0.02)] space-y-4">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pb-3 border-b border-black/[0.06]">
+      <div className="bg-card rounded-2xl p-5 sm:p-6 border border-[var(--neu-line)] shadow-[0_2px_8px_rgba(0,0,0,0.02)] space-y-4">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pb-3 border-b border-[var(--neu-line)]">
           {/* Segmented Filter Buttons */}
-          <div className="flex flex-wrap items-center gap-1 bg-gray-100 p-0.5 rounded-lg border border-black/[0.04] text-xs">
+          <div className="flex flex-wrap items-center gap-1 bg-[var(--neu-sunken)] p-0.5 rounded-lg border border-[var(--neu-line)] text-xs">
             {["All", "Running", "Queued", "Completed", "Failed"].map((st) => (
               <button
                 key={st}
@@ -160,8 +160,8 @@ export default function GenerationMonitorAdminPage() {
                 onClick={() => setStatusFilter(st)}
                 className={`px-3 py-1 rounded-md text-xs transition-all ${
                   statusFilter === st
-                    ? "bg-white text-gray-950 shadow-xs font-semibold"
-                    : "text-gray-500 hover:text-gray-900 font-medium"
+                    ? "bg-card text-foreground shadow-xs font-semibold"
+                    : "text-muted-foreground hover:text-foreground font-medium"
                 }`}
               >
                 {st}
@@ -171,13 +171,13 @@ export default function GenerationMonitorAdminPage() {
 
           {/* Search Box */}
           <div className="relative w-full lg:w-72">
-            <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
             <input
               type="text"
               placeholder="Filter by Job ID, project, user..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full h-8 pl-8 pr-3 text-xs rounded-lg bg-gray-50 border border-black/[0.08] text-gray-900 placeholder:text-gray-400 focus:bg-white focus:outline-none focus:ring-1 focus:ring-black"
+              className="w-full h-8 pl-8 pr-3 text-xs rounded-lg bg-[var(--neu-sunken)] border border-[var(--neu-line)] text-foreground placeholder:text-muted-foreground focus:bg-card focus:outline-none focus:ring-1 focus:ring-black"
             />
           </div>
         </div>
@@ -186,7 +186,7 @@ export default function GenerationMonitorAdminPage() {
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
             <thead>
-              <tr className="border-b border-black/[0.06] text-gray-400 font-semibold uppercase text-[10px]">
+              <tr className="border-b border-[var(--neu-line)] text-muted-foreground font-semibold uppercase text-[10px]">
                 <th className="pb-3">Job Identifier</th>
                 <th className="pb-3">Target Project</th>
                 <th className="pb-3">Initiator / User</th>
@@ -200,14 +200,14 @@ export default function GenerationMonitorAdminPage() {
             <tbody className="divide-y divide-black/[0.04]">
               {filtered.length > 0 ? (
                 filtered.map((job) => (
-                  <tr key={job.id} className="hover:bg-gray-50/70 transition-colors">
+                  <tr key={job.id} className="hover:bg-[var(--neu-sunken)]/70 transition-colors">
                     <td className="py-3.5">
                       <div className="flex items-center gap-1.5 font-mono">
-                        <span className="font-semibold text-gray-950">{job.id}</span>
+                        <span className="font-semibold text-foreground">{job.id}</span>
                         <button
                           type="button"
                           onClick={() => handleCopyId(job.id)}
-                          className="p-1 text-gray-400 hover:text-black transition-colors"
+                          className="p-1 text-muted-foreground hover:text-black transition-colors"
                           title="Copy Job ID"
                         >
                           <Copy className="w-3 h-3" />
@@ -215,26 +215,26 @@ export default function GenerationMonitorAdminPage() {
                       </div>
                     </td>
                     <td className="py-3.5 max-w-[220px]">
-                      <p className="font-semibold text-gray-950 truncate">{job.project}</p>
+                      <p className="font-semibold text-foreground truncate">{job.project}</p>
                       {job.promptSnippet && (
-                        <p className="text-[11px] text-gray-400 truncate italic">
+                        <p className="text-[11px] text-muted-foreground truncate italic">
                           &ldquo;{job.promptSnippet}&rdquo;
                         </p>
                       )}
                     </td>
-                    <td className="py-3.5 font-mono text-[11px] text-gray-600">
+                    <td className="py-3.5 font-mono text-[11px] text-muted-foreground">
                       {job.owner}
                     </td>
                     <td className="py-3.5">
-                      <span className="font-mono text-[11px] text-gray-700 bg-gray-50 px-2 py-0.5 rounded border border-black/[0.06]">
+                      <span className="font-mono text-[11px] text-foreground bg-[var(--neu-sunken)] px-2 py-0.5 rounded border border-[var(--neu-line)]">
                         {job.model}
                       </span>
                     </td>
                     <td className="py-3.5 text-center">{getStatusBadge(job.status)}</td>
-                    <td className="py-3.5 text-right font-mono text-gray-600">
+                    <td className="py-3.5 text-right font-mono text-muted-foreground">
                       {job.duration}
                     </td>
-                    <td className="py-3.5 text-right text-gray-400 whitespace-nowrap">
+                    <td className="py-3.5 text-right text-muted-foreground whitespace-nowrap">
                       {job.createdAt}
                     </td>
                     <td className="py-3.5 text-right">
@@ -245,7 +245,7 @@ export default function GenerationMonitorAdminPage() {
                             setSelectedJob(job);
                             setInspectorTab("overview");
                           }}
-                          className="px-2.5 py-1 text-[11px] font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors"
+                          className="px-2.5 py-1 text-[11px] font-medium text-foreground bg-[var(--neu-sunken)] hover:bg-gray-200 rounded-md transition-colors"
                         >
                           Inspect
                         </button>
@@ -261,7 +261,7 @@ export default function GenerationMonitorAdminPage() {
                           <button
                             type="button"
                             onClick={() => handleRetryJob(job)}
-                            className="p-1 text-gray-400 hover:text-black transition-colors"
+                            className="p-1 text-muted-foreground hover:text-black transition-colors"
                             title="Re-run Job"
                           >
                             <RotateCcw className="w-3.5 h-3.5" />
@@ -273,7 +273,7 @@ export default function GenerationMonitorAdminPage() {
                 ))
               ) : (
                 <tr>
-                  <td colSpan={8} className="py-8 text-center text-gray-400 text-xs">
+                  <td colSpan={8} className="py-8 text-center text-muted-foreground text-xs">
                     No generation jobs found matching your filters.
                   </td>
                 </tr>
@@ -286,31 +286,31 @@ export default function GenerationMonitorAdminPage() {
       {/* Enterprise Job Inspector Drawer */}
       {selectedJob && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs animate-in fade-in">
-          <div className="w-full max-w-xl bg-white rounded-2xl border border-black/[0.1] shadow-2xl p-6 space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-black/[0.06]">
+          <div className="w-full max-w-xl bg-card rounded-2xl border border-black/[0.1] shadow-2xl p-6 space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-[var(--neu-line)]">
               <div className="flex items-center gap-2">
-                <Terminal className="w-4 h-4 text-gray-900" />
+                <Terminal className="w-4 h-4 text-foreground" />
                 <div>
-                  <h3 className="text-sm font-bold text-gray-950">Generation Execution Inspector</h3>
-                  <p className="text-[11px] font-mono text-gray-400">{selectedJob.id} · {selectedJob.project}</p>
+                  <h3 className="text-sm font-bold text-foreground">Generation Execution Inspector</h3>
+                  <p className="text-[11px] font-mono text-muted-foreground">{selectedJob.id} · {selectedJob.project}</p>
                 </div>
               </div>
               <button
                 type="button"
                 onClick={() => setSelectedJob(null)}
-                className="p-1 text-gray-400 hover:text-black rounded-lg"
+                className="p-1 text-muted-foreground hover:text-black rounded-lg"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
             {/* Segmented Inspector Tabs */}
-            <div className="flex items-center gap-1 bg-gray-100 p-0.5 rounded-lg border border-black/[0.04] text-xs">
+            <div className="flex items-center gap-1 bg-[var(--neu-sunken)] p-0.5 rounded-lg border border-[var(--neu-line)] text-xs">
               <button
                 type="button"
                 onClick={() => setInspectorTab("overview")}
                 className={`flex-1 py-1 text-center rounded-md font-medium transition-all ${
-                  inspectorTab === "overview" ? "bg-white text-gray-950 shadow-xs font-semibold" : "text-gray-500"
+                  inspectorTab === "overview" ? "bg-card text-foreground shadow-xs font-semibold" : "text-muted-foreground"
                 }`}
               >
                 Job Metadata
@@ -319,7 +319,7 @@ export default function GenerationMonitorAdminPage() {
                 type="button"
                 onClick={() => setInspectorTab("prompt")}
                 className={`flex-1 py-1 text-center rounded-md font-medium transition-all ${
-                  inspectorTab === "prompt" ? "bg-white text-gray-950 shadow-xs font-semibold" : "text-gray-500"
+                  inspectorTab === "prompt" ? "bg-card text-foreground shadow-xs font-semibold" : "text-muted-foreground"
                 }`}
               >
                 User Prompt Input
@@ -328,7 +328,7 @@ export default function GenerationMonitorAdminPage() {
                 type="button"
                 onClick={() => setInspectorTab("logs")}
                 className={`flex-1 py-1 text-center rounded-md font-medium transition-all ${
-                  inspectorTab === "logs" ? "bg-white text-gray-950 shadow-xs font-semibold" : "text-gray-500"
+                  inspectorTab === "logs" ? "bg-card text-foreground shadow-xs font-semibold" : "text-muted-foreground"
                 }`}
               >
                 Console & Errors
@@ -338,30 +338,30 @@ export default function GenerationMonitorAdminPage() {
             {/* Tab Contents */}
             {inspectorTab === "overview" && (
               <div className="space-y-2.5 text-xs">
-                <div className="grid grid-cols-2 gap-2 bg-gray-50 p-3 rounded-xl border border-black/[0.04]">
+                <div className="grid grid-cols-2 gap-2 bg-[var(--neu-sunken)] p-3 rounded-xl border border-[var(--neu-line)]">
                   <div>
-                    <span className="text-gray-400 block text-[10px] uppercase font-bold">Project Name</span>
-                    <span className="font-semibold text-gray-950">{selectedJob.project}</span>
+                    <span className="text-muted-foreground block text-[10px] uppercase font-bold">Project Name</span>
+                    <span className="font-semibold text-foreground">{selectedJob.project}</span>
                   </div>
                   <div>
-                    <span className="text-gray-400 block text-[10px] uppercase font-bold">Execution Status</span>
+                    <span className="text-muted-foreground block text-[10px] uppercase font-bold">Execution Status</span>
                     <span>{getStatusBadge(selectedJob.status)}</span>
                   </div>
                   <div className="mt-1">
-                    <span className="text-gray-400 block text-[10px] uppercase font-bold">Model Engine</span>
-                    <span className="font-mono text-gray-900">{selectedJob.model}</span>
+                    <span className="text-muted-foreground block text-[10px] uppercase font-bold">Model Engine</span>
+                    <span className="font-mono text-foreground">{selectedJob.model}</span>
                   </div>
                   <div className="mt-1">
-                    <span className="text-gray-400 block text-[10px] uppercase font-bold">Execution Duration</span>
-                    <span className="font-mono text-gray-900">{selectedJob.duration}</span>
+                    <span className="text-muted-foreground block text-[10px] uppercase font-bold">Execution Duration</span>
+                    <span className="font-mono text-foreground">{selectedJob.duration}</span>
                   </div>
                   <div className="mt-1">
-                    <span className="text-gray-400 block text-[10px] uppercase font-bold">Tokens Consumed</span>
-                    <span className="font-mono text-gray-900">{selectedJob.tokensUsed || "7,420 tokens"}</span>
+                    <span className="text-muted-foreground block text-[10px] uppercase font-bold">Tokens Consumed</span>
+                    <span className="font-mono text-foreground">{selectedJob.tokensUsed || "7,420 tokens"}</span>
                   </div>
                   <div className="mt-1">
-                    <span className="text-gray-400 block text-[10px] uppercase font-bold">Created At</span>
-                    <span className="text-gray-700">{selectedJob.createdAt}</span>
+                    <span className="text-muted-foreground block text-[10px] uppercase font-bold">Created At</span>
+                    <span className="text-foreground">{selectedJob.createdAt}</span>
                   </div>
                 </div>
               </div>
@@ -369,7 +369,7 @@ export default function GenerationMonitorAdminPage() {
 
             {inspectorTab === "prompt" && (
               <div className="space-y-2 text-xs">
-                <span className="text-gray-400 text-[10px] uppercase font-bold block">
+                <span className="text-muted-foreground text-[10px] uppercase font-bold block">
                   Natural Language Prompt Context
                 </span>
                 <div className="p-3 bg-gray-950 text-gray-200 font-mono text-[11px] rounded-xl overflow-x-auto leading-relaxed border border-black/10">
@@ -380,7 +380,7 @@ export default function GenerationMonitorAdminPage() {
 
             {inspectorTab === "logs" && (
               <div className="space-y-2 text-xs">
-                <span className="text-gray-400 text-[10px] uppercase font-bold block">
+                <span className="text-muted-foreground text-[10px] uppercase font-bold block">
                   Diagnostic Log Stream
                 </span>
                 {selectedJob.errorLog ? (
@@ -400,7 +400,7 @@ export default function GenerationMonitorAdminPage() {
               </div>
             )}
 
-            <div className="flex items-center justify-between pt-2 border-t border-black/[0.06]">
+            <div className="flex items-center justify-between pt-2 border-t border-[var(--neu-line)]">
               {selectedJob.status === "Failed" ? (
                 <button
                   type="button"
@@ -415,7 +415,7 @@ export default function GenerationMonitorAdminPage() {
               <button
                 type="button"
                 onClick={() => setSelectedJob(null)}
-                className="px-4 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-800 text-xs font-semibold rounded-lg"
+                className="px-4 py-1.5 bg-[var(--neu-sunken)] hover:bg-gray-200 text-foreground text-xs font-semibold rounded-lg"
               >
                 Close
               </button>

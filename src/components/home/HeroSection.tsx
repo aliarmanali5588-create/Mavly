@@ -408,7 +408,7 @@ export function HeroSection() {
   };
 
   return (
-    <section className="relative pt-24 pb-20 sm:pt-32 sm:pb-28 md:pt-36 md:pb-36 overflow-hidden bg-[#faf9f6]/90">
+    <section className="relative pt-24 pb-20 sm:pt-32 sm:pb-28 md:pt-36 md:pb-36 overflow-hidden bg-[var(--neu-base)]">
       {/* Ambient Radial Depth Glow */}
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[550px] bg-gradient-to-b from-black/[0.02] to-transparent rounded-full blur-3xl pointer-events-none -z-10" />
 

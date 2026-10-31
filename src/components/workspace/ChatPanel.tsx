@@ -151,7 +151,7 @@ function renderInline(text: string, keyPrefix: string = "0"): React.ReactNode[] 
     }
     // Inline code
     if (token.startsWith("`") && token.endsWith("`")) {
-      return <code key={key} className="bg-gray-100 dark:bg-gray-800 px-1 py-0.5 rounded text-xs font-mono">{token.slice(1, -1)}</code>;
+      return <code key={key} className="bg-[var(--neu-sunken)] px-1 py-0.5 rounded text-xs font-mono shadow-[var(--neu-inset-1)]">{token.slice(1, -1)}</code>;
     }
     return <span key={key}>{token}</span>;
   });
@@ -377,7 +377,7 @@ function SecretKeysForm({ secretKeysNeeded, projectId, onTellAi, projectSecrets 
         ))}
         <button
           onClick={() => onTellAi(totalKeys)}
-          className="mt-3 w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-gray-900 dark:bg-white text-white dark:text-gray-900 text-xs font-medium hover:bg-gray-800 dark:hover:bg-gray-100 transition-colors"
+          className="mt-3 w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl bg-primary text-primary-foreground text-xs font-semibold shadow-[var(--neu-elev-1)] hover:shadow-[var(--neu-elev-2)] active:shadow-[var(--neu-inset-2)] transition-[box-shadow] duration-200"
         >
           <ArrowRight className="w-3.5 h-3.5" />
           {"Tell AI secrets are ready"}
@@ -409,7 +409,7 @@ function SecretKeysForm({ secretKeysNeeded, projectId, onTellAi, projectSecrets 
       {/* Secret inputs */}
       <div className="p-3 space-y-3">
         {secrets.map((secret, si) => (
-          <div key={secret.secretName} className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 p-3">
+          <div key={secret.secretName} className="bg-card rounded-xl border border-[var(--neu-line)] p-3 shadow-[var(--neu-elev-1)]">
             <div className="mb-2">
               <code className="text-xs font-mono font-semibold text-gray-800 dark:text-gray-200">{secret.secretName}</code>
               <p className="text-[11px] text-gray-400 mt-0.5 leading-snug">{secret.description}</p>
@@ -432,7 +432,7 @@ function SecretKeysForm({ secretKeysNeeded, projectId, onTellAi, projectSecrets 
                       value={entry.value}
                       onChange={(e) => updateEntry(si, ei, "value", e.target.value)}
                       placeholder={"Enter value..."}
-                      className="w-full h-8 px-2.5 pr-8 text-xs rounded-md border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-800 text-gray-800 dark:text-gray-200 outline-none focus:ring-1 focus:ring-amber-300 font-mono"
+                      className="w-full h-8 px-2.5 pr-8 text-xs rounded-lg border border-[var(--neu-line)] bg-[var(--neu-sunken)] text-foreground shadow-[var(--neu-inset-1)] outline-none focus-visible:shadow-[var(--neu-inset-1),var(--neu-focus)] font-mono"
                     />
                     <button
                       onClick={() => updateEntry(si, ei, "showValue", !entry.showValue)}
@@ -444,7 +444,7 @@ function SecretKeysForm({ secretKeysNeeded, projectId, onTellAi, projectSecrets 
                   <select
                     value={entry.environment}
                     onChange={(e) => updateEntry(si, ei, "environment", e.target.value)}
-                    className="h-8 px-2 text-[11px] rounded-md border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-800 text-gray-700 dark:text-gray-300 outline-none focus:ring-1 focus:ring-amber-300 min-w-[90px]"
+                    className="h-8 px-2 text-[11px] rounded-lg border border-[var(--neu-line)] bg-[var(--neu-sunken)] text-foreground shadow-[var(--neu-inset-1)] outline-none focus-visible:shadow-[var(--neu-inset-1),var(--neu-focus)] min-w-[90px]"
                   >
                     <option value="both">Dev + Prod</option>
                     <option value="development">Dev only</option>
@@ -722,7 +722,7 @@ export function ChatPanel({
       <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto px-4 py-4 space-y-4">
         {messages.length === 0 && !isBuilding && (
           <div className="flex flex-col items-center justify-center h-full text-center px-4">
-            <div className="w-10 h-10 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center mb-3"><Bot className="w-5 h-5 text-gray-400" /></div>
+            <div className="w-11 h-11 rounded-2xl bg-[var(--neu-sunken)] border border-[var(--neu-line)] shadow-[var(--neu-inset-2)] flex items-center justify-center mb-3"><Bot className="w-5 h-5 text-muted-foreground" /></div>
             <p className="text-[15px] text-gray-500 dark:text-gray-400 mb-1">{"What do you want to build?"}</p>
             <p className="text-sm text-gray-400">{"Describe your idea below"}</p>
           </div>
@@ -732,7 +732,7 @@ export function ChatPanel({
           <div className="flex justify-center pb-1">
             <button
               onClick={handleLoadEarlier}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium text-muted-foreground bg-[var(--neu-sunken)] border border-[var(--neu-line)] shadow-[var(--neu-inset-1)] hover:shadow-[var(--neu-elev-1)] transition-[box-shadow] duration-200"
             >
               <ChevronUp className="w-3.5 h-3.5" />
               {"Load earlier messages"}
@@ -837,7 +837,7 @@ export function ChatPanel({
             <div className="flex items-center gap-0.5">
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <label className="cursor-pointer size-8 inline-flex items-center justify-center rounded-lg hover:bg-black/5 dark:hover:bg-white/10 transition-colors">
+                  <label className="cursor-pointer size-8 inline-flex items-center justify-center rounded-lg hover:bg-[var(--neu-sunken)] hover:shadow-[var(--neu-inset-1)] transition-[box-shadow,background-color] duration-200">
                     <input type="file" multiple className="hidden" onChange={handleFileUpload} accept="image/*,.pdf,.svg" disabled={isBuilding} />
                     {uploading ? <Loader2 className="w-4 h-4 text-gray-400 animate-spin" /> : <Paperclip className="w-4 h-4 text-gray-400" />}
                     <span className="sr-only">{t("prompt.attachments.attach")}</span>
@@ -891,7 +891,7 @@ export function ChatPanel({
               <button onClick={() => setConfirmingStop(true)} aria-label={t("workspace.chat.stop")} className="w-8 h-8 rounded-full bg-red-500 hover:bg-red-600 flex items-center justify-center transition-colors"><Square className="w-3 h-3 text-white" /></button>
             ) : (
               <button onClick={handleSend} disabled={(!prompt.trim() && attachedFiles.length === 0) || sending}
-                className="w-8 h-8 rounded-full bg-black text-white hover:bg-neutral-800 active:scale-95 disabled:opacity-40 disabled:pointer-events-none flex items-center justify-center transition-all shadow-xs dark:bg-white dark:text-black dark:hover:bg-neutral-200">
+                className="w-8 h-8 rounded-full bg-primary text-primary-foreground shadow-[var(--neu-elev-2)] hover:shadow-[var(--neu-elev-3)] active:shadow-[var(--neu-inset-2)] disabled:opacity-40 disabled:pointer-events-none flex items-center justify-center transition-[box-shadow] duration-200">
                 {sending ? <Loader2 className="w-3.5 h-3.5 animate-spin text-current" /> : <Send className="w-3.5 h-3.5 text-current" />}
               </button>
             )}

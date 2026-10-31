@@ -111,14 +111,14 @@ export function AdminSidebar({
   };
 
   const content = (
-    <div className="flex flex-col h-full bg-white border-r border-black/[0.08] text-gray-900 select-none font-sans">
+    <div className="flex flex-col h-full bg-card border-r border-[var(--neu-line)] text-foreground select-none font-sans">
       {/* ── Top Workspace Header ── */}
-      <div className="p-4 border-b border-black/[0.06] flex items-center justify-between">
+      <div className="p-4 border-b border-[var(--neu-line)] flex items-center justify-between">
         <Link
           href="/adminsh/dashboard"
           className="flex items-center gap-3 group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black rounded-xl p-1 -m-1"
         >
-          <div className="w-8 h-8 rounded-xl overflow-hidden bg-white shadow-xs p-0.5 border border-black/[0.1] flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform duration-200">
+          <div className="w-8 h-8 rounded-xl overflow-hidden bg-card shadow-xs p-0.5 border border-black/[0.1] flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform duration-200">
             <Image
               src="/logo/Mavly.png"
               alt="Mavly Logo"
@@ -131,14 +131,14 @@ export function AdminSidebar({
           </div>
           <div className="min-w-0">
             <div className="flex items-center gap-1.5">
-              <span className="font-extrabold tracking-tight text-gray-950 text-sm">
+              <span className="font-extrabold tracking-tight text-foreground text-sm">
                 Mavly Admin
               </span>
               <span className="px-1.5 py-0.5 text-[9px] font-mono font-bold tracking-wider uppercase bg-black text-white rounded">
                 {live ? environment : "PROD"}
               </span>
             </div>
-            <p className="text-[10px] text-gray-400 font-medium truncate flex items-center gap-1 mt-0.5">
+            <p className="text-[10px] text-muted-foreground font-medium truncate flex items-center gap-1 mt-0.5">
               <span className={`w-1.5 h-1.5 rounded-full ${live ? "bg-gray-400" : "bg-emerald-500 animate-pulse"}`} />
               <span>{live ? "Verified admin session" : "Enterprise Console"}</span>
             </p>
@@ -149,7 +149,7 @@ export function AdminSidebar({
         <button
           type="button"
           onClick={() => setIsOpenMobile(false)}
-          className="lg:hidden p-1.5 text-gray-400 hover:text-black rounded-lg hover:bg-black/5"
+          className="lg:hidden p-1.5 text-muted-foreground hover:text-black rounded-lg hover:bg-black/5"
           aria-label="Close Sidebar"
         >
           <X className="w-5 h-5" />
@@ -160,7 +160,7 @@ export function AdminSidebar({
       <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-5 scrollbar-thin">
         {ADMIN_NAV_GROUPS.map((group) => (
           <div key={group.groupName} className="space-y-1">
-            <div className="px-2.5 pb-1 text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+            <div className="px-2.5 pb-1 text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
               {group.groupName}
             </div>
 
@@ -188,13 +188,13 @@ export function AdminSidebar({
                   className={`w-full flex items-center justify-between px-2.5 py-2 rounded-xl text-xs font-medium transition-all duration-150 group cursor-pointer ${
                     isActive
                       ? "bg-black text-white shadow-[0_2px_8px_rgba(0,0,0,0.12)] font-semibold"
-                      : "text-gray-600 hover:text-gray-950 hover:bg-black/[0.04]"
+                      : "text-muted-foreground hover:text-foreground hover:bg-black/[0.04]"
                   }`}
                 >
                   <div className="flex items-center gap-2.5 min-w-0">
                     <Icon
                       className={`w-4 h-4 shrink-0 transition-colors ${
-                        isActive ? "text-white" : "text-gray-400 group-hover:text-black"
+                        isActive ? "text-white" : "text-muted-foreground group-hover:text-black"
                       }`}
                     />
                     <span className="truncate">{item.label}</span>
@@ -204,8 +204,8 @@ export function AdminSidebar({
                     <span
                       className={`px-1.5 py-0.5 text-[9px] font-mono font-bold rounded-md shrink-0 ml-1.5 ${
                         isActive
-                          ? "bg-white/20 text-white"
-                          : "bg-gray-100 text-gray-600 group-hover:bg-black/10"
+                          ? "bg-card/20 text-white"
+                          : "bg-[var(--neu-sunken)] text-muted-foreground group-hover:bg-black/10"
                       }`}
                     >
                       {badge}
@@ -221,19 +221,19 @@ export function AdminSidebar({
       </nav>
 
       {/* ── Bottom Operator Profile Card & Sign Out ── */}
-      <div className="p-3 border-t border-black/[0.06] bg-gray-50/50 space-y-2">
-        <div className="p-2.5 rounded-xl bg-white border border-black/[0.06] flex items-center gap-2.5 shadow-[0_1px_3px_rgba(0,0,0,0.02)]">
+      <div className="p-3 border-t border-[var(--neu-line)] bg-[var(--neu-sunken)]/50 space-y-2">
+        <div className="p-2.5 rounded-xl bg-card border border-[var(--neu-line)] flex items-center gap-2.5 shadow-[0_1px_3px_rgba(0,0,0,0.02)]">
           <div className="w-8 h-8 rounded-full bg-black text-white flex items-center justify-center font-bold text-xs shrink-0">
             {live ? "AD" : "SA"}
           </div>
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-1.5">
-              <p className="text-xs font-bold text-gray-900 truncate">
+              <p className="text-xs font-bold text-foreground truncate">
                 {live ? "Administrator" : "Super Admin"}
               </p>
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
             </div>
-            <p className="text-[10px] text-gray-400 font-mono truncate">
+            <p className="text-[10px] text-muted-foreground font-mono truncate">
               {live ? "Session verified server-side" : "aitoolkitguide@gmail.com"}
             </p>
           </div>
@@ -242,7 +242,7 @@ export function AdminSidebar({
         <button
           type="button"
           onClick={handleSignOut}
-          className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold text-gray-600 hover:text-red-700 hover:bg-red-50/80 border border-transparent hover:border-red-100 transition-colors cursor-pointer"
+          className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold text-muted-foreground hover:text-red-700 hover:bg-red-50/80 border border-transparent hover:border-red-100 transition-colors cursor-pointer"
         >
           <LogOut className="w-3.5 h-3.5" />
           <span>Sign Out</span>

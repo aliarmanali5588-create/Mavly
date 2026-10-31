@@ -43,8 +43,8 @@ function StatusBadge({ status }: { status: AdminGenerationRow["status"] }) {
     running: "bg-blue-50 text-blue-700 border-blue-200",
     queued: "bg-amber-50 text-amber-700 border-amber-200",
     failed: "bg-red-50 text-red-700 border-red-200",
-    cancelled: "bg-gray-100 text-gray-600 border-gray-200",
-    interrupted: "bg-gray-100 text-gray-600 border-gray-200",
+    cancelled: "bg-[var(--neu-sunken)] text-muted-foreground border-[var(--neu-line)]",
+    interrupted: "bg-[var(--neu-sunken)] text-muted-foreground border-[var(--neu-line)]",
   };
   const dots: Record<AdminGenerationRow["status"], string> = {
     completed: "bg-emerald-500",
@@ -121,17 +121,17 @@ export function GenerationsTable() {
         : formatDuration(run.startedAt, null, now);
 
   return (
-    <div className="bg-white rounded-2xl p-5 sm:p-6 border border-black/[0.08] shadow-[0_2px_8px_rgba(0,0,0,0.02)] space-y-4">
+    <div className="bg-card rounded-2xl p-5 sm:p-6 border border-[var(--neu-line)] shadow-[0_2px_8px_rgba(0,0,0,0.02)] space-y-4">
       {/* ── Table Header Controls ── */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-black/[0.06]">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-[var(--neu-line)]">
         <div>
           <div className="flex items-center gap-2">
             <div className="p-1.5 rounded-lg bg-blue-50 text-blue-700 border border-blue-200">
               <Sparkles className="w-4 h-4" />
             </div>
-            <h2 className="text-base font-bold text-gray-950">Generation Operations Stream</h2>
+            <h2 className="text-base font-bold text-foreground">Generation Operations Stream</h2>
           </div>
-          <p className="text-xs text-gray-500 mt-0.5">
+          <p className="text-xs text-muted-foreground mt-0.5">
             Durable generation runs across all projects · live records
           </p>
         </div>
@@ -141,7 +141,7 @@ export function GenerationsTable() {
             type="button"
             onClick={refresh}
             disabled={loading}
-            className="inline-flex items-center gap-1 text-[11px] font-semibold text-gray-600 hover:text-black disabled:opacity-40"
+            className="inline-flex items-center gap-1 text-[11px] font-semibold text-muted-foreground hover:text-black disabled:opacity-40"
             title="Refresh run list"
           >
             <RefreshCw className={`w-3 h-3 ${loading ? "animate-spin" : ""}`} />
@@ -160,17 +160,17 @@ export function GenerationsTable() {
       {/* ── Filter & Search Toolbar ── */}
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
         <div className="relative flex-1 max-w-sm">
-          <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
           <input
             type="text"
             placeholder="Search by project, owner, or model..."
             value={searchInput}
             onChange={(event) => setSearchInput(event.target.value)}
-            className="w-full h-8 pl-8 pr-3 text-xs rounded-xl bg-gray-50 border border-black/[0.08] focus:bg-white focus:outline-none focus:ring-2 focus:ring-black text-gray-900 placeholder:text-gray-400"
+            className="w-full h-8 pl-8 pr-3 text-xs rounded-xl bg-[var(--neu-sunken)] border border-[var(--neu-line)] focus:bg-card focus:outline-none focus:ring-2 focus:ring-black text-foreground placeholder:text-muted-foreground"
           />
         </div>
 
-        <div className="flex items-center gap-1 bg-gray-50 p-1 rounded-xl border border-black/[0.06] text-xs">
+        <div className="flex items-center gap-1 bg-[var(--neu-sunken)] p-1 rounded-xl border border-[var(--neu-line)] text-xs">
           {FILTERS.map((filter) => (
             <button
               key={filter.id}
@@ -178,8 +178,8 @@ export function GenerationsTable() {
               onClick={() => setStatus(filter.id)}
               className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all cursor-pointer ${
                 status === filter.id
-                  ? "bg-white text-black shadow-xs font-bold"
-                  : "text-gray-500 hover:text-black"
+                  ? "bg-card text-black shadow-xs font-bold"
+                  : "text-muted-foreground hover:text-black"
               }`}
             >
               {filter.label}
@@ -189,10 +189,10 @@ export function GenerationsTable() {
       </div>
 
       {/* ── High-Density Data Table ── */}
-      <div className="overflow-x-auto rounded-xl border border-black/[0.06]">
+      <div className="overflow-x-auto rounded-xl border border-[var(--neu-line)]">
         <table className="w-full text-left border-collapse text-xs">
           <thead>
-            <tr className="bg-gray-50/60 border-b border-black/[0.06] text-gray-400 font-bold uppercase tracking-wider text-[10px]">
+            <tr className="bg-[var(--neu-sunken)]/60 border-b border-[var(--neu-line)] text-muted-foreground font-bold uppercase tracking-wider text-[10px]">
               <th className="py-2.5 px-4">Project</th>
               <th className="py-2.5 px-4">Owner</th>
               <th className="py-2.5 px-4">Model Engine</th>
@@ -206,12 +206,12 @@ export function GenerationsTable() {
             {error ? (
               <tr>
                 <td colSpan={7} className="py-8 text-center">
-                  <p className="text-xs font-semibold text-gray-800">The generation stream is unavailable</p>
-                  <p className="text-[11px] text-gray-500 mt-1">{error}</p>
+                  <p className="text-xs font-semibold text-foreground">The generation stream is unavailable</p>
+                  <p className="text-[11px] text-muted-foreground mt-1">{error}</p>
                   <button
                     type="button"
                     onClick={refresh}
-                    className="mt-2 inline-flex items-center gap-1 text-[11px] font-semibold text-gray-700 hover:text-black"
+                    className="mt-2 inline-flex items-center gap-1 text-[11px] font-semibold text-foreground hover:text-black"
                   >
                     <RefreshCw className="w-3 h-3" />
                     Try again
@@ -223,42 +223,42 @@ export function GenerationsTable() {
                 <tr key={index} className="animate-pulse">
                   {Array.from({ length: 7 }).map((__, cell) => (
                     <td key={cell} className="py-3 px-4">
-                      <div className="h-3 rounded bg-gray-100" />
+                      <div className="h-3 rounded bg-[var(--neu-sunken)]" />
                     </td>
                   ))}
                 </tr>
               ))
             ) : rows.length === 0 ? (
               <tr>
-                <td colSpan={7} className="py-8 text-center text-gray-400">
+                <td colSpan={7} className="py-8 text-center text-muted-foreground">
                   No generation records match the current search and status filter.
                 </td>
               </tr>
             ) : (
               rows.map((run) => (
-                <tr key={run.id} className="hover:bg-gray-50/60 transition-colors">
+                <tr key={run.id} className="hover:bg-[var(--neu-sunken)]/60 transition-colors">
                   <td className="py-2.5 px-4 max-w-[200px]">
-                    <p className="font-bold text-gray-950 truncate" title={run.projectLabel ?? run.projectId}>
+                    <p className="font-bold text-foreground truncate" title={run.projectLabel ?? run.projectId}>
                       {run.projectLabel ?? run.projectId}
                     </p>
-                    <p className="text-[10px] text-gray-400 font-mono truncate">{run.projectId}</p>
+                    <p className="text-[10px] text-muted-foreground font-mono truncate">{run.projectId}</p>
                   </td>
-                  <td className="py-2.5 px-4 text-gray-600 max-w-[160px]">
+                  <td className="py-2.5 px-4 text-muted-foreground max-w-[160px]">
                     <p className="truncate">{run.ownerName}</p>
                     {run.ownerEmail ? (
-                      <p className="text-[10px] text-gray-400 truncate">{run.ownerEmail}</p>
+                      <p className="text-[10px] text-muted-foreground truncate">{run.ownerEmail}</p>
                     ) : null}
                   </td>
-                  <td className="py-2.5 px-4 font-mono text-[11px] text-gray-700 max-w-[180px] truncate">
+                  <td className="py-2.5 px-4 font-mono text-[11px] text-foreground max-w-[180px] truncate">
                     {run.model}
                   </td>
                   <td className="py-2.5 px-4">
                     <StatusBadge status={run.status} />
                   </td>
-                  <td className="py-2.5 px-4 font-mono text-gray-600">
+                  <td className="py-2.5 px-4 font-mono text-muted-foreground">
                     {durationFor(run)}
                   </td>
-                  <td className="py-2.5 px-4 text-gray-400 whitespace-nowrap">
+                  <td className="py-2.5 px-4 text-muted-foreground whitespace-nowrap">
                     <span className="inline-flex items-center gap-1">
                       <Clock className="w-3 h-3" />
                       {now === null ? "—" : formatTimestamp(run.startedAt)}
@@ -268,7 +268,7 @@ export function GenerationsTable() {
                     <button
                       type="button"
                       onClick={() => setSelected(run)}
-                      className="px-2 py-1 rounded-lg text-[11px] font-semibold text-gray-700 bg-gray-100 hover:bg-gray-200 transition-colors"
+                      className="px-2 py-1 rounded-lg text-[11px] font-semibold text-foreground bg-[var(--neu-sunken)] hover:bg-gray-200 transition-colors"
                     >
                       Inspect
                     </button>
@@ -281,14 +281,14 @@ export function GenerationsTable() {
       </div>
 
       {/* ── Pagination ── */}
-      <div className="flex items-center justify-between text-[11px] text-gray-500">
+      <div className="flex items-center justify-between text-[11px] text-muted-foreground">
         <span>{loading ? "Loading…" : total === 0 ? "No records" : `${start}–${end} of ${total}`}</span>
         <div className="flex items-center gap-2">
           <button
             type="button"
             onClick={() => setPage((current) => Math.max(0, current - 1))}
             disabled={page === 0 || loading}
-            className="px-2.5 py-1 rounded-lg border border-black/[0.08] font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+            className="px-2.5 py-1 rounded-lg border border-[var(--neu-line)] font-semibold text-foreground hover:bg-[var(--neu-sunken)] disabled:opacity-40 disabled:cursor-not-allowed"
           >
             Previous
           </button>
@@ -296,7 +296,7 @@ export function GenerationsTable() {
             type="button"
             onClick={() => setPage((current) => current + 1)}
             disabled={loading || end >= total}
-            className="px-2.5 py-1 rounded-lg border border-black/[0.08] font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+            className="px-2.5 py-1 rounded-lg border border-[var(--neu-line)] font-semibold text-foreground hover:bg-[var(--neu-sunken)] disabled:opacity-40 disabled:cursor-not-allowed"
           >
             Next
           </button>
@@ -306,25 +306,25 @@ export function GenerationsTable() {
       {/* ── Inspection Modal (metadata only) ── */}
       {selected ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-in fade-in">
-          <div className="w-full max-w-lg bg-white rounded-2xl border border-black/[0.08] shadow-2xl p-6 space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-black/[0.06]">
+          <div className="w-full max-w-lg bg-card rounded-2xl border border-[var(--neu-line)] shadow-2xl p-6 space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-[var(--neu-line)]">
               <div className="min-w-0">
-                <h3 className="text-base font-bold text-gray-950 truncate">
+                <h3 className="text-base font-bold text-foreground truncate">
                   {selected.projectLabel ?? selected.projectId}
                 </h3>
-                <p className="text-xs text-gray-400 font-mono truncate">Run ID: {selected.id}</p>
+                <p className="text-xs text-muted-foreground font-mono truncate">Run ID: {selected.id}</p>
               </div>
               <button
                 type="button"
                 onClick={() => setSelected(null)}
-                className="p-1 text-gray-400 hover:text-black rounded-lg hover:bg-black/5"
+                className="p-1 text-muted-foreground hover:text-black rounded-lg hover:bg-black/5"
                 aria-label="Close inspection"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            <div className="space-y-2.5 text-xs bg-gray-50 p-4 rounded-xl border border-black/[0.04]">
+            <div className="space-y-2.5 text-xs bg-[var(--neu-sunken)] p-4 rounded-xl border border-[var(--neu-line)]">
               <Detail label="Status" value={<StatusBadge status={selected.status} />} />
               <Detail label="Stage" value={<span className="font-mono">{selected.stage}</span>} />
               <Detail label="Owner" value={selected.ownerName} />
@@ -350,7 +350,7 @@ export function GenerationsTable() {
               ) : null}
             </div>
 
-            <p className="text-[10px] text-gray-400 flex items-start gap-1.5">
+            <p className="text-[10px] text-muted-foreground flex items-start gap-1.5">
               <Terminal className="w-3 h-3 mt-0.5 shrink-0" />
               <span>
                 Metadata only. Prompt text and generated files stay with the project owner. No admin
@@ -377,8 +377,8 @@ export function GenerationsTable() {
 function Detail({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div className="flex items-start justify-between gap-4">
-      <span className="text-gray-500 shrink-0">{label}:</span>
-      <span className="font-semibold text-gray-900 text-right min-w-0 break-words">{value}</span>
+      <span className="text-muted-foreground shrink-0">{label}:</span>
+      <span className="font-semibold text-foreground text-right min-w-0 break-words">{value}</span>
     </div>
   );
 }

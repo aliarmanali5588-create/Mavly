@@ -29,28 +29,28 @@ export function RevenueChart({
 
 function UnavailableRevenueChart() {
   return (
-    <div className="bg-white rounded-2xl p-5 sm:p-6 border border-black/[0.08] shadow-[0_2px_8px_rgba(0,0,0,0.02)] flex flex-col justify-between space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-black/[0.06]">
+    <div className="bg-card rounded-2xl p-5 sm:p-6 border border-[var(--neu-line)] shadow-[0_2px_8px_rgba(0,0,0,0.02)] flex flex-col justify-between space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-[var(--neu-line)]">
         <div>
           <div className="flex items-center gap-2">
-            <div className="p-1.5 rounded-lg bg-gray-100 text-gray-600 border border-gray-200">
+            <div className="p-1.5 rounded-lg bg-[var(--neu-sunken)] text-muted-foreground border border-[var(--neu-line)]">
               <IndianRupee className="w-4 h-4" />
             </div>
-            <h2 className="text-base font-bold text-gray-950">Revenue Velocity</h2>
+            <h2 className="text-base font-bold text-foreground">Revenue Velocity</h2>
           </div>
-          <p className="text-xs text-gray-500 mt-0.5">
+          <p className="text-xs text-muted-foreground mt-0.5">
             Platform subscription revenue (INR ₹) — unavailable
           </p>
         </div>
 
         <div className="flex items-center gap-2.5">
-          <div className="px-3 py-1.5 rounded-xl bg-gray-50 border border-black/[0.05] text-right">
-            <span className="text-[10px] text-gray-400 uppercase font-bold block">Cumulative</span>
-            <span className="text-sm font-extrabold text-gray-400 font-mono">—</span>
+          <div className="px-3 py-1.5 rounded-xl bg-[var(--neu-sunken)] border border-black/[0.05] text-right">
+            <span className="text-[10px] text-muted-foreground uppercase font-bold block">Cumulative</span>
+            <span className="text-sm font-extrabold text-muted-foreground font-mono">—</span>
           </div>
-          <div className="px-3 py-1.5 rounded-xl bg-gray-50 border border-black/[0.05] text-right">
-            <span className="text-[10px] text-gray-400 uppercase font-bold block">Growth</span>
-            <span className="text-sm font-extrabold text-gray-400 flex items-center gap-1 font-mono">
+          <div className="px-3 py-1.5 rounded-xl bg-[var(--neu-sunken)] border border-black/[0.05] text-right">
+            <span className="text-[10px] text-muted-foreground uppercase font-bold block">Growth</span>
+            <span className="text-sm font-extrabold text-muted-foreground flex items-center gap-1 font-mono">
               <TrendingUp className="w-3.5 h-3.5" />
               <span>—</span>
             </span>
@@ -58,17 +58,17 @@ function UnavailableRevenueChart() {
         </div>
       </div>
 
-      <div className="h-52 w-full rounded-xl border border-dashed border-black/[0.1] bg-gray-50/50 flex flex-col items-center justify-center px-6 text-center gap-2">
-        <Info className="w-5 h-5 text-gray-400" />
-        <p className="text-sm font-semibold text-gray-800">No Mavly revenue source is configured</p>
-        <p className="text-xs text-gray-500 max-w-md leading-relaxed">
+      <div className="h-52 w-full rounded-xl border border-dashed border-black/[0.1] bg-[var(--neu-sunken)]/50 flex flex-col items-center justify-center px-6 text-center gap-2">
+        <Info className="w-5 h-5 text-muted-foreground" />
+        <p className="text-sm font-semibold text-foreground">No Mavly revenue source is configured</p>
+        <p className="text-xs text-muted-foreground max-w-md leading-relaxed">
           This deployment has no subscription, invoice or credit-ledger table. Monthly revenue,
           cumulative totals and growth are not estimated, and no historical months are fabricated.
         </p>
       </div>
 
-      <div className="p-3 rounded-xl bg-gray-50 border border-black/[0.04] text-xs text-gray-600 flex items-center gap-2">
-        <Info className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+      <div className="p-3 rounded-xl bg-[var(--neu-sunken)] border border-[var(--neu-line)] text-xs text-muted-foreground flex items-center gap-2">
+        <Info className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
         <span>Revenue appears here only after a real billing source is connected.</span>
       </div>
     </div>
@@ -77,12 +77,12 @@ function UnavailableRevenueChart() {
 
 function RevenueSkeleton() {
   return (
-    <div className="bg-white rounded-2xl p-5 sm:p-6 border border-black/[0.08] shadow-[0_2px_8px_rgba(0,0,0,0.02)] space-y-6 animate-pulse">
-      <div className="flex items-center justify-between pb-4 border-b border-black/[0.06]">
-        <div className="h-4 w-40 rounded bg-gray-100" />
-        <div className="h-8 w-24 rounded-xl bg-gray-100" />
+    <div className="bg-card rounded-2xl p-5 sm:p-6 border border-[var(--neu-line)] shadow-[0_2px_8px_rgba(0,0,0,0.02)] space-y-6 animate-pulse">
+      <div className="flex items-center justify-between pb-4 border-b border-[var(--neu-line)]">
+        <div className="h-4 w-40 rounded bg-[var(--neu-sunken)]" />
+        <div className="h-8 w-24 rounded-xl bg-[var(--neu-sunken)]" />
       </div>
-      <div className="h-52 rounded-xl bg-gray-50" />
+      <div className="h-52 rounded-xl bg-[var(--neu-sunken)]" />
     </div>
   );
 }
@@ -95,27 +95,27 @@ function DemoRevenueChart() {
     activeMonthIndex !== null ? MOCK_REVENUE_MONTHLY[activeMonthIndex] : null;
 
   return (
-    <div className="bg-white rounded-2xl p-5 sm:p-6 border border-black/[0.08] shadow-[0_2px_8px_rgba(0,0,0,0.02)] flex flex-col justify-between space-y-6">
+    <div className="bg-card rounded-2xl p-5 sm:p-6 border border-[var(--neu-line)] shadow-[0_2px_8px_rgba(0,0,0,0.02)] flex flex-col justify-between space-y-6">
       {/* ── Top Metric Header ── */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-black/[0.06]">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-[var(--neu-line)]">
         <div>
           <div className="flex items-center gap-2">
             <div className="p-1.5 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200">
               <IndianRupee className="w-4 h-4" />
             </div>
-            <h2 className="text-base font-bold text-gray-950">Revenue Velocity</h2>
+            <h2 className="text-base font-bold text-foreground">Revenue Velocity</h2>
           </div>
-          <p className="text-xs text-gray-500 mt-0.5">
+          <p className="text-xs text-muted-foreground mt-0.5">
             6-Month gross platform subscription revenue (INR ₹)
           </p>
         </div>
 
         <div className="flex items-center gap-2.5">
-          <div className="px-3 py-1.5 rounded-xl bg-gray-50 border border-black/[0.05] text-right">
-            <span className="text-[10px] text-gray-400 uppercase font-bold block">
+          <div className="px-3 py-1.5 rounded-xl bg-[var(--neu-sunken)] border border-black/[0.05] text-right">
+            <span className="text-[10px] text-muted-foreground uppercase font-bold block">
               Cumulative
             </span>
-            <span className="text-sm font-extrabold text-gray-950 font-mono">
+            <span className="text-sm font-extrabold text-foreground font-mono">
               ₹14,22,500
             </span>
           </div>
@@ -135,10 +135,10 @@ function DemoRevenueChart() {
       <div className="relative pt-6">
         <div className="relative h-52 w-full flex items-end justify-between gap-2 sm:gap-4 px-2">
           {/* Subtle horizontal grid lines */}
-          <div className="absolute inset-x-0 top-0 border-b border-dashed border-gray-100 flex items-center justify-between text-[10px] font-mono text-gray-400 pointer-events-none">
+          <div className="absolute inset-x-0 top-0 border-b border-dashed border-[var(--neu-line)] flex items-center justify-between text-[10px] font-mono text-muted-foreground pointer-events-none">
             <span>₹3.0L</span>
           </div>
-          <div className="absolute inset-x-0 top-1/2 border-b border-dashed border-gray-100 flex items-center justify-between text-[10px] font-mono text-gray-400 pointer-events-none">
+          <div className="absolute inset-x-0 top-1/2 border-b border-dashed border-[var(--neu-line)] flex items-center justify-between text-[10px] font-mono text-muted-foreground pointer-events-none">
             <span>₹1.5L</span>
           </div>
 
@@ -171,7 +171,7 @@ function DemoRevenueChart() {
 
                 <span
                   className={`mt-2.5 text-xs font-semibold transition-colors ${
-                    isHovered ? "text-gray-950 font-bold" : "text-gray-500"
+                    isHovered ? "text-foreground font-bold" : "text-muted-foreground"
                   }`}
                 >
                   {item.month}
@@ -184,14 +184,14 @@ function DemoRevenueChart() {
 
       {/* ── Active Month Highlight Footer ── */}
       {activeMonth ? (
-        <div className="p-3 rounded-xl bg-gray-50 border border-black/[0.04] flex items-center justify-between text-xs">
-          <div className="flex items-center gap-2 text-gray-600">
-            <Info className="w-3.5 h-3.5 text-gray-400" />
+        <div className="p-3 rounded-xl bg-[var(--neu-sunken)] border border-[var(--neu-line)] flex items-center justify-between text-xs">
+          <div className="flex items-center gap-2 text-muted-foreground">
+            <Info className="w-3.5 h-3.5 text-muted-foreground" />
             <span>
-              Selected Period: <strong className="text-gray-900">{activeMonth.month} 2026</strong>
+              Selected Period: <strong className="text-foreground">{activeMonth.month} 2026</strong>
             </span>
           </div>
-          <span className="font-extrabold text-gray-950 font-mono text-sm">
+          <span className="font-extrabold text-foreground font-mono text-sm">
             {activeMonth.label}
           </span>
         </div>

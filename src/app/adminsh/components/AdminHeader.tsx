@@ -39,7 +39,7 @@ const STATUS_DOT: Record<NonNullable<AdminHeaderProps["statusTone"]>, string> = 
 const STATUS_TEXT: Record<NonNullable<AdminHeaderProps["statusTone"]>, string> = {
   ok: "text-emerald-700",
   warn: "text-amber-700",
-  unknown: "text-gray-500",
+  unknown: "text-muted-foreground",
 };
 
 export function AdminHeader({
@@ -66,13 +66,13 @@ export function AdminHeader({
   };
 
   return (
-    <header className="sticky top-0 z-20 bg-white/90 backdrop-blur-md border-b border-black/[0.08] px-4 sm:px-6 lg:px-8 h-16 sm:h-20 flex items-center justify-between select-none">
+    <header className="sticky top-0 z-20 bg-card/90 backdrop-blur-md border-b border-[var(--neu-line)] px-4 sm:px-6 lg:px-8 h-16 sm:h-20 flex items-center justify-between select-none">
       {/* ── Left: Mobile Toggle & Page Title Hierarchy ── */}
       <div className="flex items-center gap-3">
         <button
           type="button"
           onClick={onOpenMobileSidebar}
-          className="lg:hidden p-2 rounded-xl text-gray-600 hover:text-black hover:bg-black/5 transition-colors cursor-pointer"
+          className="lg:hidden p-2 rounded-xl text-muted-foreground hover:text-black hover:bg-black/5 transition-colors cursor-pointer"
           aria-label="Open Sidebar"
         >
           <Menu className="w-5 h-5" />
@@ -80,10 +80,10 @@ export function AdminHeader({
 
         <div className="space-y-0.5">
           {/* Breadcrumb line */}
-          <div className="flex items-center gap-1.5 text-[11px] font-medium text-gray-400">
+          <div className="flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
             <span>Admin</span>
             <span>/</span>
-            <span className="text-gray-900 font-semibold">{activeNav}</span>
+            <span className="text-foreground font-semibold">{activeNav}</span>
             <span className="hidden sm:inline-block">·</span>
             <span
               className={`hidden sm:inline-flex items-center gap-1 font-semibold ${STATUS_TEXT[statusTone]}`}
@@ -94,7 +94,7 @@ export function AdminHeader({
             </span>
           </div>
 
-          <h1 className="text-lg sm:text-xl font-extrabold tracking-tight text-gray-950">
+          <h1 className="text-lg sm:text-xl font-extrabold tracking-tight text-foreground">
             {activeNav}
           </h1>
         </div>
@@ -104,7 +104,7 @@ export function AdminHeader({
       <div className="flex items-center gap-2 sm:gap-3">
         {/* Segmented Time Range Selector */}
         <div
-          className="hidden sm:flex items-center p-1 rounded-xl bg-gray-100/80 border border-black/[0.06] text-xs font-semibold text-gray-600"
+          className="hidden sm:flex items-center p-1 rounded-xl bg-[var(--neu-sunken)]/80 border border-[var(--neu-line)] text-xs font-semibold text-muted-foreground"
           role="group"
           aria-label="Dashboard period"
         >
@@ -118,7 +118,7 @@ export function AdminHeader({
                 aria-pressed={selected}
                 title={option.description}
                 className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${
-                  selected ? "bg-white text-gray-950 shadow-xs font-bold" : "hover:text-black"
+                  selected ? "bg-card text-foreground shadow-xs font-bold" : "hover:text-black"
                 }`}
               >
                 {option.label}
@@ -132,7 +132,7 @@ export function AdminHeader({
           <button
             type="button"
             onClick={() => setShowNotifications(!showNotifications)}
-            className="relative p-2 rounded-xl text-gray-600 hover:text-black hover:bg-black/5 transition-colors cursor-pointer"
+            className="relative p-2 rounded-xl text-muted-foreground hover:text-black hover:bg-black/5 transition-colors cursor-pointer"
             aria-label="Notifications"
           >
             <Bell className="w-4 h-4" />
@@ -142,10 +142,10 @@ export function AdminHeader({
           </button>
 
           {showNotifications ? (
-            <div className="absolute right-0 mt-2 w-80 sm:w-92 bg-white rounded-2xl border border-black/[0.08] shadow-[0_20px_50px_rgba(0,0,0,0.1)] p-4 z-50 animate-in fade-in slide-in-from-top-2">
-              <div className="flex items-center justify-between pb-3 border-b border-black/[0.06] mb-3">
+            <div className="absolute right-0 mt-2 w-80 sm:w-92 bg-card rounded-2xl border border-[var(--neu-line)] shadow-[0_20px_50px_rgba(0,0,0,0.1)] p-4 z-50 animate-in fade-in slide-in-from-top-2">
+              <div className="flex items-center justify-between pb-3 border-b border-[var(--neu-line)] mb-3">
                 <div className="flex items-center gap-2">
-                  <h3 className="text-xs font-bold text-gray-950">System Notifications</h3>
+                  <h3 className="text-xs font-bold text-foreground">System Notifications</h3>
                   {!live ? (
                     <span className="px-1.5 py-0.5 text-[9px] font-mono font-bold bg-black text-white rounded">
                       3
@@ -155,7 +155,7 @@ export function AdminHeader({
                 <button
                   type="button"
                   onClick={() => setShowNotifications(false)}
-                  className="p-1 text-gray-400 hover:text-black rounded-lg hover:bg-black/5"
+                  className="p-1 text-muted-foreground hover:text-black rounded-lg hover:bg-black/5"
                   aria-label="Close notifications"
                 >
                   <X className="w-3.5 h-3.5" />
@@ -164,9 +164,9 @@ export function AdminHeader({
 
               {live ? (
                 <div className="py-6 text-center space-y-1">
-                  <ShieldQuestion className="w-5 h-5 text-gray-400 mx-auto" />
-                  <p className="text-xs font-semibold text-gray-800">Notifications are unavailable</p>
-                  <p className="text-[11px] text-gray-500 leading-relaxed px-4">
+                  <ShieldQuestion className="w-5 h-5 text-muted-foreground mx-auto" />
+                  <p className="text-xs font-semibold text-foreground">Notifications are unavailable</p>
+                  <p className="text-[11px] text-muted-foreground leading-relaxed px-4">
                     This deployment has no notification store. No alerts are fabricated.
                   </p>
                 </div>
@@ -191,15 +191,15 @@ export function AdminHeader({
                   ].map((n) => (
                     <div
                       key={n.title}
-                      className="p-2.5 rounded-xl bg-gray-50/80 hover:bg-gray-100/80 transition-colors flex items-start gap-2.5"
+                      className="p-2.5 rounded-xl bg-[var(--neu-sunken)]/80 hover:bg-[var(--neu-sunken)]/80 transition-colors flex items-start gap-2.5"
                     >
-                      <Layers className="w-4 h-4 shrink-0 mt-0.5 text-gray-400" />
+                      <Layers className="w-4 h-4 shrink-0 mt-0.5 text-muted-foreground" />
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center justify-between">
-                          <p className="text-xs font-semibold text-gray-900">{n.title}</p>
-                          <span className="text-[10px] text-gray-400 font-mono">{n.time}</span>
+                          <p className="text-xs font-semibold text-foreground">{n.title}</p>
+                          <span className="text-[10px] text-muted-foreground font-mono">{n.time}</span>
                         </div>
-                        <p className="text-[11px] text-gray-500 mt-0.5 leading-snug">{n.desc}</p>
+                        <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug">{n.desc}</p>
                       </div>
                     </div>
                   ))}
@@ -210,8 +210,8 @@ export function AdminHeader({
         </div>
 
         {/* Environment Badge Pill */}
-        <div className="hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-gray-50 border border-black/[0.06] text-[10px] font-bold text-gray-700">
-          <ShieldCheck className="w-3.5 h-3.5 text-gray-500" />
+        <div className="hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[var(--neu-sunken)] border border-[var(--neu-line)] text-[10px] font-bold text-foreground">
+          <ShieldCheck className="w-3.5 h-3.5 text-muted-foreground" />
           <span className="uppercase">{live ? environment : "PRODUCTION"}</span>
         </div>
       </div>

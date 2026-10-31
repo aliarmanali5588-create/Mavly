@@ -38,7 +38,7 @@ export function AdminShell({
   const [showNotice, setShowNotice] = useState(true);
 
   return (
-    <div className="min-h-screen bg-[#faf9f6] text-gray-950 font-sans flex flex-col lg:flex-row mavly-page-enter antialiased">
+    <div className="min-h-screen bg-[var(--neu-base)] text-foreground font-sans flex flex-col lg:flex-row mavly-page-enter antialiased">
       {/* 1. Sidebar */}
       <AdminSidebar
         activeNav={activeNav}
@@ -67,14 +67,14 @@ export function AdminShell({
         <main className="flex-1 p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl w-full mx-auto">
           {/* Environment ribbon */}
           {showNotice && (
-            <div className="px-4 py-2.5 rounded-xl bg-white border border-black/[0.08] shadow-[0_2px_8px_rgba(0,0,0,0.02)] flex items-center justify-between gap-3 text-xs">
+            <div className="px-4 py-2.5 rounded-xl bg-card border border-[var(--neu-line)] shadow-[var(--neu-elev-2)] flex items-center justify-between gap-3 text-xs">
               <div className="flex items-center gap-2.5 min-w-0">
                 <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
-                <span className="font-bold text-gray-900 tracking-tight shrink-0">
+                <span className="font-bold text-foreground tracking-tight shrink-0">
                   {live ? "Live Admin Console" : "Visual Admin Console"}
                 </span>
                 <span className="text-gray-300 hidden sm:inline">|</span>
-                <span className="text-gray-500 truncate hidden sm:inline">
+                <span className="text-muted-foreground truncate hidden sm:inline">
                   Active View: <strong>{activeNav}</strong>.{" "}
                   {live
                     ? "Metrics are read from this deployment's database and configured services."
@@ -93,7 +93,7 @@ export function AdminShell({
                 <button
                   type="button"
                   onClick={() => setShowNotice(false)}
-                  className="p-1 text-gray-400 hover:text-black rounded-lg hover:bg-black/5 cursor-pointer"
+                  className="p-1 text-muted-foreground hover:text-black rounded-lg hover:bg-black/5 cursor-pointer"
                   title="Dismiss notice"
                 >
                   <X className="w-3.5 h-3.5" />
@@ -107,10 +107,10 @@ export function AdminShell({
         </main>
 
         {/* Enterprise System Footer */}
-        <footer className="py-5 px-6 lg:px-8 border-t border-black/[0.06] bg-white/60 text-xs text-gray-400">
+        <footer className="py-5 px-6 lg:px-8 border-t border-[var(--neu-line)] bg-card/60 text-xs text-muted-foreground">
           <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3">
             <div className="flex items-center gap-2">
-              <span className="font-semibold text-gray-700">Mavly Cloud Admin</span>
+              <span className="font-semibold text-foreground">Mavly Cloud Admin</span>
               <span>·</span>
               {live ? (
                 <span>Release {version ?? "not set"}</span>
@@ -118,28 +118,28 @@ export function AdminShell({
                 <span>Release v2.4.0 (Enterprise Suite)</span>
               )}
               <span>·</span>
-              <span className={live ? "text-gray-500 font-medium" : "text-emerald-600 font-medium"}>
+              <span className={live ? "text-muted-foreground font-medium" : "text-emerald-600 font-medium"}>
                 {live ? "p99: not measured" : "p99: 18ms"}
               </span>
             </div>
 
-            <div className="flex items-center gap-3 text-gray-500 font-medium">
+            <div className="flex items-center gap-3 text-muted-foreground font-medium">
               {live ? (
                 <>
                   <span className="flex items-center gap-1">
-                    <ShieldCheck className="w-3.5 h-3.5 text-gray-400" />
+                    <ShieldCheck className="w-3.5 h-3.5 text-muted-foreground" />
                     <span>Admin-only read access</span>
                   </span>
                   <span>·</span>
                   <span className="flex items-center gap-1">
-                    <ShieldQuestion className="w-3.5 h-3.5 text-gray-400" />
+                    <ShieldQuestion className="w-3.5 h-3.5 text-muted-foreground" />
                     <span>No historical uptime tracked</span>
                   </span>
                 </>
               ) : (
                 <>
                   <span className="flex items-center gap-1">
-                    <ShieldCheck className="w-3.5 h-3.5 text-gray-400" />
+                    <ShieldCheck className="w-3.5 h-3.5 text-muted-foreground" />
                     <span>Strict Frontend Scope Lock Active</span>
                   </span>
                   <span>·</span>

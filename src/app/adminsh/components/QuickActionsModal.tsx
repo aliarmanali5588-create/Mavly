@@ -42,15 +42,15 @@ export function QuickActionsModal({
         )} queued`;
 
   return (
-    <div className="bg-white rounded-2xl p-5 sm:p-6 border border-black/[0.08] shadow-[0_2px_8px_rgba(0,0,0,0.02)] space-y-4">
-      <div className="flex items-center justify-between pb-3 border-b border-black/[0.06]">
+    <div className="bg-card rounded-2xl p-5 sm:p-6 border border-[var(--neu-line)] shadow-[0_2px_8px_rgba(0,0,0,0.02)] space-y-4">
+      <div className="flex items-center justify-between pb-3 border-b border-[var(--neu-line)]">
         <div className="flex items-center gap-2">
           <div className="p-1.5 rounded-lg bg-black text-white">
             <Sparkles className="w-4 h-4" />
           </div>
-          <h2 className="text-base font-bold text-gray-950">Administrative Shortcuts</h2>
+          <h2 className="text-base font-bold text-foreground">Administrative Shortcuts</h2>
         </div>
-        <span className="text-xs text-gray-400 font-medium">Direct Suite Routing</span>
+        <span className="text-xs text-muted-foreground font-medium">Direct Suite Routing</span>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
@@ -97,15 +97,15 @@ function Shortcut({
   return (
     <Link
       href={href}
-      className="p-4 rounded-xl border border-black/[0.06] bg-gray-50/70 hover:bg-black hover:text-white group transition-all text-left flex flex-col justify-between h-24 cursor-pointer"
+      className="p-4 rounded-xl border border-[var(--neu-line)] bg-[var(--neu-sunken)]/70 hover:bg-black hover:text-white group transition-all text-left flex flex-col justify-between h-24 cursor-pointer"
     >
       <div className="flex items-center justify-between w-full">
         {icon}
-        <ArrowRight className="w-3.5 h-3.5 text-gray-400 group-hover:text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+        <ArrowRight className="w-3.5 h-3.5 text-muted-foreground group-hover:text-white opacity-0 group-hover:opacity-100 transition-opacity" />
       </div>
       <div>
-        <p className="text-xs font-bold text-gray-900 group-hover:text-white">{title}</p>
-        <p className="text-[10px] text-gray-400 group-hover:text-white/70 truncate" title={hint}>
+        <p className="text-xs font-bold text-foreground group-hover:text-white">{title}</p>
+        <p className="text-[10px] text-muted-foreground group-hover:text-white/70 truncate" title={hint}>
           {hint}
         </p>
       </div>

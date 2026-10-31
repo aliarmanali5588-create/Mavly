@@ -27,14 +27,14 @@ export function HomeNavigation() {
     <header
       className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
         scrolled
-          ? "bg-white/85 backdrop-blur-md border-b border-black/[0.06] shadow-[0_2px_12px_rgba(0,0,0,0.03)]"
+          ? "bg-[color-mix(in_srgb,var(--neu-base)_88%,transparent)] backdrop-blur-xl border-b border-[var(--neu-line)] shadow-[0_8px_28px_-18px_rgb(150_128_118/0.55)]"
           : "bg-transparent border-b border-transparent"
       }`}
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-8 h-16 sm:h-20 flex items-center justify-between">
         {/* Brand Logo */}
         <Link href="/" className="flex items-center gap-2.5 group select-none">
-          <div className="w-8 h-8 rounded-xl overflow-hidden bg-white shadow-xs p-0.5 border border-black/[0.08] flex items-center justify-center transition-transform duration-200 group-hover:scale-105 active:scale-95">
+          <div className="w-8 h-8 rounded-xl overflow-hidden bg-card shadow-[var(--neu-elev-1)] p-0.5 border border-[var(--neu-line)] flex items-center justify-center transition-[box-shadow,transform] duration-200 group-hover:shadow-[var(--neu-elev-2)] active:shadow-[var(--neu-inset-1)]">
             <Image
               src="/logo/Mavly.png"
               alt="Mavly Logo"
@@ -45,7 +45,7 @@ export function HomeNavigation() {
               referrerPolicy="no-referrer"
             />
           </div>
-          <span className="font-bold tracking-tight text-gray-950 text-base sm:text-lg leading-none">
+          <span className="font-bold tracking-tight text-foreground text-base sm:text-lg leading-none">
             Mavly
           </span>
         </Link>
@@ -56,7 +56,7 @@ export function HomeNavigation() {
             <Link
               key={link.href}
               href={link.href}
-              className="text-sm font-medium text-gray-600 hover:text-black transition-colors py-1 relative after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:bg-black after:scale-x-0 hover:after:scale-x-100 after:transition-transform"
+              className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors duration-200 py-1 relative after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:bg-foreground after:scale-x-0 hover:after:scale-x-100 after:transition-transform after:duration-200"
             >
               {link.label}
             </Link>

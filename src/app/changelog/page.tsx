@@ -86,16 +86,16 @@ export default function ChangelogPage() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-16">
         {/* Hero */}
         <div className="max-w-3xl mx-auto text-center space-y-4 pt-6 sm:pt-12">
-          <div className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-stone-600 bg-stone-100 px-3 py-1 rounded-full border border-black/[0.04]">
+          <div className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-stone-600 bg-stone-100 px-3 py-1 rounded-full border border-[var(--neu-line)]">
             <GitCommit className="w-3.5 h-3.5 text-stone-800" />
             <span>PRODUCT UPDATES</span>
           </div>
 
-          <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight text-gray-950 leading-[1.1]">
+          <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight text-foreground leading-[1.1]">
             What’s changing in Mavly.
           </h1>
 
-          <p className="text-base sm:text-lg text-gray-600 leading-relaxed font-normal max-w-2xl mx-auto">
+          <p className="text-base sm:text-lg text-muted-foreground leading-relaxed font-normal max-w-2xl mx-auto">
             Follow shipped improvements, fixes, and changes to the website-building experience.
           </p>
         </div>
@@ -105,14 +105,14 @@ export default function ChangelogPage() {
           {RELEASES.map((rel) => (
             <div
               key={rel.version}
-              className="p-8 rounded-3xl bg-white border border-black/[0.08] shadow-[0_4px_20px_rgba(0,0,0,0.02)] space-y-6"
+              className="p-8 rounded-3xl bg-card border border-[var(--neu-line)] shadow-[0_4px_20px_rgba(0,0,0,0.02)] space-y-6"
             >
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-black/[0.06] pb-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-[var(--neu-line)] pb-4">
                 <div className="flex items-center gap-3">
                   <span className="font-mono text-xs font-bold px-2.5 py-1 rounded-lg bg-black text-white">
                     {rel.version}
                   </span>
-                  <span className="text-xs text-gray-400 font-medium">
+                  <span className="text-xs text-muted-foreground font-medium">
                     {rel.date}
                   </span>
                 </div>
@@ -129,10 +129,10 @@ export default function ChangelogPage() {
               </div>
 
               <div>
-                <h2 className="text-xl font-bold text-gray-950">{rel.headline}</h2>
+                <h2 className="text-xl font-bold text-foreground">{rel.headline}</h2>
               </div>
 
-              <ul className="space-y-3 text-xs sm:text-sm text-gray-700">
+              <ul className="space-y-3 text-xs sm:text-sm text-foreground">
                 {rel.highlights.map((item, idx) => (
                   <li key={idx} className="flex items-start gap-2.5 leading-relaxed">
                     <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
@@ -141,7 +141,7 @@ export default function ChangelogPage() {
                 ))}
               </ul>
 
-              <div className="pt-2 flex items-center justify-between text-xs text-gray-500">
+              <div className="pt-2 flex items-center justify-between text-xs text-muted-foreground">
                 <span>Verified in repository codebase</span>
                 <Link
                   href="/docs"

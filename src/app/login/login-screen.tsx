@@ -66,18 +66,18 @@ export default function LoginScreen({
   }, [initialProvider]);
 
   return (
-    <div className="relative isolate min-h-screen flex flex-col justify-between bg-[#faf9f6] text-gray-950 font-sans mavly-page-enter">
+    <div className="relative isolate min-h-screen flex flex-col justify-between bg-[var(--neu-base)] text-foreground font-sans mavly-page-enter">
       <HeroShowcaseBackground variant="login" />
 
       {/* ── Top Navigation Row ── */}
-      <header className="w-full border-b border-black/[0.05] bg-white/70 backdrop-blur-md sticky top-0 z-20">
+      <header className="w-full border-b border-black/[0.05] bg-card/70 backdrop-blur-md sticky top-0 z-20">
         <div className="max-w-6xl mx-auto px-4 sm:px-8 h-16 sm:h-20 flex items-center justify-between">
           {/* Left Side: Back to Mavly */}
           <Link
             href="/"
-            className="inline-flex items-center gap-2 text-sm font-medium text-gray-600 hover:text-black transition-colors py-2 px-2.5 rounded-xl hover:bg-black/[0.04] active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black focus-visible:ring-offset-2"
+            className="inline-flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-black transition-colors py-2 px-2.5 rounded-xl hover:bg-black/[0.04] active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black focus-visible:ring-offset-2"
           >
-            <ArrowLeft className="w-4 h-4 text-gray-500 group-hover:text-black transition-colors" />
+            <ArrowLeft className="w-4 h-4 text-muted-foreground group-hover:text-black transition-colors" />
             <span>Back to Mavly</span>
           </Link>
 
@@ -87,7 +87,7 @@ export default function LoginScreen({
             className="flex items-center gap-2.5 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black focus-visible:ring-offset-2 p-1 group select-none"
             aria-label="Mavly Home"
           >
-            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl overflow-hidden bg-white shadow-xs p-0.5 border border-black/[0.08] flex items-center justify-center transition-transform group-hover:scale-105 active:scale-95 shrink-0">
+            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl overflow-hidden bg-card shadow-xs p-0.5 border border-[var(--neu-line)] flex items-center justify-center transition-transform group-hover:scale-105 active:scale-95 shrink-0">
               <Image
                 src="/logo/Mavly.png"
                 alt="Mavly Logo"
@@ -98,7 +98,7 @@ export default function LoginScreen({
                 referrerPolicy="no-referrer"
               />
             </div>
-            <span className="font-extrabold tracking-tight text-gray-950 text-base hidden sm:inline-block">
+            <span className="font-extrabold tracking-tight text-foreground text-base hidden sm:inline-block">
               Mavly
             </span>
           </Link>
@@ -107,10 +107,10 @@ export default function LoginScreen({
 
       {/* ── Central Authentication Card ── */}
       <main className="relative z-10 flex-1 flex items-center justify-center px-4 py-10 sm:py-16">
-        <div className="w-full max-w-[420px] bg-white rounded-2xl sm:rounded-3xl border border-black/[0.08] shadow-[0_20px_50px_rgba(0,0,0,0.05),0_4px_12px_rgba(0,0,0,0.02)] p-7 sm:p-10 transition-all">
+        <div className="w-full max-w-[420px] bg-card rounded-2xl sm:rounded-3xl border border-[var(--neu-line)] shadow-[0_20px_50px_rgba(0,0,0,0.05),0_4px_12px_rgba(0,0,0,0.02)] p-7 sm:p-10 transition-all">
           {/* A. Mavly Logo at top of the card */}
           <div className="flex flex-col items-center text-center">
-            <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl overflow-hidden bg-white shadow-[0_4px_12px_rgba(0,0,0,0.05)] p-1 border border-black/[0.08] flex items-center justify-center mb-5 sm:mb-6 transition-transform hover:scale-105 duration-200 shrink-0 select-none">
+            <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl overflow-hidden bg-card shadow-[0_4px_12px_rgba(0,0,0,0.05)] p-1 border border-[var(--neu-line)] flex items-center justify-center mb-5 sm:mb-6 transition-transform hover:scale-105 duration-200 shrink-0 select-none">
               <Image
                 src="/logo/Mavly.png"
                 alt="Mavly Logo"
@@ -123,12 +123,12 @@ export default function LoginScreen({
             </div>
 
             {/* B. Heading */}
-            <h1 className="text-2xl sm:text-[26px] font-bold tracking-tight text-gray-950">
+            <h1 className="text-2xl sm:text-[26px] font-bold tracking-tight text-foreground">
               Welcome to Mavly
             </h1>
 
             {/* C. Supporting text */}
-            <p className="mt-2 text-xs sm:text-sm text-gray-500 font-normal max-w-[280px]">
+            <p className="mt-2 text-xs sm:text-sm text-muted-foreground font-normal max-w-[280px]">
               Sign in to keep building with AI.
             </p>
           </div>
@@ -184,12 +184,12 @@ export default function LoginScreen({
               type="button"
               disabled={!!loadingProvider}
               onClick={() => void beginOAuth("github")}
-              className="w-full h-12 px-4 rounded-xl bg-white hover:bg-neutral-50 text-gray-900 border border-black/[0.1] hover:border-black/[0.18] font-medium text-sm flex items-center justify-center gap-3 shadow-[0_2px_8px_rgba(0,0,0,0.04)] hover:shadow-[0_4px_14px_rgba(0,0,0,0.08)] hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] active:shadow-[inset_0_1px_3px_rgba(0,0,0,0.06)] transition-all duration-200 disabled:opacity-70 disabled:pointer-events-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black focus-visible:ring-offset-2 cursor-pointer select-none"
+              className="w-full h-12 px-4 rounded-xl bg-card hover:bg-neutral-50 text-foreground border border-black/[0.1] hover:border-black/[0.18] font-medium text-sm flex items-center justify-center gap-3 shadow-[0_2px_8px_rgba(0,0,0,0.04)] hover:shadow-[0_4px_14px_rgba(0,0,0,0.08)] hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] active:shadow-[inset_0_1px_3px_rgba(0,0,0,0.06)] transition-all duration-200 disabled:opacity-70 disabled:pointer-events-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black focus-visible:ring-offset-2 cursor-pointer select-none"
             >
               {loadingProvider === "github" ? (
-                <Loader2 className="w-4 h-4 animate-spin text-gray-900" />
+                <Loader2 className="w-4 h-4 animate-spin text-foreground" />
               ) : (
-                <svg className="w-4 h-4 shrink-0 fill-current text-gray-900" viewBox="0 0 24 24" aria-hidden="true">
+                <svg className="w-4 h-4 shrink-0 fill-current text-foreground" viewBox="0 0 24 24" aria-hidden="true">
                   <path
                     fillRule="evenodd"
                     clipRule="evenodd"
@@ -203,13 +203,13 @@ export default function LoginScreen({
 
           {/* Legal Notice */}
           <div className="mt-8 pt-6 border-t border-black/[0.05] text-center">
-            <p className="text-xs text-gray-400 leading-relaxed">
+            <p className="text-xs text-muted-foreground leading-relaxed">
               By continuing, you agree to our{" "}
-              <Link href="/terms" className="text-gray-600 hover:text-black underline underline-offset-2 transition-colors">
+              <Link href="/terms" className="text-muted-foreground hover:text-black underline underline-offset-2 transition-colors">
                 Terms of Service
               </Link>{" "}
               and{" "}
-              <Link href="/privacy" className="text-gray-600 hover:text-black underline underline-offset-2 transition-colors">
+              <Link href="/privacy" className="text-muted-foreground hover:text-black underline underline-offset-2 transition-colors">
                 Privacy Policy
               </Link>
               .
@@ -219,7 +219,7 @@ export default function LoginScreen({
       </main>
 
       {/* ── Page Footer ── */}
-      <footer className="relative z-10 w-full py-6 text-center text-xs text-gray-400">
+      <footer className="relative z-10 w-full py-6 text-center text-xs text-muted-foreground">
         © 2026 Mavly. All rights reserved.
       </footer>
     </div>

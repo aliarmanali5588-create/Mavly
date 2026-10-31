@@ -53,7 +53,7 @@ export function Section({
 
       <div
         className={cn(
-          bordered && "bg-card rounded-xl border shadow-2xs",
+          bordered && "bg-card rounded-2xl border border-[var(--neu-line)] shadow-[var(--neu-elev-2)]",
           bordered && !flush && "p-5 sm:p-6",
           contentClassName,
         )}

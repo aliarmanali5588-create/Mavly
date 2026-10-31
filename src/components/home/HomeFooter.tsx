@@ -11,7 +11,7 @@ export function HomeFooter() {
   };
 
   return (
-    <footer className="pt-20 pb-12 border-t border-black/[0.08] bg-[#faf9f6] text-gray-900">
+    <footer className="pt-20 pb-12 border-t border-[var(--neu-line)] bg-[var(--neu-base)] text-foreground">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 pb-16 border-b border-black/[0.06]">
           {/* Brand Column */}

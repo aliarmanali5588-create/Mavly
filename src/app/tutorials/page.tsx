@@ -188,16 +188,16 @@ export default function TutorialsPage() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-16">
         {/* Hero */}
         <div className="max-w-3xl mx-auto text-center space-y-4 pt-6 sm:pt-12">
-          <div className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-stone-600 bg-stone-100 px-3 py-1 rounded-full border border-black/[0.04]">
+          <div className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-stone-600 bg-stone-100 px-3 py-1 rounded-full border border-[var(--neu-line)]">
             <GraduationCap className="w-3.5 h-3.5 text-stone-800" />
             <span>LEARN BY BUILDING</span>
           </div>
 
-          <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight text-gray-950 leading-[1.1]">
+          <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight text-foreground leading-[1.1]">
             Build your first website, one step at a time.
           </h1>
 
-          <p className="text-base sm:text-lg text-gray-600 leading-relaxed font-normal max-w-2xl mx-auto">
+          <p className="text-base sm:text-lg text-muted-foreground leading-relaxed font-normal max-w-2xl mx-auto">
             Follow practical guides for turning a website idea into a project you can review and refine in Mavly.
           </p>
         </div>
@@ -212,7 +212,7 @@ export default function TutorialsPage() {
               className={`px-3.5 py-1.5 text-xs font-semibold rounded-xl transition-all cursor-pointer ${
                 activeCategory === cat
                   ? "bg-black text-white shadow-xs"
-                  : "bg-white text-gray-600 hover:text-black border border-black/[0.08]"
+                  : "bg-card text-muted-foreground hover:text-black border border-[var(--neu-line)]"
               }`}
             >
               {cat}
@@ -227,25 +227,25 @@ export default function TutorialsPage() {
             return (
               <div
                 key={tut.id}
-                className="rounded-2xl bg-white border border-black/[0.08] shadow-[0_4px_20px_rgba(0,0,0,0.02)] overflow-hidden transition-all"
+                className="rounded-2xl bg-card border border-[var(--neu-line)] shadow-[0_4px_20px_rgba(0,0,0,0.02)] overflow-hidden transition-all"
               >
                 {/* Accordion Header */}
                 <button
                   type="button"
                   onClick={() => setExpandedId(isExpanded ? "" : tut.id)}
-                  className="w-full p-6 text-left flex items-start justify-between gap-4 cursor-pointer hover:bg-gray-50/50 transition-colors"
+                  className="w-full p-6 text-left flex items-start justify-between gap-4 cursor-pointer hover:bg-[var(--neu-sunken)]/50 transition-colors"
                 >
                   <div className="space-y-1.5 flex-1">
-                    <div className="flex items-center gap-2 text-xs text-gray-500 font-medium">
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground font-medium">
                       <span>{tut.category}</span>
                       <span aria-hidden="true">·</span>
                       <span>{tut.difficulty}</span>
                     </div>
-                    <h3 className="text-lg font-bold text-gray-950">{tut.title}</h3>
-                    <p className="text-xs text-gray-600 leading-relaxed">{tut.intro}</p>
+                    <h3 className="text-lg font-bold text-foreground">{tut.title}</h3>
+                    <p className="text-xs text-muted-foreground leading-relaxed">{tut.intro}</p>
                   </div>
 
-                  <div className="p-2 rounded-xl bg-gray-50 border border-black/[0.04] text-gray-500 shrink-0">
+                  <div className="p-2 rounded-xl bg-[var(--neu-sunken)] border border-[var(--neu-line)] text-muted-foreground shrink-0">
                     <ChevronDown
                       className={`w-4 h-4 transition-transform ${
                         isExpanded ? "rotate-180" : ""
@@ -256,13 +256,13 @@ export default function TutorialsPage() {
 
                 {/* Expanded Details */}
                 {isExpanded && (
-                  <div className="px-6 pb-6 pt-2 border-t border-black/[0.06] space-y-6 text-xs text-gray-700">
+                  <div className="px-6 pb-6 pt-2 border-t border-[var(--neu-line)] space-y-6 text-xs text-foreground">
                     {/* Prerequisites */}
-                    <div className="p-4 rounded-xl bg-[#faf9f6] border border-black/[0.04] space-y-2">
-                      <span className="font-bold text-gray-900 block text-[11px] uppercase tracking-wider">
+                    <div className="p-4 rounded-xl bg-[var(--neu-base)] border border-[var(--neu-line)] space-y-2">
+                      <span className="font-bold text-foreground block text-[11px] uppercase tracking-wider">
                         Prerequisites
                       </span>
-                      <ul className="space-y-1 list-disc list-inside text-gray-600">
+                      <ul className="space-y-1 list-disc list-inside text-muted-foreground">
                         {tut.prerequisites.map((req, i) => (
                           <li key={i}>{req}</li>
                         ))}
@@ -271,19 +271,19 @@ export default function TutorialsPage() {
 
                     {/* Ordered Steps */}
                     <div className="space-y-3">
-                      <span className="font-bold text-gray-900 block text-[11px] uppercase tracking-wider">
+                      <span className="font-bold text-foreground block text-[11px] uppercase tracking-wider">
                         Step-by-Step Instructions
                       </span>
                       <div className="space-y-3">
                         {tut.steps.map((s) => (
                           <div
                             key={s.stepNumber}
-                            className="p-3.5 rounded-xl bg-white border border-black/[0.06] space-y-1"
+                            className="p-3.5 rounded-xl bg-card border border-[var(--neu-line)] space-y-1"
                           >
-                            <p className="font-bold text-gray-950">
+                            <p className="font-bold text-foreground">
                               Step {s.stepNumber}: {s.instruction}
                             </p>
-                            <p className="text-gray-600 leading-relaxed">{s.detail}</p>
+                            <p className="text-muted-foreground leading-relaxed">{s.detail}</p>
                           </div>
                         ))}
                       </div>
@@ -316,9 +316,9 @@ export default function TutorialsPage() {
         </div>
 
         {/* CTA to Builder */}
-        <div className="p-8 rounded-3xl bg-white border border-black/[0.08] text-center max-w-2xl mx-auto space-y-4">
-          <h3 className="text-lg font-bold text-gray-950">Ready to put these tutorials into practice?</h3>
-          <p className="text-xs text-gray-600">
+        <div className="p-8 rounded-3xl bg-card border border-[var(--neu-line)] text-center max-w-2xl mx-auto space-y-4">
+          <h3 className="text-lg font-bold text-foreground">Ready to put these tutorials into practice?</h3>
+          <p className="text-xs text-muted-foreground">
             Open the workspace to begin building your website with the AI assistant.
           </p>
           <Link
