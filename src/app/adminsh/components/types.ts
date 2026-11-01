@@ -47,32 +47,6 @@ export interface GenerationRecord {
   errorLog?: string;
 }
 
-export interface TransactionRecord {
-  id: string;
-  customer: string;
-  email: string;
-  plan: "Free" | "Starter" | "Creator" | "Pro" | "Agency";
-  amount: string;
-  status: "Paid" | "Processing" | "Refunded";
-  date: string;
-  paymentMethod?: string;
-  invoiceId?: string;
-}
-
-export interface ProjectRecord {
-  id: string;
-  name: string;
-  owner: string;
-  ownerEmail: string;
-  createdAt: string;
-  lastUpdated: string;
-  status: "Ready" | "Building" | "Failed";
-  model: string;
-  visibility: "Custom Domain" | "Preview URL" | "Draft";
-  domain?: string;
-  pagesCount: number;
-}
-
 export interface CreditTransactionRecord {
   id: string;
   user: string;

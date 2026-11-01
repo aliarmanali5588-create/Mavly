@@ -32,6 +32,10 @@ function formatCredits(value: string | null) {
   return value.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 }
 
+function initials(name: string | null) {
+  return name?.trim().slice(0, 2).toUpperCase() || "?";
+}
+
 export default function UsersAdminPage() {
   const [directory, setDirectory] = useState<AdminUserDirectoryResponse | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -222,10 +226,10 @@ export default function UsersAdminPage() {
                     <td className="py-2.5 px-4">
                       <div className="flex items-center gap-2.5">
                         <div className="w-7 h-7 rounded-full bg-black text-white flex items-center justify-center font-bold text-[10px] shrink-0 shadow-[var(--clay-elev-ink-1)]">
-                          {user.name.slice(0, 2).toUpperCase()}
+                          {initials(user.name)}
                         </div>
                         <div>
-                          <p className="font-bold text-foreground leading-tight">{user.name}</p>
+                          <p className="font-bold text-foreground leading-tight">{user.name ?? "Name not recorded"}</p>
                           <p className="text-[11px] text-muted-foreground leading-tight">{user.email ?? "No email recorded"}</p>
                         </div>
                       </div>
@@ -321,10 +325,10 @@ export default function UsersAdminPage() {
             <div className="flex items-center justify-between pb-3 border-b border-[var(--clay-line)]">
               <div className="flex items-center gap-3">
                 <div className="w-9 h-9 rounded-full bg-black text-white flex items-center justify-center font-bold text-xs shadow-[var(--clay-elev-ink-1)]">
-                  {selectedUser.name.slice(0, 2).toUpperCase()}
+                  {initials(selectedUser.name)}
                 </div>
                 <div>
-                  <h3 className="text-base font-bold text-foreground">{selectedUser.name}</h3>
+                  <h3 className="text-base font-bold text-foreground">{selectedUser.name ?? "Name not recorded"}</h3>
                   <p className="text-xs text-muted-foreground font-mono">{selectedUser.id}</p>
                 </div>
               </div>

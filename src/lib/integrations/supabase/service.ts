@@ -26,8 +26,10 @@ import {
 import {
   createOAuthState,
   consumeOAuthState,
+  consumeSelectionSession,
   deleteConnection,
   markStatus,
+  openSelectionSession,
   readConnection,
   readTokens,
   recordAudit,
@@ -264,6 +266,91 @@ export async function completeSupabaseOAuth(input: {
 /* ────────────────────────── Project selection ──────────────────────────── */
 
 /**
+ * The projects the STORED token can see, for the selection picker.
+ *
+ * ⚠️ THIS REPLACES PUTTING THE PROJECT LIST IN THE CALLBACK URL. The old flow
+ * base64-encoded refs and names into a query parameter, which put customer
+ * project names into access logs, browser history and referrer headers. The list
+ * is now derived server-side from the encrypted token row every time it is
+ * needed, so nothing identifying travels through the browser's address bar.
+ *
+ * ⚠️ BOUND TO THE AUTHENTICATED OWNER AND THE CONNECTION. The token is read
+ * through an owner-checked RPC, so this cannot list another account's projects,
+ * and it only works while a `pending_selection` or `connected` row exists.
+ */
+export async function listSelectableProjects(input: {
+  client: SupabaseClient;
+  userId: string;
+  projectId: string;
+}): Promise<
+  SupabaseServiceResult<{
+    projects: Array<{ ref: string; name: string; organizationSlug: string | null }>;
+  }>
+> {
+  const configured = configOrFailure();
+  if ("ok" in configured && configured.ok === false) return configured;
+  if (!("ok" in configured) || configured.ok !== true) {
+    return failure("SUPABASE_OAUTH_NOT_CONFIGURED", "Supabase OAuth is not configured.", 503);
+  }
+
+  const stored = await readTokens({
+    client: input.client,
+    userId: input.userId,
+    projectId: input.projectId,
+    config: configured.config,
+  });
+  if (stored.ok === false) return storeFailure(stored.code, "listed");
+  if (!stored.data || !stored.data.accessToken) {
+    return failure(
+      "SUPABASE_OAUTH_NOT_CONNECTED",
+      "Start the Supabase connection again.",
+      409,
+    );
+  }
+
+  const projects = await listProjects(stored.data.accessToken);
+  if (projects.ok === false) {
+    return failure(
+      "SUPABASE_OAUTH_PROJECTS_FAILED",
+      "Your Supabase projects could not be listed.",
+      502,
+    );
+  }
+
+  return {
+    ok: true,
+    data: {
+      projects: projects.data.map((project) => ({
+        ref: project.ref,
+        name: project.name,
+        organizationSlug: project.organizationSlug,
+      })),
+    },
+  };
+}
+
+/**
+ * Open a short-lived selection session for the picker.
+ *
+ * ⚠️ THE SESSION IS THE BINDING, NOT THE PROJECT ID ALONE. It names the
+ * authenticated user and the Mavly project, expires in ten minutes, and is
+ * consumed by the selection it authorizes. That is what lets the callback URL
+ * carry no project data at all: the browser holds an opaque id, not a list of
+ * customer refs and names.
+ */
+export async function openSupabaseSelection(input: {
+  client: SupabaseClient;
+  projectId: string;
+}): Promise<SupabaseServiceResult<{ selectionId: string; expiresAt: string }>> {
+  const opened = await openSelectionSession({
+    client: input.client,
+    projectId: input.projectId,
+  });
+  if (opened.ok === false) return storeFailure(opened.code, "selection");
+  return { ok: true, data: opened.data };
+}
+
+/**
  * ⚠️ THE TOKEN COMES FROM THE STORE, NOT FROM THE REQUEST. The browser sends only
  * the project ref it wants. That ref is then checked against the live project list
  * the stored token can actually see, so a forged ref cannot attach a project the
@@ -274,6 +361,8 @@ export async function selectSupabaseProject(input: {
   userId: string;
   projectId: string;
   supabaseProjectRef: unknown;
+  /** Required: the single-use session that authorizes this selection. */
+  selectionId: unknown;
 }): Promise<SupabaseServiceResult<{ connection: SupabaseConnectionView }>> {
   const configured = configOrFailure();
   if ("ok" in configured && configured.ok === false) return configured;
@@ -283,6 +372,27 @@ export async function selectSupabaseProject(input: {
 
   if (!isSafeProjectRef(input.supabaseProjectRef)) {
     return failure("SUPABASE_OAUTH_INVALID_PROJECT", "Choose a Supabase project.", 400);
+  }
+
+  /**
+   * ═══ THE SELECTION SESSION IS CONSUMED FIRST ═════════════════════════════
+   *
+   * ⚠️ BEFORE ANY TOKEN IS READ OR ANY PROJECT IS LISTED. The session is
+   * delete-returning, so a replayed id fails here and never reaches the token
+   * store. An expired, already-used, or foreign session is refused with the same
+   * code so the caller cannot distinguish "wrong user" from "expired".
+   */
+  const consumed = await consumeSelectionSession({
+    client: input.client,
+    projectId: input.projectId,
+    selectionId: input.selectionId,
+  });
+  if (consumed.ok === false) {
+    return failure(
+      "SUPABASE_OAUTH_SELECTION_INVALID",
+      "That selection expired. Start the Supabase connection again.",
+      409,
+    );
   }
 
   const stored = await readTokens({

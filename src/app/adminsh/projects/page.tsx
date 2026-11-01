@@ -284,7 +284,7 @@ export default function ProjectsAdminPage() {
                     <tr key={project.id} className="hover:bg-[var(--clay-sunken)] transition-colors">
                       <td className="py-3.5">
                         <div className="flex items-center gap-1.5">
-                          <p className="font-semibold text-foreground">{project.name}</p>
+                          <p className="font-semibold text-foreground">{project.name ?? "Name not recorded"}</p>
                           <button
                             type="button"
                             onClick={() => void copyProjectId(project.id)}
@@ -297,7 +297,7 @@ export default function ProjectsAdminPage() {
                         <p className="text-[10px] font-mono text-muted-foreground">{project.id}</p>
                       </td>
                       <td className="py-3.5">
-                        <p className="font-medium text-foreground">{project.owner}</p>
+                        <p className="font-medium text-foreground">{project.owner ?? "Name not recorded"}</p>
                         <p className="text-[11px] text-muted-foreground">{project.ownerEmail ?? "No email recorded"}</p>
                       </td>
                       <td className="py-3.5">
@@ -409,7 +409,7 @@ export default function ProjectsAdminPage() {
               <div className="flex items-center gap-2">
                 <FolderGit2 className="w-4 h-4 text-foreground" />
                 <div>
-                  <h3 className="text-sm font-bold text-foreground">{selectedProject.name}</h3>
+                  <h3 className="text-sm font-bold text-foreground">{selectedProject.name ?? "Name not recorded"}</h3>
                   <p className="text-[10px] font-mono text-muted-foreground">{selectedProject.id}</p>
                 </div>
               </div>
@@ -423,7 +423,7 @@ export default function ProjectsAdminPage() {
               </button>
             </div>
             <div className="grid grid-cols-2 gap-3 text-xs bg-[var(--clay-sunken)] p-4 rounded-xl border border-[var(--clay-line)] shadow-[var(--clay-well-1)]">
-              <div><span className="text-muted-foreground block text-[10px] uppercase font-bold">Owner</span><span className="font-semibold text-foreground">{selectedProject.owner}</span></div>
+              <div><span className="text-muted-foreground block text-[10px] uppercase font-bold">Owner</span><span className="font-semibold text-foreground">{selectedProject.owner ?? "Name not recorded"}</span></div>
               <div><span className="text-muted-foreground block text-[10px] uppercase font-bold">Owner email</span><span className="break-all font-mono text-foreground">{selectedProject.ownerEmail ?? "Not recorded"}</span></div>
               <div><span className="text-muted-foreground block text-[10px] uppercase font-bold">Generation</span>{getStatusBadge(selectedProject.generationStatus)}</div>
               <div><span className="text-muted-foreground block text-[10px] uppercase font-bold">Model</span><span className="font-mono text-foreground">{selectedProject.model ?? "Not recorded"}</span></div>

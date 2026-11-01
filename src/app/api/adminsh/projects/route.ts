@@ -8,9 +8,10 @@ import {
   withTimeout,
 } from "@/lib/admin/http";
 import type {
-  AdminProjectDirectoryResponse,
   AdminProjectGenerationStatus,
 } from "@/lib/admin/directory";
+import { isAdminProjectDirectoryResponse } from "@/lib/admin/directory";
+import { adminDirectoryFailure } from "@/lib/admin/directory-errors";
 
 export const dynamic = "force-dynamic";
 
@@ -50,22 +51,25 @@ export async function GET(request: NextRequest) {
     );
 
     if (error) {
-      return adminError(
-        503,
-        "PROJECT_DIRECTORY_UNAVAILABLE",
-        "The admin project directory is unavailable. Apply supabase/migrations/41_admin_directory.sql."
-      );
+      console.error("[adminsh] project directory RPC failed", {
+        databaseCode: error.code ?? "unknown",
+      });
+      const failure = adminDirectoryFailure("project", error.code);
+      return adminError(failure.status, failure.code, failure.message);
     }
 
-    if (!data || typeof data !== "object") {
-      return adminError(503, "PROJECT_DIRECTORY_UNAVAILABLE", "The project directory returned no data.");
+    if (!isAdminProjectDirectoryResponse(data)) {
+      return adminError(503, "PROJECT_DIRECTORY_INVALID_RESPONSE", "The project directory returned an invalid response.");
     }
 
-    return adminJson({ ok: true, data: data as AdminProjectDirectoryResponse });
+    return adminJson({ ok: true, data });
   } catch (error) {
     if (error instanceof Error && error.message === "ADMIN_TIMEOUT") {
       return adminError(504, "PROJECT_DIRECTORY_TIMEOUT", "The admin project directory timed out.");
     }
+    console.error("[adminsh] project directory request failed", {
+      reason: error instanceof Error ? "request_error" : "unknown_error",
+    });
     return adminError(503, "PROJECT_DIRECTORY_UNAVAILABLE", "The admin project directory could not be loaded.");
   }
 }

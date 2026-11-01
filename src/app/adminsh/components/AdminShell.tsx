@@ -22,6 +22,12 @@ interface AdminShellProps {
   userCount?: number | null;
 }
 
+const REAL_DATA_SECTIONS = new Set<AdminNavSection>([
+  "Users",
+  "Projects",
+  "Billing & Revenue",
+]);
+
 export function AdminShell({
   activeNav,
   children,
@@ -36,6 +42,8 @@ export function AdminShell({
 }: AdminShellProps) {
   const [isOpenMobile, setIsOpenMobile] = useState(false);
   const [showNotice, setShowNotice] = useState(true);
+  const isRealDataSection = REAL_DATA_SECTIONS.has(activeNav);
+  const showLiveFooter = live || isRealDataSection;
 
   return (
     <div className="min-h-screen bg-[var(--clay-base)] text-foreground font-sans flex flex-col lg:flex-row mavly-page-enter antialiased">
@@ -66,7 +74,7 @@ export function AdminShell({
         {/* Main Content Scroll Area */}
         <main className="flex-1 p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl w-full mx-auto">
           {/* Environment ribbon */}
-          {showNotice && (
+          {!isRealDataSection && showNotice && (
             <div className="px-4 py-2.5 rounded-xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)] flex items-center justify-between gap-3 text-xs">
               <div className="flex items-center gap-2.5 min-w-0">
                 <span className="w-2 h-2 rounded-full bg-success shrink-0" />
@@ -112,19 +120,19 @@ export function AdminShell({
             <div className="flex items-center gap-2">
               <span className="font-semibold text-foreground">Mavly Cloud Admin</span>
               <span>·</span>
-              {live ? (
+              {showLiveFooter ? (
                 <span>Release {version ?? "not set"}</span>
               ) : (
                 <span>Release v2.4.0 (Enterprise Suite)</span>
               )}
               <span>·</span>
-              <span className={live ? "text-muted-foreground font-medium" : "text-success font-medium"}>
-                {live ? "p99: not measured" : "p99: 18ms"}
+              <span className={showLiveFooter ? "text-muted-foreground font-medium" : "text-success font-medium"}>
+                {showLiveFooter ? "p99: not measured" : "p99: 18ms"}
               </span>
             </div>
 
             <div className="flex items-center gap-3 text-muted-foreground font-medium">
-              {live ? (
+              {showLiveFooter ? (
                 <>
                   <span className="flex items-center gap-1">
                     <ShieldCheck className="w-3.5 h-3.5 text-muted-foreground" />

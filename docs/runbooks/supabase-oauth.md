@@ -69,19 +69,43 @@ The encryption key is deliberately shared with the GitHub integration: a second 
 would be a second thing to rotate. Ciphertexts stay mutually undecryptable because the
 AAD binds each value to `supabase-oauth:<purpose>:<userId>:<projectId>`.
 
-### 4. Apply migration 40
+### 4. Apply migrations 40, then 42, then 43
 
 ```bash
 # after 39
 psql "$DATABASE_URL" -f supabase/migrations/40_supabase_oauth.sql
+# after 40 (and after 41 if you are applying the admin directory)
+psql "$DATABASE_URL" -f supabase/migrations/42_supabase_oauth_audit_integrity.sql
+# after 42
+psql "$DATABASE_URL" -f supabase/migrations/43_supabase_oauth_selection_session.sql
 ```
 
-Additive and non-destructive. It does not alter `project_backend_providers`,
-`project_secrets` or `projects`, and it never deletes a customer database or data.
+All three are additive and non-destructive. None alters `project_backend_providers`,
+`project_secrets` or `projects`, and none deletes a customer database or data.
 Migration 39's `service_role_ciphertext` column is left in place; OAuth rows simply
 leave it null.
 
-Before it is applied, the routes answer `503 SUPABASE_OAUTH_MIGRATION_REQUIRED`.
+**Migration 42 is required, not optional.** It closes the audit forge path: it drops
+the owner-callable `record_supabase_oauth_audit` RPC, revokes direct writes on the
+audit table, adds a service-role-only `record_supabase_oauth_audit_server`, and
+refuses UPDATE/DELETE/TRUNCATE by trigger.
+
+**Migration 43 is also required.** It fixes two things 42 could not finish:
+
+1. **The audit write path was unreachable.** 42 made the RPC service-role-only, but the
+   broker runs under the caller's session client and `AGENTS.md` confines the
+   service-role client to the worker. Every audit row failed to write. 43 keeps the
+   table append-only and adds one narrow owner path: an authenticated caller may append
+   only for a project it owns, and only with an action name from the broker's closed
+   set. Cross-account forgery and arbitrary-action forgery are closed; see the residual
+   risk note at the bottom of the migration.
+2. **The selection step had no server-side session.** It adds
+   `supabase_oauth_selection_sessions` — a ten-minute, single-use authorization bound to
+   `(auth.uid(), Mavly project)` that carries no ref, name or token — plus
+   `open_/check_/consume_supabase_oauth_selection`. The picker now presents a session id
+   alongside the ref, and the session is consumed before any token is read.
+
+Before 40 is applied, the routes answer `503 SUPABASE_OAUTH_MIGRATION_REQUIRED`.
 
 ---
 
@@ -100,16 +124,42 @@ Before it is applied, the routes answer `503 SUPABASE_OAUTH_MIGRATION_REQUIRED`.
 4. **Pending** — the token pair is stored as a `pending_selection` row. **A pending row
    authorizes nothing**: the broker refuses it, so an abandoned flow leaves an unusable
    row rather than a working credential.
-5. **Select** — `POST /api/projects/{projectId}/supabase` with `{action:"select"}`. The
-   browser sends only a project ref; the server re-lists projects with the stored token
-   and refuses a ref that is not in that list. Selection then registers the
-   `external_supabase` provider row (`verified: true`, no service-role key) so the
-   Backend Center can offer "Use this backend".
+5. **Select** — `GET /api/projects/{projectId}/supabase/projects` returns the list the
+   stored token can see **and** opens a selection session, in one response:
+
+   ```json
+   { "data": { "projects": [...], "selectionId": "…", "selectionExpiresAt": "…" } }
+   ```
+
+   Then `POST /api/projects/{projectId}/supabase` with
+   `{action:"select", supabaseProjectRef, selectionId}`. The server consumes the session
+   **before** it reads any token, re-lists projects with the stored token, and refuses a
+   ref that is not in that list. Selection then registers the `external_supabase` provider
+   row (`verified: true`, no service-role key) so the Backend Center can offer "Use this
+   backend".
+
+   **The callback URL carries no project data.** It used to base64-encode every ref and
+   name into a query parameter, which put customer project names into browser history,
+   access logs and referrer headers. The redirect now carries only the outcome and the
+   Mavly project id.
+
+   **The selection session is the binding.** It is a ten-minute, single-use authorization
+   bound to `(auth.uid(), Mavly project)`, stored in
+   `supabase_oauth_selection_sessions`. It holds no Supabase ref, name or token. A
+   replayed, expired, or foreign session is refused with the same
+   `SUPABASE_OAUTH_SELECTION_INVALID` code, so a caller cannot distinguish "wrong user"
+   from "expired". `POST {action:"open_selection"}` opens one explicitly if a picker
+   needs a fresh session.
 6. **Connected** — `GET` returns metadata only: ref, name, organization, status, granted
    scopes, expiry. Never a token.
 
 ## Refresh, revocation, disconnect
 
+- **Expiry is never assumed.** A missing or malformed `expires_in` is stored as
+  `expiresAt: null` with `expiryKnown: false`, and the broker treats a null expiry as
+  **expiring now**: it refreshes if it holds a refresh token, and refuses otherwise. An
+  unknown lifetime is never treated as unlimited validity. A usable lifetime is clamped
+  to 1 second–24 hours.
 - **Refresh** — `{action:"refresh"}`, and automatically inside the broker. A token within
   60 s of expiry is refreshed **before use** by `resolveAccessToken`, which exchanges the
   stored refresh token and writes the new pair back. A refreshable token is never reported
@@ -156,6 +206,49 @@ validation layer, not a live tool loop. Do not describe it as one.
 
 ## The agent action broker
 
+### SQL classification (hardened)
+
+`classifySql` is a conservative lexer plus a full-statement keyword scan, not a
+first-keyword test. A statement is `read` only when it **starts** with a read keyword
+**and** contains no data-modifying keyword anywhere. Everything else needs approval;
+anything unlexable is refused.
+
+The cases that used to slip through as reads, all of which now require approval or are
+refused:
+
+| Statement | Before | Now |
+| --- | --- | --- |
+| `WITH d AS (DELETE … RETURNING *) SELECT * FROM d` | read | destructive |
+| `EXPLAIN ANALYZE DELETE FROM orders` | read | destructive |
+| `EXPLAIN ANALYZE UPDATE …` | read | destructive |
+| `select 1; delete from orders` | read | blocked |
+| nested modifying CTE | read | destructive |
+| `/* SELECT */ DELETE FROM orders` | read | destructive |
+
+Also: comments (including PostgreSQL's nested block comments), single-quoted strings,
+double-quoted identifiers and dollar-quoted strings are lexed out before the scan, so a
+keyword cannot hide inside them and a keyword inside a literal cannot cause a false
+positive. An unterminated string or comment is `blocked`, never assumed harmless.
+
+`EXPLAIN` without `ANALYZE` does not execute its inner statement, but it is treated as
+destructive anyway. Requiring approval for a plan is the cheaper mistake.
+
+**The approval is re-checked immediately before execution.** `executeBrokerAction`
+re-classifies the statement and re-checks the scope against the token it actually
+resolved (a refresh can rewrite the stored row), so a statement cannot be approved
+against one connection state and executed under another.
+
+### Audit integrity
+
+Audit rows are server-authored and append-only. Migration 42 drops the owner-callable
+write RPC, revokes direct writes on `supabase_oauth_audit`, adds a service-role-only
+`record_supabase_oauth_audit_server` that derives the owner from the project, and
+refuses UPDATE/DELETE/TRUNCATE by trigger. Owners keep read visibility of their own
+rows.
+
+An audit write failure never fails the action: the action's outcome is reported
+honestly and the missing row is logged.
+
 `src/lib/integrations/supabase/broker.ts` is the only path from an agent or the UI to a
 customer's Supabase project. **The agent never receives a token.** It proposes a
 structured action; the server resolves the token, then checks action, scope, ownership
@@ -186,7 +279,9 @@ the Management API client, the token store or the encryption key.
 - **Approval required:** `drop`, `truncate`, `delete`, `alter`, `update`, `insert`,
   `create`, `replace`, `rename` — and anything the classifier does not recognise, which
   fails closed.
-- **No approval:** `select`, `with`, `explain`, `show`, `describe`, `table`.
+- **No approval:** only a statement that starts with `select`, `with`, `explain`, `show`,
+  `describe`, `desc`, `table` or `values` **and** contains no modifying keyword anywhere.
+  A leading `with` or `explain` no longer implies a read.
 
 This is a heuristic, not a parser. It fails closed by design.
 
@@ -196,6 +291,8 @@ This is a heuristic, not a parser. It fails closed by design.
 pending_approval, and why. It stores **counts and identifiers only** — never SQL text,
 never a row value, never a token fragment. The table is owner-readable, so it must be
 safe to read.
+
+Writes are server-only (migration 42) and the table is append-only by trigger.
 
 ---
 

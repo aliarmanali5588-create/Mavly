@@ -1,9 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
 import {
-  Users,
-  CreditCard,
   Cpu,
   Sparkles,
   FolderGit2,
@@ -12,22 +9,17 @@ import {
   Server,
   ShieldAlert,
   Settings,
-  Search,
-  Plus,
   ShieldCheck,
   CheckCircle,
   Clock,
-  MoreVertical,
   Filter,
   Save,
 } from "lucide-react";
 import { toast } from "sonner";
 import { AdminNavSection } from "./types";
 import {
-  MOCK_USERS_LIST,
   MOCK_AUDIT_LOGS,
   MOCK_GENERATIONS,
-  MOCK_TRANSACTIONS,
   MOCK_AI_MODEL_USAGE,
   MOCK_SYSTEM_HEALTH,
 } from "./mockData";
@@ -37,108 +29,6 @@ interface MockDataViewProps {
 }
 
 export function MockDataViews({ section }: MockDataViewProps) {
-  const [searchTerm, setSearchTerm] = useState("");
-
-  if (section === "Users") {
-    const users = MOCK_USERS_LIST.filter(
-      (u) =>
-        u.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        u.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        u.plan.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-
-    return (
-      <div className="bg-card rounded-2xl p-6 border border-[var(--clay-line)] shadow-[var(--clay-elev-1)] space-y-5">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-[var(--clay-line)]">
-          <div>
-            <div className="flex items-center gap-2">
-              <Users className="w-5 h-5 text-foreground" />
-              <h2 className="text-lg font-bold text-foreground">User Management</h2>
-            </div>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              Overview of 12,480 registered accounts and subscription tiers
-            </p>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <div className="relative">
-              <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-              <input
-                type="text"
-                placeholder="Search user email or name..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="h-9 pl-8 pr-3 text-xs rounded-xl bg-[var(--clay-sunken)] border border-[var(--clay-line)] text-foreground w-60 shadow-[var(--clay-well-1)]"
-              />
-            </div>
-            <button
-              type="button"
-              onClick={() => toast.info("Demo Action: Invite User")}
-              className="h-9 px-3 bg-black text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 cursor-pointer shadow-[var(--clay-elev-ink-1)]"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              <span>Invite User</span>
-            </button>
-          </div>
-        </div>
-
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
-            <thead>
-              <tr className="border-b border-[var(--clay-line)] text-muted-foreground font-semibold uppercase text-[10px]">
-                <th className="pb-3">User</th>
-                <th className="pb-3">Plan</th>
-                <th className="pb-3">Projects</th>
-                <th className="pb-3">Credits</th>
-                <th className="pb-3">Joined Date</th>
-                <th className="pb-3">Status</th>
-                <th className="pb-3 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[var(--clay-line)]">
-              {users.map((u) => (
-                <tr key={u.id} className="hover:bg-[var(--clay-sunken)] transition-colors">
-                  <td className="py-3.5">
-                    <p className="font-bold text-foreground">{u.name}</p>
-                    <p className="text-[10px] text-muted-foreground">{u.email}</p>
-                  </td>
-                  <td className="py-3.5">
-                    <span className="px-2 py-0.5 text-[10px] font-bold rounded bg-[var(--clay-sunken)] border border-[var(--clay-line)]">
-                      {u.plan}
-                    </span>
-                  </td>
-                  <td className="py-3.5 font-bold">{u.projectsCount}</td>
-                  <td className="py-3.5 font-mono text-foreground">{u.creditsRemaining}</td>
-                  <td className="py-3.5 text-muted-foreground">{u.joinedDate}</td>
-                  <td className="py-3.5">
-                    <span
-                      className={`px-2 py-0.5 text-[10px] font-semibold rounded-full ${
-                        u.status === "Active"
-                          ? "bg-success-subtle text-success-subtle-foreground border border-success/25"
-                          : "bg-[var(--clay-sunken)] text-muted-foreground"
-                      }`}
-                    >
-                      {u.status}
-                    </span>
-                  </td>
-                  <td className="py-3.5 text-right">
-                    <button
-                      type="button"
-                      onClick={() => toast.info(`User settings for ${u.name} (Demo)`)}
-                      className="p-1.5 text-muted-foreground hover:text-black rounded-lg"
-                    >
-                      <MoreVertical className="w-3.5 h-3.5" />
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    );
-  }
-
   if (section === "Audit Logs") {
     return (
       <div className="bg-card rounded-2xl p-6 border border-[var(--clay-line)] shadow-[var(--clay-elev-1)] space-y-5">

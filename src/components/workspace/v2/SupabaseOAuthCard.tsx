@@ -80,60 +80,6 @@ const STATUS_LABEL: Record<ConnectionStatus, string> = {
 
 /* ─────────────────────────── URL handoff ──────────────────────────────── */
 
-/**
- * ⚠️ THE CALLBACK HANDS BACK A PROJECT LIST IN THE QUERY STRING. It is refs and
- * names only, and it is untrusted input: every entry is re-validated here, and
- * the server re-verifies the chosen ref regardless. A malformed payload is
- * treated as "no list", never as an error the user has to decode.
- *
- * ⚠️ NO `Buffer` HERE. This is a client component, and `Buffer` is a Node global
- * that does not exist in the browser bundle: using it would throw the moment the
- * callback landed. `atob` is the browser primitive, and base64url is converted to
- * standard base64 first because `atob` rejects `-` and `_`.
- */
-function decodeBase64Url(value: string): string | null {
-  try {
-    const base64 = value.replace(/-/g, "+").replace(/_/g, "/");
-    const padded = base64.padEnd(base64.length + ((4 - (base64.length % 4)) % 4), "=");
-    const binary = atob(padded);
-    /**
-     * The payload is JSON with non-ASCII project names, so the bytes are decoded
-     * as UTF-8 rather than passed through as latin-1.
-     */
-    const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
-    return new TextDecoder().decode(bytes);
-  } catch {
-    return null;
-  }
-}
-
-function readProjectOptions(value: string | null): ProjectOption[] | null {
-  if (!value) return null;
-  const json = decodeBase64Url(value);
-  if (!json) return null;
-  try {
-    const decoded = JSON.parse(json) as unknown;
-    if (!Array.isArray(decoded)) return null;
-
-    const options: ProjectOption[] = [];
-    for (const entry of decoded) {
-      if (!entry || typeof entry !== "object") continue;
-      const record = entry as Record<string, unknown>;
-      const ref = typeof record.ref === "string" ? record.ref : null;
-      if (!ref || !/^[a-z0-9]{6,40}$/.test(ref)) continue;
-      options.push({
-        ref,
-        name: typeof record.name === "string" ? record.name : ref,
-        organizationSlug:
-          typeof record.organizationSlug === "string" ? record.organizationSlug : null,
-      });
-    }
-    return options;
-  } catch {
-    return null;
-  }
-}
-
 /* ───────────────────────────── The card ───────────────────────────────── */
 
 export function SupabaseOAuthCard({
@@ -153,6 +99,13 @@ export function SupabaseOAuthCard({
   /** Set by the callback redirect, cleared once the user picks or dismisses. */
   const [options, setOptions] = useState<ProjectOption[] | null>(null);
   const [selectedRef, setSelectedRef] = useState<string | null>(null);
+  /**
+   * ⚠️ THE SINGLE-USE SELECTION SESSION. It is issued with the project list and
+   * must be presented when a project is chosen. It is what replaces the project
+   * refs that used to travel in the callback URL: the browser holds an opaque id
+   * that expires in minutes, not a list of customer identifiers.
+   */
+  const [selectionId, setSelectionId] = useState<string | null>(null);
 
   const base = `/api/projects/${encodeURIComponent(projectId)}/supabase`;
 
@@ -176,6 +129,36 @@ export function SupabaseOAuthCard({
     }
   }, [base]);
 
+  /**
+   * Fetch the selectable projects from the authenticated endpoint.
+   *
+   * ⚠️ THE LIST IS NOT IN THE CALLBACK URL ANY MORE. It is derived server-side
+   * from the encrypted token, so customer project refs and names never appear in
+   * browser history, access logs or referrer headers.
+   */
+  const loadOptions = useCallback(async () => {
+    try {
+      const response = await fetch(`${base}/projects`, { cache: "no-store" });
+      const payload = (await response.json()) as {
+        data?: { projects?: ProjectOption[]; selectionId?: string };
+        error?: { message?: string };
+      };
+      if (!response.ok) {
+        setError(payload.error?.message ?? "Your Supabase projects could not be listed.");
+        return;
+      }
+      setOptions(payload.data?.projects ?? []);
+      /**
+       * ⚠️ WITHOUT A SESSION THE PICKER CANNOT SUBMIT. The server refuses a
+       * selection that presents no valid session, so a missing id is surfaced
+       * here rather than as a confusing failure on submit.
+       */
+      setSelectionId(payload.data?.selectionId ?? null);
+    } catch {
+      setError("Your Supabase projects could not be listed.");
+    }
+  }, [base]);
+
   useEffect(() => {
     void load();
   }, [load]);
@@ -192,7 +175,12 @@ export function SupabaseOAuthCard({
     if (!outcome) return;
 
     if (outcome === "select") {
-      setOptions(readProjectOptions(params.get("projects")));
+      /**
+       * ⚠️ THE OPTIONS COME FROM THE SERVER, NOT THE URL. The callback no longer
+       * carries project refs or names, so the picker asks the authenticated
+       * endpoint for the list the stored token can actually see.
+       */
+      void loadOptions();
     } else if (outcome === "error") {
       const reason = params.get("reason") ?? "";
       setError(
@@ -210,7 +198,7 @@ export function SupabaseOAuthCard({
     }
     window.history.replaceState({}, "", url.toString());
     void load();
-  }, [load]);
+  }, [load, loadOptions]);
 
   const start = async () => {
     setPending("start");
@@ -239,14 +227,23 @@ export function SupabaseOAuthCard({
   };
 
   const select = async () => {
-    if (!selectedRef) return;
+    if (!selectedRef || !selectionId) return;
     setPending("select");
     setError(null);
     try {
       const response = await fetch(base, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "select", supabaseProjectRef: selectedRef }),
+        body: JSON.stringify({
+          action: "select",
+          supabaseProjectRef: selectedRef,
+          /**
+           * ⚠️ THE SESSION IS SENT WITH THE REF. The ref alone is not proof of
+           * intent; the session binds this selection to the authenticated user
+           * and the OAuth connection, and is consumed by it.
+           */
+          selectionId,
+        }),
       });
       const payload = (await response.json()) as {
         data?: { connection: ConnectionView };
@@ -259,6 +256,7 @@ export function SupabaseOAuthCard({
       setConnection(payload.data.connection);
       setOptions(null);
       setSelectedRef(null);
+      setSelectionId(null);
       toast.success("Supabase project connected.");
       onChanged?.();
       router.refresh();
@@ -430,7 +428,7 @@ export function SupabaseOAuthCard({
             <Button
               size="sm"
               onClick={() => void select()}
-              disabled={pending !== null || !selectedRef}
+              disabled={pending !== null || !selectedRef || !selectionId}
             >
               {pending === "select" ? (
                 <LoaderIcon className="size-4 animate-spin" aria-hidden="true" />

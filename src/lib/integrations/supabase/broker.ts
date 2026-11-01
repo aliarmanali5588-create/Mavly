@@ -33,6 +33,7 @@ import {
   type SupabaseOAuthResult,
 } from "./oauth";
 import { classifySql, sqlRequiresApproval, type SqlRisk } from "./sql-policy";
+import { SUPABASE_REQUIRED_SCOPES } from "./config";
 import { markStatus, readTokens, recordAudit, saveConnection } from "./store";
 
 /* ───────────────────────────── The action set ──────────────────────────── */
@@ -62,6 +63,12 @@ const ACTION_SCOPE: Readonly<Record<SupabaseActionName, string | null>> = {
   list_projects: "projects:read",
   read_project_config: "projects:read",
   read_schema: "database:read",
+  /**
+   * ⚠️ EDGE FUNCTION LISTING IS A READ. Deploying or deleting one would need
+   * `edge_functions:write`, and no such action exists in `SUPABASE_ACTIONS`.
+   * Adding one without adding that scope here would be a silent privilege
+   * broadening, so the two must change together.
+   */
   list_edge_functions: "edge_functions:read",
   run_sql: "database:write",
 };
@@ -77,6 +84,44 @@ const READ_ONLY_ACTIONS: ReadonlySet<SupabaseActionName> = new Set([
 
 export function actionRequiresScope(action: SupabaseActionName): string | null {
   return ACTION_SCOPE[action];
+}
+
+/**
+ * ═══ THE SCOPE TABLE CANNOT DRIFT FROM THE DECLARED SET ═════════════════════
+ *
+ * ⚠️ EVERY SCOPE AN ACTION REQUIRES MUST BE ONE MAVLY ACTUALLY DECLARES. If an
+ * action were pointed at a scope outside `SUPABASE_REQUIRED_SCOPES`, the broker
+ * would demand a permission the OAuth app never asks for — so the action would
+ * fail closed — or, worse, someone would "fix" it by widening the required set.
+ * This makes that mistake loud at module load instead of silent at runtime.
+ *
+ * ⚠️ IT DOES NOT BROADEN ANYTHING. It only asserts that what is already required
+ * is a subset of what is already declared. Adding a write scope still requires
+ * editing `SUPABASE_REQUIRED_SCOPES` deliberately.
+ */
+const UNDECLARED_SCOPES = (Object.entries(ACTION_SCOPE) as Array<[string, string | null]>)
+  .filter(([, scope]) => scope !== null && !(SUPABASE_REQUIRED_SCOPES as readonly string[]).includes(scope))
+  .map(([action, scope]) => `${action}→${scope}`);
+
+if (UNDECLARED_SCOPES.length > 0) {
+  throw new Error(
+    `[supabase-broker] action scopes not in SUPABASE_REQUIRED_SCOPES: ${UNDECLARED_SCOPES.join(", ")}`,
+  );
+}
+
+/**
+ * ⚠️ AND EVERY DECLARED SCOPE MUST BE USED BY SOME ACTION. A declared scope no
+ * action needs is a permission Mavly asks the user for and never uses, which is
+ * exactly the silent broadening this patch is meant to prevent.
+ */
+const UNUSED_SCOPES = (SUPABASE_REQUIRED_SCOPES as readonly string[]).filter(
+  (scope) => !Object.values(ACTION_SCOPE).includes(scope),
+);
+
+if (UNUSED_SCOPES.length > 0) {
+  throw new Error(
+    `[supabase-broker] SUPABASE_REQUIRED_SCOPES declares unused scopes: ${UNUSED_SCOPES.join(", ")}`,
+  );
 }
 
 export function isReadOnlyAction(action: SupabaseActionName): boolean {
@@ -280,9 +325,17 @@ async function resolveAccessToken(input: {
 
   /**
    * Refresh a minute early so a call cannot expire in flight.
+   *
+   * ⚠️ A NULL EXPIRY IS TREATED AS EXPIRING NOW, NOT AS VALID FOREVER. The stored
+   * row cannot tell us whether the token has a lifetime at all, so the safe read
+   * is "assume it is about to die". With a refresh token we refresh; without one
+   * we refuse rather than use a credential of unknown age indefinitely.
    */
+  const parsedExpiry = expiresAt === null ? Number.NaN : Date.parse(expiresAt);
   const expiringSoon =
-    expiresAt !== null && Date.parse(expiresAt) - Date.now() < 60_000;
+    expiresAt === null ||
+    !Number.isFinite(parsedExpiry) ||
+    parsedExpiry - Date.now() < 60_000;
 
   if (!expiringSoon) {
     return { ok: true, accessToken, projectRef, grantedScopes };
@@ -295,7 +348,6 @@ async function resolveAccessToken(input: {
       message: "The Supabase authorization expired. Reconnect to continue.",
     };
   }
-
   /**
    * ⚠️ A REFRESH TOKEN IS A WORKING CREDENTIAL. Refusing here because the access
    * token is near expiry would tell the user to reconnect while Mavly still holds
@@ -443,6 +495,77 @@ export async function executeBrokerAction(input: {
       metadata: {},
     });
     return token;
+  }
+
+  /**
+   * ═══ THE APPROVAL IS RE-CHECKED HERE, IMMEDIATELY BEFORE EXECUTION ═══════
+   *
+   * ⚠️ NOT ONLY AT CLASSIFICATION TIME. The decision above ran against the
+   * connection as it was read at the start of this call. A refresh inside
+   * `resolveAccessToken` can rewrite the stored row (scopes, status), so the
+   * statement is re-classified and the scope re-checked against the LIVE token
+   * result before anything reaches the network.
+   *
+   * This is cheap and pure, and it means a statement cannot be approved against
+   * one connection state and executed under another.
+   */
+  if (decision.action === "run_sql") {
+    const recheck = classifySql(decision.statement);
+    if (recheck.risk === "blocked") {
+      await recordAudit({
+        client: input.client,
+        projectId: input.projectId,
+        projectRef: decision.projectRef,
+        action: decision.action,
+        outcome: "refused",
+        reasonCode: "statement_blocked",
+        metadata: { sqlRisk: "blocked" },
+      });
+      return {
+        ok: false,
+        code: "statement_blocked",
+        message:
+          "That statement is not allowed through Mavly. Run it in the Supabase SQL editor instead.",
+      };
+    }
+    if (sqlRequiresApproval(recheck) && !input.approved) {
+      await recordAudit({
+        client: input.client,
+        projectId: input.projectId,
+        projectRef: decision.projectRef,
+        action: decision.action,
+        outcome: "pending_approval",
+        reasonCode: "approval_required",
+        metadata: { sqlRisk: recheck.risk },
+      });
+      return {
+        ok: false,
+        code: "approval_required",
+        message: "This statement changes your database. Confirm it to continue.",
+      };
+    }
+  }
+
+  /**
+   * ⚠️ THE SCOPE IS RE-CHECKED AGAINST THE TOKEN THAT WILL ACTUALLY BE USED. A
+   * refresh can return a narrower grant than the one the decision saw.
+   */
+  const liveScope = ACTION_SCOPE[decision.action];
+  if (liveScope && !token.grantedScopes.includes(liveScope)) {
+    await recordAudit({
+      client: input.client,
+      projectId: input.projectId,
+      projectRef: decision.projectRef,
+      action: decision.action,
+      outcome: "refused",
+      reasonCode: "scope_missing",
+      metadata: {},
+    });
+    return {
+      ok: false,
+      code: "scope_missing",
+      message: `This connection was not granted the ${liveScope} scope.`,
+    };
   }
 
   const run = async (): Promise<SupabaseOAuthResult<unknown>> => {

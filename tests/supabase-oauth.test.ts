@@ -669,3 +669,331 @@ test("a refused refresh is terminal and marks the row, rather than retrying fore
   assert.match(resolve, /supabase_unauthorized/);
   assert.match(resolve, /reconnection_required/);
 });
+
+/* ══════════ 14. P0 REGRESSION: SQL approval bypasses ══════════════════════ */
+
+/**
+ * These six cases are the bypasses the first-keyword classifier allowed. Each
+ * one reached the database WITHOUT approval before this hardening, so each one
+ * is a regression guard, not a hypothetical.
+ */
+
+test("a data-modifying CTE is never classified as read", () => {
+  const c = classifySql("WITH d AS (DELETE FROM orders RETURNING *) SELECT * FROM d");
+  assert.notEqual(c.risk, "read", "a modifying CTE must not be a read");
+  assert.equal(sqlRequiresApproval(c), true);
+});
+
+test("EXPLAIN ANALYZE DELETE requires destructive approval", () => {
+  const c = classifySql("EXPLAIN ANALYZE DELETE FROM orders");
+  assert.notEqual(c.risk, "read");
+  assert.equal(sqlRequiresApproval(c), true);
+});
+
+test("EXPLAIN ANALYZE UPDATE requires destructive approval", () => {
+  const c = classifySql("EXPLAIN ANALYZE UPDATE orders SET total = 0");
+  assert.notEqual(c.risk, "read");
+  assert.equal(sqlRequiresApproval(c), true);
+});
+
+test("a second statement containing a destructive operation is refused", () => {
+  const c = classifySql("select 1; delete from orders");
+  assert.equal(c.risk, "blocked");
+  assert.equal(c.reason, "multiple_statements_not_allowed");
+});
+
+test("nested modifying CTEs are not read", () => {
+  const c = classifySql(
+    "WITH a AS (WITH b AS (DELETE FROM orders RETURNING *) SELECT * FROM b) SELECT * FROM a",
+  );
+  assert.notEqual(c.risk, "read");
+  assert.equal(sqlRequiresApproval(c), true);
+});
+
+test("comments and whitespace cannot hide a destructive keyword", () => {
+  const cases = [
+    "/* SELECT */ DELETE FROM orders",
+    "WITH d AS (/*x*/ DELETE FROM orders RETURNING *) SELECT * FROM d",
+    "select 1 -- harmless\n; delete from orders",
+    "  \n\t WITH d AS ( DELETE FROM orders RETURNING * ) SELECT * FROM d",
+  ];
+  for (const sql of cases) {
+    const c = classifySql(sql);
+    assert.notEqual(c.risk, "read", `must not be a read: ${sql}`);
+  }
+});
+
+test("a keyword inside a string literal does not make a read destructive", () => {
+  const c = classifySql("select 'delete from orders' as note");
+  assert.equal(c.risk, "read");
+});
+
+test("an unterminated string or comment is refused, not assumed harmless", () => {
+  assert.equal(classifySql("select 'unterminated").risk, "blocked");
+  assert.equal(classifySql("select 1 /* unterminated").risk, "blocked");
+});
+
+test("a plain read with column names containing keywords stays a read", () => {
+  assert.equal(classifySql("select id, updated_at, deleted_at from orders").risk, "read");
+});
+
+/* ══════════ 15. P1: scope table matches the action set ═══════════════════ */
+
+test("every action declares a scope and edge functions are read-only", () => {
+  for (const action of SUPABASE_ACTIONS) {
+    assert.ok(actionRequiresScope(action), `${action} must declare a scope`);
+  }
+  assert.equal(actionRequiresScope("list_edge_functions"), "edge_functions:read");
+  assert.equal(isReadOnlyAction("list_edge_functions"), true);
+});
+
+test("no action requires a write scope except run_sql", () => {
+  for (const action of SUPABASE_ACTIONS) {
+    const scope = actionRequiresScope(action);
+    if (action === "run_sql") {
+      assert.equal(scope, "database:write");
+    } else {
+      assert.match(scope ?? "", /:read$/, `${action} must be a read scope`);
+    }
+  }
+});
+
+/* ══════════ 16. P1: audit integrity migration ════════════════════════════ */
+
+test("the audit hardening migration is additive and append-only", async () => {
+  const sql = await readFile(
+    new URL("../supabase/migrations/42_supabase_oauth_audit_integrity.sql", import.meta.url),
+    "utf8",
+  );
+  assert.match(sql, /^begin;/m);
+  assert.match(sql, /^commit;/m);
+  // The forge path is gone.
+  assert.match(
+    sql,
+    /drop function if exists public\.record_supabase_oauth_audit\(/,
+    "the owner-callable write RPC must be dropped",
+  );
+  // The replacement is service-role only.
+  assert.match(sql, /grant execute on function public\.record_supabase_oauth_audit_server/);
+  assert.doesNotMatch(
+    sql,
+    /grant execute on function public\.record_supabase_oauth_audit_server[^;]*authenticated/,
+    "the server audit RPC must never be granted to authenticated",
+  );
+  // Append-only is enforced by trigger, not only by grant.
+  assert.match(sql, /before update or delete on public\.supabase_oauth_audit/);
+  // No destructive change to existing data.
+  assert.doesNotMatch(sql, /drop table/i);
+  assert.doesNotMatch(sql, /delete from public\.supabase_oauth_audit/i);
+});
+
+/* ══════════ 17. P2: unknown expiry is not unlimited validity ═════════════ */
+
+test("the broker treats a null expiry as expiring now, not as valid forever", async () => {
+  const source = await readFile(
+    new URL("../src/lib/integrations/supabase/broker.ts", import.meta.url),
+    "utf8",
+  );
+  const resolve = source.slice(
+    source.indexOf("async function resolveAccessToken"),
+    source.indexOf("export async function executeBrokerAction"),
+  );
+  assert.match(
+    resolve,
+    /expiresAt === null/,
+    "a null expiry must be handled explicitly",
+  );
+  assert.doesNotMatch(
+    resolve,
+    /expiresAt !== null && Date\.parse\(expiresAt\) - Date\.now\(\) < 60_000/,
+    "the old null-tolerant comparison must be gone",
+  );
+});
+
+test("a malformed expires_in does not produce an unlimited lifetime", async () => {
+  const source = await readFile(
+    new URL("../src/lib/integrations/supabase/oauth.ts", import.meta.url),
+    "utf8",
+  );
+  assert.match(source, /expiryKnown/);
+  assert.match(source, /86_400/, "a lifetime must be clamped");
+});
+
+/* ══════════ 18. P2: no project data in the callback URL ══════════════════ */
+
+test("the callback redirect carries no project list", async () => {
+  const source = await readFile(
+    new URL("../src/app/auth/supabase/callback/route.ts", import.meta.url),
+    "utf8",
+  );
+  assert.doesNotMatch(
+    source,
+    /projects: Buffer\.from/,
+    "project refs and names must not be encoded into the redirect",
+  );
+  assert.doesNotMatch(source, /JSON\.stringify\(projects\)/);
+});
+
+/* ══════════ 19. P0: approval is re-checked at the execution boundary ══════ */
+
+test("the broker re-classifies the statement immediately before executing", async () => {
+  const source = await readFile(
+    new URL("../src/lib/integrations/supabase/broker.ts", import.meta.url),
+    "utf8",
+  );
+  const execute = source.slice(source.indexOf("export async function executeBrokerAction"));
+  const recheckIndex = execute.indexOf("const recheck = classifySql(decision.statement)");
+  const runIndex = execute.indexOf("const result = await run();");
+  assert.ok(recheckIndex > -1, "the statement must be re-classified before execution");
+  assert.ok(runIndex > -1, "the execution call must exist");
+  assert.ok(
+    recheckIndex < runIndex,
+    "the re-check must happen BEFORE the network call, not after",
+  );
+});
+
+/* ══════════ 20. P0: SELECT ... INTO and unbalanced syntax ════════════════ */
+
+test("SELECT ... INTO creates a table and is not a read", () => {
+  const cases = [
+    "select * into new_orders from orders",
+    "SELECT id INTO TEMP scratch FROM orders",
+    "select 1 into strict x",
+  ];
+  for (const sql of cases) {
+    const c = classifySql(sql);
+    assert.notEqual(c.risk, "read", `must not be a read: ${sql}`);
+    assert.equal(sqlRequiresApproval(c), true, `must need approval: ${sql}`);
+  }
+});
+
+test("unbalanced parentheses are refused rather than classified", () => {
+  assert.equal(classifySql("select (1").risk, "blocked");
+  assert.equal(classifySql("select 1)").risk, "blocked");
+  assert.equal(classifySql("select ((1)").risk, "blocked");
+});
+
+test("a paren inside a string literal does not break balance", () => {
+  assert.equal(classifySql("select '(' as note").risk, "read");
+});
+
+/* ══════════ 21. P0: dangerous functions are refused ══════════════════════ */
+
+test("server-side file, session and lock functions are refused", () => {
+  const cases = [
+    "select pg_read_file('/etc/passwd')",
+    "select lo_import('/etc/passwd')",
+    "select pg_ls_dir('.')",
+    "select pg_terminate_backend(123)",
+    "select pg_advisory_lock(1)",
+  ];
+  for (const sql of cases) {
+    assert.equal(classifySql(sql).risk, "blocked", `must be blocked: ${sql}`);
+  }
+});
+
+/* ══════════ 22. P1: scope table cannot drift ═════════════════════════════ */
+
+test("every declared scope is used by exactly the actions that need it", () => {
+  const used = new Set(
+    SUPABASE_ACTIONS.map((action) => actionRequiresScope(action)).filter(
+      (scope): scope is string => scope !== null,
+    ),
+  );
+  for (const scope of used) {
+    assert.ok(
+      (SUPABASE_REQUIRED_SCOPES as readonly string[]).includes(scope),
+      `${scope} must be declared in SUPABASE_REQUIRED_SCOPES`,
+    );
+  }
+  for (const scope of SUPABASE_REQUIRED_SCOPES) {
+    assert.ok(used.has(scope), `${scope} is declared but no action requires it`);
+  }
+});
+
+test("no write scope is declared beyond database:write", () => {
+  const writeScopes = (SUPABASE_REQUIRED_SCOPES as readonly string[]).filter((scope) =>
+    scope.endsWith(":write"),
+  );
+  assert.deepEqual(writeScopes, ["database:write"]);
+});
+
+/* ══════════ 23. P1/P2: migration 43 structure ════════════════════════════ */
+
+test("migration 43 keeps the audit append-only and adds a bounded owner path", async () => {
+  const sql = await readFile(
+    new URL("../supabase/migrations/43_supabase_oauth_selection_session.sql", import.meta.url),
+    "utf8",
+  );
+  assert.match(sql, /^begin;/m);
+  assert.match(sql, /^commit;/m);
+  // Append-only is re-asserted, not assumed from 42.
+  assert.match(sql, /before update or delete on public\.supabase_oauth_audit/);
+  assert.match(sql, /before truncate on public\.supabase_oauth_audit/);
+  // The action name is constrained to the broker's closed set.
+  assert.match(sql, /p_action not in \(/);
+  // The owner path is narrower than migration 40's: ownership is re-checked.
+  assert.match(sql, /project owner mismatch/);
+  // No destructive change to existing data.
+  assert.doesNotMatch(sql, /drop table/i);
+  assert.doesNotMatch(sql, /delete from public\.supabase_oauth_audit/i);
+});
+
+test("the selection session is short-lived, single-use and carries no project data", async () => {
+  const sql = await readFile(
+    new URL("../supabase/migrations/43_supabase_oauth_selection_session.sql", import.meta.url),
+    "utf8",
+  );
+  assert.match(sql, /interval '10 minutes'/, "the session must be short-lived");
+  assert.match(sql, /consumed_at/, "the session must be single-use");
+
+  // The table must not store a Supabase ref, name or token.
+  const table = sql.slice(
+    sql.indexOf("create table if not exists public.supabase_oauth_selection_sessions"),
+    sql.indexOf("comment on table public.supabase_oauth_selection_sessions"),
+  );
+  assert.doesNotMatch(table, /supabase_project_ref/);
+  assert.doesNotMatch(table, /supabase_project_name/);
+  assert.doesNotMatch(table, /token/);
+});
+
+test("the selection session is bound to the authenticated user", async () => {
+  const sql = await readFile(
+    new URL("../supabase/migrations/43_supabase_oauth_selection_session.sql", import.meta.url),
+    "utf8",
+  );
+  // user_id comes from auth.uid(), never from a parameter.
+  assert.match(sql, /v_user uuid := auth\.uid\(\)/);
+  assert.doesNotMatch(sql, /p_user_id/, "the user must never be passed in");
+});
+
+/* ══════════ 24. P2: the selection is consumed before any token read ══════ */
+
+test("selectSupabaseProject consumes the session before reading tokens", async () => {
+  const source = await readFile(
+    new URL("../src/lib/integrations/supabase/service.ts", import.meta.url),
+    "utf8",
+  );
+  const fn = source.slice(
+    source.indexOf("export async function selectSupabaseProject"),
+    source.indexOf("/* ─────────────────────────────── Refresh"),
+  );
+  const consumeIndex = fn.indexOf("consumeSelectionSession");
+  const readIndex = fn.indexOf("readTokens");
+  assert.ok(consumeIndex > -1, "the session must be consumed");
+  assert.ok(readIndex > -1, "the token read must still exist");
+  assert.ok(
+    consumeIndex < readIndex,
+    "the session must be consumed BEFORE any token is read",
+  );
+});
+
+test("the callback redirect carries no project list or refs", async () => {
+  const source = await readFile(
+    new URL("../src/app/auth/supabase/callback/route.ts", import.meta.url),
+    "utf8",
+  );
+  assert.doesNotMatch(source, /projects:/);
+  assert.doesNotMatch(source, /supabase_project_ref/);
+  assert.doesNotMatch(source, /Buffer\.from/);
+});

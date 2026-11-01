@@ -4,6 +4,7 @@ import { authorizeProjectRequest } from "@/app/api/vcaas/_shared";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import {
   disconnectSupabase,
+  openSupabaseSelection,
   readSupabaseStatus,
   refreshConnection,
   selectSupabaseProject,
@@ -77,7 +78,23 @@ export async function POST(
         body && typeof body === "object"
           ? (body as { supabaseProjectRef?: unknown }).supabaseProjectRef
           : undefined,
+      /**
+       * ⚠️ THE SESSION ID IS REQUIRED. It is the server-side binding between this
+       * selection, the authenticated user and the OAuth connection. Without it a
+       * bare ref would be the only proof of intent, which is what the callback
+       * URL used to carry in the clear.
+       */
+      selectionId:
+        body && typeof body === "object"
+          ? (body as { selectionId?: unknown }).selectionId
+          : undefined,
     });
+    if (result.ok === false) return errorResponse(result.code, result.message, result.status);
+    return Response.json({ data: result.data }, { headers: { "cache-control": "private, no-store" } });
+  }
+
+  if (action === "open_selection") {
+    const result = await openSupabaseSelection({ client, projectId });
     if (result.ok === false) return errorResponse(result.code, result.message, result.status);
     return Response.json({ data: result.data }, { headers: { "cache-control": "private, no-store" } });
   }
@@ -100,7 +117,7 @@ export async function POST(
 
   return errorResponse(
     "INVALID_ACTION",
-    "Use one of: select, refresh, disconnect.",
+    "Use one of: open_selection, select, refresh, disconnect.",
     400,
   );
 }

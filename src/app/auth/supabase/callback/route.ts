@@ -76,16 +76,16 @@ export async function GET(request: NextRequest) {
     return failure(request, DEFAULT_RETURN, completed.code.toLowerCase());
   }
 
-  const { returnTo, projectId, projects } = completed.data;
+  const { returnTo, projectId } = completed.data;
 
   /**
-   * The project list travels in the redirect so the workspace can render the
-   * picker without a second round trip. It carries refs and names only: no token,
-   * no key, nothing secret.
+   * ⚠️ NO PROJECT LIST IN THE URL. The redirect carries only the outcome and the
+   * Mavly project id. The picker fetches its options from the authenticated
+   * endpoint, so customer project refs and names never enter browser history,
+   * access logs or referrer headers.
    */
   return redirectWith(request, returnTo, {
     supabase: "select",
     ...(projectId ? { project: projectId } : {}),
-    projects: Buffer.from(JSON.stringify(projects), "utf8").toString("base64url"),
   });
 }

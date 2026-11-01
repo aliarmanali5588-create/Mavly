@@ -342,6 +342,24 @@ export async function deleteConnection(input: {
 /**
  * Append an audit row. `metadata` must be counts and identifiers only: this
  * table is owner-readable, so SQL text and row values must never reach it.
+ *
+ * ⚠️ THIS CALLS THE FENCED RPC FROM MIGRATION 42/43. The audit trail is
+ * server-authored on purpose: migration 40's owner-callable write path let a
+ * subject forge rows for ANY project they owned with ANY action name, which made
+ * the trail worthless as evidence.
+ *
+ * ⚠️ MIGRATION 43 IS WHAT MAKES THIS CALLABLE FROM HERE. Migration 42 made the
+ * RPC service-role-only, but the broker runs under the caller's session client
+ * and `AGENTS.md` confines the service-role client to the worker, so every audit
+ * row failed to write. Migration 43 keeps the table append-only and adds one
+ * narrow owner path: an authenticated caller may append only for a project it
+ * owns, and only with an action name from the broker's closed set. A caller
+ * outside that set gets `forbidden`.
+ *
+ * ⚠️ AUDIT FAILURE IS NEVER FATAL TO THE ACTION. Callers ignore this result: an
+ * action that succeeded must not be reported as failed because its audit row
+ * could not be written. The failure is logged instead, so a missing trail is
+ * visible in server logs rather than silent.
  */
 export async function recordAudit(input: {
   client: SupabaseClient;
@@ -352,7 +370,7 @@ export async function recordAudit(input: {
   reasonCode: string | null;
   metadata: Record<string, unknown>;
 }): Promise<SupabaseStoreResult<true>> {
-  const { error } = await input.client.rpc("record_supabase_oauth_audit", {
+  const { error } = await input.client.rpc("record_supabase_oauth_audit_server", {
     p_mavly_project_id: input.projectId,
     p_supabase_project_ref: input.projectRef,
     p_action: input.action,
@@ -361,5 +379,65 @@ export async function recordAudit(input: {
     p_metadata: input.metadata,
   });
   if (error) return { ok: false, code: mapError("audit_record", error) };
+  return { ok: true, data: true };
+}
+
+/* ──────────────────────── Selection session (migration 43) ─────────────── */
+
+/**
+ * Open a short-lived, single-use selection session.
+ *
+ * ⚠️ THIS IS THE SERVER-SIDE REPLACEMENT FOR PUTTING PROJECT DATA IN THE CALLBACK
+ * URL. The session names the authenticated user and the Mavly project — never a
+ * Supabase ref, name or token — and expires in ten minutes. The project list is
+ * still derived from the encrypted token on every request, so this is an
+ * authorization to choose, not a cache of customer identifiers.
+ *
+ * ⚠️ OWNERSHIP AND CONNECTION EXISTENCE ARE CHECKED IN THE RPC. A session cannot
+ * be opened for a project the caller does not own, or for one that never started
+ * the OAuth flow.
+ */
+export async function openSelectionSession(input: {
+  client: SupabaseClient;
+  projectId: string;
+}): Promise<SupabaseStoreResult<{ selectionId: string; expiresAt: string }>> {
+  const { data, error } = await input.client.rpc("open_supabase_oauth_selection", {
+    p_mavly_project_id: input.projectId,
+  });
+  if (error) return { ok: false, code: mapError("selection_open", error) };
+
+  const rows = Array.isArray(data) ? data : [];
+  const row = recordOf(rows[0]);
+  const selectionId = typeof row?.selection_id === "string" ? row.selection_id : null;
+  const expiresAt = typeof row?.expires_at === "string" ? row.expires_at : null;
+  if (!selectionId || !expiresAt) return { ok: false, code: "error" };
+
+  return { ok: true, data: { selectionId, expiresAt } };
+}
+
+/**
+ * Consume a selection session.
+ *
+ * ⚠️ DELETE-RETURNING, SO IT IS SINGLE-USE. A replayed id finds nothing and the
+ * selection it authorized cannot happen twice. `false` means the session was
+ * expired, already used, or belonged to another user or project — the caller must
+ * treat all three the same way and refuse.
+ */
+export async function consumeSelectionSession(input: {
+  client: SupabaseClient;
+  projectId: string;
+  selectionId: unknown;
+}): Promise<SupabaseStoreResult<true>> {
+  if (typeof input.selectionId !== "string" || !/^[0-9a-f-]{36}$/i.test(input.selectionId)) {
+    return { ok: false, code: "state_invalid" };
+  }
+
+  const { data, error } = await input.client.rpc("consume_supabase_oauth_selection", {
+    p_selection_id: input.selectionId,
+    p_mavly_project_id: input.projectId,
+  });
+  if (error) return { ok: false, code: mapError("selection_consume", error) };
+  if (data !== true) return { ok: false, code: "state_expired" };
+
   return { ok: true, data: true };
 }

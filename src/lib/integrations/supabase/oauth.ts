@@ -49,6 +49,11 @@ export interface SupabaseTokenSet {
   refreshToken: string | null;
   /** ISO instant the access token stops working, when Supabase says so. */
   expiresAt: string | null;
+  /**
+   * ⚠️ FALSE MEANS "WE DO NOT KNOW WHEN THIS EXPIRES", NOT "IT NEVER EXPIRES".
+   * Callers must treat an unknown expiry as expiring now and prefer a refresh.
+   */
+  expiryKnown: boolean;
   /** The scopes Supabase actually granted. Never assumed. */
   grantedScopes: string[];
 }
@@ -124,7 +129,44 @@ function parseTokenSet(body: unknown): SupabaseTokenSet | null {
   const accessToken = nonEmptyString(value.access_token);
   if (!accessToken) return null;
 
-  const expiresIn = typeof value.expires_in === "number" ? value.expires_in : null;
+  /**
+   * ═══ EXPIRY IS NEVER ASSUMED ═════════════════════════════════════════════
+   *
+   * ⚠️ A MISSING OR MALFORMED `expires_in` MUST NOT MEAN "VALID FOREVER". The
+   * previous version stored `null` and the broker treated `null` as "no expiry
+   * to check", so a token with an unreadable lifetime was used indefinitely and
+   * only discovered dead on a 401.
+   *
+   * `expires_in` may arrive as a number, a numeric string, or something unusable.
+   * A usable value is clamped to a sane window; anything else is recorded as
+   * `expiresAt: null` AND flagged `expiryKnown: false`, which the broker treats
+   * as "treat as expiring now" — it will attempt a refresh rather than assume
+   * the token is good.
+   */
+  let expiresAt: string | null = null;
+  let expiryKnown = false;
+
+  const rawExpiresIn =
+    typeof value.expires_in === "number"
+      ? value.expires_in
+      : typeof value.expires_in === "string" && /^\d{1,9}$/.test(value.expires_in.trim())
+        ? Number(value.expires_in.trim())
+        : null;
+
+  if (
+    rawExpiresIn !== null &&
+    Number.isFinite(rawExpiresIn) &&
+    rawExpiresIn > 0
+  ) {
+    /**
+     * Clamp: no token is trusted for more than 24 hours, and a sub-second value
+     * is rounded up so a token is never considered already-expired on arrival.
+     */
+    const seconds = Math.min(Math.max(Math.floor(rawExpiresIn), 1), 86_400);
+    expiresAt = new Date(Date.now() + seconds * 1000).toISOString();
+    expiryKnown = true;
+  }
+
   const refreshToken = nonEmptyString(value.refresh_token, 4096);
 
   /**
@@ -143,10 +185,8 @@ function parseTokenSet(body: unknown): SupabaseTokenSet | null {
   return {
     accessToken,
     refreshToken,
-    expiresAt:
-      expiresIn && Number.isFinite(expiresIn)
-        ? new Date(Date.now() + expiresIn * 1000).toISOString()
-        : null,
+    expiresAt,
+    expiryKnown,
     grantedScopes,
   };
 }

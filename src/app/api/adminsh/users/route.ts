@@ -7,7 +7,8 @@ import {
   requireAdmin,
   withTimeout,
 } from "@/lib/admin/http";
-import type { AdminUserDirectoryResponse } from "@/lib/admin/directory";
+import { isAdminUserDirectoryResponse } from "@/lib/admin/directory";
+import { adminDirectoryFailure } from "@/lib/admin/directory-errors";
 
 export const dynamic = "force-dynamic";
 
@@ -35,22 +36,25 @@ export async function GET(request: NextRequest) {
     );
 
     if (error) {
-      return adminError(
-        503,
-        "USER_DIRECTORY_UNAVAILABLE",
-        "The admin user directory is unavailable. Apply supabase/migrations/41_admin_directory.sql."
-      );
+      console.error("[adminsh] user directory RPC failed", {
+        databaseCode: error.code ?? "unknown",
+      });
+      const failure = adminDirectoryFailure("user", error.code);
+      return adminError(failure.status, failure.code, failure.message);
     }
 
-    if (!data || typeof data !== "object") {
-      return adminError(503, "USER_DIRECTORY_UNAVAILABLE", "The user directory returned no data.");
+    if (!isAdminUserDirectoryResponse(data)) {
+      return adminError(503, "USER_DIRECTORY_INVALID_RESPONSE", "The user directory returned an invalid response.");
     }
 
-    return adminJson({ ok: true, data: data as AdminUserDirectoryResponse });
+    return adminJson({ ok: true, data });
   } catch (error) {
     if (error instanceof Error && error.message === "ADMIN_TIMEOUT") {
       return adminError(504, "USER_DIRECTORY_TIMEOUT", "The admin user directory timed out.");
     }
+    console.error("[adminsh] user directory request failed", {
+      reason: error instanceof Error ? "request_error" : "unknown_error",
+    });
     return adminError(503, "USER_DIRECTORY_UNAVAILABLE", "The admin user directory could not be loaded.");
   }
 }
