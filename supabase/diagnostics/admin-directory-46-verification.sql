@@ -21,17 +21,13 @@ select
   to_regprocedure('public.admin_directory_schema_version()') is not null
     as version_marker_present;
 
-select case
-  when to_regprocedure('public.admin_directory_schema_version()') is null
-    then 'not installed — migration 46 has not been applied'
-  else public.admin_directory_schema_version()::text
-end as schema_version;
+select
+  to_regprocedure('public.admin_directory_schema_version()') is not null as version_marker_present,
+  to_regprocedure('public.admin_directory_schema_report()') is not null as schema_report_present;
 
-select case
-  when to_regprocedure('public.admin_directory_schema_report()') is null
-    then '{}'::jsonb
-  else public.admin_directory_schema_report()
-end as schema_report;
+-- If the markers above are true, run these manually:
+--   select public.admin_directory_schema_version()::text as schema_version;
+--   select public.admin_directory_schema_report() as schema_report;
 
 select
   required.name,
