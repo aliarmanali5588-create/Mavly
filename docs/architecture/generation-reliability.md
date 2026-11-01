@@ -78,16 +78,16 @@ Consequences worth stating plainly:
    50 s again before handing the budget to `generateApp`. Generation — the only consumer
    left — started with roughly 95–160 s instead of 145–210 s. Fixed: generation receives
    what remains.
-2. **The per-batch reserve starved the batch being sent.**
-   The loop asked `planProviderCall` to reserve `pending × minAttemptMs`, which for a
-   batch class is `pending × 60 s`. The clamp then handed the *current* batch its bare
-   minimum, so a full batch ran with a 60 s ceiling that it was expected to exceed. A
-   timeout is answered by splitting the batch, which queues more calls and squeezes the
-   next attempt further — a tight budget degraded into a run that failed with almost
-   nothing written. Fixed with `reserveForPendingWork`, which caps the reserve at 40 % of
-   the time actually left.
+2. **The per-batch reserve could starve work at the end of the queue.**
+   An earlier implementation reserved a fixed minimum for every queued group, then a
+   later 40% reserve cap still allowed the current call to consume time needed by later
+   groups. The current implementation uses `reserveForPendingFloors` to reserve each
+   pending group's own floor, and `batchAttemptFloorMs`/`batchGroupFloorFor` scale a
+   group's floor by its estimated bytes. The pre-check uses the next group's floor too.
+   This preserves one absolute run deadline; it does not extend the budget or establish
+   that a particular production timeout had this cause.
 
-   **Still greedy, and this was the cross-file timeout.** A 40 % cap is not a fair share:
+   **Historical issue, fixed in the current implementation.** A 40 % cap was not a fair share:
    with three groups left the current call could take 60 % and the two behind it 20 % each
    (a 200 s window became 120 s / 40 s / 40 s), and 40 s is below the batch class's own
    60 s floor. The tail of every multi-batch run was therefore starved, and the file named
@@ -132,6 +132,33 @@ Consequences worth stating plainly:
    usage remains attached to each attempt. No production response/usage logs were available
    for this diagnosis, so it describes repository behavior rather than measured incident
    tokens.
+8. **A planned `package.json` could be delayed behind other generated files.** Batches
+   followed planner manifest order, so the critical runtime manifest could be part of a
+   larger request and not be checkpointed if that request timed out. Website generation
+   now puts a planned `package.json` in its own first batch; remaining paths preserve
+   their manifest order and the preview remains isolated. This reduces exposure to later
+   timeouts but does not make the file deterministic or guarantee that its own provider
+   request will finish.
+
+### The reported `package.json` timeout
+
+The reported failure is consistent with the single-file `TIMEOUT` branch in
+`generateApp()`: after scope reduction, the one-file request still did not finish within
+its usable call window, so the pipeline failed rather than checkpointing partial output.
+The response/token contract distinguishes output truncation (`finish_reason: "length"`)
+from timeout; neither partial response is persisted. A missing `package.json` is
+consistent with an uncheckpointed failed request, not evidence that the run completed.
+
+The code requests up to 12,000 output tokens for an ordinary batch, 16,000 for the
+standalone preview, and up to 32,000 for planning; the OpenRouter adapter clamps each
+request to the selected catalog model's maximum (24,000 for the default model, 32,000 for
+Claude Sonnet 5). A normal batch can include up to eight files and a 48,000-byte estimate.
+OpenRouter's reported prompt/completion/reasoning token usage and request ID are captured
+per provider attempt when provided. However, the supplied incident has no run ID,
+provider request ID, or attempt record. Therefore the exact production cause—provider
+latency/stall, the absolute call deadline, local remaining-run budget, or a request that
+was too broad—cannot be confirmed from the workspace message alone. The code change
+addresses prioritization and recoverability, not that missing evidence.
 
 ## 4. Structural costs that are *not* bugs
 
@@ -150,6 +177,24 @@ Consequences worth stating plainly:
   were generated and validated", not "it builds", "it renders" or "it passed". Those are
   separate facts, reported separately by the verification sandbox when it is enabled for
   the project.
+
+### Current capacity boundary
+
+The durable admission path still allows at most **one active run per project, two per
+user, and eight globally**. These are database-enforced safety limits, not estimates of
+worker capacity. `runGenerationWorkerOnce()` processes one claimed generation per tick;
+additional worker processes can claim other jobs through the existing atomic queue, but
+the repository has no production load measurements, provider-wide concurrency limiter,
+or evidence that 1,000 concurrent users can be served. Do not raise the admission limits
+to imply that capacity.
+
+Before any scale claim, the operator should load-test against a non-production Supabase
+project and provider account, increase worker capacity in controlled steps, and measure
+queue wait, active runs, completion/failure rates, per-model throttling, provider latency,
+worker memory/CPU, database connections, lease recoveries, retries, and credit
+reconciliation. Set explicit stop/rollback thresholds before raising admission limits.
+Horizontal worker count is not by itself a safe scale control: the database cap, provider
+quotas, and any shared per-model concurrency budget must remain authoritative.
 
 ## 5. Invariants these fixes preserve
 
@@ -211,12 +256,14 @@ Interpretation rules that keep the number honest:
 
 Production website and Android admissions now write `dispatch_mode = 'worker'` for every
 project; no worker-specific flag or project allowlist gates dispatch. Local development and
-Vercel previews retain the inline `after()` path. The Render Background Worker repeatedly
-invokes the existing durable worker through a single serial loop and uses the existing
-Supabase queue, atomic claim, lease and checkpoint machinery. The code/configuration change
-does not establish that Render has been deployed or that the process is running. The
-legacy Cloudflare Cron configuration remains in the repository and must be disabled before
-the Render worker is enabled.
+Vercel previews retain the inline `after()` path. AWS is the designated production worker
+host; its process repeatedly invokes the existing durable worker and uses the existing
+Supabase queue, atomic claim, lease, retry and checkpoint machinery. Render remains
+preserved but disabled by `MAVLY_RENDER_WORKER_DISABLED=true`. The legacy Cloudflare Cron
+configuration remains in the repository and must be disabled operationally while AWS is
+active; atomic claiming prevents two hosts from owning the same run, but does not prevent
+two active hosts from consuming different queued runs. No AWS, Render, or Cloudflare
+deployment state was accessed or verified for this audit.
 
 Migration 36 remains useful for legacy inline runs that cannot finish:
 
@@ -330,6 +377,6 @@ provider call, but neither claim is a measurement.
 ## 11. Unverified
 
 No test, typecheck, build, live generation, provider call, worker tick or migration was
-run while producing this document. The fixes above are reasoned from the code and are
-covered by the existing pure suites (`tests/generation-reliability.test.ts`,
-`tests/generation-budget.test.ts`) only when the human developer runs them.
+run while producing this document. This includes the new focused package-first test in
+`tests/generation-reliability.test.ts`. The changes are based on static inspection; the
+human developer must run the repository's focused suites before merge.

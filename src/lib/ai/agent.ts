@@ -1860,6 +1860,13 @@ function buildBatches(
   profile: AgentProjectType,
 ): AgentManifestEntry[][] {
   const groups: AgentManifestEntry[][] = [];
+  const packageManifest =
+    profile === "website"
+      ? entries.find((entry) => entry.path === "package.json")
+      : undefined;
+  // Persist the runtime manifest before other files can exhaust the run budget.
+  if (packageManifest) groups.push([packageManifest]);
+
   let current: AgentManifestEntry[] = [];
   let currentBytes = 0;
 
@@ -1870,6 +1877,8 @@ function buildBatches(
   };
 
   for (const entry of entries) {
+    if (entry === packageManifest) continue;
+
     // The standalone preview is usually the largest website file. Give it its
     // own batch so its truncation cannot take other valid files with it.
     if (profile === "website" && entry.path === PREVIEW_ENTRY_PATH) {

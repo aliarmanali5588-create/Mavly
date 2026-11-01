@@ -332,6 +332,46 @@ test("planner checkpoint persistence failure stops before the compact retry", as
   assert.equal(plannerCalls, 1);
 });
 
+test("website package.json is generated in its own first batch", async () => {
+  const requestedBatches: string[][] = [];
+  const outcome = await generateApp(
+    {
+      prompt: "Build a minimal website.",
+      mode: "create",
+    },
+    {
+      complete: async (_selectedModel, messages) => {
+        if (isPlanner(messages)) {
+          return success(manifestJson([
+            "app/layout.tsx",
+            "app/page.tsx",
+            "src/lib/example.ts",
+            "package.json",
+          ]));
+        }
+        const paths = requestedPaths(messages);
+        requestedBatches.push(paths);
+        return success(batchJson(paths.map((path) => [
+          path,
+          path === "preview.html"
+            ? "<!doctype html><html><head><title>Site</title></head><body>Site</body></html>"
+            : `complete:${path}`,
+        ])));
+      },
+      sleep: noop,
+    },
+  );
+
+  assert.equal(isGenerationFailure(outcome), false);
+  if (isGenerationFailure(outcome)) return;
+  assert.deepEqual(requestedBatches[0], ["package.json"]);
+  assert.equal(requestedBatches.flat().includes("package.json"), true);
+  assert.equal(
+    new Set(requestedBatches.flat()).size,
+    requestedBatches.flat().length,
+  );
+});
+
 test("a truncated batch is split; only validated content is checkpointed", async () => {
   const persisted: string[][] = [];
   const batchCalls: string[][] = [];
