@@ -96,6 +96,9 @@ export interface ChatCompletionFailure {
   code: ChatCompletionErrorCode;
   retryable: boolean;
   retryAfterMs: number | null;
+  /** Present only for bounded, incomplete streamed output; never a completion. */
+  partialContent?: string;
+  timeoutClassification?: "idle" | "absolute" | "external";
   metadata: ChatCompletionMetadata;
 }
 
@@ -154,6 +157,8 @@ export function failureResult(input: {
   error: string;
   status?: number;
   retryAfterMs?: number | null;
+  partialContent?: string;
+  timeoutClassification?: "idle" | "absolute" | "external";
   metadata: ChatCompletionMetadata;
 }): ChatCompletionFailure {
   const metadata: ChatCompletionMetadata = {
@@ -170,6 +175,10 @@ export function failureResult(input: {
     code: input.code,
     retryable: input.retryable,
     retryAfterMs: metadata.retryAfterMs,
+    ...(input.partialContent ? { partialContent: input.partialContent } : {}),
+    ...(input.timeoutClassification
+      ? { timeoutClassification: input.timeoutClassification }
+      : {}),
     metadata,
   };
 }

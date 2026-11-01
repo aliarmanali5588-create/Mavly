@@ -14,6 +14,7 @@ import {
   neonProjectName,
   type NeonFailure,
 } from "./neon";
+import { authorizeProvisioningRpc } from "./enrollment-store";
 import {
   beginManagedBackendConfiguration,
   claimManagedBackend,
@@ -55,6 +56,16 @@ function storeError(code: ManagedBackendStoreFailureCode): ManagedBackendFailure
   }
   if (code === "unavailable") {
     return failure("MANAGED_BACKEND_UNAVAILABLE", "Supabase is unavailable.");
+  }
+  if (code === "not_authorized") {
+    /**
+     * A withdrawn enrollment, not an ownership problem. The run must say the
+     * authorization was revoked so an operator reads the right cause.
+     */
+    return failure(
+      "MANAGED_BACKEND_NOT_ENROLLED",
+      "This project's managed database authorization was withdrawn, so the database was not changed.",
+    );
   }
   if (code === "forbidden") {
     return failure("MANAGED_BACKEND_FORBIDDEN", "The project owner could not be verified.");
@@ -216,6 +227,18 @@ export async function configureManagedBackend(input: {
     leaseToken,
   });
   if (claim.ok === false) return storeError(claim.code);
+  /**
+   * ⚠️ THE CONFIGURATION GATE. `begin_managed_backend_configuration` refuses a
+   * project whose enrollment was revoked or suspended after the pre-flight
+   * recheck. It is a policy refusal, not a lock conflict: reporting it as
+   * `MANAGED_BACKEND_BUSY` would invite a retry that can never succeed.
+   */
+  if (claim.data.claimStatus === "not_authorized") {
+    return failure(
+      "MANAGED_BACKEND_NOT_ENROLLED",
+      "This project's managed database authorization was withdrawn, so the application schema was not applied.",
+    );
+  }
   if (claim.data.claimStatus === "busy") {
     return failure(
       "MANAGED_BACKEND_BUSY",
@@ -248,10 +271,32 @@ export async function configureManagedBackend(input: {
   }
 
   const plan = buildSchemaPlan(input.model);
+
+  /**
+   * ═══ MIGRATION 38: THE COMMIT-TIME RECHECK ═════════════════════════════════
+   *
+   * The schema runner applies every step in ONE transaction and commits at the
+   * end. A revocation that lands while the DDL is running therefore cannot be
+   * caught by a check that happened before the run started — the only moment it
+   * can still be honored is immediately before COMMIT.
+   *
+   * This callback re-reads the live enrollment through the same SQL gate the
+   * worker uses, so a revoked/suspended project leaves NO partial schema behind.
+   * A refusal rolls the whole transaction back.
+   */
   const applied = await applySchemaPlan({
     connectionUri,
     plan,
     timeBudgetMs: input.timeBudgetMs,
+    authorizeBeforeCommit: async () => {
+      const recheck = await authorizeProvisioningRpc({
+        client: input.client,
+        projectId: input.projectId,
+        userId: input.userId,
+      });
+      if (recheck.ok === false) return false;
+      return recheck.data.authorized === true;
+    },
   });
   if (applied.ok === false) {
     await failManagedBackendConfiguration({
@@ -262,6 +307,10 @@ export async function configureManagedBackend(input: {
       code: applied.code,
       step: applied.step ?? "schema",
     });
+    /**
+     * A commit-time authorization refusal is reported as its own code so the run
+     * can say "authorization was withdrawn" instead of blaming the schema.
+     */
     return failure(
       applied.code === "SCHEMA_CONNECTION_FAILED"
         ? "NEON_CONNECTION_UNAVAILABLE"
@@ -351,6 +400,18 @@ export async function ensureManagedBackend(input: {
     regionId: config.regionId,
   });
   if (claim.ok === false) return storeError(claim.code);
+  /**
+   * ⚠️ MIGRATION 38'S FIRST GATE. In strict mode a project with no approved
+   * enrollment is refused before a registry row or a lease exists. This is a
+   * policy refusal, not a storage failure, and it must never be reported as
+   * `MANAGED_BACKEND_BUSY` — retrying would not help.
+   */
+  if (claim.data.claimStatus === "not_authorized") {
+    return failure(
+      "MANAGED_BACKEND_NOT_ENROLLED",
+      "This project is not enrolled for a managed database, so no database was created.",
+    );
+  }
   if (claim.data.claimStatus === "busy") {
     return failure(
       "MANAGED_BACKEND_BUSY",

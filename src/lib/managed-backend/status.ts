@@ -18,6 +18,7 @@ import {
   type ManagedBackendState,
 } from "./lifecycle";
 import type { AppDataModel } from "./model";
+import type { EnrollmentStatusView } from "./enrollment";
 
 export interface ManagedBackendStatusView {
   state: ManagedBackendState;
@@ -34,6 +35,18 @@ export interface ManagedBackendStatusView {
   lastStep: string | null;
   updatedAt: string | null;
   nextAction: string | null;
+  /**
+   * ═══ ENROLLMENT (migration 37) ════════════════════════════════════════════
+   *
+   * Whether this project is AUTHORIZED to have a managed backend. Deliberately
+   * separate from `state`, which describes the database it actually has.
+   *
+   * ⚠️ AN APPROVED ENROLLMENT IS NOT A READY DATABASE. `enrollment.state ===
+   * "approved"` with `state === "not_required"` means "allowed, nothing built
+   * yet". The UI must not imply otherwise, which is why these are two fields
+   * and not one collapsed status.
+   */
+  enrollment?: EnrollmentStatusView;
 }
 
 export function managedBackendStatusView(input: {
@@ -48,6 +61,8 @@ export function managedBackendStatusView(input: {
   updatedAt: string | null;
   /** Used only for `pending_approval`, which has no registry row. */
   blockedReason?: string | null;
+  /** The enrollment projection, when the registry is installed. */
+  enrollment?: EnrollmentStatusView | null;
 }): ManagedBackendStatusView {
   const model = input.dataModel;
   const facts: ManagedBackendFacts = {
@@ -83,5 +98,6 @@ export function managedBackendStatusView(input: {
     lastStep: input.lastStep,
     updatedAt: input.updatedAt,
     nextAction: managedBackendNextAction(facts),
+    ...(input.enrollment ? { enrollment: input.enrollment } : {}),
   };
 }

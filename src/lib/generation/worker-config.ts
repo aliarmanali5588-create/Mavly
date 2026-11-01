@@ -13,6 +13,7 @@ import { sanitizeWorkerId } from "./leases";
 export const SERVICE_ROLE_ENV = "SUPABASE_SERVICE_ROLE_KEY";
 export const SUPABASE_URL_ENV = "NEXT_PUBLIC_SUPABASE_URL";
 export const CLOUDFLARE_WORKER_ENV = "MAVLY_CLOUDFLARE_WORKER";
+export const CLOUDFLARE_WORKER_DISABLED_ENV = "MAVLY_CLOUDFLARE_WORKER_DISABLED";
 export const RENDER_WORKER_ENV = "MAVLY_RENDER_WORKER";
 export const RENDER_WORKER_DISABLED_ENV = "MAVLY_RENDER_WORKER_DISABLED";
 export const AWS_WORKER_ENV = "MAVLY_AWS_WORKER";
@@ -29,6 +30,13 @@ export interface GenerationWorkerConfig {
 }
 
 export type WorkerEnvironment = Record<string, string | undefined>;
+
+export function isCloudflareWorkerDisabled(
+  env: WorkerEnvironment = process.env,
+): boolean {
+  const value = env[CLOUDFLARE_WORKER_DISABLED_ENV]?.trim().toLowerCase();
+  return value === "true" || value === "1";
+}
 
 /** Pure configuration parse. Reads no environment of its own. */
 export function parseWorkerConfig(env: WorkerEnvironment): GenerationWorkerConfig {

@@ -111,7 +111,17 @@ interface TransportFailureInput {
   error: string;
   status?: number | null;
   retryAfterMs?: number | null;
+  partialContent?: string;
+  timeoutClassification?: "idle" | "absolute" | "external";
   metadata: ChatCompletionMetadata;
+}
+
+const MAX_PERSISTABLE_PARTIAL_BYTES = 128 * 1024;
+
+function persistablePartial(content: string): string | undefined {
+  return content && Buffer.byteLength(content, "utf8") <= MAX_PERSISTABLE_PARTIAL_BYTES
+    ? content
+    : undefined;
 }
 
 function failure(input: TransportFailureInput): ChatCompletionResult {
@@ -121,6 +131,10 @@ function failure(input: TransportFailureInput): ChatCompletionResult {
     error: input.error,
     ...(typeof input.status === "number" ? { status: input.status } : {}),
     retryAfterMs: input.retryAfterMs ?? null,
+    ...(input.partialContent ? { partialContent: input.partialContent } : {}),
+    ...(input.timeoutClassification
+      ? { timeoutClassification: input.timeoutClassification }
+      : {}),
     metadata: input.metadata,
   });
 }
@@ -260,6 +274,7 @@ export async function chatCompletion(
         code: "TIMEOUT",
         retryable: false,
         error: "The request was cancelled before the provider finished answering.",
+        timeoutClassification: "external",
         metadata: abortedMetadata(snapshot, capturedStatus),
       });
     }
@@ -270,6 +285,8 @@ export async function chatCompletion(
         reason === "idle"
           ? `OpenRouter stopped sending tokens for ${seconds} s before the response completed.`
           : `OpenRouter did not finish the response within ${Math.round(timeoutMs / 1_000)} s.`,
+      partialContent: snapshot ? persistablePartial(snapshot.content) : undefined,
+      timeoutClassification: reason,
       metadata: abortedMetadata(snapshot, capturedStatus),
     });
   };
@@ -461,6 +478,7 @@ function interpretStream(
       retryAfterMs: metadata.retryAfterMs,
       error:
         "OpenRouter stopped at the model's output limit before returning a complete answer. The incomplete response was discarded.",
+      partialContent: persistablePartial(snapshot.content),
       metadata: { ...metadata, errorCode: "OUTPUT_LIMIT" },
     });
   }
@@ -489,6 +507,10 @@ function interpretStream(
       status: metadata.status ?? undefined,
       retryAfterMs: metadata.retryAfterMs,
       error: redactSecret(verdict.detail ?? "The streamed response did not complete.", apiKey),
+      partialContent:
+        verdict.reason === "premature_eof"
+          ? persistablePartial(snapshot.content)
+          : undefined,
       metadata: { ...metadata, errorCode: code },
     });
   }

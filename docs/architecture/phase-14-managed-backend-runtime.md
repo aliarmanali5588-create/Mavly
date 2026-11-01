@@ -244,7 +244,138 @@ Failure handling:
 5. **Destructive schema evolution / data deletion** — additive only by design. A reviewed,
    owner-approved migration/cleanup path does not exist yet; `cleanup_pending` is bookkeeping.
 
-## 10. Not implemented on purpose
+## 10. Enrollment and cohort authorization (migration 37)
+
+### The problem this solves
+
+Before migration 37, the only authorization for a managed backend was
+`MAVLY_MANAGED_BACKENDS_PROJECTS`: an operator pasted every eligible project UUID into an
+environment variable. That does not scale past a handful of customers, and it made "the id is
+in a list" the entire security story. It also meant a project id alone was, effectively, the
+authorization.
+
+### Two independent state machines
+
+```
+ENROLLMENT (project_managed_backend_enrollments)   LIFECYCLE (project_managed_backends)
+not_enrolled (no row)                              not_required
+pending                                            pending_approval
+approved                                           provisioning → provisioned → configuring → ready
+rejected                                           failed
+revoked                                            outcome_unknown
+suspended                                          cleanup_pending
+```
+
+Enrollment answers *"is this project authorized to receive a managed backend?"*. Lifecycle
+answers *"what is the current state of its Neon backend?"*. They are deliberately not merged:
+
+- a project can be `approved` with no database yet;
+- a project can have a `ready` database and later be `suspended`;
+- a provisioning failure is a lifecycle fact, never an authorization fact;
+- a revocation is an authorization fact, never a data-loss event.
+
+`managedBackendStatusView` therefore carries `state` and `enrollment` as two fields, and
+`enrollment.state === "approved"` with `state === "not_required"` is a real, meaningful
+combination: "allowed, nothing built yet".
+
+### Where the decision is made
+
+`src/lib/managed-backend/enrollment.ts` is the policy engine — pure, no I/O, no clock, no
+environment. `evaluateEnrollment` returns `{ eligible, reasonCode, policyVersion, cohort,
+bucket, decisionTimestamp }`.
+
+Inputs, in evaluation order:
+
+1. **Operator overrides** — `revoked` / `suspended` / `rejected` outrank everything. A rollout
+   change can never re-admit them.
+2. **Platform readiness** — `disabled` mode, then incomplete prerequisites. Reported as
+   `platform_not_ready`, never blamed on the project's cohort.
+3. **Grandfathering** — an already-`approved` enrollment stays authorized even if the rollout
+   has narrowed since. This is what makes a percentage decrease safe.
+4. **Requirement** — a static site (`backend_not_required`) and a missing data model
+   (`no_data_model`) are refused before consuming a rollout or capacity slot.
+5. **Cohort** — `internal` / `allowlisted` / `percentage` / `general_availability`.
+
+`src/lib/managed-backend/enrollment-service.ts` persists the decision through the RPCs and is
+the only writer. `src/lib/managed-backend/enrollment-store.ts` is the only module that touches
+the registry at all, and it only calls `security definer` RPCs.
+
+### Deterministic percentage rollout
+
+```
+bucket = sha256(salt ‖ project_id ‖ project_created_at) mod 100
+admitted = bucket < rolloutPercent
+```
+
+- Stable across evaluations, so a project never flaps between enrolled and not.
+- Raising 10 → 25 admits exactly buckets 10–24; nobody is reassigned.
+- Lowering stops new admissions and grandfathers existing approvals.
+- `project_created_at` is in the hash, so a recreated slug is a different subject and cannot
+  inherit a previous incarnation's approval.
+- The salt is server-only and never appears in a status projection or a log line.
+
+### Two gates, deliberately different
+
+| | Enrollment-time (`ensureEnrollment`) | Execution-time (`recheckAuthorization`) |
+|---|---|---|
+| When | Once, when the project first needs a backend | Before **every** provisioning and configuration |
+| Runs the percentage lottery | Yes | **No** |
+| Checks capacity | Yes | No (the lease serializes work) |
+| Checks approved status, owner, incarnation, platform | Yes | **Yes, against live rows** |
+| Stamps `last_authorized_at` | No | Yes |
+
+The split is what makes a rollout decrease safe *and* a revocation immediate. A stale worker
+cannot provision after revocation because the execution-time gate reads the live row rather
+than trusting the decision that queued the work.
+
+### Defense in depth
+
+The execution-time gate is enforced in three places, not one:
+
+1. `recheckAuthorization()` in the run stage, before `ensureManagedBackend`.
+2. A second `recheckAuthorization()` before `configureManagedBackend`, because applying a schema
+   writes into the customer database and is a separate act from creating it.
+3. SQL: `mark_managed_backend_create_started` (the last gate before the provider call, already
+   lease-fenced) and `begin_managed_backend_configuration` both refuse when a registry row exists
+   and is not `approved`.
+
+The SQL guard is **conditional on a row existing**, so a deployment still on the legacy static
+list — which has no rows — keeps byte-for-byte its previous behavior.
+
+### What the model can never do
+
+The planner's `requiresDatabase` and `authentication` are *inputs* to
+`detectBackendRequirement`, which re-reads them defensively and can override them in both
+directions. Neither is an authorization. There is no code path where model output sets an
+enrollment status, a cohort, an approval flag, or an owner identity. The enrollment service's
+inputs are booleans produced by trusted server code, and a test asserts the service never reads
+a planner object.
+
+### Security model
+
+- Supabase is the authoritative control plane; Neon is never consulted for an enrollment
+  decision.
+- Both tables are RLS-enabled with **zero policies** and no privilege for `anon` or
+  `authenticated`. Owners read their own projection through a `security definer` RPC.
+- Every mutation RPC is `security definer` with an empty `search_path`.
+- The policy write path (`enroll_managed_backend`) refuses any caller that is not
+  `service_role`, and resolves the owner and incarnation from `public.projects` itself.
+- Administrative actions (`set_managed_backend_enrollment`) require
+  `public.current_user_is_admin()`, which resolves the caller's own `auth.uid()`. There is no
+  `isAdmin` parameter anywhere.
+- The audit table is append-only: no UPDATE/DELETE grant, plus a trigger that refuses both.
+- Revocation never deletes a Neon project, a schema, a row, or a registry record.
+
+### Observability
+
+`managed_backend.enrollment.requested|approved|rejected|revoked|suspended|resumed`,
+`managed_backend.cohort.assigned`, `managed_backend.authorization.denied`,
+`managed_backend.provisioning.authorized`. Each carries a project id, cohort, policy version,
+reason code and rollout bucket. The allowlist in `src/lib/observability/events.ts` drops every
+other field, and `redactSensitiveText` runs on every string, so a salt, a connection URI or an
+operator note cannot reach a log line.
+
+## 11. Not implemented on purpose
 
 - No generic admin/data endpoint; only declared resources.
 - No arbitrary SQL from a model.
@@ -252,3 +383,10 @@ Failure handling:
 - No per-request user-supplied database, host, command or environment.
 - No Mavly credit pricing for managed databases (provider spend only; Phase 11 still prices
   generation runs only).
+- No UI for enrollment administration; the actions are HTTP endpoints behind the existing admin
+  gate.
+- No external metrics vendor for enrollment volume or cohort distribution; the structured log
+  lines are the metric source.
+- No automatic backfill of pre-existing `project_managed_backends` rows into the enrollment
+  registry. A project that already has a database but no enrollment row is refused by the
+  execution-time gate until it is approved (or the deployment stays on the legacy path).

@@ -78,6 +78,11 @@ import {
   managedBackendStatusView,
   type ManagedBackendStatusView,
 } from "@/lib/managed-backend/status";
+import { readOwnEnrollment } from "@/lib/managed-backend/enrollment-store";
+import {
+  enrollmentStatusView,
+  type EnrollmentReasonCode,
+} from "@/lib/managed-backend/enrollment";
 import { generationWorkerConfig } from "@/lib/generation/worker-config";
 import {
   creditAdmissionForProject,
@@ -2748,14 +2753,54 @@ async function readStaticVerification(
  * Owner-visible managed-backend state. The RPC checks ownership itself, returns
  * no ciphertext, and reports a missing migration as an absence rather than a
  * fabricated status. A project that never needed a backend has no row.
+ *
+ * ═══ ENROLLMENT IS READ SEPARATELY, AND MAY EXIST WITHOUT A BACKEND ═════════
+ *
+ * A project can be `approved` for enrollment and still have no database (the
+ * run has not reached provisioning, or it is still `pending`). That is why the
+ * enrollment projection is attached when present instead of being folded into
+ * `state`: "authorized" and "ready" are different facts and the UI must be able
+ * to tell them apart. A missing enrollment table is an absence, not an error.
  */
 async function readManagedBackend(
   projectId: string,
 ): Promise<ManagedBackendStatusView | undefined> {
   const supabase = await createSupabaseServerClient();
   if (!supabase) return undefined;
+
+  const enrollment = await readOwnEnrollment({ client: supabase, projectId });
+  const enrollmentView =
+    enrollment.ok && enrollment.data
+      ? enrollmentStatusView({
+          state: enrollment.data.status,
+          cohort: enrollment.data.cohort,
+          reasonCode: enrollment.data.reasonCode as EnrollmentReasonCode,
+          policyVersion: enrollment.data.policyVersion,
+          enrolledAt: enrollment.data.enrolledAt,
+          lastAuthorizedAt: enrollment.data.lastAuthorizedAt,
+        })
+      : null;
+
   const result = await managedBackendStatus({ client: supabase, projectId });
-  if (result.ok === false || !result.data) return undefined;
+  if (result.ok === false || !result.data) {
+    /**
+     * No backend row. If the project is enrolled, report that honestly rather
+     * than returning nothing: "approved, no database yet" is real information.
+     */
+    if (!enrollmentView) return undefined;
+    return managedBackendStatusView({
+      state: "not_required",
+      dataModel: null,
+      authRequired: false,
+      connectionVerified: false,
+      schemaVerified: false,
+      gatewayConfigured: false,
+      errorCode: null,
+      lastStep: null,
+      updatedAt: null,
+      enrollment: enrollmentView,
+    });
+  }
   const row = result.data;
   return managedBackendStatusView({
     state: row.status,
@@ -2767,6 +2812,7 @@ async function readManagedBackend(
     errorCode: row.errorCode,
     lastStep: row.lastStep,
     updatedAt: row.updatedAt || null,
+    enrollment: enrollmentView,
   });
 }
 

@@ -58,7 +58,14 @@ export type SchemaApplyResult =
       code:
         | "SCHEMA_CONNECTION_FAILED"
         | "SCHEMA_APPLY_FAILED"
-        | "SCHEMA_VERIFICATION_FAILED";
+        | "SCHEMA_VERIFICATION_FAILED"
+        /**
+         * Migration 38. The authorization recheck ran immediately before COMMIT
+         * and refused, so the whole transaction was rolled back. This is a
+         * distinct code because it is NOT a schema failure: the DDL was valid and
+         * the run was stopped on purpose.
+         */
+        | "SCHEMA_AUTHORIZATION_REVOKED";
       /** Sanitized step name, or null when the failure was not step-specific. */
       step: string | null;
       problems: string[];
@@ -170,6 +177,28 @@ async function verifySchema(
 }
 
 /**
+ * ═══ THE COMMIT GATE, AS A PURE DECISION ════════════════════════════════════
+ *
+ * Split out of `applySchemaPlan` so the one rule that matters can be tested
+ * without a database: an authorization check that cannot answer is a REFUSAL.
+ *
+ * A callback that returns anything other than exactly `true`, or that throws,
+ * denies. That asymmetry is deliberate — the failure mode of "permission by
+ * accident" is a stranded customer database, and the failure mode of "refusal by
+ * accident" is a retried run.
+ */
+export async function commitGateAllows(
+  authorize: (() => Promise<boolean>) | undefined,
+): Promise<boolean> {
+  if (!authorize) return true;
+  try {
+    return (await authorize()) === true;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Apply every unrecorded step and verify, atomically. The advisory lock is
  * transaction-scoped; the connection is always closed.
  */
@@ -178,6 +207,23 @@ export async function applySchemaPlan(input: {
   plan: SchemaPlan;
   /** Stop before applying another step past this many milliseconds. */
   timeBudgetMs?: number;
+  /**
+   * ═══ MIGRATION 38: THE COMMIT-TIME AUTHORIZATION CHECK ════════════════════
+   *
+   * Every step runs inside ONE transaction, so a revocation that lands mid-apply
+   * cannot un-commit DDL that already committed — but it CAN stop the commit.
+   * This callback is awaited after every step has run and after the schema has
+   * been verified, and immediately before `commit`.
+   *
+   * Returning false rolls the whole transaction back, so a revoked project leaves
+   * no partial schema behind. That is the strongest guarantee available without
+   * splitting the run into per-step transactions, which would trade atomicity for
+   * a narrower window and is a worse deal.
+   *
+   * Absent means "no recheck", which is what the pure tests and any non-managed
+   * caller get.
+   */
+  authorizeBeforeCommit?: () => Promise<boolean>;
 }): Promise<SchemaApplyResult> {
   const deadline =
     typeof input.timeBudgetMs === "number" && Number.isFinite(input.timeBudgetMs)
@@ -264,6 +310,30 @@ export async function applySchemaPlan(input: {
           step: null,
           problems: problems.slice(0, 10),
         };
+      }
+
+      /**
+       * ⚠️ THE LAST MOMENT AUTHORIZATION CAN BE ENFORCED. Everything above is
+       * inside the transaction and nothing has committed yet, so a refusal here
+       * costs the run its schema and costs the customer nothing.
+       *
+       * A THROWING callback is treated as a refusal: an authorization check that
+       * cannot answer must not be read as permission.
+       */
+      if (input.authorizeBeforeCommit) {
+        const permitted = await commitGateAllows(input.authorizeBeforeCommit);
+        if (!permitted) {
+          await client.query("rollback");
+          inTransaction = false;
+          return {
+            ok: false,
+            code: "SCHEMA_AUTHORIZATION_REVOKED",
+            step: null,
+            problems: [
+              "Authorization was withdrawn before the schema could be committed. Nothing was applied.",
+            ],
+          };
+        }
       }
 
       await client.query("commit");

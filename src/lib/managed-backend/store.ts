@@ -13,7 +13,13 @@ export type ManagedBackendLifecycle =
   | "cleanup_pending";
 
 export interface ManagedBackendClaim {
-  claimStatus: "claimed" | "busy" | "provisioned";
+  /**
+   * `not_authorized` is migration 38's first gate: the project has no approved
+   * enrollment and the deployment is in strict mode. It is reported as a claim
+   * status rather than an exception so the caller can block the backend
+   * truthfully instead of treating it as a storage failure.
+   */
+  claimStatus: "claimed" | "busy" | "provisioned" | "not_authorized";
   neonProjectId: string | null;
   regionId: string | null;
   connectionUriCiphertext: string | null;
@@ -26,6 +32,15 @@ export type ManagedBackendStoreFailureCode =
   | "unavailable"
   | "migration_required"
   | "forbidden"
+  /**
+   * Migration 38: the enrollment guard inside `begin_managed_backend_configuration`
+   * raises `42501` when authorization was withdrawn between the pre-flight check
+   * and the configuration claim. It shares SQLSTATE 42501 with an owner mismatch,
+   * so it is separated here by message. Reporting it as `forbidden` would tell the
+   * operator "the project owner could not be verified" when the real cause is a
+   * revoked or suspended enrollment.
+   */
+  | "not_authorized"
   | "conflict"
   | "error";
 
@@ -35,10 +50,19 @@ export type ManagedBackendStoreResult<T> =
 
 function mapError(
   operation: string,
-  error: { code?: string } | null,
+  error: { code?: string; message?: string } | null,
 ): ManagedBackendStoreFailureCode {
   const code = error?.code ?? "unknown";
+  const message = error?.message ?? "";
   console.error(`[managed-backend] ${operation} failed (${code})`);
+  /**
+   * The enrollment guard's message is the only way to tell a withdrawn
+   * authorization apart from an owner mismatch: both raise 42501. Checked before
+   * the generic `forbidden` mapping so a revocation is never misreported.
+   */
+  if (code === "42501" && /enrollment not authorized/i.test(message)) {
+    return "not_authorized";
+  }
   if (
     code === "42P01" ||
     code === "42883" ||
@@ -67,10 +91,12 @@ function claimFrom(value: unknown): ManagedBackendClaim | null {
   if (
     (record.claim_status !== "claimed" &&
       record.claim_status !== "busy" &&
-      record.claim_status !== "provisioned") ||
+      record.claim_status !== "provisioned" &&
+      record.claim_status !== "not_authorized") ||
     typeof record.project_created_at !== "string" ||
     !Number.isFinite(Date.parse(record.project_created_at)) ||
     (record.claim_status !== "busy" &&
+      record.claim_status !== "not_authorized" &&
       (typeof record.registry_id !== "string" ||
         !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
           record.registry_id,
@@ -181,7 +207,14 @@ export async function failManagedBackend(input: {
 // ── Configuration phase (migration 35) ──────────────────────────────────────
 
 export interface ManagedBackendConfigClaim {
-  claimStatus: "claimed" | "busy";
+  /**
+   * `not_authorized` is the configuration-time gate: the enrollment guard inside
+   * `begin_managed_backend_configuration` refused because authorization was
+   * withdrawn. The SQL raises rather than returning this status, so it reaches
+   * the caller through `mapError`; it is declared here so the claim type can
+   * never silently narrow to the point where the refusal is unrepresentable.
+   */
+  claimStatus: "claimed" | "busy" | "not_authorized";
   registryId: string;
   projectCreatedAt: string;
   neonProjectId: string;
@@ -214,8 +247,25 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 function configClaimFrom(value: unknown): ManagedBackendConfigClaim | null {
   const record = recordOf(Array.isArray(value) ? value[0] : value);
   if (!record) return null;
-  if (record.claim_status !== "claimed" && record.claim_status !== "busy") {
+  if (
+    record.claim_status !== "claimed" &&
+    record.claim_status !== "busy" &&
+    record.claim_status !== "not_authorized"
+  ) {
     return null;
+  }
+  if (record.claim_status === "not_authorized") {
+    return {
+      claimStatus: "not_authorized",
+      registryId: "",
+      projectCreatedAt:
+        typeof record.project_created_at === "string"
+          ? record.project_created_at
+          : new Date(0).toISOString(),
+      neonProjectId: "",
+      regionId: "",
+      connectionUriCiphertext: "",
+    };
   }
   if (record.claim_status === "busy") {
     return {

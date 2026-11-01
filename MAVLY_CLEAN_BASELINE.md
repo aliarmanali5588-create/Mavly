@@ -681,11 +681,31 @@ The Totalum client `src/lib/vcaas-server.ts` remains deleted and must not be rec
   `17_verification_sandbox.sql` (after 16) and then `19_runtime_verification.sql` (after
   17) before enabling verification, and
   `08_figma_integration.sql` before using Figma. Apply
-  `30_managed_backends.sql` after `29_multi_agent_orchestration.sql`, and
-  `35_managed_backend_runtime.sql` after 34 and 30, before enabling managed Neon
-  provisioning and the generated-app data API; both also require the approved Neon Agent
-  Plan enrollment and server-only operator configuration (including
+  `30_managed_backends.sql` after `29_multi_agent_orchestration.sql`,
+  `35_managed_backend_runtime.sql` after 34 and 30, and
+  `37_managed_backend_enrollment.sql` after 35, before enabling managed Neon
+  provisioning and the generated-app data API; all three also require the approved Neon
+  Agent Plan enrollment and server-only operator configuration (including
   `MAVLY_APP_GATEWAY_ORIGIN` and `MAVLY_MANAGED_BACKENDS_RPC_SECRET`).
+- **Managed backend authorization is database-backed as of migration 37.** Enrollment
+  (`project_managed_backend_enrollments`) is a separate state machine from the backend
+  lifecycle (`project_managed_backends`): enrollment answers "may this project have a
+  database?", lifecycle answers "what is the state of the database it has?". A trusted
+  server-side policy engine decides enrollment; model output, browser input and a project
+  UUID alone are never authorization. Leaving `MAVLY_MANAGED_BACKENDS_ENROLLMENT_MODE`
+  unset preserves the legacy `MAVLY_MANAGED_BACKENDS_PROJECTS` allowlist exactly; setting
+  it to any value (including `disabled`) makes the registry authoritative and stops the
+  static list from authorizing anything. Rollout cohorts are `disabled` → `internal` →
+  `allowlisted` → `percentage` → `general_availability`, and general availability is never
+  a default. Percentage assignment is `sha256(salt‖project_id‖project_created_at) mod 100`,
+  so raising the percentage only adds projects and lowering it grandfathers existing
+  approvals. The worker re-verifies authorization against live rows before every
+  provisioning and configuration call, and the SQL create/configure RPCs refuse a
+  non-approved project when a registry row exists. Revocation stops future provisioning and
+  never deletes a Neon project, schema or customer row. See
+  `docs/architecture/phase-14-managed-backend-runtime.md` §10 and
+  `docs/runbooks/managed-backends.md` §3a. No live end-to-end verification of enrollment →
+  provisioning → gateway has been performed.
 - The verification sandbox is off by default, applies only to worker-dispatched runs, and
   is not proven against a live provider by this document. `passed` means the production
   build exited `0`, the validated runtime started on loopback, and a sandbox-local health

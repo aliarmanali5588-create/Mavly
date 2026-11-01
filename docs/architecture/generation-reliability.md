@@ -260,10 +260,12 @@ Vercel previews retain the inline `after()` path. AWS is the designated producti
 host; its process repeatedly invokes the existing durable worker and uses the existing
 Supabase queue, atomic claim, lease, retry and checkpoint machinery. Render remains
 preserved but disabled by `MAVLY_RENDER_WORKER_DISABLED=true`. The legacy Cloudflare Cron
-configuration remains in the repository and must be disabled operationally while AWS is
-active; atomic claiming prevents two hosts from owning the same run, but does not prevent
-two active hosts from consuming different queued runs. No AWS, Render, or Cloudflare
-deployment state was accessed or verified for this audit.
+configuration remains in the repository with `MAVLY_CLOUDFLARE_WORKER_DISABLED=true`; the
+scheduler no-ops before invoking a worker tick. Operators must still remove the deployed
+Cron trigger and verify Render is disabled before treating AWS as the sole active host.
+Atomic claiming prevents two hosts from owning the same run, but does not prevent two
+active hosts from consuming different queued runs. No AWS, Render, or Cloudflare deployment
+state was accessed or verified for this audit.
 
 Migration 36 remains useful for legacy inline runs that cannot finish:
 
@@ -380,3 +382,61 @@ No test, typecheck, build, live generation, provider call, worker tick or migrat
 run while producing this document. This includes the new focused package-first test in
 `tests/generation-reliability.test.ts`. The changes are based on static inspection; the
 human developer must run the repository's focused suites before merge.
+
+## 12. Bounded partial-response recovery and per-attempt evidence
+
+The provider stream adapter now returns incomplete text only for bounded output-limit,
+idle/absolute timeout, and premature-EOF failures. External cancellation is not checkpointed.
+`generateApp` checkpoints at most 128 KiB for a single requested path, separately from
+completed-file batches. The checkpoint is versioned inside the existing
+`generation_manifest` value, retains legacy top-level manifest fields for status/verification
+readers, and validates the source-content SHA-256 before reuse. A verified completed batch
+always wins over a duplicate partial checkpoint. Recovery receives the incomplete bytes as
+untrusted context and must return a complete replacement; only ordinary parsing,
+validation, and the existing fenced batch RPC can persist a file. The partial entry is
+cleared after the matching validated batch is checkpointed.
+
+`generation.provider_attempt` structured events use the durable run ID and contain an
+allowlisted provider request ID, model, run/phase attempt numbers, start/end timestamps,
+latency, remaining budget, HTTP status, timeout/retry classification, finish reason, token
+usage and provider-reported cost when available. They never contain prompts, response text,
+secrets or raw provider errors. Completed attempt records are also checkpointed to the
+existing run row through its lease/claim fence; credit usage RPCs and settlement semantics
+are unchanged.
+
+`runGenerationWorkerOnce()` remains one generation claim per tick. The AWS process polls
+again after each tick; multiple worker processes use migration 16's atomic
+`FOR UPDATE SKIP LOCKED` claim and random lease tokens, so they can work on different runs
+without both owning the same live run. This does not make parallel hosts a singleton or
+increase provider capacity. Migration 10 still serializes admissions at 2 unfinished runs
+per user / 8 globally; the global ceiling includes queued work and can throttle new
+admissions before more EC2 capacity helps. No cap was raised.
+
+The legacy Cloudflare schedule remains in `wrangler.jsonc` for rollback, but the checked-in
+`MAVLY_CLOUDFLARE_WORKER_DISABLED=true` guard makes scheduled invocations no-op before a
+claim. To guarantee AWS-only operation, an operator must also remove the deployed Cron
+trigger and verify Render remains disabled; see
+[`../runbooks/aws-generation-worker.md`](../runbooks/aws-generation-worker.md).
+
+## Human-run verification commands
+
+`AGENTS.md` prohibits agents from running automated verification. The human developer can
+run the focused reliability coverage:
+
+```bash
+node --import ./tests/register.mjs --test \
+  tests/generation-reliability.test.ts \
+  tests/provider-streaming.test.ts \
+  tests/generation-observability.test.ts \
+  tests/generation-worker-migration.test.ts \
+  tests/generation-worker-config.test.ts \
+  tests/generation-worker-route.test.ts \
+  tests/android-build.test.ts
+npx tsc --noEmit
+npx tsc --noEmit --noUnusedLocals --noUnusedParameters
+npm run lint
+```
+
+These commands were not run for this change. A static migration-contract test is not a
+live concurrent-claim test; database concurrency and AWS/Cloudflare/Render operation remain
+unverified.

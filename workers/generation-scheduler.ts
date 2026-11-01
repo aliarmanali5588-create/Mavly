@@ -3,10 +3,15 @@ import {
   type WorkerTickResult,
 } from "../src/lib/generation/worker";
 import { emitGenerationEvent } from "../src/lib/observability/events";
+import { isCloudflareWorkerDisabled } from "../src/lib/generation/worker-config";
 
 interface ScheduledController {
   cron: string;
   scheduledTime: number;
+}
+
+interface ScheduledEnvironment {
+  MAVLY_CLOUDFLARE_WORKER_DISABLED?: string;
 }
 
 const WORKER_ID = "cloudflare-generation-worker";
@@ -36,8 +41,31 @@ function logOutcome(result: WorkerTickResult, scheduledTime: number, durationMs:
 }
 
 export default {
-  async scheduled(controller: ScheduledController): Promise<void> {
+  async scheduled(
+    controller: ScheduledController,
+    env: ScheduledEnvironment,
+  ): Promise<void> {
     const startedAt = Date.now();
+    if (
+      isCloudflareWorkerDisabled({
+        MAVLY_CLOUDFLARE_WORKER_DISABLED: env.MAVLY_CLOUDFLARE_WORKER_DISABLED,
+      })
+    ) {
+      emitGenerationEvent("generation.scheduler.heartbeat", {
+        workerId: WORKER_ID,
+        scheduledTime: controller.scheduledTime,
+        status: "disabled",
+      });
+      emitGenerationEvent("generation.scheduler.completed", {
+        workerId: WORKER_ID,
+        scheduledTime: controller.scheduledTime,
+        durationMs: Date.now() - startedAt,
+        status: "disabled",
+        reason: "worker_disabled",
+      });
+      return;
+    }
+
     emitGenerationEvent("generation.scheduler.heartbeat", {
       workerId: WORKER_ID,
       scheduledTime: controller.scheduledTime,

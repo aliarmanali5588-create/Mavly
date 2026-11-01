@@ -33,6 +33,7 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { createHash } from "node:crypto";
 
 import { chatCompletion, isAiConfigured } from "@/lib/ai/provider";
 import { resolveRoleModel } from "@/lib/ai/model-roles";
@@ -49,10 +50,12 @@ import {
   type AgentGenerationResult,
   type AgentManifest,
   type AgentPlanningCheckpoint,
+  type AgentPartialResponseCheckpoint,
   type AgentProjectType,
   type AgentProgressEvent,
   type AgentProviderAttempt,
   type AgentUsageTotals,
+  MAX_PARTIAL_RESPONSE_BYTES,
 } from "@/lib/ai/agent";
 import {
   MAX_INLINE_RECOVERY_ATTEMPTS,
@@ -182,6 +185,11 @@ import {
 } from "@/lib/managed-backend/prompt";
 import { detectBackendRequirement } from "@/lib/managed-backend/requirement";
 import {
+  ensureEnrollment,
+  recheckAuthorization,
+} from "@/lib/managed-backend/enrollment-service";
+import { enrollmentReasonLabel } from "@/lib/managed-backend/enrollment";
+import {
   managedBackendLifecycle,
   managedBackendStatus,
 } from "@/lib/managed-backend/store";
@@ -272,6 +280,116 @@ interface RunGuard {
    */
   priorUsage: AgentUsageTotals;
   priorAttempts: readonly AgentProviderAttempt[];
+}
+
+interface PersistedGenerationCheckpoint extends Partial<AgentManifest> {
+  type: "mavly_generation_checkpoint";
+  version: 1;
+  manifest: unknown | null;
+  planningCheckpoint: unknown | null;
+  partialResponse: unknown | null;
+}
+
+function generationCheckpointParts(value: unknown): {
+  manifest: unknown;
+  planningCheckpoint: unknown;
+  partialResponse: unknown;
+} {
+  if (
+    value &&
+    typeof value === "object" &&
+    !Array.isArray(value) &&
+    (value as Record<string, unknown>).type === "mavly_generation_checkpoint" &&
+    (value as Record<string, unknown>).version === 1
+  ) {
+    const record = value as Record<string, unknown>;
+    return {
+      manifest: record.manifest,
+      planningCheckpoint: record.planningCheckpoint,
+      partialResponse: record.partialResponse,
+    };
+  }
+
+  // Existing raw manifest and planning checkpoint rows remain resumable.
+  return {
+    manifest: value,
+    planningCheckpoint: value,
+    partialResponse: null,
+  };
+}
+
+function persistedGenerationCheckpoint(input: {
+  manifest: AgentManifest | null;
+  planningCheckpoint: AgentPlanningCheckpoint | null;
+  partialResponse: AgentPartialResponseCheckpoint | null;
+}): PersistedGenerationCheckpoint {
+  return {
+    ...(input.manifest ?? {}),
+    type: "mavly_generation_checkpoint",
+    version: 1,
+    manifest: input.manifest,
+    planningCheckpoint: input.planningCheckpoint,
+    partialResponse: input.partialResponse,
+  };
+}
+
+function parsePartialResponseCheckpoint(value: unknown): AgentPartialResponseCheckpoint | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const record = value as Record<string, unknown>;
+  const path = sanitizeProjectPath(record.path);
+  if (
+    record.type !== "mavly_partial_response_checkpoint" ||
+    record.version !== 1 ||
+    !path ||
+    typeof record.content !== "string" ||
+    Buffer.byteLength(record.content, "utf8") === 0 ||
+    Buffer.byteLength(record.content, "utf8") > MAX_PARTIAL_RESPONSE_BYTES ||
+    (record.sourceHash !== null &&
+      (typeof record.sourceHash !== "string" || !/^[a-f0-9]{64}$/.test(record.sourceHash))) ||
+    (record.failureCode !== "TIMEOUT" &&
+      record.failureCode !== "OUTPUT_LIMIT" &&
+      record.failureCode !== "TRANSIENT") ||
+    (record.timeoutClassification !== null &&
+      record.timeoutClassification !== "idle" &&
+      record.timeoutClassification !== "absolute") ||
+    (record.providerAttemptId !== null &&
+      (typeof record.providerAttemptId !== "string" ||
+        !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+          record.providerAttemptId,
+        ))) ||
+    typeof record.model !== "string" ||
+    !/^[A-Za-z0-9._:/-]{1,120}$/.test(record.model) ||
+    typeof record.capturedAt !== "string" ||
+    !Number.isFinite(Date.parse(record.capturedAt))
+  ) {
+    return null;
+  }
+
+  return {
+    type: "mavly_partial_response_checkpoint",
+    version: 1,
+    path,
+    sourceHash: record.sourceHash as string | null,
+    content: record.content,
+    /**
+     * The guard above already proved these three values are members of their
+     * unions; TypeScript cannot follow narrowing through a
+     * `Record<string, unknown>` across a compound condition, so the assertions
+     * restate what the runtime check established.
+     */
+    failureCode: record.failureCode as AgentPartialResponseCheckpoint["failureCode"],
+    timeoutClassification:
+      record.timeoutClassification as AgentPartialResponseCheckpoint["timeoutClassification"],
+    providerAttemptId: record.providerAttemptId as string | null,
+    model: record.model,
+    capturedAt: record.capturedAt,
+  };
+}
+
+function partialResponseSourceHash(content: string | null): string | null {
+  return content === null
+    ? null
+    : createHash("sha256").update(content, "utf8").digest("hex");
 }
 
 interface FailInput {
@@ -1020,8 +1138,14 @@ async function execute(
     }
   }
 
-  let resumeManifest: AgentManifest | null = parseManifest(run.generation_manifest);
-  let resumePlanningCheckpoint = parsePlanningCheckpoint(run.generation_manifest);
+  const persistedCheckpoint = generationCheckpointParts(run.generation_manifest);
+  let resumeManifest: AgentManifest | null = parseManifest(persistedCheckpoint.manifest);
+  let resumePlanningCheckpoint = parsePlanningCheckpoint(
+    persistedCheckpoint.planningCheckpoint,
+  );
+  let resumePartialResponse = parsePartialResponseCheckpoint(
+    persistedCheckpoint.partialResponse,
+  );
   let completedPaths: string[] = [];
   let nextBatchIndex = 0;
 
@@ -1046,6 +1170,20 @@ async function execute(
       console.warn(
         `[mavly] run ${runId}: ${verified.mismatchedPaths.length} checkpointed path(s) no longer match and will be regenerated`,
       );
+    }
+  }
+
+  if (resumePartialResponse) {
+    const source = before.find((file) => file.path === resumePartialResponse?.path);
+    const planIncludesPath = resumeManifest?.files.some(
+      (file) => file.path === resumePartialResponse?.path,
+    );
+    if (
+      !planIncludesPath ||
+      completedPaths.includes(resumePartialResponse.path) ||
+      resumePartialResponse.sourceHash !== partialResponseSourceHash(source?.content ?? null)
+    ) {
+      resumePartialResponse = null;
     }
   }
 
@@ -1200,20 +1338,6 @@ async function execute(
       return;
     }
 
-    const inCohort = config.cohort.includes(input.projectId.toLowerCase());
-    if (!config.requested || !inCohort) {
-      managedBackendSummary =
-        "This request needs stored data, but Mavly's managed database is not enabled for this project. No database was created; the generated app is a labelled prototype and persistent data is not live.";
-      emitManagedBackendStage("blocked", "not_enabled_for_project");
-      return;
-    }
-
-    if (!input.worker) {
-      managedBackendSummary =
-        "This request needs stored data, but managed provisioning runs only on the durable generation worker. No database was created; the generated app is a labelled prototype and persistent data is not live.";
-      emitManagedBackendStage("blocked", "requires_worker_dispatch");
-      return;
-    }
     /**
      * ⚠️ A BLOCKED BACKEND NEVER DISCARDS THE USER'S WORK.
      *
@@ -1223,6 +1347,9 @@ async function execute(
      * exact sanitized reason is reported, and whatever database/schema already
      * exists is left untouched for a later retry. Only an unexpected exception
      * propagates, because that is a bug in this stage, not a backend decision.
+     *
+     * Declared before the enrollment call because every refusal below routes
+     * through it.
      */
     const blockBackend = (reason: string, detail: string): void => {
       managedBackendContext = "not_provisioned";
@@ -1232,6 +1359,58 @@ async function execute(
       emitManagedBackendStage("blocked", reason);
     };
 
+    /**
+     * ═══ ENROLLMENT: WHO MAY RECEIVE A DATABASE ══════════════════════════════
+     *
+     * This replaces the old `config.cohort.includes(projectId)` check. The
+     * decision is now made by the trusted policy engine and persisted in
+     * Supabase's enrollment registry, so an operator no longer pastes every
+     * eligible project UUID into an environment variable.
+     *
+     * ⚠️ `decision.required` and `model` are trusted server outputs — the
+     * planner's `requiresDatabase` was already re-read by
+     * `detectBackendRequirement`, and `model` was validated by
+     * `parseAppDataModel`. Neither is an authorization on its own.
+     *
+     * The worker client is required to read or write the registry, so it is
+     * checked first; without it there is no authorization to evaluate.
+     */
+    if (!guard.client) {
+      blockBackend(
+        "worker_client_unavailable",
+        "The managed database worker has no authorized Supabase client, so no database was created.",
+      );
+      return;
+    }
+
+    const enrollment = await ensureEnrollment({
+      client: guard.client,
+      userId: input.userId,
+      projectId: input.projectId,
+      config,
+      backendRequired: decision.required,
+      hasDataModel: true,
+    });
+
+    if (!enrollment.authorized) {
+      /**
+       * ⚠️ A REFUSAL IS NOT A FAILURE. The run continues as a labelled
+       * prototype, the exact reason is reported, and no database is touched.
+       */
+      blockBackend(
+        enrollment.decision.reasonCode,
+        `${enrollment.label} No database was created.`,
+      );
+      return;
+    }
+
+    if (!input.worker) {
+      managedBackendSummary =
+        "This request needs stored data, but managed provisioning runs only on the durable generation worker. No database was created; the generated app is a labelled prototype and persistent data is not live.";
+      emitManagedBackendStage("blocked", "requires_worker_dispatch");
+      return;
+    }
+
     if (!config.ready) {
       blockBackend(
         "platform_configuration_incomplete",
@@ -1239,10 +1418,26 @@ async function execute(
       );
       return;
     }
-    if (!guard.client) {
+
+    /**
+     * ═══ EXECUTION-TIME RECHECK ══════════════════════════════════════════════
+     *
+     * Enrollment was decided above, but this is the worker about to act. The
+     * enrollment is re-read from the live row so a revocation or suspension that
+     * landed in between is honored here, before any provider call. The SQL gate
+     * also stamps `last_authorized_at`, which is the audit answer to "when was
+     * this project last confirmed authorized?".
+     */
+    const recheck = await recheckAuthorization({
+      client: guard.client,
+      userId: input.userId,
+      projectId: input.projectId,
+      config,
+    });
+    if (!recheck.authorized) {
       blockBackend(
-        "worker_client_unavailable",
-        "The managed database worker has no authorized Supabase client, so no database was created.",
+        `authorization_${recheck.reasonCode}`,
+        `${enrollmentReasonLabel(recheck.reasonCode)} No database was created.`,
       );
       return;
     }
@@ -1262,6 +1457,27 @@ async function execute(
     }
 
     const remaining = remainingRunMs(guard.budget, Date.now());
+    /**
+     * ⚠️ THE CONFIGURATION PHASE WRITES INTO THE CUSTOMER DATABASE, so it gets
+     * its own authorization recheck. Provisioning a Neon project and applying a
+     * schema are separate acts; a revocation between them must stop the schema,
+     * not just the create. `begin_managed_backend_configuration` enforces the
+     * same rule in SQL, and this is the application-side half of that lock.
+     */
+    const configRecheck = await recheckAuthorization({
+      client: guard.client,
+      userId: input.userId,
+      projectId: input.projectId,
+      config,
+    });
+    if (!configRecheck.authorized) {
+      blockBackend(
+        `configuration_authorization_${configRecheck.reasonCode}`,
+        `${enrollmentReasonLabel(configRecheck.reasonCode)} The application schema was not applied.`,
+      );
+      return;
+    }
+
     const configured = await configureManagedBackend({
       client: guard.client,
       userId: input.userId,
@@ -1451,7 +1667,11 @@ async function execute(
   const onManifest = async (manifest: AgentManifest): Promise<void> => {
     const saved = await setRunManifest(
       runId,
-      manifest,
+      persistedGenerationCheckpoint({
+        manifest,
+        planningCheckpoint: null,
+        partialResponse: null,
+      }),
       guard.claimedAt ?? undefined,
       guard.leaseToken ?? undefined,
       client,
@@ -1462,6 +1682,7 @@ async function execute(
     }
     resumeManifest = manifest;
     resumePlanningCheckpoint = null;
+    resumePartialResponse = null;
     await prepareManagedBackend(manifest);
     await prepareImageStage(manifest);
   };
@@ -1471,7 +1692,11 @@ async function execute(
   ): Promise<void> => {
     const saved = await setRunManifest(
       runId,
-      checkpoint,
+      persistedGenerationCheckpoint({
+        manifest: resumeManifest,
+        planningCheckpoint: checkpoint,
+        partialResponse: resumePartialResponse,
+      }),
       guard.claimedAt ?? undefined,
       guard.leaseToken ?? undefined,
       client,
@@ -1481,6 +1706,29 @@ async function execute(
       throw new RunStoreError(`Could not save planner recovery state: ${saved.error}`);
     }
     resumePlanningCheckpoint = checkpoint;
+  };
+
+  const onPartialResponse = async (
+    checkpoint: AgentPartialResponseCheckpoint,
+  ): Promise<void> => {
+    const saved = await setRunManifest(
+      runId,
+      persistedGenerationCheckpoint({
+        manifest: resumeManifest,
+        planningCheckpoint: resumePlanningCheckpoint,
+        partialResponse: checkpoint,
+      }),
+      guard.claimedAt ?? undefined,
+      guard.leaseToken ?? undefined,
+      client,
+    );
+    if (isStoreFailure(saved)) {
+      if (saved.code === "CONFLICT") throw new RunLeaseLostError();
+      throw new AgentGenerationSetupError(
+        `Could not save incomplete response recovery state: ${saved.error}`,
+      );
+    }
+    resumePartialResponse = checkpoint;
   };
 
   const onBatch = async (batch: AgentBatchCheckpoint): Promise<void> => {
@@ -1511,6 +1759,25 @@ async function execute(
         throw new RunLeaseLostError();
       }
       throw new RunStoreError(`Could not record the batch checkpoint: ${checkpoint.error}`);
+    }
+
+    if (resumePartialResponse && batch.files.some((file) => file.path === resumePartialResponse?.path)) {
+      const saved = await setRunManifest(
+        runId,
+        persistedGenerationCheckpoint({
+          manifest: resumeManifest,
+          planningCheckpoint: null,
+          partialResponse: null,
+        }),
+        guard.claimedAt ?? undefined,
+        guard.leaseToken ?? undefined,
+        client,
+      );
+      if (isStoreFailure(saved)) {
+        if (saved.code === "CONFLICT") throw new RunLeaseLostError();
+        throw new RunStoreError(`Could not clear recovered partial response: ${saved.error}`);
+      }
+      resumePartialResponse = null;
     }
 
     emitGenerationEvent("generation.checkpoint", {
@@ -1693,6 +1960,7 @@ async function execute(
     existingFiles: before,
     projectRules,
     budgetMs: generationBudgetMs,
+    priorAttemptCount: guard.priorUsage.attempts,
     managedBackendContext,
     ...(backendContract ? { backendContract } : {}),
     ...(memory.used
@@ -1717,12 +1985,14 @@ async function execute(
     ...(designDirectives ? { designDirectives } : {}),
     ...(resumeManifest ||
     resumePlanningCheckpoint ||
+    resumePartialResponse ||
     completedPaths.length > 0 ||
     nextBatchIndex > 0
       ? {
           resume: {
             manifest: resumeManifest,
             planningCheckpoint: resumePlanningCheckpoint,
+            partialResponse: resumePartialResponse,
             completedPaths,
             nextBatchIndex,
           },
@@ -1730,6 +2000,7 @@ async function execute(
       : {}),
     onManifest,
     onPlanningCheckpoint,
+    onPartialResponse,
     onBatch,
     onProgress,
   };
@@ -1741,6 +2012,7 @@ async function execute(
    * already-ready assets untouched (they are skipped, not regenerated).
    */
   if (resumeManifest) await prepareImageStage(resumeManifest);
+  const observedProviderAttempts: AgentProviderAttempt[] = [];
   const generated = await generateApp(
     nextGenerationInput,
     {
@@ -1752,8 +2024,8 @@ async function execute(
         return result;
       },
       onProviderAttempt: async (event) => {
-        if (!guard.trackProviderUsage || !guard.client || !guard.leaseToken) return;
         if (event.type === "dispatching") {
+          if (!guard.trackProviderUsage || !guard.client || !guard.leaseToken) return;
           const inputForStart = {
             attemptId: event.attemptId,
             runId,
@@ -1782,14 +2054,85 @@ async function execute(
         }
 
         const attempt = event.attempt;
-        if (!attempt.providerAttemptId) {
-          emitGenerationEvent("credits.usage_recorded", {
-            traceId: guard.traceId,
+        observedProviderAttempts.push(attempt);
+        emitGenerationEvent("generation.provider_attempt", {
+          traceId: guard.traceId,
+          runId,
+          projectId: input.projectId,
+          workerId: guard.workerId,
+          attempt: attempt.runAttempt,
+          runAttempt: attempt.runAttempt,
+          phaseAttempt: attempt.attempt,
+          stage: attempt.phase,
+          status: attempt.errorCode ?? "completed",
+          model: attempt.model ?? attempt.requestedModel,
+          providerRequestId: attempt.providerRequestId,
+          providerAttemptId: attempt.providerAttemptId,
+          startedAt: attempt.startedAt,
+          endedAt: attempt.endedAt,
+          latencyMs: attempt.latencyMs,
+          remainingBudgetMs: attempt.remainingBudgetMs,
+          httpStatus: attempt.status,
+          finishReason: attempt.finishReason,
+          timeoutClassification: attempt.timeoutClassification,
+          retryReason: attempt.retryReason,
+          promptTokens: attempt.promptTokens,
+          completionTokens: attempt.completionTokens,
+          totalTokens: attempt.totalTokens,
+          reasoningTokens: attempt.reasoningTokens,
+          costUsd: attempt.costUsd,
+          costKnown: attempt.costUsd !== null,
+        });
+
+        if (guard.client) {
+          const totals = observedProviderAttempts.reduce(
+            (current, recorded) => ({
+              promptTokens: current.promptTokens + (recorded.promptTokens ?? 0),
+              completionTokens: current.completionTokens + (recorded.completionTokens ?? 0),
+              totalTokens: current.totalTokens + (recorded.totalTokens ?? 0),
+              reasoningTokens: current.reasoningTokens + (recorded.reasoningTokens ?? 0),
+            }),
+            {
+              promptTokens: guard.priorUsage.promptTokens,
+              completionTokens: guard.priorUsage.completionTokens,
+              totalTokens: guard.priorUsage.totalTokens,
+              reasoningTokens: guard.priorUsage.reasoningTokens,
+            },
+          );
+          const attemptsPersisted = await heartbeatRun(
             runId,
-            projectId: input.projectId,
-            reason: "provider_attempt_id_missing",
-            status: "deferred",
-          });
+            {
+              attemptCount: guard.priorUsage.attempts + observedProviderAttempts.length,
+              promptTokens: totals.promptTokens,
+              completionTokens: totals.completionTokens,
+              totalTokens: totals.totalTokens,
+              reasoningTokens: totals.reasoningTokens,
+              providerAttempts: [...guard.priorAttempts, ...observedProviderAttempts].slice(-60),
+              providerRequestId:
+                attempt.providerRequestId ?? latestProviderRequestId ?? undefined,
+              ...(guard.leaseToken
+                ? { expectedLeaseToken: guard.leaseToken, leaseSeconds: WORKER_LEASE_SECONDS }
+                : { expectedClaimedAt: guard.claimedAt ?? undefined }),
+            },
+            guard.client,
+          );
+          if (!attemptsPersisted) {
+            emitGenerationEvent("generation.heartbeat_failed", {
+              traceId: guard.traceId,
+              runId,
+              projectId: input.projectId,
+              workerId: guard.workerId,
+              reason: "provider_attempt_persist_failed",
+            });
+          }
+        }
+
+        if (
+          !guard.trackProviderUsage ||
+          !guard.client ||
+          !guard.leaseToken ||
+          !attempt.providerAttemptId
+        ) {
           return;
         }
         const completed = await completeProviderAttempt(
@@ -2931,8 +3274,9 @@ async function captureResult(
 }
 
 function parseManifest(value: unknown): AgentManifest | null {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
-  const record = value as Record<string, unknown>;
+  const manifest = generationCheckpointParts(value).manifest;
+  if (!manifest || typeof manifest !== "object" || Array.isArray(manifest)) return null;
+  const record = manifest as Record<string, unknown>;
   if (!Array.isArray(record.files) || record.files.length === 0) return null;
 
   const files: AgentManifest["files"] = [];
@@ -3016,8 +3360,9 @@ function parseManifest(value: unknown): AgentManifest | null {
 }
 
 function parsePlanningCheckpoint(value: unknown): AgentPlanningCheckpoint | null {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
-  const record = value as Record<string, unknown>;
+  const checkpoint = generationCheckpointParts(value).planningCheckpoint;
+  if (!checkpoint || typeof checkpoint !== "object" || Array.isArray(checkpoint)) return null;
+  const record = checkpoint as Record<string, unknown>;
   if (
     record.type !== "mavly_planning_checkpoint" ||
     record.version !== 1 ||

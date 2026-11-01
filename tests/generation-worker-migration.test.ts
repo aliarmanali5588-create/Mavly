@@ -141,6 +141,20 @@ test("claim is a single SKIP LOCKED, service-role-only, fenced operation", () =>
   assert.match(sql, /coalesce\(auth\.role\(\), ''\) <> 'service_role'/);
 });
 
+test("parallel worker claims skip locked jobs and assign independent fencing tokens", () => {
+  const claimStart = sql.indexOf("create or replace function public.claim_generation_job");
+  assert.notEqual(claimStart, -1);
+  const claimEnd = sql.indexOf("$$;", sql.indexOf("as $$", claimStart) + 5);
+  assert.notEqual(claimEnd, -1);
+  const claimFunction = sql.slice(claimStart, claimEnd);
+
+  assert.match(claimFunction, /for update skip locked/);
+  assert.match(claimFunction, /limit 1/);
+  assert.match(claimFunction, /lease_token = gen_random_uuid\(\)/);
+  assert.match(claimFunction, /lease_token is null/);
+  assert.match(claimFunction, /lease_expires_at = now\(\) \+ make_interval/);
+});
+
 test("worker RPCs are executable only by service_role", () => {
   const serviceOnly = [
     "claim_generation_job(text, integer, text[])",

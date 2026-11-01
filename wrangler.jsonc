@@ -6,8 +6,10 @@
   "workers_dev": false,
   "vars": {
     "NODE_ENV": "production",
-    "MAVLY_CLOUDFLARE_WORKER": "true"
+    "MAVLY_CLOUDFLARE_WORKER": "true",
+    "MAVLY_CLOUDFLARE_WORKER_DISABLED": "true"
   },
+  // Retained for rollback only. The scheduler no-ops while the disable flag is true.
   "triggers": {
     "crons": ["* * * * *"]
   },

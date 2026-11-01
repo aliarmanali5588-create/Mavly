@@ -9,15 +9,15 @@ User=mavly-worker
 Group=mavly-worker
 WorkingDirectory=/srv/mavly
 UMask=0027
-EnvironmentFile=-/etc/mavly/worker.env
+EnvironmentFile=/etc/mavly/worker.env
 Environment=NODE_ENV=production
 Environment=MAVLY_AWS_WORKER=true
 Environment=MAVLY_RENDER_WORKER_DISABLED=true
 ExecStart=/usr/bin/node --import /srv/mavly/workers/register-node-ts-resolver.mjs /srv/mavly/workers/aws-generation-worker.ts
 Restart=on-failure
 RestartSec=5
-KillSignal=SIGINT
-TimeoutStopSec=300
+KillSignal=SIGTERM
+TimeoutStopSec=360
 
 [Install]
 WantedBy=multi-user.target

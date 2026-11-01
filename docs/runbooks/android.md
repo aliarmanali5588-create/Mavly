@@ -39,7 +39,7 @@ VERCEL_PROJECT_ID=<project id>
 # Worker and database (required; builds are not claimed without these)
 SUPABASE_SERVICE_ROLE_KEY=<server-only service role key>
 NEXT_PUBLIC_SUPABASE_URL=https://<project>.supabase.co
-# Deploy the platform-wide Render Background Worker; no project worker settings are needed.
+# The active AWS worker uses the same service-role key and Supabase URL; Render remains disabled.
 ```
 
 Semantics, all read by `src/lib/android/build-config.ts`:
@@ -54,11 +54,13 @@ Semantics, all read by `src/lib/android/build-config.ts`:
 | `VERCEL_OIDC_TOKEN` or the access-token triple | yes | Presence only is checked. Mavly does not probe the provider during admission; a rejected token surfaces as a typed provider error. |
 | `SUPABASE_SERVICE_ROLE_KEY` | yes | Worker and private storage only. Never `NEXT_PUBLIC_*`. |
 | `NEXT_PUBLIC_SUPABASE_URL` | yes | Project URL. |
-| Render Background Worker | yes | The worker advances build jobs when no generation job is ready. |
+| AWS generation worker | yes | The active worker advances build jobs when no generation job is ready. |
 
 **Only a presence check happens at request time.** Nothing in the API proves that
 the credentials work, that the image exists, that the bucket is private, or that the
-worker is running. Confirm operation in the Render service logs.
+worker is running. Confirm operation in the AWS systemd/journal logs. Keep Render and the
+legacy Cloudflare scheduler disabled while AWS is the active host; see
+`docs/runbooks/aws-generation-worker.md`.
 
 **Provider plan.** The worker creates each sandbox with the 24-hour session timeout
 in `ANDROID_BUILD_SESSION_TIMEOUT_MS` and a 22-minute build deadline. Vercel

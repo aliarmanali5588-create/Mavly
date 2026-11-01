@@ -31,6 +31,7 @@ export const GENERATION_EVENTS = [
   "generation.worker_empty",
   "generation.worker_unavailable",
   "generation.worker_error",
+  "generation.provider_attempt",
   "generation.scheduler.heartbeat",
   "generation.scheduler.completed",
   "generation.scheduler.failed",
@@ -42,6 +43,23 @@ export const GENERATION_EVENTS = [
   "image.plan",
   "image.asset",
   "managed_backend.stage",
+  /**
+   * ═══ ENROLLMENT (migration 37) ════════════════════════════════════════════
+   *
+   * One event per enrollment transition, plus the two decisions that matter
+   * operationally: an authorization refusal and a successful provisioning
+   * authorization. These carry a cohort, a policy version and a reason code —
+   * never a salt, a connection URI or an operator note.
+   */
+  "managed_backend.enrollment.requested",
+  "managed_backend.enrollment.approved",
+  "managed_backend.enrollment.rejected",
+  "managed_backend.enrollment.revoked",
+  "managed_backend.enrollment.suspended",
+  "managed_backend.enrollment.resumed",
+  "managed_backend.cohort.assigned",
+  "managed_backend.authorization.denied",
+  "managed_backend.provisioning.authorized",
   "image.stage",
   "credits.reserved",
   "credits.settled",
@@ -109,6 +127,7 @@ const ALLOWED_FIELDS = new Set([
   "status",
   "dispatchMode",
   "attempt",
+  "phaseAttempt",
   "maxAttempts",
   "errorClass",
   "reason",
@@ -123,8 +142,21 @@ const ALLOWED_FIELDS = new Set([
   "cleanupComplete",
   "scheduledTime",
   "model",
+  "providerRequestId",
+  "providerAttemptId",
+  "startedAt",
+  "endedAt",
+  "latencyMs",
+  "remainingBudgetMs",
+  "httpStatus",
+  "finishReason",
+  "timeoutClassification",
+  "retryReason",
+  "runAttempt",
   "promptTokens",
   "completionTokens",
+  "totalTokens",
+  "reasoningTokens",
   "costUsd",
   "costKnown",
   "runtimePort",
@@ -138,10 +170,17 @@ const ALLOWED_FIELDS = new Set([
   "commandMs",
   "fileCount",
   "fileBytes",
+  /** Enrollment cohort, e.g. `percentage`. Never a salt. */
+  "cohort",
+  /** The enrollment policy version that produced a decision. */
+  "policyVersion",
+  /** The deterministic 0–99 rollout bucket. */
+  "rolloutBucket",
 ]);
 
 const NUMERIC_FIELDS = new Set([
   "attempt",
+  "phaseAttempt",
   "maxAttempts",
   "durationMs",
   "scheduledTime",
@@ -154,6 +193,8 @@ const NUMERIC_FIELDS = new Set([
   "exitCode",
   "promptTokens",
   "completionTokens",
+  "totalTokens",
+  "reasoningTokens",
   "costUsd",
   "runtimePort",
   "healthHttpStatus",
@@ -161,6 +202,11 @@ const NUMERIC_FIELDS = new Set([
   "credits",
   "imageAssets",
   "imageReady",
+  "latencyMs",
+  "remainingBudgetMs",
+  "httpStatus",
+  "runAttempt",
+  "rolloutBucket",
 ]);
 
 const BOOLEAN_FIELDS = new Set(["costKnown", "cleanupComplete"]);
@@ -199,6 +245,26 @@ function sanitize(name: string, value: EmitValue): string | number | boolean | n
   if (name === "workerId") {
     return /^[A-Za-z0-9._:-]{1,120}$/.test(value) ? value : undefined;
   }
+  if (name === "providerAttemptId") return isUuid(value) ? value : undefined;
+  if (name === "providerRequestId") {
+    return /^[A-Za-z0-9._:-]{1,200}$/.test(value) ? value : undefined;
+  }
+  if (name === "startedAt" || name === "endedAt") {
+    return Number.isFinite(Date.parse(value)) && /^\d{4}-\d{2}-\d{2}T/.test(value)
+      ? value.slice(0, 40)
+      : undefined;
+  }
+  if (name === "finishReason") {
+    return /^[A-Za-z0-9._:-]{1,80}$/.test(value) ? value : undefined;
+  }
+  if (name === "timeoutClassification") {
+    return value === "idle" || value === "absolute" || value === "external"
+      ? value
+      : undefined;
+  }
+  if (name === "retryReason") {
+    return /^[a-z0-9_:-]{1,80}$/.test(value) ? value : undefined;
+  }
   if (
     name === "stage" ||
     name === "status" ||
@@ -224,19 +290,33 @@ export interface GenerationEventFields {
   status?: string | null;
   dispatchMode?: string | null;
   attempt?: number | null;
+  phaseAttempt?: number | null;
   maxAttempts?: number | null;
   errorClass?: string | null;
   reason?: string | null;
   durationMs?: number | null;
   scheduledTime?: number | null;
+  model?: string | null;
+  providerRequestId?: string | null;
+  providerAttemptId?: string | null;
+  startedAt?: string | null;
+  endedAt?: string | null;
+  latencyMs?: number | null;
+  remainingBudgetMs?: number | null;
+  httpStatus?: number | null;
+  finishReason?: string | null;
+  timeoutClassification?: string | null;
+  retryReason?: string | null;
+  runAttempt?: number | null;
   queueLagMs?: number | null;
   retryAfterSeconds?: number | null;
   filesWritten?: number | null;
   checkpoints?: number | null;
   recovered?: number | null;
-  model?: string | null;
   promptTokens?: number | null;
   completionTokens?: number | null;
+  totalTokens?: number | null;
+  reasoningTokens?: number | null;
   costUsd?: number | null;
   costKnown?: boolean | null;
   /** Whole credits for a reservation/settlement/release event. */
@@ -245,6 +325,12 @@ export interface GenerationEventFields {
   imageAssets?: number | null;
   /** Image assets durably persisted as ready. */
   imageReady?: number | null;
+  /** Enrollment rollout cohort. Never a salt, never a secret. */
+  cohort?: string | null;
+  /** The enrollment policy version that produced the decision. */
+  policyVersion?: string | null;
+  /** The deterministic 0–99 rollout bucket, when the percentage policy ran. */
+  rolloutBucket?: number | null;
 }
 
 /**
@@ -267,7 +353,11 @@ export function emitGenerationEvent(
       event === "generation.scheduler.failed"
     ) {
       console.error(`[generation] ${line}`);
-    } else if (event === "generation.retry_scheduled" || event === "generation.lease_lost" || event === "generation.heartbeat_failed") {
+    } else if (
+      event === "generation.retry_scheduled" ||
+      event === "generation.lease_lost" ||
+      event === "generation.heartbeat_failed"
+    ) {
       console.warn(`[generation] ${line}`);
     } else {
       console.info(`[generation] ${line}`);
@@ -277,10 +367,7 @@ export function emitGenerationEvent(
   }
 }
 
-function serializeEvent(
-  event: string,
-  fields: object,
-): string {
+function serializeEvent(event: string, fields: object): string {
   const body: Record<string, string | number | boolean> = {
     event,
     at: new Date().toISOString(),

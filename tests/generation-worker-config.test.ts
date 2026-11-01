@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 
 import {
   dispatchModeForProject,
+  isCloudflareWorkerDisabled,
   parseWorkerConfig,
   type WorkerEnvironment,
 } from "../src/lib/generation/worker-config";
@@ -64,6 +65,13 @@ test("legacy worker-specific variables do not gate production dispatch", () => {
   assert.equal(dispatchModeForProject("any-project", config), "worker");
 });
 
+test("the legacy Cloudflare scheduler disable flag is parsed independently", () => {
+  assert.equal(isCloudflareWorkerDisabled({ MAVLY_CLOUDFLARE_WORKER_DISABLED: "true" }), true);
+  assert.equal(isCloudflareWorkerDisabled({ MAVLY_CLOUDFLARE_WORKER_DISABLED: "1" }), true);
+  assert.equal(isCloudflareWorkerDisabled({ MAVLY_CLOUDFLARE_WORKER_DISABLED: "false" }), false);
+  assert.equal(isCloudflareWorkerDisabled({}), false);
+});
+
 test("the Render background worker selects production dispatch", () => {
   const config = parseWorkerConfig(env({
     VERCEL_ENV: undefined,
@@ -81,6 +89,7 @@ test("AWS remains ready and production-enabled when Render is disabled", () => {
     MAVLY_AWS_WORKER: "true",
     MAVLY_RENDER_WORKER: "true",
     MAVLY_RENDER_WORKER_DISABLED: "true",
+    MAVLY_CLOUDFLARE_WORKER_DISABLED: "true",
   }));
   assert.equal(config.requested, true);
   assert.equal(config.ready, true);

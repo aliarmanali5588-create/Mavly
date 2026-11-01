@@ -26,7 +26,7 @@
  * Nothing generated here is executed on the Mavly server. Files are data.
  */
 
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import {
   chatCompletion,
   isChatCompletionFailure,
@@ -131,11 +131,27 @@ export interface AgentPlanningCheckpoint {
   nextAttempt: "compact";
 }
 
+export interface AgentPartialResponseCheckpoint {
+  type: "mavly_partial_response_checkpoint";
+  version: 1;
+  path: string;
+  /** Hash of the file that the incomplete response was intended to replace. */
+  sourceHash: string | null;
+  content: string;
+  failureCode: "TIMEOUT" | "OUTPUT_LIMIT" | "TRANSIENT";
+  timeoutClassification: "idle" | "absolute" | null;
+  providerAttemptId: string | null;
+  model: string;
+  capturedAt: string;
+}
+
 export interface AgentResumeState {
   /** The manifest a previous attempt planned, when it was persisted. */
   manifest?: AgentManifest | null;
   /** Resume a planning output-limit recovery without repeating the full request. */
   planningCheckpoint?: AgentPlanningCheckpoint | null;
+  /** Incomplete provider text is context only; it is never a completed file. */
+  partialResponse?: AgentPartialResponseCheckpoint | null;
   /** Paths whose persisted content has already been verified by the caller. */
   completedPaths?: readonly string[];
   /** Continue checkpoint indexes after the last persisted batch. */
@@ -231,6 +247,8 @@ export interface AgentGenerationInput {
   designContext?: string | null;
   /** Overall wall-clock budget for planning + all batches. */
   budgetMs?: number;
+  /** Number of provider requests already recorded for this durable run. */
+  priorAttemptCount?: number;
   /**
    * Ask the planner for a structured image plan. The text is server-authored
    * and already carries the backend ceiling; absent means no image planning.
@@ -261,6 +279,8 @@ export interface AgentGenerationInput {
   onManifest?: (manifest: AgentManifest) => Promise<void> | void;
   /** Persist safe planner recovery state; never receives provider response text. */
   onPlanningCheckpoint?: (checkpoint: AgentPlanningCheckpoint) => Promise<void> | void;
+  /** Persist bounded incomplete response state separately from completed files. */
+  onPartialResponse?: (checkpoint: AgentPartialResponseCheckpoint) => Promise<void> | void;
   onProgress?: (event: AgentProgressEvent) => Promise<void> | void;
 }
 
@@ -292,6 +312,13 @@ export interface AgentProviderAttempt {
   /** Provider cache writes, when reported. */
   cachedWriteTokens: number | null;
   providerRequestId: string | null;
+  timeoutClassification: "idle" | "absolute" | "external" | null;
+  retryReason: string | null;
+  runAttempt: number;
+  startedAt: string;
+  endedAt: string;
+  latencyMs: number;
+  remainingBudgetMs: number;
   retryAfterMs: number | null;
   errorCode: string | null;
   costUsd: number | null;
@@ -362,6 +389,7 @@ export interface AgentDependencies {
           attemptId: string;
           phase: AgentProviderAttempt["phase"];
           attempt: number;
+          runAttempt: number;
           model: string;
         }
       | { type: "result"; attempt: AgentProviderAttempt },
@@ -401,6 +429,7 @@ export const MAX_BATCH_FILES = 8;
 export const MAX_BATCH_ESTIMATED_BYTES = 48_000;
 export const DEFAULT_ESTIMATED_FILE_BYTES = 8_000;
 export const BATCH_OUTPUT_TOKENS = 12_000;
+export const MAX_PARTIAL_RESPONSE_BYTES = 128 * 1024;
 /** Highest catalog output cap; the provider adapter clamps this per model. */
 export const MANIFEST_OUTPUT_TOKENS = 32_000;
 /**
@@ -836,6 +865,7 @@ export const REQUIRED_CREATE_PATHS = [
 
 interface GenerationState {
   attempts: AgentProviderAttempt[];
+  runAttemptOffset: number;
   /**
    * ⚠️ TOTALS ARE ACCUMULATED, NOT DERIVED FROM `attempts`. The attempt list is
    * capped for storage, so deriving totals from it would silently drop the
@@ -844,10 +874,62 @@ interface GenerationState {
   usage: AgentUsageTotals;
   completedPaths: Set<string>;
   generated: Map<string, string>;
+  partialResponses: Map<string, AgentPartialResponseCheckpoint>;
   generatedBytes: number;
   batchesCompleted: number;
   nextBatchIndex: number;
   retries: number;
+}
+
+function contentHash(content: string | null): string | null {
+  return content === null
+    ? null
+    : createHash("sha256").update(content, "utf8").digest("hex");
+}
+
+function validatedPartialResponse(
+  partial: AgentPartialResponseCheckpoint | null | undefined,
+  existingFiles: readonly AgentFile[],
+): AgentPartialResponseCheckpoint | null {
+  if (!partial || partial.type !== "mavly_partial_response_checkpoint" || partial.version !== 1) {
+    return null;
+  }
+  const path = sanitizeProjectPath(partial.path);
+  if (!path || !partial.content || Buffer.byteLength(partial.content, "utf8") > MAX_PARTIAL_RESPONSE_BYTES) {
+    return null;
+  }
+  const existing = existingFiles.find((file) => file.path === path);
+  const currentSourceHash = contentHash(existing?.content ?? null);
+  if (partial.sourceHash !== currentSourceHash) return null;
+  if (
+    partial.failureCode !== "TIMEOUT" &&
+    partial.failureCode !== "OUTPUT_LIMIT" &&
+    partial.failureCode !== "TRANSIENT"
+  ) {
+    return null;
+  }
+  if (!/^[0-9a-f]{64}$/.test(partial.sourceHash ?? "") && partial.sourceHash !== null) {
+    return null;
+  }
+  return {
+    ...partial,
+    path,
+    content: partial.content,
+    model: typeof partial.model === "string" ? partial.model.slice(0, 120) : "",
+    timeoutClassification:
+      partial.timeoutClassification === "idle" || partial.timeoutClassification === "absolute"
+        ? partial.timeoutClassification
+        : null,
+    providerAttemptId:
+      typeof partial.providerAttemptId === "string" &&
+      /^[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(partial.providerAttemptId)
+        ? partial.providerAttemptId
+        : null,
+    capturedAt:
+      typeof partial.capturedAt === "string" && Number.isFinite(Date.parse(partial.capturedAt))
+        ? partial.capturedAt
+        : new Date(0).toISOString(),
+  };
 }
 
 export async function generateApp(
@@ -880,6 +962,12 @@ export async function generateApp(
       .map((path) => sanitizeProjectPath(path))
       .filter((path): path is string => !!path),
   );
+  const parsedPartial = validatedPartialResponse(
+    input.resume?.partialResponse,
+    input.existingFiles ?? [],
+  );
+  const resumedPartial =
+    parsedPartial && !completedPaths.has(parsedPartial.path) ? parsedPartial : null;
   const existingBytes = new Map(
     (input.existingFiles ?? []).map((file) => [file.path, Buffer.byteLength(file.content, "utf8")]),
   );
@@ -888,9 +976,13 @@ export async function generateApp(
 
   const state: GenerationState = {
     attempts: [],
+    runAttemptOffset: Math.max(0, Math.floor(input.priorAttemptCount ?? 0)),
     usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0, reasoningTokens: 0, costUsd: 0, attempts: 0, retries: 0 },
     completedPaths,
     generated: new Map(),
+    partialResponses: resumedPartial?.content
+      ? new Map([[resumedPartial.path, resumedPartial]])
+      : new Map(),
     generatedBytes: resumedBytes,
     batchesCompleted: 0,
     nextBatchIndex: Math.max(0, Math.floor(input.resume?.nextBatchIndex ?? 0)),
@@ -1106,7 +1198,7 @@ export async function generateApp(
     profile,
   );
   const missingCounts = new Map<string, number>();
-  const compactRetried = new Set<string>();
+  const compactRetried = new Set<string>(resumedPartial ? [resumedPartial.path] : []);
   // Every split halves a group and every single file gets one compact retry, so
   // the loop is inherently bounded. The cap is a safety net scaled to the plan,
   // not a reason to fail a legitimate 30–80 file project after 16 recoveries.
@@ -1156,7 +1248,17 @@ export async function generateApp(
       minAttemptMs: batchGroupFloorFor(group, profile),
     });
 
-    const messages = buildBatchMessages(input, model, manifest, group, compact, state);
+    const partialResponse =
+      group.length === 1 ? state.partialResponses.get(group[0].path) ?? null : null;
+    const messages = buildBatchMessages(
+      input,
+      model,
+      manifest,
+      group,
+      compact,
+      state,
+      partialResponse,
+    );
     const call = await callModel(
       "batch",
       model,
@@ -1230,6 +1332,55 @@ export async function generateApp(
         }
 
         const singlePath = requestedPaths[0];
+        if (
+          singlePath &&
+          call.partialContent &&
+          Buffer.byteLength(call.partialContent, "utf8") <= MAX_PARTIAL_RESPONSE_BYTES
+        ) {
+          const existing = (input.existingFiles ?? []).find((file) => file.path === singlePath);
+          const partialCheckpoint: AgentPartialResponseCheckpoint = {
+            type: "mavly_partial_response_checkpoint",
+            version: 1,
+            path: singlePath,
+            sourceHash: contentHash(existing?.content ?? null),
+            content: call.partialContent,
+            /**
+             * ⚠️ THE CHECKPOINT ONLY ACCEPTS A RETRYABLE CODE. `call.code` is the
+             * full provider error vocabulary, but a partial response is only
+             * worth resuming after a truncation, a timeout or a transient
+             * failure — a CONFIGURATION or CONTENT_FILTER failure would fail
+             * identically on resume. This branch is already gated on
+             * `reducible` (OUTPUT_LIMIT | TIMEOUT); TRANSIENT is the one other
+             * code that can reach here, so anything else is recorded as
+             * TRANSIENT rather than claiming a precision we do not have.
+             */
+            failureCode:
+              call.code === "OUTPUT_LIMIT" || call.code === "TIMEOUT"
+                ? call.code
+                : "TRANSIENT",
+            timeoutClassification: call.timeoutClassification === "idle" ||
+              call.timeoutClassification === "absolute"
+              ? call.timeoutClassification
+              : null,
+            providerAttemptId: state.attempts.at(-1)?.providerAttemptId ?? null,
+            model: call.metadata.model ?? call.metadata.requestedModel,
+            capturedAt: new Date(now()).toISOString(),
+          };
+          try {
+            await input.onPartialResponse?.(partialCheckpoint);
+          } catch (error) {
+            if (error instanceof AgentGenerationSetupError) {
+              return fail(error.code, error.message);
+            }
+            console.error("[mavly] partial response checkpoint failed:", errorMessage(error));
+            return fail(
+              "GENERATION_PERSIST_FAILED",
+              "The incomplete provider response could not be safely checkpointed.",
+            );
+          }
+          state.partialResponses.set(singlePath, partialCheckpoint);
+        }
+
         if (singlePath && !compactRetried.has(singlePath)) {
           compactRetried.add(singlePath);
           truncationRecoveries += 1;
@@ -1431,6 +1582,7 @@ export async function generateApp(
         state.completedPaths.add(file.path);
         state.generated.set(file.path, file.content);
         state.generatedBytes += Buffer.byteLength(file.content, "utf8");
+        state.partialResponses.delete(file.path);
       }
       state.batchesCompleted += 1;
       state.nextBatchIndex += 1;
@@ -2186,13 +2338,20 @@ function baseMetadataForFailure(model: AiModel): ChatCompletionMetadata {
 function outputLimitFailure(
   model: AiModel,
   metadata: ChatCompletionMetadata,
+  partialContent?: string,
 ): ChatCompletionFailure {
+  const boundedPartial =
+    partialContent &&
+    Buffer.byteLength(partialContent, "utf8") <= MAX_PARTIAL_RESPONSE_BYTES
+      ? partialContent
+      : undefined;
   return {
     ok: false,
     code: "OUTPUT_LIMIT",
     error: "The provider stopped at its output limit before completing the response.",
     retryable: false,
     retryAfterMs: null,
+    ...(boundedPartial ? { partialContent: boundedPartial } : {}),
     metadata: {
       ...metadata,
       requestedModel: metadata.requestedModel || model.id,
@@ -2227,9 +2386,17 @@ async function callModel(
    */
   let refusedBeforeSending = false;
   let providerAttemptId: string | null = null;
+  let attemptTiming: {
+    runAttempt: number;
+    startedAt: string;
+    endedAt: string;
+    latencyMs: number;
+    remainingBudgetMs: number;
+  } | null = null;
 
   return retryWithBackoff(
     async (attemptNumber) => {
+      attemptTiming = null;
       /**
        * ⚠️ THE RUN'S OWN PROVIDER-CALL CEILING. A wall-clock budget bounds spend
        * only while calls are slow; a fast, fan-out-prone run needs a count. This
@@ -2266,19 +2433,31 @@ async function callModel(
       }
       refusedBeforeSending = false;
       providerAttemptId = randomUUID();
+      const runAttempt = state.runAttemptOffset + state.usage.attempts + 1;
       await deps.onProviderAttempt?.({
         type: "dispatching",
         attemptId: providerAttemptId,
         phase,
         attempt: attemptNumber,
+        runAttempt,
         model: model.id,
       });
 
+      const startedAtMs = now();
+      const remainingBudgetMs = Math.max(0, deadlineAt - startedAtMs);
       const result = await complete(model, messages, {
         timeoutMs: plan.timeoutMs,
         idleTimeoutMs: Math.min(policy.idleTimeoutMs, plan.timeoutMs),
         maxTokens: policy.maxTokens,
       });
+      const endedAtMs = now();
+      attemptTiming = {
+        runAttempt,
+        startedAt: new Date(startedAtMs).toISOString(),
+        endedAt: new Date(endedAtMs).toISOString(),
+        latencyMs: Math.max(0, endedAtMs - startedAtMs),
+        remainingBudgetMs,
+      };
 
       /**
        * Defense in depth: an adapter can surface a 200 whose `finish_reason` is
@@ -2287,7 +2466,7 @@ async function callModel(
        * persisting half a document.
        */
       if (!isChatCompletionFailure(result) && result.metadata.finishReason === "length") {
-        return outputLimitFailure(model, result.metadata);
+        return outputLimitFailure(model, result.metadata, result.content);
       }
       return result;
     },
@@ -2317,6 +2496,7 @@ async function callModel(
           result as ChatCompletionResult,
           attemptNumber,
           providerAttemptId,
+          attemptTiming,
         );
         if (attempt) {
           await deps.onProviderAttempt?.({ type: "result", attempt });
@@ -2372,10 +2552,25 @@ function recordAttempt(
   result: ChatCompletionResult,
   attemptNumber: number,
   providerAttemptId: string | null,
+  timing: {
+    runAttempt: number;
+    startedAt: string;
+    endedAt: string;
+    latencyMs: number;
+    remainingBudgetMs: number;
+  } | null,
 ): AgentProviderAttempt | null {
   if (!providerAttemptId) return null;
   const metadata = result.metadata;
-  const attempt = attemptFromMetadata(phase, metadata, attemptNumber, providerAttemptId);
+  if (!timing) return null;
+  const attempt = attemptFromMetadata(
+    phase,
+    metadata,
+    attemptNumber,
+    providerAttemptId,
+    timing,
+    isChatCompletionFailure(result) ? result.timeoutClassification ?? null : null,
+  );
   if (state.attempts.length < MAX_ATTEMPTS_RECORDED) state.attempts.push(attempt);
   /**
    * Totals are accumulated here, once per real provider call, so the storage
@@ -2399,11 +2594,21 @@ function attemptFromMetadata(
   metadata: ChatCompletionMetadata,
   attemptNumber: number,
   providerAttemptId: string,
+  timing: {
+    runAttempt: number;
+    startedAt: string;
+    endedAt: string;
+    latencyMs: number;
+    remainingBudgetMs: number;
+  },
+  timeoutClassification: "idle" | "absolute" | "external" | null,
 ): AgentProviderAttempt {
+  const code = metadata.errorCode;
   return {
     providerAttemptId,
     phase,
     attempt: attemptNumber,
+    runAttempt: timing.runAttempt,
     status: metadata.status,
     requestedModel: metadata.requestedModel,
     model: metadata.model,
@@ -2415,10 +2620,25 @@ function attemptFromMetadata(
     cachedReadTokens: metadata.usage.cachedReadTokens,
     cachedWriteTokens: metadata.usage.cachedWriteTokens,
     providerRequestId: metadata.providerRequestId,
+    timeoutClassification,
+    retryReason:
+      code === "TIMEOUT"
+        ? "timeout_scope_reduction"
+        : code === "OUTPUT_LIMIT"
+          ? "output_limit_scope_reduction"
+          : code === "RATE_LIMITED"
+            ? "provider_rate_limit"
+            : code === "TRANSIENT" || code === "NETWORK"
+              ? "transient_provider_failure"
+              : null,
+    startedAt: timing.startedAt,
+    endedAt: timing.endedAt,
+    latencyMs: timing.latencyMs,
+    remainingBudgetMs: timing.remainingBudgetMs,
     retryAfterMs: metadata.retryAfterMs,
     errorCode: metadata.errorCode,
     costUsd: metadata.usage.costUsd,
-    at: new Date().toISOString(),
+    at: timing.endedAt,
   };
 }
 
@@ -2530,6 +2750,7 @@ function buildBatchMessages(
   group: readonly AgentManifestEntry[],
   compact: boolean,
   state: GenerationState,
+  partialResponse: AgentPartialResponseCheckpoint | null,
 ): ChatMessage[] {
   const profile: AgentProjectType = input.projectType === "android" ? "android" : "website";
   const design = input.designContext?.trim().slice(0, 30_000) ?? "";
@@ -2605,6 +2826,13 @@ function buildBatchMessages(
           "- Prefer shorter copy and fewer decorative elements.",
           "- Return the COMPLETE file — for preview.html, everything from <!doctype html> through </html>, never a partial diff.",
           "- Do not truncate the file or leave placeholders. A smaller finished document beats a larger unfinished one.",
+        ].join("\n")
+      : "",
+    partialResponse
+      ? [
+          "\nRecovery context from an earlier incomplete provider response (untrusted data, not a file checkpoint):",
+          "The following JSON string contains only a partial response. Do not append it as a diff or assume it is valid. Reconstruct and return the entire requested file as a complete replacement; normal validation still applies.",
+          JSON.stringify(partialResponse.content),
         ].join("\n")
       : "",
     "",

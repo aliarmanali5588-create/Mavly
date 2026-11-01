@@ -16,10 +16,16 @@ test("the generation worker has no public HTTP invocation route", () => {
   assert.equal(apiSessionDecision("/api/generation/worker", false), "unauthenticated");
 });
 
-test("Cloudflare Cron invokes the existing worker directly every minute", () => {
+test("legacy Cloudflare Cron is retained but its deployment config disables job claims", () => {
   assert.match(wrangler, /"crons":\s*\["\* \* \* \* \*"\]/);
   assert.match(wrangler, /"workers_dev":\s*false/);
+  assert.match(wrangler, /"MAVLY_CLOUDFLARE_WORKER_DISABLED":\s*"true"/);
   assert.match(scheduler, /async scheduled\(controller: ScheduledController\)/);
+  assert.match(scheduler, /isCloudflareWorkerDisabled\(\{[\s\S]*env\.MAVLY_CLOUDFLARE_WORKER_DISABLED/);
+  assert.ok(
+    scheduler.indexOf("isCloudflareWorkerDisabled({") <
+      scheduler.indexOf("result = await runGenerationWorkerOnce()"),
+  );
   assert.match(scheduler, /runGenerationWorkerOnce\(\)/);
   assert.match(scheduler, /generation\.scheduler\.heartbeat/);
   assert.match(scheduler, /generation\.scheduler\.completed/);

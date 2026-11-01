@@ -1,5 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 
 import {
   BATCH_OUTPUT_TOKENS,
@@ -10,6 +11,7 @@ import {
   isGenerationFailure,
   type AgentDependencies,
   type AgentGenerationInput,
+  type AgentPartialResponseCheckpoint,
   type AgentPlanningCheckpoint,
 } from "../src/lib/ai/agent";
 import {
@@ -76,6 +78,8 @@ function failure(
     finishReason?: string | null;
     promptTokens?: number | null;
     completionTokens?: number | null;
+    partialContent?: string;
+    timeoutClassification?: "idle" | "absolute" | "external";
   } = {},
 ): ChatCompletionFailure {
   const promptTokens = options.promptTokens ?? null;
@@ -86,6 +90,10 @@ function failure(
     error: `synthetic ${code}`,
     retryable: options.retryable ?? false,
     retryAfterMs: null,
+    ...(options.partialContent ? { partialContent: options.partialContent } : {}),
+    ...(options.timeoutClassification
+      ? { timeoutClassification: options.timeoutClassification }
+      : {}),
     metadata: {
       status: code === "RATE_LIMITED" ? 429 : 200,
       requestedModel: model.id,
@@ -528,6 +536,159 @@ test("a truncated single file gets exactly one compact retry", async () => {
   assert.equal(sawCompactInstruction, true);
 });
 
+test("a bounded incomplete response is checkpointed as context, never as file content", async () => {
+  const partials: AgentPartialResponseCheckpoint[] = [];
+  const persisted: string[] = [];
+  let batchCalls = 0;
+  let sawPartialRecoveryContext = false;
+  const oldContent = "previous complete source";
+  const partialContent = '{"files":[{"path":"only.ts","content":"unfinished';
+
+  const outcome = await generateApp(
+    {
+      prompt: "update the file",
+      mode: "update",
+      existingFiles: [{ path: "only.ts", content: oldContent }],
+      onPartialResponse: (checkpoint) => {
+        partials.push(checkpoint);
+      },
+      onBatch: (batch) => {
+        persisted.push(...batch.files.map((file) => file.content));
+      },
+    },
+    {
+      complete: async (_selectedModel, messages) => {
+        if (isPlanner(messages)) return success(manifestJson(["only.ts"]));
+        batchCalls += 1;
+        if (batchCalls === 1) {
+          return success(partialContent, "length");
+        }
+        sawPartialRecoveryContext = messages.some((message) =>
+          message.content.includes(JSON.stringify(partialContent)),
+        );
+        return success(batchJson([["only.ts", "complete replacement source"]]));
+      },
+      sleep: noop,
+    },
+  );
+
+  assert.equal(isGenerationFailure(outcome), false);
+  assert.equal(batchCalls, 2);
+  assert.equal(sawPartialRecoveryContext, true);
+  assert.equal(partials.length, 1);
+  assert.equal(partials[0]?.content, partialContent);
+  assert.equal(
+    partials[0]?.sourceHash,
+    createHash("sha256").update(oldContent, "utf8").digest("hex"),
+  );
+  assert.deepEqual(persisted, ["complete replacement source"]);
+});
+
+test("completed checkpoint paths take precedence over a duplicate partial response", async () => {
+  const sourceContent = "unchanged baseline";
+  const partial: AgentPartialResponseCheckpoint = {
+    type: "mavly_partial_response_checkpoint",
+    version: 1,
+    path: "a.ts",
+    sourceHash: createHash("sha256").update(sourceContent, "utf8").digest("hex"),
+    content: "incomplete old response",
+    failureCode: "OUTPUT_LIMIT",
+    timeoutClassification: null,
+    providerAttemptId: null,
+    model: model.id,
+    capturedAt: new Date(0).toISOString(),
+  };
+  const requested: string[][] = [];
+  const persisted: string[] = [];
+  const manifest = {
+    message: "Existing plan.",
+    files: [
+      { path: "a.ts", estimatedBytes: 500 },
+      { path: "b.ts", estimatedBytes: 500 },
+    ],
+    deletedPaths: [],
+  };
+
+  const outcome = await generateApp(
+    {
+      prompt: "continue",
+      mode: "update",
+      existingFiles: [
+        { path: "a.ts", content: sourceContent },
+        { path: "b.ts", content: "old b" },
+      ],
+      resume: {
+        manifest,
+        partialResponse: partial,
+        completedPaths: ["a.ts"],
+        nextBatchIndex: 1,
+      },
+      onBatch: (batch) => {
+        persisted.push(...batch.files.map((file) => file.path));
+      },
+    },
+    {
+      complete: async (_selectedModel, messages) => {
+        if (isPlanner(messages)) throw new Error("A persisted manifest should be reused.");
+        const paths = requestedPaths(messages);
+        requested.push(paths);
+        assert.equal(
+          messages.some((message) => message.content.includes("incomplete old response")),
+          false,
+        );
+        return success(batchJson(paths.map((path) => [path, `complete:${path}`])));
+      },
+      sleep: noop,
+    },
+  );
+
+  assert.equal(isGenerationFailure(outcome), false);
+  assert.deepEqual(requested, [["b.ts"]]);
+  assert.deepEqual(persisted, ["b.ts"]);
+});
+
+test("partial response recovery rejects a checkpoint for changed source content", async () => {
+  const partial: AgentPartialResponseCheckpoint = {
+    type: "mavly_partial_response_checkpoint",
+    version: 1,
+    path: "only.ts",
+    sourceHash: createHash("sha256").update("old baseline", "utf8").digest("hex"),
+    content: "stale partial",
+    failureCode: "TIMEOUT",
+    timeoutClassification: "idle",
+    providerAttemptId: null,
+    model: model.id,
+    capturedAt: new Date(0).toISOString(),
+  };
+  let sawPartial = false;
+  const outcome = await generateApp(
+    {
+      prompt: "continue",
+      mode: "update",
+      existingFiles: [{ path: "only.ts", content: "newer source" }],
+      resume: {
+        manifest: {
+          message: "Existing plan.",
+          files: [{ path: "only.ts", estimatedBytes: 500 }],
+          deletedPaths: [],
+        },
+        partialResponse: partial,
+      },
+    },
+    {
+      complete: async (_selectedModel, messages) => {
+        if (isPlanner(messages)) throw new Error("A persisted manifest should be reused.");
+        sawPartial = messages.some((message) => message.content.includes("stale partial"));
+        return success(batchJson([["only.ts", "complete replacement"]]));
+      },
+      sleep: noop,
+    },
+  );
+
+  assert.equal(isGenerationFailure(outcome), false);
+  assert.equal(sawPartial, false);
+});
+
 test("two truncated single-file attempts fail without persisting", async () => {
   let persisted = 0;
 
@@ -750,7 +911,7 @@ test("the provider's usage is aggregated across attempts", async () => {
   });
 
   const outcome = await generateApp(
-    { prompt: "build it", mode: "update" },
+    { prompt: "build it", mode: "update", priorAttemptCount: 5 },
     { complete, sleep: noop },
   );
 
@@ -763,6 +924,7 @@ test("the provider's usage is aggregated across attempts", async () => {
   assert.equal(outcome.result.usage.totalTokens, 36);
   assert.equal(outcome.result.attempts.length, 2);
   assert.equal(outcome.result.attempts[0].providerRequestId, "req-test");
+  assert.deepEqual(outcome.result.attempts.map((attempt) => attempt.runAttempt), [6, 7]);
 });
 
 test("project paths cannot escape the project or target internal files", async () => {
@@ -1015,6 +1177,38 @@ test("a timed-out single file gets exactly one narrower retry", async () => {
 
   assert.equal(isGenerationFailure(outcome), false);
   assert.equal(batchCalls, 2);
+});
+
+test("provider-attempt records retain timeout classification and retry context", async () => {
+  let batchCalls = 0;
+  const complete = provider((messages) => {
+    if (isPlanner(messages)) return success(manifestJson(["only.ts"]));
+    batchCalls += 1;
+    if (batchCalls === 1) {
+      return failure("TIMEOUT", {
+        retryable: true,
+        timeoutClassification: "idle",
+      });
+    }
+    return success(batchJson([["only.ts", "complete source"]]));
+  });
+
+  const outcome = await generateApp(
+    { prompt: "build it", mode: "update" },
+    { complete, sleep: noop },
+  );
+
+  assert.equal(isGenerationFailure(outcome), false);
+  if (isGenerationFailure(outcome)) return;
+  const timeoutAttempt = outcome.result.attempts.find(
+    (attempt) => attempt.errorCode === "TIMEOUT",
+  );
+  assert.equal(timeoutAttempt?.timeoutClassification, "idle");
+  assert.equal(timeoutAttempt?.retryReason, "timeout_scope_reduction");
+  assert.ok(timeoutAttempt?.startedAt);
+  assert.ok(timeoutAttempt?.endedAt);
+  assert.ok(timeoutAttempt?.latencyMs >= 0);
+  assert.ok(timeoutAttempt?.remainingBudgetMs > 0);
 });
 
 function manifestWithSizes(files: ReadonlyArray<[string, number]>): string {

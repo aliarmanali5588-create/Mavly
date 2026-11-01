@@ -144,7 +144,20 @@ sweep, the database transition table, SELECT-only owner RLS, schema marker 34 an
 alter generation runs, credits, images, verification, payments or deployment, and stores
 no generated source or artifact. With the flag off no sandbox is created and the static
 preview is unchanged. It requires a separately managed E2B template with Node + npm.
-Apply `35_managed_backend_runtime.sql` after 34 and after 30 before enabling the managed
+Apply `37_managed_backend_enrollment.sql` after 35 before enabling automatic managed-backend
+enrollment: it adds `project_managed_backend_enrollments` (one row per project incarnation,
+unique on `(project_id, project_created_at)`), the append-only
+`project_managed_backend_enrollment_events` audit table, the service-role-only enrollment and
+execution-time authorization RPCs, the admin-gated `set_managed_backend_enrollment`, and an
+enrollment guard inside `mark_managed_backend_create_started` and
+`begin_managed_backend_configuration` (signatures unchanged; the guard applies only when a
+registry row exists, so a legacy deployment is unaffected). It is additive and non-destructive
+and never deletes a Neon project or customer row. Enrollment is a SEPARATE state machine from
+the backend lifecycle — do not merge them. With
+`MAVLY_MANAGED_BACKENDS_ENROLLMENT_MODE` unset the legacy
+`MAVLY_MANAGED_BACKENDS_PROJECTS` allowlist still authorizes; setting it to any value makes the
+registry authoritative and the static list stops authorizing. Apply
+`35_managed_backend_runtime.sql` after 34 and after 30 before enabling the managed
 backend runtime: it extends the managed-backend lifecycle to
 `configuring`/`ready`/`cleanup_pending`, adds the verified-schema and gateway columns, a
 sanitized migration mirror, the service-role configuration RPCs, the public
@@ -333,9 +346,11 @@ install/Vite dev server/readiness probe/QA build, or the migrations against a da
   enable flag, shared worker secret, project allowlist or public invocation route. Local
   development and Vercel previews retain the inline `after()` path. The app admission path
   and Render Background Worker require only the existing server-side
-  `SUPABASE_SERVICE_ROLE_KEY`, `NEXT_PUBLIC_SUPABASE_URL` and `OPENROUTER_API_KEY`. The
-  root `render.yaml` starts `workers/render-generation-worker.ts` as a single serial,
-  continuously polling Node.js process; each tick invokes the existing worker. It recovers
+  `SUPABASE_SERVICE_ROLE_KEY`, `NEXT_PUBLIC_SUPABASE_URL` and `OPENROUTER_API_KEY`. AWS
+  EC2 is the designated production worker host through
+  `workers/aws-generation-worker.ts`; it polls the existing worker engine. The preserved
+  Render entry point and `render.yaml` are disabled with
+  `MAVLY_RENDER_WORKER_DISABLED=true` and remain a future fallback. The worker recovers
   expired leases, claims one ready job with `FOR UPDATE SKIP LOCKED`, re-verifies the owner
   with a service-role client, executes the unchanged generation pipeline under a 420 s
   fenced `lease_token`, and renews it every 120 s. Retries reuse only verified checkpoints
@@ -346,10 +361,11 @@ install/Vite dev server/readiness probe/QA build, or the migrations against a da
   orchestrator and trusted worker entrypoints; the managed-backend provisioning service
   only receives that client from the worker. RLS is unchanged, and the authenticated role's
   UPDATE grant explicitly excludes all worker-owned columns.** The previous Cloudflare Cron
-  configuration is retained in `wrangler.jsonc` and must be disabled before the Render
-  poller is enabled. Render deployment, runtime compatibility and memory use remain
-  unverified; see `docs/runbooks/render-generation-worker.md` for setup, monitoring,
-  pause/drain and recovery. Do not raise the 2/user or 8/global admission caps to claim
+  configuration is retained in `wrangler.jsonc` but its scheduler is disabled by
+  `MAVLY_CLOUDFLARE_WORKER_DISABLED=true`; remove its deployed trigger before AWS-only
+  production operation. Render is preserved but inactive; its reactivation instructions
+  are in `docs/runbooks/aws-generation-worker.md`. AWS deployment, runtime compatibility
+  and production behavior remain unverified. Do not raise the 2/user or 8/global admission caps to claim
   support for 1,000 concurrent users.
   **An inline run that cannot finish can be handed to the worker (migration 36).** When an
   inline attempt reaches its terminal decision with a retryable failure and this deployment
@@ -750,9 +766,11 @@ browser ── src/lib/vcaas.ts (client catalog, same-origin only)
    │      └── src/lib/deployments/*      opt-in static publish/unpublish
    │             ├── store.ts            project_deployments (RLS)
    │             └── service.ts → src/lib/vercel/provider.ts → api.vercel.com
-   ├── Render Background Worker    continuous Node process → service-role worker tick
-   │      ├── workers/render-generation-worker.ts → src/lib/generation/worker.ts
+   ├── AWS EC2 Background Worker    systemd Node process → service-role worker tick
+   │      ├── workers/aws-generation-worker.ts → src/lib/generation/worker.ts
    │      └── run-agent → OpenRouter + durable checkpoints
+   ├── Render Background Worker    preserved, disabled future fallback
+   │      └── workers/render-generation-worker.ts → src/lib/generation/worker.ts
    ├── /api/app/v1/apps/{id}/data|auth/*  public, project id + end-user session
    │      └── src/lib/app-data/gateway.ts → parameterized SQL → customer Neon database
    ├── /api/app/v1/payments/*      public, project API key (integrations:*) → Razorpay
@@ -791,8 +809,9 @@ paths with `src/lib/vcaas-scope.ts`, so unknown shapes are refused before any wo
 | `src/lib/generation/worker-config.ts` | Platform credential readiness and production/local admission dispatch mode. |
 | `src/lib/generation/verification.ts` | Claim parsing plus owner re-verification for the service-role worker. |
 | `src/lib/generation/worker.ts` | One bounded worker tick: preflight → recover → claim → verify → execute → renew. |
-| `workers/render-generation-worker.ts`, `render.yaml` | Continuous serial Render Background Worker; polls the existing queue and invokes one worker tick at a time. |
-| `workers/generation-scheduler.ts`, `wrangler.jsonc` | Retained legacy Cloudflare Cron configuration; disable its trigger before enabling the Render worker. |
+| `workers/aws-generation-worker.ts`, `infra/aws-generation-worker/mavly-aws-worker.service` | AWS EC2 process entrypoint and systemd unit; reuses the existing queue worker. |
+| `workers/render-generation-worker.ts`, `render.yaml` | Preserved Render fallback; `MAVLY_RENDER_WORKER_DISABLED=true` prevents it from polling. |
+| `workers/generation-scheduler.ts`, `wrangler.jsonc` | Retained legacy Cloudflare Cron with `MAVLY_CLOUDFLARE_WORKER_DISABLED=true`; scheduler no-ops before a worker tick. |
 | `workers/register-node-ts-resolver.mjs`, `workers/node-ts-resolver.mjs` | Node resolver hook for native TypeScript execution and source `@/` aliases in the standalone worker process. |
 | `src/lib/supabase/worker.ts` | The confined service-role client factory (scheduled worker, credit accounting, and owner-checked Android artifact download only). |
 | `src/lib/observability/` | Correlation ids, structured generation events, redaction and reported-cost accounting. |
@@ -827,7 +846,8 @@ paths with `src/lib/vcaas-scope.ts`, so unknown shapes are refused before any wo
 | `supabase/migrations/34_runtime_sandboxes.sql` | Runtime sandbox lifecycle table, active-session uniqueness, database transition table, owner-checked begin/update/stop RPCs, service-role expiry sweep, SELECT-only RLS and schema marker 34. Additive; apply after 33. |
 | `docs/architecture/phase-13-live-runtime-preview.md`, `docs/runbooks/runtime-sandbox.md` | Phase 13 design, authority, security model, residuals and the operator enable/smoke/rollback runbook. |
 | `supabase/migrations/16_durable_generation_worker.sql` | Queue columns/constraints/indexes, claim/lease/retry/recovery/resume RPCs, least-privilege grants and the worker schema marker. |
-| `docs/runbooks/render-generation-worker.md` | Current Render worker setup, monitoring and recovery runbook. |
+| `docs/runbooks/aws-generation-worker.md` | AWS worker deployment, shutdown/rollback, Cloudflare deactivation and preserved Render fallback runbook. |
+| `docs/runbooks/render-generation-worker.md` | Historical Render worker operations; use only when deliberately reactivating the fallback. |
 | `docs/runbooks/generation-worker.md` | Historical Cloudflare Cron runbook; do not use for current deployment. |
 | `src/lib/ai/retry.ts` | Bounded exponential retry, jitter and `Retry-After` parsing. |
 | `src/lib/ai/budget.ts` | Pure run-deadline policy: finalization reserve, per-attempt planning from the time actually left, the minimum useful attempt, the capped reserve for work still queued (`reserveForPendingWork`) and the reserve that keeps every queued group's own minimum (`reserveForPendingFloors`). A batch group's minimum scales with its own estimated bytes (`batchAttemptFloorMs` / `batchGroupFloorFor` in `src/lib/ai/agent.ts`), so a single small file gets a usable window instead of the full-batch 60 s floor, and the one deadline is reserved for the groups that still need it rather than letting the first consume it. |

@@ -240,6 +240,7 @@ test("a finish_reason of length is an output limit, never a success", async () =
     if (result.ok) return;
     assert.equal(result.code, "OUTPUT_LIMIT");
     assert.equal(result.retryable, false);
+    assert.equal(result.partialContent, '{"files":[');
   } finally {
     restore();
   }
@@ -305,6 +306,8 @@ test("an idle stream is aborted by the progress timeout, keeping the request id"
     assert.equal(result.code, "TIMEOUT");
     assert.match(result.error, /stopped sending tokens/i);
     assert.equal(result.metadata.providerRequestId, "gen-test-request");
+    assert.equal(result.timeoutClassification, "idle");
+    assert.equal(result.partialContent, "starting");
     // Bounded by the idle window, not by the absolute cap.
     assert.ok(elapsed < 5_000, `idle abort took ${elapsed} ms`);
   } finally {

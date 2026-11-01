@@ -153,6 +153,47 @@ test("invalid identifiers and negative counts are dropped rather than logged", (
   assert.equal(line.body.costKnown, true);
 });
 
+test("provider-attempt events retain safe run-scoped metadata without prompt content", () => {
+  const [line] = capture("generation.provider_attempt", {
+    traceId: TRACE,
+    runId: RUN_ID,
+    projectId: "my-project",
+    workerId: "aws-worker-1",
+    attempt: 4,
+    runAttempt: 4,
+    phaseAttempt: 2,
+    stage: "batch",
+    status: "TIMEOUT",
+    model: "anthropic/claude-sonnet-5",
+    providerRequestId: "req_123",
+    providerAttemptId: "33333333-3333-4333-8333-333333333333",
+    startedAt: "2026-01-02T03:04:05.000Z",
+    endedAt: "2026-01-02T03:04:15.000Z",
+    latencyMs: 10_000,
+    remainingBudgetMs: 50_000,
+    httpStatus: 200,
+    finishReason: "length",
+    timeoutClassification: "idle",
+    retryReason: "timeout_scope_reduction",
+    promptTokens: 900,
+    completionTokens: 12_000,
+    totalTokens: 12_900,
+    reasoningTokens: 2_000,
+    prompt: "must never be emitted",
+  } as GenerationEventFields);
+
+  assert.equal(line.body.event, "generation.provider_attempt");
+  assert.equal(line.body.runId, RUN_ID);
+  assert.equal(line.body.runAttempt, 4);
+  assert.equal(line.body.providerRequestId, "req_123");
+  assert.equal(line.body.providerAttemptId, "33333333-3333-4333-8333-333333333333");
+  assert.equal(line.body.timeoutClassification, "idle");
+  assert.equal(line.body.completionTokens, 12_000);
+  assert.equal(line.body.totalTokens, 12_900);
+  assert.equal(line.body.reasoningTokens, 2_000);
+  assert.equal("prompt" in line.body, false);
+});
+
 test("failure-level events use the error channel and retry events warn", () => {
   assert.equal(capture("generation.failed", { runId: RUN_ID })[0].channel, "error");
   assert.equal(capture("generation.dead_letter", { runId: RUN_ID })[0].channel, "error");

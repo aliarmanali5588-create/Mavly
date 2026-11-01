@@ -2,8 +2,44 @@ import { createHash } from "node:crypto";
 
 import { isRoutableProjectSlug } from "@/lib/project-slug";
 
+import {
+  isEnrollmentMode,
+  type EnrollmentMode,
+} from "./enrollment";
+
 export const MANAGED_BACKENDS_ENABLED_ENV = "MAVLY_MANAGED_BACKENDS_ENABLED";
+/**
+ * ⚠️ LEGACY. This was the ONLY authorization mechanism: an operator pasted every
+ * eligible project UUID here. It is retained for two reasons and neither is
+ * "keep doing it by hand":
+ *
+ *   1. Backward compatibility. When `MAVLY_MANAGED_BACKENDS_ENROLLMENT_MODE` is
+ *      unset, this list IS the authorization, exactly as before, so an existing
+ *      deployment keeps working through the migration.
+ *   2. It becomes the source of the `allowlisted` enrollment cohort once an
+ *      enrollment mode is configured. It is never a bypass around the registry.
+ */
 export const MANAGED_BACKENDS_PROJECTS_ENV = "MAVLY_MANAGED_BACKENDS_PROJECTS";
+/**
+ * ═══ ENROLLMENT CONFIGURATION (migration 37) ════════════════════════════════
+ *
+ * Unset means "legacy": authorization comes from MAVLY_MANAGED_BACKENDS_PROJECTS
+ * and no enrollment row is required. Any explicit value — including `disabled` —
+ * switches the deployment to the database-backed enrollment registry, and the
+ * legacy list stops being an authorization path.
+ */
+export const MANAGED_BACKENDS_ENROLLMENT_MODE_ENV =
+  "MAVLY_MANAGED_BACKENDS_ENROLLMENT_MODE";
+export const MANAGED_BACKENDS_ROLLOUT_PERCENT_ENV =
+  "MAVLY_MANAGED_BACKENDS_ROLLOUT_PERCENT";
+/** Server-only. Never returned by a route, a status projection or a log line. */
+export const MANAGED_BACKENDS_ROLLOUT_SALT_ENV =
+  "MAVLY_MANAGED_BACKENDS_ROLLOUT_SALT";
+export const MANAGED_BACKENDS_MAX_ACTIVE_PROVISIONS_ENV =
+  "MAVLY_MANAGED_BACKENDS_MAX_ACTIVE_PROVISIONS";
+/** Explicit internal/test projects, for `internal` mode. */
+export const MANAGED_BACKENDS_INTERNAL_PROJECTS_ENV =
+  "MAVLY_MANAGED_BACKENDS_INTERNAL_PROJECTS";
 export const NEON_AGENT_PLAN_APPROVED_ENV = "MAVLY_NEON_AGENT_PLAN_APPROVED";
 export const NEON_API_KEY_ENV = "NEON_API_KEY";
 export const NEON_ORG_ID_ENV = "NEON_ORG_ID";
@@ -24,6 +60,9 @@ export const APP_GATEWAY_ORIGIN_ENV = "MAVLY_APP_GATEWAY_ORIGIN";
 export const MANAGED_BACKENDS_RPC_SECRET_ENV = "MAVLY_MANAGED_BACKENDS_RPC_SECRET";
 
 const MAX_PROJECTS = 500;
+/** A bounded ceiling on concurrent provisions. Never unbounded, never zero. */
+const MAX_ACTIVE_PROVISIONS_CEILING = 50;
+const DEFAULT_MAX_ACTIVE_PROVISIONS = 5;
 
 export type ManagedBackendConfigProblem =
   | "disabled"
@@ -39,7 +78,28 @@ export type ManagedBackendConfigProblem =
   | "missing_gateway_origin"
   | "invalid_gateway_origin"
   | "missing_rpc_secret"
-  | "invalid_rpc_secret";
+  | "invalid_rpc_secret"
+  | "invalid_enrollment_mode"
+  | "invalid_rollout_percent"
+  | "missing_rollout_salt"
+  | "invalid_max_active_provisions";
+
+/**
+ * The enrollment half of the configuration. `mode: null` means the deployment is
+ * still on the legacy static allowlist; anything else means the enrollment
+ * registry is authoritative.
+ */
+export interface ManagedBackendEnrollmentConfig {
+  mode: EnrollmentMode | null;
+  /** 0–99. Meaningful only for `percentage`. */
+  rolloutPercent: number;
+  /** Server-only salt. Empty unless `percentage` is configured. */
+  rolloutSalt: string;
+  maxActiveProvisions: number;
+  internalProjects: string[];
+  /** True when the database-backed registry decides authorization. */
+  registryAuthoritative: boolean;
+}
 
 export interface ManagedBackendConfig {
   requested: boolean;
@@ -53,6 +113,7 @@ export interface ManagedBackendConfig {
   gatewayOrigin: string | null;
   /** SHA-256 of the server-only gateway proof; the secret itself is not kept. */
   rpcSecretHash: string | null;
+  enrollment: ManagedBackendEnrollmentConfig;
   problems: ManagedBackendConfigProblem[];
 }
 
@@ -111,6 +172,105 @@ export function parseRpcSecret(value: string | undefined): string | null {
   return createHash("sha256").update(secret).digest("hex");
 }
 
+/**
+ * ═══ ENROLLMENT CONFIGURATION PARSING ═══════════════════════════════════════
+ *
+ * Every failure mode here fails CLOSED. A malformed percentage, a missing salt
+ * for `percentage`, or a nonsense capacity does not fall back to "enroll
+ * everyone" — it records a problem, which makes `ready` false, which blocks
+ * provisioning entirely. That is the only safe direction.
+ */
+export function parseEnrollmentConfig(
+  env: Environment,
+  problems: ManagedBackendConfigProblem[],
+): ManagedBackendEnrollmentConfig {
+  const rawMode = env[MANAGED_BACKENDS_ENROLLMENT_MODE_ENV]?.trim().toLowerCase();
+  const internalProjects = splitCohort(env[MANAGED_BACKENDS_INTERNAL_PROJECTS_ENV]);
+
+  /**
+   * An unset mode is the documented legacy path: the static project list is the
+   * authorization. An explicitly EMPTY value is a configuration mistake and is
+   * refused rather than silently treated as legacy, because a half-migrated
+   * deployment should stop, not quietly keep the old behavior.
+   */
+  if (rawMode === undefined) {
+    return {
+      mode: null,
+      rolloutPercent: 0,
+      rolloutSalt: "",
+      maxActiveProvisions: DEFAULT_MAX_ACTIVE_PROVISIONS,
+      internalProjects,
+      registryAuthoritative: false,
+    };
+  }
+
+  if (!isEnrollmentMode(rawMode)) {
+    problems.push("invalid_enrollment_mode");
+    return {
+      mode: "disabled",
+      rolloutPercent: 0,
+      rolloutSalt: "",
+      maxActiveProvisions: DEFAULT_MAX_ACTIVE_PROVISIONS,
+      internalProjects,
+      registryAuthoritative: true,
+    };
+  }
+
+  const rawPercent = env[MANAGED_BACKENDS_ROLLOUT_PERCENT_ENV]?.trim() ?? "";
+  let rolloutPercent = 0;
+  if (rawMode === "percentage") {
+    /**
+     * ⚠️ NO IMPLICIT 100. A missing or malformed percentage is refused, never
+     * defaulted upward. `0` is the only safe default and it enrolls nobody.
+     */
+    if (!/^\d{1,3}$/.test(rawPercent)) {
+      problems.push("invalid_rollout_percent");
+    } else {
+      const parsed = Number.parseInt(rawPercent, 10);
+      if (parsed < 0 || parsed > 99) problems.push("invalid_rollout_percent");
+      else rolloutPercent = parsed;
+    }
+  } else if (rawPercent) {
+    // A percentage outside `percentage` mode is dead configuration. Refuse it so
+    // an operator does not believe a rollout is in effect when it is not.
+    if (!/^\d{1,3}$/.test(rawPercent) || Number.parseInt(rawPercent, 10) > 99) {
+      problems.push("invalid_rollout_percent");
+    }
+  }
+
+  const rolloutSalt =
+    rawMode === "percentage" ? (env[MANAGED_BACKENDS_ROLLOUT_SALT_ENV]?.trim() ?? "") : "";
+  if (rawMode === "percentage" && rolloutSalt.length < 16) {
+    // A short salt makes the bucket predictable across deployments. 16 chars is
+    // a floor, not a recommendation; generate 32 random bytes.
+    problems.push("missing_rollout_salt");
+  }
+
+  const rawMax = env[MANAGED_BACKENDS_MAX_ACTIVE_PROVISIONS_ENV]?.trim() ?? "";
+  let maxActiveProvisions = DEFAULT_MAX_ACTIVE_PROVISIONS;
+  if (rawMax) {
+    if (!/^\d{1,2}$/.test(rawMax)) {
+      problems.push("invalid_max_active_provisions");
+    } else {
+      const parsed = Number.parseInt(rawMax, 10);
+      if (parsed < 1 || parsed > MAX_ACTIVE_PROVISIONS_CEILING) {
+        problems.push("invalid_max_active_provisions");
+      } else {
+        maxActiveProvisions = parsed;
+      }
+    }
+  }
+
+  return {
+    mode: rawMode,
+    rolloutPercent,
+    rolloutSalt,
+    maxActiveProvisions,
+    internalProjects,
+    registryAuthoritative: true,
+  };
+}
+
 export function parseManagedBackendConfig(env: Environment): ManagedBackendConfig {
   const requested = isOn(env[MANAGED_BACKENDS_ENABLED_ENV]);
   const apiKey = env[NEON_API_KEY_ENV]?.trim() || null;
@@ -123,6 +283,7 @@ export function parseManagedBackendConfig(env: Environment): ManagedBackendConfi
   const rawSecret = env[MANAGED_BACKENDS_RPC_SECRET_ENV]?.trim() ?? "";
   const rpcSecretHash = parseRpcSecret(env[MANAGED_BACKENDS_RPC_SECRET_ENV]);
   const problems: ManagedBackendConfigProblem[] = [];
+  const enrollment = parseEnrollmentConfig(env, problems);
 
   if (!requested) problems.push("disabled");
   if (!isOn(env[NEON_AGENT_PLAN_APPROVED_ENV])) {
@@ -135,7 +296,21 @@ export function parseManagedBackendConfig(env: Environment): ManagedBackendConfi
   else if (!/^[a-z0-9]+(?:-[a-z0-9]+){1,5}$/.test(regionId)) {
     problems.push("invalid_region_id");
   }
-  if (cohort.length === 0 || cohort.includes("*")) problems.push("missing_cohort");
+  /**
+   * ⚠️ THE COHORT RULE DEPENDS ON THE AUTHORIZATION MODEL.
+   *
+   * Legacy: the project list IS the authorization, so an empty list (or `*`)
+   * must keep failing closed exactly as before.
+   *
+   * Registry: the list is no longer an authorization path, so it is allowed to
+   * be empty — that is the whole point of this change. `*` is still refused
+   * everywhere, because a wildcard cohort is the one value that would turn a
+   * list into "everyone".
+   */
+  if (cohort.includes("*")) problems.push("missing_cohort");
+  else if (!enrollment.registryAuthoritative && cohort.length === 0) {
+    problems.push("missing_cohort");
+  }
   if (cohort.length > MAX_PROJECTS) problems.push("invalid_cohort");
   if (cohort.some((projectId) => !isRoutableProjectSlug(projectId))) {
     problems.push("invalid_cohort");
@@ -156,6 +331,7 @@ export function parseManagedBackendConfig(env: Environment): ManagedBackendConfi
     encryptionKey,
     gatewayOrigin,
     rpcSecretHash,
+    enrollment,
     problems,
   };
 }
