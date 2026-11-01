@@ -1,3 +1,8 @@
+# Render is preserved as a future fallback and reactivation target, but it is
+# intentionally disabled while AWS is the active background worker host for Mavly.
+# To re-enable Render in the future, remove MAVLY_RENDER_WORKER_DISABLED and
+# redeploy this worker. The implementation and historical configuration remain in
+# place and are not deleted.
 services:
   - type: worker
     name: mavly-generation-worker
@@ -15,6 +20,8 @@ services:
       - key: NODE_ENV
         value: production
       - key: MAVLY_RENDER_WORKER
+        value: "true"
+      - key: MAVLY_RENDER_WORKER_DISABLED
         value: "true"
       - key: NEXT_PUBLIC_SUPABASE_URL
         sync: false

@@ -45,6 +45,12 @@ function logTick(result: WorkerTickResult, durationMs: number): void {
 }
 
 async function run(): Promise<void> {
+  const renderDisabled = process.env.MAVLY_RENDER_WORKER_DISABLED?.trim().toLowerCase() === "true" || process.env.MAVLY_RENDER_WORKER_DISABLED?.trim() === "1";
+  if (renderDisabled) {
+    console.info(`[generation-worker] disabled (${WORKER_ID}); Render worker remains preserved but inactive while AWS is the active host.`);
+    return;
+  }
+
   process.once("SIGTERM", () => requestShutdown("SIGTERM"));
   process.once("SIGINT", () => requestShutdown("SIGINT"));
   console.info(`[generation-worker] started (${WORKER_ID})`);

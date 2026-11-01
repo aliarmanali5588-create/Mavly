@@ -73,3 +73,16 @@ test("the Render background worker selects production dispatch", () => {
   assert.equal(config.workerId, "render-generation-worker");
   assert.equal(dispatchModeForProject("any-project", config), "worker");
 });
+
+test("Render remains disabled while AWS is the active host", () => {
+  const config = parseWorkerConfig(env({
+    VERCEL_ENV: undefined,
+    MAVLY_RENDER_WORKER: "true",
+    MAVLY_RENDER_WORKER_DISABLED: "true",
+  }));
+  assert.equal(config.requested, false);
+  assert.equal(config.ready, false);
+  assert.equal(config.production, false);
+  assert.equal(config.workerId, "render-generation-worker-disabled");
+  assert.equal(dispatchModeForProject("any-project", config), "inline");
+});

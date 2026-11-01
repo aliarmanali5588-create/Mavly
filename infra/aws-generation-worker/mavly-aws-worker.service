@@ -1,0 +1,24 @@
+[Unit]
+Description=Mavly AWS Generation Worker
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=mavly-worker
+Group=mavly-worker
+WorkingDirectory=/srv/mavly
+Environment=NODE_ENV=production
+Environment=MAVLY_AWS_WORKER=true
+Environment=MAVLY_RENDER_WORKER_DISABLED=true
+Environment=NEXT_PUBLIC_SUPABASE_URL=replace-me
+Environment=SUPABASE_SERVICE_ROLE_KEY=replace-me
+Environment=OPENROUTER_API_KEY=replace-me
+ExecStart=/usr/bin/node --import /srv/mavly/workers/register-node-ts-resolver.mjs /srv/mavly/workers/aws-generation-worker.ts
+Restart=on-failure
+RestartSec=5
+KillSignal=SIGINT
+TimeoutStopSec=300
+
+[Install]
+WantedBy=multi-user.target

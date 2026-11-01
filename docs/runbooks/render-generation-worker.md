@@ -1,9 +1,16 @@
 # Runbook — Render Generation Worker
 
-Status: **Render Background Worker adapter and Blueprint added; deployment and live
-processing are not verified.** Vercel continues to host the website. Render only runs a
-continuous Node.js process that polls the existing Supabase `project_runs` queue and calls
-the existing `runGenerationWorkerOnce()` tick.
+Status: **Render Background Worker implementation is preserved for future use, but it is
+intentionally disabled while AWS is the active background worker host for Mavly.**
+Vercel continues to host the website. Render remains available as a deployment fallback
+and can be re-enabled later without deleting its configuration or implementation.
+
+Deployment status: `DISABLED / NOT ACTIVE`
+
+The existing Render worker files remain in place, the queue/claiming logic stays unchanged,
+and AWS is the current active worker host. To re-enable Render in the future, remove
+`MAVLY_RENDER_WORKER_DISABLED=true` from the deployment environment and redeploy the
+service; the existing file set and historical configuration continue to be available.
 
 ## Architecture
 
