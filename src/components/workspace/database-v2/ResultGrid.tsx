@@ -53,7 +53,7 @@ export function ResultGrid({
     return (
         <div className="space-y-2">
             {result.truncated ? <p className="text-warning text-xs font-medium">{t("engineV2.database.truncated")}</p> : null}
-            <div className="border-border max-h-[55vh] overflow-auto rounded-lg border">
+            <div className="border-[var(--clay-line)] max-h-[55vh] overflow-auto rounded-lg border">
                 <table className="w-full text-xs">
                     <thead className="bg-muted sticky top-0 text-left">
                         <tr>
@@ -85,7 +85,7 @@ export function ResultGrid({
                         {result.rows.map((row, index) => (
                             <tr
                                 key={index}
-                                className={`border-border border-t ${onRowClick ? "hover:bg-muted/60 cursor-pointer" : ""} ${selection?.selected.has(index) ? "bg-muted" : ""}`}
+                                className={`border-[var(--clay-line)] border-t ${onRowClick ? "hover:bg-[var(--clay-sunken)] cursor-pointer" : ""} ${selection?.selected.has(index) ? "bg-[var(--clay-sunken)]" : ""}`}
                                 onClick={onRowClick ? () => onRowClick(index) : undefined}
                             >
                                 {selection ? (

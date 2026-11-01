@@ -354,7 +354,7 @@ export function ProjectPaymentsIntegration({
                                     description="Orders appear here after your published app calls the payments gateway."
                                 />
                             ) : (
-                                <ul className="divide-border divide-y">
+                                <ul className="divide-[var(--clay-line)] divide-y">
                                     {status.transactions.map(transaction => (
                                         <li key={`${transaction.orderId ?? transaction.receipt}-${transaction.createdAt}`} className="flex flex-wrap items-center gap-2 py-2">
                                             <code className="min-w-0 flex-1 truncate font-mono text-xs">
@@ -387,7 +387,7 @@ export function ProjectPaymentsIntegration({
                                     description="Events appear after Razorpay calls the webhook address."
                                 />
                             ) : (
-                                <ul className="divide-border divide-y">
+                                <ul className="divide-[var(--clay-line)] divide-y">
                                     {(status.events ?? []).map(event => (
                                         <li key={`${event.eventId}-${event.receivedAt}`} className="space-y-1 py-2">
                                             <div className="flex flex-wrap items-center gap-2">

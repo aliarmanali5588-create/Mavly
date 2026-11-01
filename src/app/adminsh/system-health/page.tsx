@@ -45,7 +45,7 @@ export default function SystemHealthAdminPage() {
     if (name.includes("Database")) return <Database className="w-4 h-4 text-foreground" />;
     if (name.includes("Worker")) return <Cpu className="w-4 h-4 text-foreground" />;
     if (name.includes("Model") || name.includes("OpenRouter"))
-      return <Zap className="w-4 h-4 text-amber-500" />;
+      return <Zap className="w-4 h-4 text-warning" />;
     if (name.includes("Domain") || name.includes("DNS"))
       return <Globe className="w-4 h-4 text-muted-foreground" />;
     return <HardDrive className="w-4 h-4 text-muted-foreground" />;
@@ -55,21 +55,21 @@ export default function SystemHealthAdminPage() {
     switch (status) {
       case "Operational":
         return (
-          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200/60 font-mono">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-medium bg-success-subtle text-success-subtle-foreground border border-success/25 font-mono">
+            <span className="w-1.5 h-1.5 rounded-full bg-success" />
             Operational
           </span>
         );
       case "Degraded":
         return (
-          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-medium bg-amber-50 text-amber-700 border border-amber-200/60 font-mono">
-            <AlertTriangle className="w-3 h-3 text-amber-600" />
+          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-medium bg-warning-subtle text-warning-subtle-foreground border border-warning/25 font-mono">
+            <AlertTriangle className="w-3 h-3 text-warning" />
             Degraded
           </span>
         );
       case "Maintenance":
         return (
-          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-medium bg-[var(--clay-sunken)] text-foreground border border-[var(--clay-line)]/60 font-mono">
+          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-medium bg-[var(--clay-sunken)] text-foreground border border-[var(--clay-line)] font-mono">
             <Clock className="w-3 h-3 text-foreground" />
             Maintenance
           </span>
@@ -82,7 +82,7 @@ export default function SystemHealthAdminPage() {
       {/* 1. Global Platform Uptime Banner */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-5 rounded-2xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)]">
         <div className="flex items-start sm:items-center gap-3.5">
-          <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 border border-emerald-200/60 flex items-center justify-center shrink-0">
+          <div className="w-10 h-10 rounded-xl bg-success-subtle text-success border border-success/25 flex items-center justify-center shrink-0">
             <ShieldCheck className="w-5 h-5" />
           </div>
           <div>
@@ -90,7 +90,7 @@ export default function SystemHealthAdminPage() {
               <h2 className="text-sm font-semibold tracking-tight text-foreground">
                 All Core Services Fully Operational
               </h2>
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              <span className="w-2 h-2 rounded-full bg-success animate-pulse" />
             </div>
             <p className="text-xs text-muted-foreground mt-0.5">
               99.98% composite availability recorded across the last 90 calendar days
@@ -101,7 +101,7 @@ export default function SystemHealthAdminPage() {
         <button
           onClick={handlePingAll}
           disabled={isRefreshing}
-          className="self-start md:self-auto flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-foreground bg-[var(--clay-sunken)] hover:bg-[var(--clay-sunken)] border border-[var(--clay-line)] rounded-lg transition-colors shrink-0"
+          className="self-start md:self-auto flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-foreground bg-[var(--clay-sunken)] hover:bg-[var(--clay-sunken)] border border-[var(--clay-line)] rounded-lg transition-colors shrink-0 shadow-[var(--clay-well-1)]"
         >
           <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? "animate-spin" : ""}`} />
           <span>{isRefreshing ? "Probing..." : "Probe All Services"}</span>
@@ -116,7 +116,7 @@ export default function SystemHealthAdminPage() {
             <Activity className="w-3.5 h-3.5 text-muted-foreground" />
           </div>
           <h3 className="text-xl font-bold tracking-tight text-foreground font-mono mt-1">24ms</h3>
-          <p className="text-[11px] text-emerald-600 font-medium mt-1">Edge routed via Cloudflare</p>
+          <p className="text-[11px] text-success font-medium mt-1">Edge routed via Cloudflare</p>
         </div>
 
         <div className="p-4 rounded-xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)]">
@@ -140,9 +140,9 @@ export default function SystemHealthAdminPage() {
         <div className="p-4 rounded-xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)]">
           <div className="flex items-center justify-between text-xs text-muted-foreground font-medium">
             <span>Static Cache Ratio</span>
-            <Sparkles className="w-3.5 h-3.5 text-emerald-500" />
+            <Sparkles className="w-3.5 h-3.5 text-success" />
           </div>
-          <h3 className="text-xl font-bold tracking-tight text-emerald-700 font-mono mt-1">98.4%</h3>
+          <h3 className="text-xl font-bold tracking-tight text-success font-mono mt-1">98.4%</h3>
           <p className="text-[11px] text-muted-foreground mt-1">Vercel edge preview hits</p>
         </div>
       </div>
@@ -158,11 +158,11 @@ export default function SystemHealthAdminPage() {
           {services.map((svc) => (
             <div
               key={svc.name}
-              className="p-5 rounded-2xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)] hover:border-black/20 transition-all flex flex-col justify-between space-y-4"
+              className="p-5 rounded-2xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)] hover:border-[var(--clay-line-strong)] transition-all flex flex-col justify-between space-y-4"
             >
               <div>
                 <div className="flex items-start justify-between gap-2">
-                  <div className="p-2 rounded-lg bg-[var(--clay-sunken)] border border-[var(--clay-line)]">
+                  <div className="p-2 rounded-lg bg-[var(--clay-sunken)] border border-[var(--clay-line)] shadow-[var(--clay-well-1)]">
                     {getServiceIcon(svc.name)}
                   </div>
                   {getStatusBadge(svc.status)}
@@ -186,7 +186,7 @@ export default function SystemHealthAdminPage() {
                   <span className="text-muted-foreground block text-[10px] uppercase font-semibold">
                     Response
                   </span>
-                  <span className="font-mono font-bold text-emerald-600">{svc.latency}</span>
+                  <span className="font-mono font-bold text-success">{svc.latency}</span>
                 </div>
 
                 <button
@@ -212,22 +212,22 @@ export default function SystemHealthAdminPage() {
             <h4 className="text-sm font-semibold tracking-tight text-foreground">Past Postmortems & Incident History</h4>
             <p className="text-xs text-muted-foreground">Zero active alerts or degradations currently ongoing</p>
           </div>
-          <span className="text-[11px] font-mono text-emerald-700 bg-emerald-50 border border-emerald-200/60 px-2 py-0.5 rounded">
+          <span className="text-[11px] font-mono text-success bg-success-subtle border border-success/25 px-2 py-0.5 rounded">
             All Resolved
           </span>
         </div>
 
-        <div className="divide-y divide-black/[0.04]">
+        <div className="divide-y divide-[var(--clay-line)]">
           {incidents.map((inc) => (
             <div
               key={inc.id}
-              className="p-4 hover:bg-[var(--clay-sunken)]/70 transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs"
+              className="p-4 hover:bg-[var(--clay-sunken)] transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs"
             >
               <div className="space-y-1">
                 <div className="flex items-center gap-2">
                   <span className="font-mono text-muted-foreground text-[11px]">{inc.id}</span>
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200/60 font-mono">
-                    <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-success-subtle text-success-subtle-foreground border border-success/25 font-mono">
+                    <CheckCircle2 className="w-3 h-3 text-success" />
                     {inc.status}
                   </span>
                   <span className="font-semibold text-foreground">{inc.title}</span>
@@ -254,8 +254,8 @@ export default function SystemHealthAdminPage() {
 
       {/* Incident Detail Modal */}
       {selectedIncident && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs animate-in fade-in">
-          <div className="bg-card rounded-2xl max-w-lg w-full border border-black/[0.1] shadow-2xl p-6 relative space-y-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[var(--clay-scrim)] backdrop-blur-[3px] animate-in fade-in">
+          <div className="bg-card rounded-2xl max-w-lg w-full border border-[var(--clay-line)] shadow-[var(--clay-float)] p-6 relative space-y-4">
             <div className="flex items-center justify-between pb-3 border-b border-[var(--clay-line)]">
               <div className="flex items-center gap-2">
                 <Info className="w-4 h-4 text-foreground" />
@@ -269,7 +269,7 @@ export default function SystemHealthAdminPage() {
               </button>
             </div>
 
-            <div className="space-y-3 bg-[var(--clay-sunken)] p-4 rounded-xl border border-[var(--clay-line)] text-xs">
+            <div className="space-y-3 bg-[var(--clay-sunken)] p-4 rounded-xl border border-[var(--clay-line)] text-xs shadow-[var(--clay-well-1)]">
               <div>
                 <span className="text-muted-foreground block text-[10px] uppercase font-bold">Event Summary</span>
                 <p className="font-bold text-foreground mt-0.5">{selectedIncident.title}</p>
@@ -293,7 +293,7 @@ export default function SystemHealthAdminPage() {
 
               <div className="pt-2 border-t border-[var(--clay-line)]">
                 <span className="text-muted-foreground block text-[10px] uppercase font-bold">Technical Root Cause & Fix</span>
-                <p className="text-foreground bg-card p-2.5 rounded-lg border border-[var(--clay-line)] mt-1 leading-relaxed">
+                <p className="text-foreground bg-card p-2.5 rounded-lg border border-[var(--clay-line)] mt-1 leading-relaxed shadow-[var(--clay-elev-1)]">
                   {selectedIncident.details}
                 </p>
               </div>

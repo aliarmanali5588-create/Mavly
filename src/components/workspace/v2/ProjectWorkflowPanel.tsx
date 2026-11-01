@@ -349,7 +349,7 @@ export function ProjectWorkflowPanel({
                                     {workflow.tasks.length === 0 ? (
                                         <p className="text-muted-foreground text-xs">No specialist tasks were recorded.</p>
                                     ) : (
-                                        <ul className="divide-border divide-y">
+                                        <ul className="divide-[var(--clay-line)] divide-y">
                                             {workflow.tasks.map(task => (
                                                 <li key={task.key} className="space-y-1.5 py-2">
                                                     <div className="flex flex-wrap items-center gap-2">
@@ -476,7 +476,7 @@ export function ProjectWorkflowPanel({
                                     {proposalList.length === 0 ? (
                                         <p className="text-muted-foreground text-xs">No deployment proposals yet.</p>
                                     ) : (
-                                        <ul className="divide-border divide-y">
+                                        <ul className="divide-[var(--clay-line)] divide-y">
                                             {proposalList.map(proposal => {
                                                 const summary = summaryRecord(proposal);
                                                 const risks = stringList(summary.risks);

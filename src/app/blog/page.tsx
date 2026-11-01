@@ -122,7 +122,7 @@ export default function BlogPage() {
               onClick={() => setSelectedCategory(cat)}
               className={`px-3.5 py-1.5 text-xs font-semibold rounded-xl transition-all cursor-pointer ${
                 selectedCategory === cat
-                  ? "bg-black text-white shadow-xs"
+                  ? "bg-black text-white shadow-[var(--clay-elev-1)]"
                   : "bg-card text-muted-foreground hover:text-black border border-[var(--clay-line)]"
               }`}
             >
@@ -136,7 +136,7 @@ export default function BlogPage() {
           {filteredPosts.map((post) => (
             <article
               key={post.id}
-              className="p-8 rounded-3xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)] hover:border-black/20 transition-all flex flex-col justify-between space-y-6"
+              className="p-8 rounded-3xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)] hover:border-[var(--clay-line-strong)] transition-all flex flex-col justify-between space-y-6"
             >
               <div className="space-y-3">
                 <div className="flex items-center gap-2 text-xs text-muted-foreground font-medium">
@@ -174,7 +174,7 @@ export default function BlogPage() {
         {/* Article Reader Modal */}
         {readingPost && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
-            <div className="bg-card rounded-3xl max-w-2xl w-full max-h-[85vh] overflow-y-auto border border-[var(--clay-line)] shadow-2xl p-6 sm:p-8 relative space-y-6">
+            <div className="bg-card rounded-3xl max-w-2xl w-full max-h-[85vh] overflow-y-auto border border-[var(--clay-line)] shadow-[var(--clay-float)] p-6 sm:p-8 relative space-y-6">
               <button
                 type="button"
                 onClick={() => setReadingPost(null)}

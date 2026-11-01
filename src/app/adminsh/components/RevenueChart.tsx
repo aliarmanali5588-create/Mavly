@@ -33,7 +33,7 @@ function UnavailableRevenueChart() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-[var(--clay-line)]">
         <div>
           <div className="flex items-center gap-2">
-            <div className="p-1.5 rounded-lg bg-[var(--clay-sunken)] text-muted-foreground border border-[var(--clay-line)]">
+            <div className="p-1.5 rounded-lg bg-[var(--clay-sunken)] text-muted-foreground border border-[var(--clay-line)] shadow-[var(--clay-well-1)]">
               <IndianRupee className="w-4 h-4" />
             </div>
             <h2 className="text-base font-bold text-foreground">Revenue Velocity</h2>
@@ -44,11 +44,11 @@ function UnavailableRevenueChart() {
         </div>
 
         <div className="flex items-center gap-2.5">
-          <div className="px-3 py-1.5 rounded-xl bg-[var(--clay-sunken)] border border-black/[0.05] text-right">
+          <div className="px-3 py-1.5 rounded-xl bg-[var(--clay-sunken)] border border-[var(--clay-line)] text-right shadow-[var(--clay-well-1)]">
             <span className="text-[10px] text-muted-foreground uppercase font-bold block">Cumulative</span>
             <span className="text-sm font-extrabold text-muted-foreground font-mono">—</span>
           </div>
-          <div className="px-3 py-1.5 rounded-xl bg-[var(--clay-sunken)] border border-black/[0.05] text-right">
+          <div className="px-3 py-1.5 rounded-xl bg-[var(--clay-sunken)] border border-[var(--clay-line)] text-right shadow-[var(--clay-well-1)]">
             <span className="text-[10px] text-muted-foreground uppercase font-bold block">Growth</span>
             <span className="text-sm font-extrabold text-muted-foreground flex items-center gap-1 font-mono">
               <TrendingUp className="w-3.5 h-3.5" />
@@ -58,7 +58,7 @@ function UnavailableRevenueChart() {
         </div>
       </div>
 
-      <div className="h-52 w-full rounded-xl border border-dashed border-black/[0.1] bg-[var(--clay-sunken)]/50 flex flex-col items-center justify-center px-6 text-center gap-2">
+      <div className="h-52 w-full rounded-xl border border-dashed border-[var(--clay-line)] bg-[var(--clay-sunken)] flex flex-col items-center justify-center px-6 text-center gap-2 shadow-[var(--clay-well-1)]">
         <Info className="w-5 h-5 text-muted-foreground" />
         <p className="text-sm font-semibold text-foreground">No Mavly revenue source is configured</p>
         <p className="text-xs text-muted-foreground max-w-md leading-relaxed">
@@ -67,7 +67,7 @@ function UnavailableRevenueChart() {
         </p>
       </div>
 
-      <div className="p-3 rounded-xl bg-[var(--clay-sunken)] border border-[var(--clay-line)] text-xs text-muted-foreground flex items-center gap-2">
+      <div className="p-3 rounded-xl bg-[var(--clay-sunken)] border border-[var(--clay-line)] text-xs text-muted-foreground flex items-center gap-2 shadow-[var(--clay-well-1)]">
         <Info className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
         <span>Revenue appears here only after a real billing source is connected.</span>
       </div>
@@ -100,7 +100,7 @@ function DemoRevenueChart() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-[var(--clay-line)]">
         <div>
           <div className="flex items-center gap-2">
-            <div className="p-1.5 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200">
+            <div className="p-1.5 rounded-lg bg-success-subtle text-success-subtle-foreground border border-success/25">
               <IndianRupee className="w-4 h-4" />
             </div>
             <h2 className="text-base font-bold text-foreground">Revenue Velocity</h2>
@@ -111,7 +111,7 @@ function DemoRevenueChart() {
         </div>
 
         <div className="flex items-center gap-2.5">
-          <div className="px-3 py-1.5 rounded-xl bg-[var(--clay-sunken)] border border-black/[0.05] text-right">
+          <div className="px-3 py-1.5 rounded-xl bg-[var(--clay-sunken)] border border-[var(--clay-line)] text-right shadow-[var(--clay-well-1)]">
             <span className="text-[10px] text-muted-foreground uppercase font-bold block">
               Cumulative
             </span>
@@ -119,11 +119,11 @@ function DemoRevenueChart() {
               ₹14,22,500
             </span>
           </div>
-          <div className="px-3 py-1.5 rounded-xl bg-emerald-50 border border-emerald-200/60 text-right">
-            <span className="text-[10px] text-emerald-700 uppercase font-bold block">
+          <div className="px-3 py-1.5 rounded-xl bg-success-subtle border border-success/25 text-right">
+            <span className="text-[10px] text-success uppercase font-bold block">
               Growth
             </span>
-            <span className="text-sm font-extrabold text-emerald-800 flex items-center gap-1 font-mono">
+            <span className="text-sm font-extrabold text-success-subtle-foreground flex items-center gap-1 font-mono">
               <TrendingUp className="w-3.5 h-3.5" />
               <span>+53.7%</span>
             </span>
@@ -154,7 +154,7 @@ function DemoRevenueChart() {
               >
                 {/* Floating Precision Tooltip */}
                 {isHovered ? (
-                  <div className="absolute -top-11 px-3 py-1.5 rounded-xl bg-black text-white text-[11px] font-bold shadow-xl whitespace-nowrap animate-in fade-in zoom-in-95 font-mono z-20">
+                  <div className="absolute -top-11 px-3 py-1.5 rounded-xl bg-black text-white text-[11px] font-bold shadow-[var(--clay-float)] whitespace-nowrap animate-in fade-in zoom-in-95 font-mono z-20">
                     {item.label} · {item.month} 2026
                   </div>
                 ) : null}
@@ -184,7 +184,7 @@ function DemoRevenueChart() {
 
       {/* ── Active Month Highlight Footer ── */}
       {activeMonth ? (
-        <div className="p-3 rounded-xl bg-[var(--clay-sunken)] border border-[var(--clay-line)] flex items-center justify-between text-xs">
+        <div className="p-3 rounded-xl bg-[var(--clay-sunken)] border border-[var(--clay-line)] flex items-center justify-between text-xs shadow-[var(--clay-well-1)]">
           <div className="flex items-center gap-2 text-muted-foreground">
             <Info className="w-3.5 h-3.5 text-muted-foreground" />
             <span>

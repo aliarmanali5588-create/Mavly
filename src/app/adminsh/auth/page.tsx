@@ -32,14 +32,14 @@ export default function AdminAuthPage() {
         <div className="max-w-6xl mx-auto px-4 sm:px-8 h-16 flex items-center justify-between">
           <Link
             href="/"
-            className="inline-flex items-center gap-2 text-xs font-semibold text-muted-foreground hover:text-black transition-colors py-1.5 px-2.5 rounded-xl hover:bg-black/[0.04]"
+            className="inline-flex items-center gap-2 text-xs font-semibold text-muted-foreground hover:text-black transition-colors py-1.5 px-2.5 rounded-xl hover:bg-[var(--clay-sunken)]"
           >
             <ArrowLeft className="w-3.5 h-3.5" />
             <span>Return to Site</span>
           </Link>
 
           <div className="flex items-center gap-2.5">
-            <div className="w-7 h-7 rounded-xl overflow-hidden bg-card shadow-xs p-0.5 border border-[var(--clay-line)] flex items-center justify-center shrink-0">
+            <div className="w-7 h-7 rounded-xl overflow-hidden bg-card shadow-[var(--clay-elev-1)] p-0.5 border border-[var(--clay-line)] flex items-center justify-center shrink-0">
               <Image
                 src="/logo/Mavly.png"
                 alt="Mavly Logo"
@@ -54,7 +54,7 @@ export default function AdminAuthPage() {
               <span className="font-extrabold tracking-tight text-foreground text-sm">
                 Mavly
               </span>
-              <span className="px-1.5 py-0.5 text-[9px] font-mono font-bold tracking-wider uppercase bg-black text-white rounded">
+              <span className="px-1.5 py-0.5 text-[9px] font-mono font-bold tracking-wider uppercase bg-black text-white rounded shadow-[var(--clay-elev-ink-1)]">
                 ADMIN
               </span>
             </div>
@@ -68,7 +68,7 @@ export default function AdminAuthPage() {
           {/* Card Header & Branding */}
           <div className="flex flex-col items-center text-center space-y-3">
             <div className="relative">
-              <div className="w-14 h-14 rounded-2xl overflow-hidden bg-card shadow-sm p-1 border border-[var(--clay-line)] flex items-center justify-center shrink-0 select-none">
+              <div className="w-14 h-14 rounded-2xl overflow-hidden bg-card shadow-[var(--clay-elev-1)] p-1 border border-[var(--clay-line)] flex items-center justify-center shrink-0 select-none">
                 <Image
                   src="/logo/Mavly.png"
                   alt="Mavly Logo"
@@ -79,7 +79,7 @@ export default function AdminAuthPage() {
                   referrerPolicy="no-referrer"
                 />
               </div>
-              <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-black text-white flex items-center justify-center shadow-md border-2 border-white">
+              <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-black text-white flex items-center justify-center shadow-[var(--clay-elev-ink-1)] border-2 border-card">
                 <Lock className="w-2.5 h-2.5" />
               </div>
             </div>
@@ -104,7 +104,7 @@ export default function AdminAuthPage() {
               type="button"
               disabled={isLoading}
               onClick={handleGoogleClick}
-              className="w-full h-11 px-4 rounded-xl bg-primary hover:bg-[var(--clay-brand-hover)] text-white font-semibold text-xs sm:text-sm flex items-center justify-center gap-3 shadow-[var(--clay-elev-ink-2)] hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] transition-all duration-200 disabled:opacity-70 disabled:pointer-events-none cursor-pointer select-none"
+              className="w-full h-11 px-4 rounded-xl bg-primary hover:bg-[var(--clay-brand-hover)] text-white font-semibold text-xs sm:text-sm flex items-center justify-center gap-3 shadow-[var(--clay-elev-ink-2)] clay-press transition-all duration-200 disabled:opacity-70 disabled:pointer-events-none cursor-pointer select-none"
             >
               {isLoading ? (
                 <Loader2 className="w-4 h-4 animate-spin text-white" />
@@ -133,7 +133,7 @@ export default function AdminAuthPage() {
           </div>
 
           {/* Security Caption */}
-          <div className="pt-2 border-t border-black/[0.05] flex items-center justify-center gap-1.5 text-center text-[11px] text-muted-foreground">
+          <div className="pt-2 border-t border-[var(--clay-line)] flex items-center justify-center gap-1.5 text-center text-[11px] text-muted-foreground">
             <ShieldCheck className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
             <span>Restricted to authorized organization administrators</span>
           </div>

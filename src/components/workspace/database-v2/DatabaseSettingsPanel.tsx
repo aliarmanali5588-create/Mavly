@@ -121,7 +121,7 @@ export function DatabaseSettingsPanel({ projectId, env }: { projectId: string; e
                             {(["today", "last7Days", "last30Days"] as const).map(p => {
                                 const u = current.usage[p];
                                 return (
-                                    <div key={p} className="border-border rounded-lg border p-3">
+                                    <div key={p} className="border-[var(--clay-line)] bg-card rounded-lg border p-3 shadow-[var(--clay-elev-1)]">
                                         <p className="text-muted-foreground text-xs">{t(`engineV2.dbSettings.period_${p}`)}</p>
                                         <p className="mt-1 text-lg font-semibold tabular-nums">
                                             {t("engineV2.dbSettings.credits", { value: credits(u.credits.total) })}
@@ -152,7 +152,7 @@ export function DatabaseSettingsPanel({ projectId, env }: { projectId: string; e
                 </>
             ) : null}
 
-            <section className="border-border space-y-3 rounded-lg border p-4" aria-labelledby="dbs-turso">
+            <section className="border-[var(--clay-line)] bg-card space-y-3 rounded-lg border p-4 shadow-[var(--clay-elev-1)]" aria-labelledby="dbs-turso">
                 <div className="flex flex-wrap items-center gap-2">
                     <h3 id="dbs-turso" className="flex-1 font-medium">
                         {t("engineV2.dbSettings.providerTitle")}
@@ -207,9 +207,9 @@ export function DatabaseSettingsPanel({ projectId, env }: { projectId: string; e
                 ) : (
                     <ul className="space-y-2">
                         {data.tips.map((tip, i) => (
-                            <li key={`${tip.code}-${i}`} className="border-border flex gap-2 rounded-lg border p-3">
+                            <li key={`${tip.code}-${i}`} className="border-[var(--clay-line)] bg-card flex gap-2 rounded-lg border p-3 shadow-[var(--clay-elev-1)]">
                                 {tip.severity === "warn" ? (
-                                    <AlertTriangleIcon className="mt-0.5 size-4 shrink-0 text-amber-600" aria-label={t("engineV2.dbSettings.warn")} />
+                                    <AlertTriangleIcon className="mt-0.5 size-4 shrink-0 text-warning" aria-label={t("engineV2.dbSettings.warn")} />
                                 ) : (
                                     <InfoIcon className="text-muted-foreground mt-0.5 size-4 shrink-0" aria-label={t("engineV2.dbSettings.info")} />
                                 )}
@@ -259,7 +259,7 @@ function Stats({ env, n }: { env: DbUsageEnv; n: (v: number) => string }) {
         <div className="space-y-4">
             <dl className="grid grid-cols-2 gap-3 sm:grid-cols-5">
                 {tiles.map(([label, value]) => (
-                    <div key={label} className="border-border rounded-lg border p-3">
+                    <div key={label} className="border-[var(--clay-line)] bg-card rounded-lg border p-3 shadow-[var(--clay-elev-1)]">
                         <dt className="text-muted-foreground text-xs">{label}</dt>
                         <dd className="mt-1 font-semibold tabular-nums">{value}</dd>
                     </div>
@@ -297,7 +297,7 @@ function Stats({ env, n }: { env: DbUsageEnv; n: (v: number) => string }) {
                         </thead>
                         <tbody>
                             {env.queries.slice(0, 5).map(q => (
-                                <tr key={q.sql} className="border-border border-t">
+                                <tr key={q.sql} className="border-[var(--clay-line)] border-t">
                                     <td className="max-w-0 truncate py-1 pr-2 font-mono" title={q.sql}>
                                         {q.sql}
                                     </td>
@@ -337,7 +337,7 @@ function DailyChart({ env, format }: { env: DbUsageEnv; format: (v: number) => s
     const w = 100 / days.length;
     const shown = hover === null ? null : days[hover];
     return (
-        <div className="border-border rounded-lg border p-3">
+        <div className="border-[var(--clay-line)] bg-card rounded-lg border p-3 shadow-[var(--clay-elev-1)]">
             <div className="mb-2 flex flex-wrap items-center gap-3 text-xs">
                 <span className="text-muted-foreground flex-1">{t("engineV2.dbSettings.chartTitle")}</span>
                 {SERIES.map(s => (
@@ -372,7 +372,7 @@ function DailyChart({ env, format }: { env: DbUsageEnv; format: (v: number) => s
                         <span>{days[days.length - 1].date.slice(5)}</span>
                     </div>
                     {shown ? (
-                        <div className="bg-popover text-popover-foreground pointer-events-none absolute top-0 right-0 rounded-lg border px-3 py-2 text-xs shadow-md">
+                        <div className="bg-card text-popover-foreground pointer-events-none absolute top-0 right-0 rounded-xl border border-[var(--clay-line)] px-3 py-2 text-xs shadow-[var(--clay-float)]">
                             <p className="font-medium">{shown.date}</p>
                             {SERIES.map(s => (
                                 <p key={s.key} className="flex gap-3">

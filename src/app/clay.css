@@ -55,6 +55,9 @@
   /* ── SHADOW MATERIAL ────────────────────────────────────────────── */
   --clay-shade: 0 0 0;
   --clay-glow: 255 255 255;
+  /* The dimming plane behind a dialog or sheet. One token, so every
+     overlay in the product darkens the page by the same amount. */
+  --clay-scrim: rgb(0 0 0 / 0.34);
 
   /* ── GEOMETRY ───────────────────────────────────────────────────────
      Consistent per component type. Buttons are tighter than cards;
@@ -142,6 +145,14 @@
     0 16px 34px -8px rgb(var(--clay-shade) / 0.24),
     inset 0 2px 0 rgb(var(--clay-glow) / 0.22),
     inset 0 -3.5px 6px rgb(var(--clay-shade) / 0.42);
+
+  /* An ink object pressed into the plane: the ambient shadow collapses to
+     a contact line and the top face falls into shade. This is the press
+     for black clay, where a light well would read as a hole. */
+  --clay-press-ink:
+    0 1px 1px rgb(var(--clay-shade) / 0.12),
+    inset 0 2px 5px rgb(var(--clay-shade) / 0.45),
+    inset 0 -1px 0 rgb(var(--clay-glow) / 0.1);
 
   /* ── WELLS ──────────────────────────────────────────────────────────
      A pressed clay well still has volume: the rim catches light on the
@@ -300,6 +311,11 @@
     0 16px 34px -8px rgb(var(--clay-shade) / 0.55),
     inset 0 2px 0 rgb(var(--clay-glow) / 1),
     inset 0 -3.5px 6px rgb(var(--clay-shade) / 0.32);
+
+  --clay-press-ink:
+    0 1px 1px rgb(var(--clay-shade) / 0.4),
+    inset 0 2px 5px rgb(var(--clay-shade) / 0.55),
+    inset 0 -1px 0 rgb(var(--clay-glow) / 0.12);
 
   --clay-well-1:
     inset 0 2px 3px rgb(var(--clay-shade) / 0.55),
@@ -465,6 +481,27 @@
     box-shadow: var(--clay-well-2);
   }
 
+  /* THE PRESS — the one tactile response for anything clickable.
+
+     Applied as a class so a component that is not a `[data-slot]` (a link,
+     a label, a plain button, a logo tile) still presses correctly. It
+     changes depth only: no translate, no scale, so the element's footprint
+     and position are identical before, during and after the press. */
+  .clay-press {
+    transition:
+      box-shadow var(--clay-dur) var(--clay-ease),
+      border-color var(--clay-dur) var(--clay-ease),
+      background-color var(--clay-dur) var(--clay-ease);
+  }
+  .clay-press:active:not(:disabled) {
+    box-shadow: var(--clay-well-2);
+  }
+  /* Ink surfaces press into their own darker well. */
+  .clay-press.bg-primary:active:not(:disabled),
+  .clay-press.bg-destructive:active:not(:disabled) {
+    box-shadow: var(--clay-press-ink);
+  }
+
   /* Floating clear of the plane. */
   .clay-floating {
     background-color: var(--clay-surface);
@@ -481,20 +518,21 @@
     box-shadow: none;
   }
 
-  /* Interactive clay: lifts on hover, compresses on press. */
+  /* Interactive clay: the volume never changes on hover, and the object
+     never moves. Hover only warms the edge; the press is what changes the
+     material, and it changes the shadow, never the position. */
   .clay-interactive {
     transition:
       box-shadow var(--clay-dur) var(--clay-ease),
-      transform var(--clay-dur) var(--clay-ease),
-      border-color var(--clay-dur) var(--clay-ease);
+      border-color var(--clay-dur) var(--clay-ease),
+      background-color var(--clay-dur) var(--clay-ease);
   }
   .clay-interactive:hover {
-    box-shadow: var(--clay-elev-3);
     border-color: var(--clay-line-strong);
   }
   .clay-interactive:active {
     box-shadow: var(--clay-well-2);
-    transform: translateY(1px) scale(0.995);
+    border-color: var(--clay-line-strong);
   }
 
   /* A small moulded well for an icon. */
@@ -534,14 +572,14 @@
 
 @layer components {
   /* ── BUTTONS ───────────────────────────────────────────────────────
-     A button is a piece of clay you press. Resting: raised. Hover:
-     lifts a little. Pressed: compresses, loses elevation, gains the
-     well. Colour never signals state — volume does.                    */
+     A button is a piece of clay you press. Resting: raised. Hover: the
+     same volume, only the edge warms. Pressed: the volume compresses
+     into the plane and the well appears. Colour never signals state —
+     volume does, and the object never changes position.                */
 
   [data-slot="button"] {
     border-radius: var(--clay-r-md); font-weight: 600; letter-spacing: -0.005em; transition:
       box-shadow var(--clay-dur) var(--clay-ease),
-      transform var(--clay-dur) var(--clay-ease),
       background-color var(--clay-dur) var(--clay-ease),
       border-color var(--clay-dur) var(--clay-ease); }
 
@@ -553,12 +591,13 @@
   [data-slot="button"].bg-primary,
   [data-slot="button"].bg-destructive {
     background-image: var(--clay-sheen-ink); box-shadow: var(--clay-elev-ink-1); }
+  /* Hover holds the resting elevation: no growth, no lift. */
   [data-slot="button"].bg-primary:hover,
   [data-slot="button"].bg-destructive:hover {
-    box-shadow: var(--clay-elev-ink-2); }
+    box-shadow: var(--clay-elev-ink-1); }
   [data-slot="button"].bg-primary:active,
   [data-slot="button"].bg-destructive:active {
-    box-shadow: var(--clay-elev-ink-1); }
+    box-shadow: var(--clay-press-ink); }
   [data-slot="button"].bg-primary:focus-visible,
   [data-slot="button"].bg-destructive:focus-visible {
     box-shadow: var(--clay-elev-ink-1), var(--clay-focus-ink); }
@@ -566,9 +605,10 @@
   [data-slot="button"]:focus-visible {
     box-shadow: var(--clay-focus); }
 
-  /* The press: a controlled tactile compression, never an inset slab. */
+  /* The press: the volume sinks into the plane. The button does not move,
+     scale, or change its footprint — only its depth changes. */
   [data-slot="button"]:active:not(:disabled) {
-    transform: translateY(1px) scale(0.985); }
+    box-shadow: var(--clay-well-2); }
 
   /* ── CARDS ─────────────────────────────────────────────────────────
      An independent clay object. It has its own volume and its own
@@ -577,8 +617,7 @@
   [data-slot="card"] {
     border-radius: var(--clay-r-xl); background-image: var(--clay-sheen); box-shadow: var(--clay-elev-2); transition:
       box-shadow var(--clay-dur) var(--clay-ease),
-      border-color var(--clay-dur) var(--clay-ease),
-      transform var(--clay-dur) var(--clay-ease); }
+      border-color var(--clay-dur) var(--clay-ease); }
 
   /* Nested clay: a card inside a card steps DOWN, never up, so the
      hierarchy reads as physical layering instead of competing shadows. */
@@ -707,8 +746,9 @@
       box-shadow var(--clay-dur) var(--clay-ease),
       transform var(--clay-dur) var(--clay-ease); }
 
+  /* Hover holds the resting volume: the thumb is a bead, not a balloon. */
   [data-slot="slider-thumb"]:hover {
-    box-shadow: var(--clay-elev-3); }
+    box-shadow: var(--clay-elev-2); }
 
   /* ── PROGRESS ──────────────────────────────────────────────────── */
 
@@ -808,36 +848,38 @@
   .mavly-btn-secondary {
     display: inline-flex; align-items: center; justify-content: center; gap: 0.375rem; font-weight: 600; border-radius: var(--clay-r-pill); cursor: pointer; user-select: none; transition:
       box-shadow var(--clay-dur) var(--clay-ease),
-      transform var(--clay-dur) var(--clay-ease),
       background-color var(--clay-dur) var(--clay-ease),
       border-color var(--clay-dur) var(--clay-ease); }
 
   .mavly-btn-primary {
     background-color: var(--clay-brand); background-image: var(--clay-sheen-ink); color: var(--clay-white); border: 1px solid transparent; box-shadow: var(--clay-elev-ink-2); }
+  /* Hover keeps the resting elevation — no growth, no movement. */
   .mavly-btn-primary:hover {
-    background-color: var(--clay-brand-hover); box-shadow: var(--clay-elev-ink-3); transform: translateY(-1px); }
+    background-color: var(--clay-brand-hover); box-shadow: var(--clay-elev-ink-2); }
   .mavly-btn-primary:active {
-    transform: translateY(1px) scale(0.985); box-shadow: var(--clay-elev-ink-1); }
+    box-shadow: var(--clay-press-ink); }
   .mavly-btn-primary:focus-visible {
     outline: none; box-shadow: var(--clay-elev-ink-2), var(--clay-focus-ink); }
 
   .mavly-btn-secondary {
     background-color: var(--clay-surface); background-image: var(--clay-sheen); color: var(--clay-ink); border: 1px solid var(--clay-line); box-shadow: var(--clay-elev-2); }
   .mavly-btn-secondary:hover {
-    box-shadow: var(--clay-elev-3); border-color: var(--clay-line-strong); transform: translateY(-1px); }
+    border-color: var(--clay-line-strong); box-shadow: var(--clay-elev-2); }
   .mavly-btn-secondary:active {
-    transform: translateY(1px) scale(0.985); box-shadow: var(--clay-well-2); }
+    box-shadow: var(--clay-well-2); }
   .mavly-btn-secondary:focus-visible {
     outline: none; box-shadow: var(--clay-elev-2), var(--clay-focus); }
 
   .mavly-soft-card {
     background-color: var(--clay-surface); background-image: var(--clay-sheen); border-radius: var(--clay-r-xl); border: 1px solid var(--clay-line); box-shadow: var(--clay-elev-2); transition:
       box-shadow var(--clay-dur) var(--clay-ease),
-      transform var(--clay-dur) var(--clay-ease),
       border-color var(--clay-dur) var(--clay-ease); }
 
+  /* An interactive card warms its edge and presses in; it never rises. */
   .mavly-soft-card-hover:hover {
-    border-color: var(--clay-line-strong); box-shadow: var(--clay-elev-4); transform: translateY(-2px); }
+    border-color: var(--clay-line-strong); box-shadow: var(--clay-elev-2); }
+  .mavly-soft-card-hover:active {
+    box-shadow: var(--clay-well-2); }
 }
 
 /* ══════════════════════════════════════════════════════════════════════
@@ -851,22 +893,26 @@
       0 3px 6px -1px rgb(var(--clay-shade) / 0.06),
       0 6px 14px -4px rgb(var(--clay-shade) / 0.06),
       inset 0 2px 2px rgb(var(--clay-glow) / 1),
-      inset 0 -2px 3px rgb(var(--clay-shade) / 0.04); --clay-elev-3:
+      inset 0 -2px 3px rgb(var(--clay-shade) / 0.04);
+    --clay-elev-3:
       0 1px 2px rgb(var(--clay-shade) / 0.05),
       0 4px 9px -2px rgb(var(--clay-shade) / 0.07),
       0 9px 20px -5px rgb(var(--clay-shade) / 0.07),
       inset 0 2.5px 3px rgb(var(--clay-glow) / 1),
-      inset 0 -3px 5px rgb(var(--clay-shade) / 0.045); --clay-elev-4:
+      inset 0 -3px 5px rgb(var(--clay-shade) / 0.045);
+    --clay-elev-4:
       0 2px 3px rgb(var(--clay-shade) / 0.05),
       0 6px 14px -3px rgb(var(--clay-shade) / 0.08),
       0 16px 34px -10px rgb(var(--clay-shade) / 0.08),
       inset 0 3px 4px rgb(var(--clay-glow) / 1),
-      inset 0 -4px 7px rgb(var(--clay-shade) / 0.05); --clay-elev-5:
+      inset 0 -4px 7px rgb(var(--clay-shade) / 0.05);
+    --clay-elev-5:
       0 2px 4px rgb(var(--clay-shade) / 0.06),
       0 10px 22px -5px rgb(var(--clay-shade) / 0.09),
       0 24px 48px -14px rgb(var(--clay-shade) / 0.09),
       inset 0 3.5px 5px rgb(var(--clay-glow) / 1),
-      inset 0 -5px 9px rgb(var(--clay-shade) / 0.055); --clay-float:
+      inset 0 -5px 9px rgb(var(--clay-shade) / 0.055);
+    --clay-float:
       0 2px 4px rgb(var(--clay-shade) / 0.05),
       0 8px 18px -4px rgb(var(--clay-shade) / 0.09),
       0 20px 40px -10px rgb(var(--clay-shade) / 0.1),
@@ -887,14 +933,6 @@
   .mavly-btn-secondary,
   .mavly-soft-card {
     transition: none !important; }
-  .clay-interactive:hover,
-  .clay-interactive:active,
-  [data-slot="button"]:active:not(:disabled),
-  .mavly-btn-primary:hover,
-  .mavly-btn-primary:active,
-  .mavly-btn-secondary:hover,
-  .mavly-btn-secondary:active {
-    transform: none !important; }
 }
 
 /* ══════════════════════════════════════════════════════════════════════
@@ -903,3 +941,214 @@
 
 * {
   scrollbar-color: rgb(var(--clay-shade) / 0.26) transparent; scrollbar-width: thin; }
+
+/* ══════════════════════════════════════════════════════════════════════
+   THE STABILITY CONTRACT — nothing rises on hover
+
+   Clay is a solid object resting on a plane. Hovering a cursor over it
+   does not lift it, scale it, or move it by a single pixel; the object's
+   footprint is identical before, during and after the pointer passes.
+   Only its surface tone may warm very slightly.
+
+   This block is the enforcement, not the documentation. Every element
+   that is part of the interaction system is pinned here, so a stray
+   `hover:-translate-y-*` or `hover:scale-*` added later cannot make the
+   interface twitch. Press is the only thing that changes depth, and it
+   changes the shadow, never the position.
+   ══════════════════════════════════════════════════════════════════════ */
+
+@layer components {
+  [data-slot="button"]:hover,
+  [data-slot="card"]:hover,
+  [data-slot="toggle"]:hover,
+  [data-slot="tabs-trigger"]:hover,
+  [data-slot="badge"]:hover,
+  .clay-press:hover,
+  .clay-interactive:hover,
+  .clay-raised:hover,
+  .clay-raised-1:hover,
+  .clay-raised-3:hover,
+  .clay-floating:hover,
+  .mavly-btn-primary:hover,
+  .mavly-btn-secondary:hover,
+  .mavly-soft-card:hover,
+  .mavly-soft-card-hover:hover {
+    transform: none;
+    translate: none;
+    scale: none;
+  }
+
+  /* ── PANELS, TOOLBARS, CHIPS ────────────────────────────────────────
+     The three shapes the application shell is built from, so a page
+     never has to invent its own surface for a toolbar or a filter bar. */
+
+  /* A large clay slab: a page section, a workspace panel, a settings
+     group. Sits one step above a card so nesting still reads downward. */
+  .clay-panel {
+    background-color: var(--clay-surface);
+    background-image: var(--clay-sheen);
+    border: 1px solid var(--clay-line);
+    border-radius: var(--clay-r-2xl);
+    box-shadow: var(--clay-elev-2);
+  }
+
+  /* A toolbar is a shallow slab that holds controls. It never moves. */
+  .clay-toolbar {
+    background-color: var(--clay-surface);
+    background-image: var(--clay-sheen);
+    border: 1px solid var(--clay-line);
+    border-radius: var(--clay-r-lg);
+    box-shadow: var(--clay-elev-1);
+  }
+
+  /* A chip / pill of clay, for filters, tags and segmented controls. */
+  .clay-chip {
+    background-color: var(--clay-surface);
+    background-image: var(--clay-sheen);
+    border: 1px solid var(--clay-line);
+    border-radius: var(--clay-r-pill);
+    box-shadow: var(--clay-elev-1);
+    transition:
+      box-shadow var(--clay-dur) var(--clay-ease),
+      border-color var(--clay-dur) var(--clay-ease),
+      background-color var(--clay-dur) var(--clay-ease);
+  }
+  .clay-chip:hover {
+    border-color: var(--clay-line-strong);
+  }
+  .clay-chip:active {
+    box-shadow: var(--clay-well-1);
+  }
+
+  /* A sub-panel moulded into a larger surface: same material, one step
+     down, so a nested group reads as pressed into its parent. */
+  .clay-subpanel {
+    background-color: var(--clay-surface-soft);
+    border: 1px solid var(--clay-line);
+    border-radius: var(--clay-r-lg);
+    box-shadow: var(--clay-elev-1);
+  }
+
+  /* A well that holds content rather than an input. */
+  .clay-inset-panel {
+    background-color: var(--clay-sunken);
+    border: 1px solid var(--clay-line);
+    border-radius: var(--clay-r-lg);
+    box-shadow: var(--clay-well-1);
+  }
+
+  /* An interactive card: the same volume at rest, a press on click. */
+  .clay-card-interactive {
+    transition:
+      box-shadow var(--clay-dur) var(--clay-ease),
+      border-color var(--clay-dur) var(--clay-ease);
+  }
+  .clay-card-interactive:hover {
+    border-color: var(--clay-line-strong);
+  }
+  .clay-card-interactive:active {
+    box-shadow: var(--clay-well-2);
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   SLOT SKINS — the surfaces the component library declares but that were
+   still falling through to the old flat defaults
+   ══════════════════════════════════════════════════════════════════════ */
+
+@layer components {
+  /* A sheet is a slab of clay slid over the plane, not a bare panel. */
+  [data-slot="sheet-content"] {
+    background-color: var(--clay-surface);
+    background-image: var(--clay-sheen);
+    border-color: var(--clay-line);
+    box-shadow: var(--clay-float);
+  }
+
+  [data-slot="sheet-overlay"],
+  [data-slot="dialog-overlay"],
+  [data-slot="alert-dialog-overlay"] {
+    background-color: var(--clay-scrim);
+    backdrop-filter: blur(3px);
+  }
+
+  /* The command palette's search row is a well inside the floating slab. */
+  [data-slot="command-input-wrapper"] {
+    border-bottom: 1px solid var(--clay-line); }
+
+  [data-slot="command-input"] {
+    background-color: transparent; box-shadow: none; }
+
+  /* A table sits in a moulded tray; its header is a pressed band. */
+  [data-slot="table-container"] {
+    border-radius: var(--clay-r-lg); }
+
+  [data-slot="table-header"] {
+    background-color: var(--clay-sunken); box-shadow: var(--clay-well-1); }
+
+  [data-slot="table-row"]:last-child {
+    border-bottom: 0; }
+
+  /* The calendar is a slab of its own when it is not inside a popover. */
+  [data-slot="calendar"] {
+    background-color: transparent; }
+
+  [data-slot="calendar"] .rdp-day_button:hover {
+    background-color: var(--clay-sunken); box-shadow: var(--clay-well-1); }
+
+  [data-slot="calendar"] .rdp-day_button[data-selected="true"] {
+    background-color: var(--clay-brand); color: var(--clay-white); box-shadow: var(--clay-elev-ink-1); }
+
+  /* Toasts are small clay objects that appear above everything. */
+  [data-sonner-toast] {
+    background-color: var(--clay-surface) !important; background-image: var(--clay-sheen) !important; border: 1px solid var(--clay-line) !important; border-radius: var(--clay-r-lg) !important; box-shadow: var(--clay-float) !important; color: var(--clay-ink) !important; }
+
+  /* The navigation bar's own list is a toolbar, not a bare strip. */
+  [data-slot="navigation-menu-list"] {
+    gap: 2px;
+  }
+
+  /* Labels are typography, never a surface. */
+  [data-slot="label"] {
+    box-shadow: none;
+  }
+
+  /* A scrollbar thumb is a rounded clay bead. */
+  [data-slot="scroll-area-scrollbar"] {
+    padding: 2px;
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   THE SAFETY NET — a bordered surface is never flat
+
+   The component library declares its material through `data-slot`, but a
+   page can still hand-roll a panel out of utilities. Those panels were
+   the last flat rectangles in the product: a white box with a hairline
+   border and no volume. This block catches them by their own utility
+   classes, so a hand-rolled panel gets the same resting elevation as a
+   <Card> without anyone having to remember to add a class.
+
+   Wells are excluded on purpose: an input, a sunken tray and a muted
+   strip are pressed INTO the plane, and giving them a drop shadow would
+   invert the light.
+   ══════════════════════════════════════════════════════════════════════ */
+
+@layer components {
+  /* A white surface that draws its own full border is a clay object one
+     step above the plane. Edge-only borders (border-t, border-b, …) do
+     not contain the word "border" alone in the class list, so strips,
+     headers and dividers stay flat. */
+  .bg-card[class~="border"]:not([data-slot]):not(.clay-flat):not(.clay-inset-panel):not(.clay-recessed):not([class*="clay-sunken"]):not([class*="bg-muted"]),
+  .bg-card[class~="border-2"]:not([data-slot]):not(.clay-flat):not(.clay-inset-panel):not(.clay-recessed):not([class*="clay-sunken"]):not([class*="bg-muted"]) {
+    background-image: var(--clay-sheen);
+    box-shadow: var(--clay-elev-1);
+  }
+
+  /* A muted rounded tray is a well, not an object. */
+  .bg-muted.rounded-md:not([data-slot]),
+  .bg-muted.rounded-lg:not([data-slot]),
+  .bg-muted.rounded-xl:not([data-slot]) {
+    box-shadow: var(--clay-well-1);
+  }
+}

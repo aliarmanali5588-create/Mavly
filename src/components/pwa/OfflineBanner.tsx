@@ -46,7 +46,7 @@ export function OfflineBanner() {
       role="status"
       aria-live="polite"
       aria-atomic="true"
-      className="fixed top-0 left-0 right-0 z-[50000] flex items-center justify-center gap-2 px-4 py-2 text-xs font-medium text-amber-900 bg-amber-100 border-b border-amber-200 shadow-sm"
+      className="fixed top-0 left-0 right-0 z-[50000] flex items-center justify-center gap-2 px-4 py-2 text-xs font-medium text-warning-subtle-foreground bg-warning-subtle border-b border-warning/25 shadow-[var(--clay-elev-1)]"
     >
       <WifiOff className="h-3.5 w-3.5" aria-hidden="true" />
       <span>You're offline — cached assets remain available; signing in, AI generation and publishing need a connection.</span>

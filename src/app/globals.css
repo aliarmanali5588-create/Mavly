@@ -44,6 +44,20 @@
   --color-warning-foreground: var(--warning-foreground);
   --color-warning-subtle: var(--warning-subtle);
   --color-warning-subtle-foreground: var(--warning-subtle-foreground);
+  /* Success / info / destructive-subtle: used across the workspace, the v2
+     panels and the admin console, but never declared — so every
+     `bg-success-subtle` and `text-info-subtle-foreground` in the product was
+     silently a no-op. Declared here so the semantic layer actually resolves. */
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-success-subtle: var(--success-subtle);
+  --color-success-subtle-foreground: var(--success-subtle-foreground);
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
+  --color-info-subtle: var(--info-subtle);
+  --color-info-subtle-foreground: var(--info-subtle-foreground);
+  --color-destructive-subtle: var(--destructive-subtle);
+  --color-destructive-subtle-foreground: var(--destructive-subtle-foreground);
   --text-2xs: 0.6875rem;
   --text-2xs--line-height: 1rem;
   --text-2xs--letter-spacing: 0.01em;
@@ -97,6 +111,18 @@
   --warning-foreground: #2a1c05;
   --warning-subtle: #fdf3e0;
   --warning-subtle-foreground: #8a5a10;
+  /* Semantic status, tuned to the warm white canvas rather than to a
+     saturated UI palette: each is a soft clay tint with a readable ink. */
+  --success: #1f7a4d;
+  --success-foreground: #ffffff;
+  --success-subtle: #eaf6ef;
+  --success-subtle-foreground: #17603c;
+  --info: #1f5fa8;
+  --info-foreground: #ffffff;
+  --info-subtle: #eaf1fa;
+  --info-subtle-foreground: #1a4c86;
+  --destructive-subtle: #fdeeea;
+  --destructive-subtle-foreground: #a8290a;
   --ease-in-out-soft: cubic-bezier(0.4, 0, 0.2, 1);
 }
 
@@ -132,6 +158,20 @@
   --sidebar-accent-foreground: #ffffff;
   --sidebar-border: rgba(255, 255, 255, 0.08);
   --sidebar-ring: #ffffff;
+  --warning: #e5b168;
+  --warning-foreground: #1a1206;
+  --warning-subtle: #2c2113;
+  --warning-subtle-foreground: #f0c98d;
+  --success: #6fd3a2;
+  --success-foreground: #06210f;
+  --success-subtle: #12281d;
+  --success-subtle-foreground: #93e0bb;
+  --info: #8ab6ee;
+  --info-foreground: #061424;
+  --info-subtle: #14202f;
+  --info-subtle-foreground: #a8cbf5;
+  --destructive-subtle: #2c1410;
+  --destructive-subtle-foreground: #ff9a80;
 }
 
 @layer base {

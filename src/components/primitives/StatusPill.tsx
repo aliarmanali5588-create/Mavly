@@ -8,7 +8,7 @@ const TONES = {
   success: "bg-success-subtle text-success-subtle-foreground border-transparent",
   warning: "bg-warning-subtle text-warning-subtle-foreground border-transparent",
   danger: "bg-destructive-subtle text-destructive-subtle-foreground border-transparent",
-  outline: "bg-transparent text-foreground border-border",
+  outline: "bg-transparent text-foreground border-[var(--clay-line)]",
 } as const;
 
 const DOTS = {

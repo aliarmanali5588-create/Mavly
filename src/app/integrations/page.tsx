@@ -62,10 +62,10 @@ export default function IntegrationsPage() {
           {/* GitHub App */}
           <div className="p-8 rounded-3xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)] space-y-6">
             <div className="flex items-center justify-between">
-              <div className="w-12 h-12 rounded-2xl bg-black text-white flex items-center justify-center">
+              <div className="w-12 h-12 rounded-2xl bg-black text-white flex items-center justify-center shadow-[var(--clay-elev-ink-1)]">
                 <GitBranch className="w-6 h-6" />
               </div>
-              <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-full">
+              <span className="text-[11px] font-bold text-success bg-success-subtle border border-success/25 px-2.5 py-0.5 rounded-full">
                 Verified Available
               </span>
             </div>
@@ -81,19 +81,19 @@ export default function IntegrationsPage() {
               <h4 className="font-semibold text-foreground">Supported Capabilities:</h4>
               <ul className="space-y-2">
                 <li className="flex items-start gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                  <CheckCircle2 className="w-4 h-4 text-success shrink-0 mt-0.5" />
                   <span>Connect account via secure user-to-server OAuth token exchange.</span>
                 </li>
                 <li className="flex items-start gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                  <CheckCircle2 className="w-4 h-4 text-success shrink-0 mt-0.5" />
                   <span>Select any accessible personal or organization repository.</span>
                 </li>
                 <li className="flex items-start gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                  <CheckCircle2 className="w-4 h-4 text-success shrink-0 mt-0.5" />
                   <span>Create new repository when GitHub App permissions and authorization allow.</span>
                 </li>
                 <li className="flex items-start gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                  <CheckCircle2 className="w-4 h-4 text-success shrink-0 mt-0.5" />
                   <span>Empty repository initialization: first push creates branch and initial commit.</span>
                 </li>
               </ul>
@@ -107,7 +107,7 @@ export default function IntegrationsPage() {
           {/* Vercel Publishing */}
           <div className="p-8 rounded-3xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)] space-y-6">
             <div className="flex items-center justify-between">
-              <div className="w-12 h-12 rounded-2xl bg-black text-white flex items-center justify-center font-bold">
+              <div className="w-12 h-12 rounded-2xl bg-black text-white flex items-center justify-center font-bold shadow-[var(--clay-elev-ink-1)]">
                 ▲
               </div>
               <span className="text-[11px] font-bold text-foreground bg-[var(--clay-sunken)] border border-[var(--clay-line)] px-2.5 py-0.5 rounded-full">
@@ -134,7 +134,7 @@ export default function IntegrationsPage() {
                   <span>Requires operator token activation and verified DNS wildcard resolution.</span>
                 </li>
                 <li className="flex items-start gap-2">
-                  <AlertCircle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
+                  <AlertCircle className="w-4 h-4 text-warning shrink-0 mt-0.5" />
                   <span className="text-muted-foreground">
                     Fails closed with <code>BACKEND_NOT_CONFIGURED</code> if the operator has not enabled Vercel deployments.
                   </span>
@@ -149,7 +149,7 @@ export default function IntegrationsPage() {
               <div className="w-12 h-12 rounded-2xl bg-foreground text-white flex items-center justify-center">
                 <Cpu className="w-6 h-6" />
               </div>
-              <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-full">
+              <span className="text-[11px] font-bold text-success bg-success-subtle border border-success/25 px-2.5 py-0.5 rounded-full">
                 Website/code provider
               </span>
             </div>
@@ -165,15 +165,15 @@ export default function IntegrationsPage() {
               <h4 className="font-semibold text-foreground">Configured Model:</h4>
               <ul className="space-y-2">
                 <li className="flex items-start gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                  <CheckCircle2 className="w-4 h-4 text-success shrink-0 mt-0.5" />
                   <span><strong>DeepSeek V4.1 Flash:</strong> OpenRouter default model for website creation and follow-up code edits.</span>
                 </li>
                 <li className="flex items-start gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                  <CheckCircle2 className="w-4 h-4 text-success shrink-0 mt-0.5" />
                   <span>Generation fails explicitly if OpenRouter is unavailable; no provider fallback is configured.</span>
                 </li>
                 <li className="flex items-start gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                  <CheckCircle2 className="w-4 h-4 text-success shrink-0 mt-0.5" />
                   <span>Zero client-side API keys exposed: all generation executed server-side.</span>
                 </li>
               </ul>
@@ -191,19 +191,19 @@ export default function IntegrationsPage() {
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 text-xs text-foreground">
-            <div className="p-4 rounded-xl bg-[var(--clay-sunken)] border border-[var(--clay-line)] space-y-2">
+            <div className="p-4 rounded-xl bg-[var(--clay-sunken)] border border-[var(--clay-line)] space-y-2 shadow-[var(--clay-well-1)]">
               <span className="font-bold text-foreground">1. Authorize Service</span>
               <p className="text-muted-foreground leading-relaxed">
                 Open the workspace settings or integrations panel and authorize the GitHub App through its secure OAuth flow.
               </p>
             </div>
-            <div className="p-4 rounded-xl bg-[var(--clay-sunken)] border border-[var(--clay-line)] space-y-2">
+            <div className="p-4 rounded-xl bg-[var(--clay-sunken)] border border-[var(--clay-line)] space-y-2 shadow-[var(--clay-well-1)]">
               <span className="font-bold text-foreground">2. Select Project / Repo</span>
               <p className="text-muted-foreground leading-relaxed">
                 Choose the exact repository and branch where project files should synchronize or initialize an empty repo.
               </p>
             </div>
-            <div className="p-4 rounded-xl bg-[var(--clay-sunken)] border border-[var(--clay-line)] space-y-2">
+            <div className="p-4 rounded-xl bg-[var(--clay-sunken)] border border-[var(--clay-line)] space-y-2 shadow-[var(--clay-well-1)]">
               <span className="font-bold text-foreground">3. Review and Push</span>
               <p className="text-muted-foreground leading-relaxed">
                 Verify generated changes in the diff viewer and trigger an automated commit push anytime.

@@ -59,7 +59,7 @@ function NavigationMenuItem({
 }
 
 const navigationMenuTriggerStyle = cva(
-  "group inline-flex h-9 w-max items-center justify-center rounded-xl border border-transparent px-4 py-2 text-sm font-medium text-foreground outline-none transition-[box-shadow,background-color] duration-200 hover:bg-[var(--clay-sunken)] hover:shadow-[var(--clay-well-1)] focus-visible:shadow-[var(--clay-focus)] disabled:pointer-events-none disabled:opacity-50 data-[state=open]:bg-[var(--clay-sunken)] data-[state=open]:shadow-[var(--clay-well-1)]"
+  "group inline-flex h-9 w-max items-center justify-center rounded-xl border border-transparent px-4 py-2 text-sm font-medium text-foreground outline-none transition-[box-shadow,background-color] duration-200 hover:bg-[var(--clay-sunken)] focus-visible:shadow-[var(--clay-focus)] disabled:pointer-events-none disabled:opacity-50 data-[state=open]:bg-[var(--clay-sunken)] data-[state=open]:shadow-[var(--clay-well-1)]"
 )
 
 function NavigationMenuTrigger({
@@ -129,7 +129,7 @@ function NavigationMenuLink({
     <NavigationMenuPrimitive.Link
       data-slot="navigation-menu-link"
       className={cn(
-        "data-[active=true]:bg-[var(--clay-sunken)] data-[active=true]:shadow-[var(--clay-well-1)] data-[active=true]:text-accent-foreground hover:bg-[var(--clay-sunken)] hover:shadow-[var(--clay-well-1)] focus:bg-[var(--clay-sunken)] focus:text-accent-foreground [&_svg:not([class*='text-'])]:text-muted-foreground flex flex-col gap-1 rounded-xl p-2.5 text-sm transition-[box-shadow,background-color] duration-200 outline-none focus-visible:shadow-[var(--clay-focus)] [&_svg:not([class*='size-'])]:size-4",
+        "data-[active=true]:bg-[var(--clay-sunken)] data-[active=true]:shadow-[var(--clay-well-1)] data-[active=true]:text-accent-foreground hover:bg-[var(--clay-sunken)] focus:bg-[var(--clay-sunken)] focus:text-accent-foreground [&_svg:not([class*='text-'])]:text-muted-foreground flex flex-col gap-1 rounded-xl p-2.5 text-sm transition-[box-shadow,background-color] duration-200 outline-none focus-visible:shadow-[var(--clay-focus)] [&_svg:not([class*='size-'])]:size-4",
         className
       )}
       {...props}
@@ -150,7 +150,7 @@ function NavigationMenuIndicator({
       )}
       {...props}
     >
-      <div className="bg-border relative top-[60%] h-2 w-2 rotate-45 rounded-tl-sm shadow-md" />
+      <div className="bg-card border border-[var(--clay-line)] relative top-[60%] h-2 w-2 rotate-45 rounded-tl-sm" />
     </NavigationMenuPrimitive.Indicator>
   )
 }

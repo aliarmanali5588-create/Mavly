@@ -32,8 +32,8 @@ import { cn } from "@/lib/utils";
  *
  * ── COLOURS THAT SURVIVE DARK MODE ──────────────────────────────────────────
  *
- * Diff colours are the one place a design system usually breaks: `bg-green-50` is
- * invisible on a dark background, and `bg-green-900` is unreadable on a light one.
+ * Diff colours are the one place a design system usually breaks: `bg-success-subtle` is
+ * invisible on a dark background, and `bg-success` is unreadable on a light one.
  * Every colour below is an explicit light/dark pair, and the WORD-LEVEL highlight
  * is a *stronger* shade of the same hue so it reads as emphasis inside the row
  * rather than as a different kind of change.
@@ -58,8 +58,8 @@ const STATUS_TONE: Record<DiffFile["status"], { tone: StatusTone; labelKey: Tran
 
 /** Row backgrounds. Explicit light/dark pairs — see the header note. */
 const LINE_BG: Record<LineKind, string> = {
-    add: "bg-emerald-50 dark:bg-emerald-950/40",
-    del: "bg-rose-50 dark:bg-rose-950/40",
+    add: "bg-success-subtle",
+    del: "bg-destructive-subtle",
     context: "",
     hunk: "bg-muted text-muted-foreground select-none",
     meta: "text-muted-foreground italic",
@@ -67,8 +67,8 @@ const LINE_BG: Record<LineKind, string> = {
 
 /** The changed span inside a row — a stronger shade of the row's own hue. */
 const WORD_BG: Partial<Record<LineKind, string>> = {
-    add: "bg-emerald-200/70 dark:bg-emerald-700/50 rounded-[2px]",
-    del: "bg-rose-200/70 dark:bg-rose-700/50 rounded-[2px]",
+    add: "bg-success/25 rounded-[2px]",
+    del: "bg-destructive/20 rounded-[2px]",
 };
 
 const SIGN: Record<LineKind, string> = { add: "+", del: "-", context: " ", hunk: "", meta: "" };
@@ -444,12 +444,12 @@ function FileBlock({
     const status = STATUS_TONE[file.status];
 
     return (
-        <div className="border-border overflow-hidden rounded-lg border">
+        <div className="border-[var(--clay-line)] overflow-hidden rounded-lg border">
             <button
                 type="button"
                 onClick={onToggle}
                 aria-expanded={open}
-                className="bg-muted/50 hover:bg-muted focus-visible:ring-ring flex w-full items-center gap-2 px-2.5 py-2 text-left transition-colors focus-visible:ring-2 focus-visible:outline-none"
+                className="bg-[var(--clay-sunken)] hover:bg-muted focus-visible:ring-ring flex w-full items-center gap-2 px-2.5 py-2 text-left transition-colors focus-visible:ring-2 focus-visible:outline-none"
             >
                 {open ? (
                     <ChevronDownIcon className="text-muted-foreground size-3.5 shrink-0" aria-hidden />
@@ -470,11 +470,11 @@ function FileBlock({
 
                 <span className="shrink-0 font-mono text-[11px] tabular-nums">
                     {file.additions > 0 && (
-                        <span className="text-emerald-600 dark:text-emerald-400">+{file.additions}</span>
+                        <span className="text-success">+{file.additions}</span>
                     )}
                     {file.additions > 0 && file.deletions > 0 && " "}
                     {file.deletions > 0 && (
-                        <span className="text-rose-600 dark:text-rose-400">−{file.deletions}</span>
+                        <span className="text-destructive dark:text-destructive">−{file.deletions}</span>
                     )}
                 </span>
             </button>
@@ -508,10 +508,10 @@ function DiffRow({ line }: { line: DiffLine }) {
 
     return (
         <tr className={LINE_BG[line.kind]}>
-            <td className="border-border/60 text-muted-foreground w-10 min-w-10 border-r px-1.5 text-right align-top tabular-nums select-none">
+            <td className="border-[var(--clay-line)] text-muted-foreground w-10 min-w-10 border-r px-1.5 text-right align-top tabular-nums select-none">
                 {line.oldNo ?? ""}
             </td>
-            <td className="border-border/60 text-muted-foreground w-10 min-w-10 border-r px-1.5 text-right align-top tabular-nums select-none">
+            <td className="border-[var(--clay-line)] text-muted-foreground w-10 min-w-10 border-r px-1.5 text-right align-top tabular-nums select-none">
                 {line.newNo ?? ""}
             </td>
             <td className="text-muted-foreground w-4 min-w-4 pl-1.5 text-center align-top select-none">

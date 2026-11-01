@@ -318,8 +318,8 @@ export function PricingSection({
                 <span
                   className={`px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wide transition-colors ${
                     billingCycle === "yearly"
-                      ? "bg-emerald-500 text-white"
-                      : "bg-emerald-100 text-emerald-800"
+                      ? "bg-success text-success-foreground"
+                      : "bg-success-subtle text-success-subtle-foreground"
                   }`}
                 >
                   Save 20%
@@ -337,10 +337,10 @@ export function PricingSection({
             return (
               <div
                 key={plan.id}
-                className={`p-6 sm:p-7 rounded-3xl bg-card flex flex-col justify-between relative transition-[box-shadow,transform,border-color] duration-300 ${
+                className={`p-6 sm:p-7 rounded-3xl bg-card flex flex-col justify-between relative transition-[box-shadow,border-color] duration-300 ${
                   plan.isPrimaryChoice
-                    ? "border border-[var(--clay-line-strong)] shadow-[var(--clay-elev-4)] hover:shadow-[var(--clay-elev-5)] hover:-translate-y-1"
-                    : "border border-[var(--clay-line)] shadow-[var(--clay-elev-2)] hover:shadow-[var(--clay-elev-4)] hover:border-[var(--clay-line-strong)] hover:-translate-y-1"
+                    ? "border border-[var(--clay-line-strong)] shadow-[var(--clay-elev-4)]"
+                    : "border border-[var(--clay-line)] shadow-[var(--clay-elev-2)] hover:border-[var(--clay-line-strong)]"
                 }`}
               >
                 <div>
@@ -393,7 +393,7 @@ export function PricingSection({
                           <span className="text-[11px] text-muted-foreground font-medium leading-tight">
                             Effective monthly rate · Billed annually at {pricing.annualTotalFormatted}/yr
                           </span>
-                          <span className="text-[11px] text-emerald-600 font-semibold mt-0.5">
+                          <span className="text-[11px] text-success font-semibold mt-0.5">
                             Save {pricing.annualSavingsFormatted} (20% off)
                           </span>
                         </>
@@ -500,7 +500,7 @@ export function PricingSection({
                 return (
                   <div
                     key={item.id}
-                    className="p-6 sm:p-8 rounded-3xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)] hover:shadow-[var(--clay-elev-4)] hover:border-[var(--clay-line-strong)] transition-[box-shadow,border-color] duration-300 flex flex-col justify-between"
+                    className="p-6 sm:p-8 rounded-3xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)] hover:border-[var(--clay-line-strong)] transition-[box-shadow,border-color] duration-300 flex flex-col justify-between"
                   >
                     <div>
                       <div className="flex items-center justify-between mb-4">

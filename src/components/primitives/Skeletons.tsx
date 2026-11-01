@@ -68,7 +68,7 @@ export function SkeletonCardGrid({ count = 6 }: { count?: number }) {
 
 export function SkeletonList({ count = 5, className }: { count?: number; className?: string }) {
   return (
-    <div className={cn("divide-border bg-card divide-y rounded-xl border", className)}>
+    <div className={cn("divide-[var(--clay-line)] bg-card divide-y rounded-xl border", className)}>
       {Array.from({ length: count }).map((_, i) => (
         <div key={i} className="flex items-center gap-3 p-4">
           <SkeletonBox className="size-8 rounded-lg" />
@@ -96,7 +96,7 @@ export function SkeletonTable({
           <SkeletonBox key={i} className="h-3 flex-1" />
         ))}
       </div>
-      <div className="divide-border bg-card divide-y">
+      <div className="divide-[var(--clay-line)] bg-card divide-y">
         {Array.from({ length: rows }).map((_, r) => (
           <div key={r} className="flex gap-4 px-4 py-3.5">
             {Array.from({ length: columns }).map((_, c) => (

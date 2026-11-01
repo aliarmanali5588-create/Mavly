@@ -153,7 +153,7 @@ export function DomainBuyPanel({
         const busy = step.kind === "buying";
         return (
             <div className="space-y-4">
-                <div className="border-border rounded-xl border p-4">
+                <div className="border-[var(--clay-line)] bg-card rounded-xl border p-4 shadow-[var(--clay-elev-1)]">
                     <div className="flex items-center gap-2">
                         <GlobeIcon className="text-primary size-4 shrink-0" aria-hidden />
                         <span className="min-w-0 flex-1 truncate font-mono text-sm font-semibold">{result.domain}</span>
@@ -180,7 +180,7 @@ export function DomainBuyPanel({
                 {saved !== undefined && !busy && <DomainContactForm value={contact} onChange={setContact} saved={saved !== null} />}
 
                 {busy && (
-                    <div role="status" className="bg-muted/40 flex items-center gap-3 rounded-lg p-3 text-sm">
+                    <div role="status" className="bg-[var(--clay-sunken)] flex items-center gap-3 rounded-lg p-3 text-sm">
                         <LoaderIcon className="text-primary size-4 shrink-0 animate-spin" aria-hidden />
                         <span>
                             <span className="block font-medium">{t("workspace.domain.buy.buying")}</span>
@@ -246,7 +246,7 @@ export function DomainBuyPanel({
                     {results.map(result => (
                         <li
                             key={result.domain}
-                            className="border-border flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border px-3 py-2.5 text-sm"
+                            className="border-[var(--clay-line)] flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border px-3 py-2.5 text-sm"
                         >
                             <span className="min-w-0 flex-1 truncate font-mono font-medium">{result.domain}</span>
                             {result.available ? (

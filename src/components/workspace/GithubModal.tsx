@@ -608,7 +608,7 @@ export function GithubModal({
                             <div
                                 role="radiogroup"
                                 aria-label={t("workspace.github.setupMode")}
-                                className="bg-muted/50 grid grid-cols-2 gap-1 rounded-lg p-1"
+                                className="bg-[var(--clay-sunken)] grid grid-cols-2 gap-1 rounded-lg p-1"
                             >
                                 <Button
                                     type="button"
@@ -751,7 +751,7 @@ export function GithubModal({
                                             {t("workspace.github.repository")}
                                         </Label>
                                         {repositoryLoading || (repositories === null && !repositoryError) ? (
-                                            <div className="border-input text-muted-foreground flex items-center gap-2 rounded-md border px-3 py-2 text-xs">
+                                            <div className="border-[var(--clay-line)] text-muted-foreground flex items-center gap-2 rounded-md border px-3 py-2 text-xs">
                                                 <LoaderIcon className="size-3.5 shrink-0 animate-spin" aria-hidden />
                                                 {t("workspace.github.loadingRepositories")}
                                             </div>
@@ -827,7 +827,7 @@ export function GithubModal({
                                                 <SelectContent />
                                             </Select>
                                         ) : branchLoading || (branches === null && !branchError) ? (
-                                            <div className="border-input text-muted-foreground flex items-center gap-2 rounded-md border px-3 py-2 text-xs">
+                                            <div className="border-[var(--clay-line)] text-muted-foreground flex items-center gap-2 rounded-md border px-3 py-2 text-xs">
                                                 <LoaderIcon className="size-3.5 shrink-0 animate-spin" aria-hidden />
                                                 {t("workspace.github.loadingBranches")}
                                             </div>
@@ -926,7 +926,7 @@ export function GithubModal({
                     {!loading && connection ? (
                         /* ── Connected ─────────────────────────────────────── */
                         <div className="space-y-3">
-                            <div className="border-border rounded-lg border p-3">
+                            <div className="border-[var(--clay-line)] bg-card rounded-lg border p-3 shadow-[var(--clay-elev-1)]">
                                 <div className="flex flex-wrap items-center gap-2">
                                     <GithubIcon className="size-4 shrink-0" aria-hidden />
                                     <code className="min-w-0 flex-1 truncate font-mono text-sm font-medium">

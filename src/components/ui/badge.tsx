@@ -10,13 +10,13 @@ const badgeVariants = cva(
     variants: {
       variant: {
         default:
-          "border-transparent bg-primary text-primary-foreground shadow-[var(--clay-elev-ink-1)] [a&]:hover:shadow-[var(--clay-elev-ink-2)]",
+          "border-transparent bg-primary text-primary-foreground shadow-[var(--clay-elev-ink-1)] [a&]:",
         secondary:
-          "border-[var(--clay-line)] bg-[var(--clay-sunken)] text-secondary-foreground shadow-[var(--clay-well-1)] [a&]:hover:shadow-[var(--clay-well-2)]",
+          "border-[var(--clay-line)] bg-[var(--clay-sunken)] text-secondary-foreground shadow-[var(--clay-well-1)] [a&]:hover:border-[var(--clay-line-strong)]",
         destructive:
-          "border-transparent bg-destructive text-white shadow-[var(--clay-elev-ink-1)] [a&]:hover:shadow-[var(--clay-elev-ink-2)]",
+          "border-transparent bg-destructive text-white shadow-[var(--clay-elev-ink-1)] [a&]:",
         outline:
-          "border-[var(--clay-line)] bg-card text-foreground shadow-[var(--clay-elev-1)] [a&]:hover:shadow-[var(--clay-elev-2)]",
+          "border-[var(--clay-line)] bg-card text-foreground shadow-[var(--clay-elev-1)] [a&]:",
       },
     },
     defaultVariants: {

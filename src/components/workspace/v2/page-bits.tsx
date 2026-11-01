@@ -23,8 +23,8 @@ export function Disclosure({
     testId?: string;
 }) {
     return (
-        <details className={cn("group border-border rounded-xl border", className)} open={defaultOpen} data-testid={testId}>
-            <summary className="hover:bg-muted/50 flex cursor-pointer list-none items-center gap-2 rounded-xl px-4 py-3 text-sm font-medium select-none [&::-webkit-details-marker]:hidden">
+        <details className={cn("group border-[var(--clay-line)] bg-card rounded-xl border shadow-[var(--clay-elev-1)]", className)} open={defaultOpen} data-testid={testId}>
+            <summary className="hover:bg-[var(--clay-sunken)] flex cursor-pointer list-none items-center gap-2 rounded-xl px-4 py-3 text-sm font-medium select-none transition-colors [&::-webkit-details-marker]:hidden">
                 <ChevronRightIcon className="text-muted-foreground size-4 shrink-0 transition-transform group-open:rotate-90" aria-hidden />
                 <span className="min-w-0 flex-1">
                     {title}
@@ -74,10 +74,10 @@ export function Card({
     testId?: string;
 }) {
     return (
-        <section className={cn("border-border bg-card space-y-3 rounded-xl border p-4", className)} data-testid={testId}>
+        <section className={cn("border-[var(--clay-line)] bg-card space-y-3 rounded-xl border p-4 shadow-[var(--clay-elev-1)]", className)} data-testid={testId}>
             {title || aside ? (
                 <div className="flex items-start gap-3">
-                    {icon ? <span className="bg-muted text-foreground flex size-9 shrink-0 items-center justify-center rounded-lg [&_svg]:size-4.5">{icon}</span> : null}
+                    {icon ? <span className="border-[var(--clay-line)] bg-[var(--clay-sunken)] text-foreground flex size-9 shrink-0 items-center justify-center rounded-xl border shadow-[var(--clay-well-1)] [&_svg]:size-4.5">{icon}</span> : null}
                     <div className="min-w-0 flex-1">
                         {title ? <h3 className="text-sm font-semibold">{title}</h3> : null}
                         {description ? <p className="text-muted-foreground mt-0.5 text-[13px] leading-relaxed">{description}</p> : null}
@@ -103,7 +103,7 @@ export function Segmented<T extends string>({
     onChange: (value: T) => void;
 }) {
     return (
-        <div role="group" aria-label={label} className="bg-muted inline-flex rounded-lg p-0.5">
+        <div role="group" aria-label={label} className="border-[var(--clay-line)] bg-[var(--clay-sunken)] inline-flex rounded-xl border p-0.5 shadow-[var(--clay-well-1)]">
             {options.map(option => (
                 <button
                     key={option.value}
@@ -111,8 +111,8 @@ export function Segmented<T extends string>({
                     aria-pressed={value === option.value}
                     onClick={() => onChange(option.value)}
                     className={cn(
-                        "rounded-md px-3 py-1 text-xs font-medium transition-colors",
-                        value === option.value ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
+                        "rounded-lg px-3 py-1 text-xs font-medium transition-[box-shadow,background-color]",
+                        value === option.value ? "bg-card text-foreground shadow-[var(--clay-elev-1)]" : "text-muted-foreground hover:text-foreground",
                     )}
                 >
                     {option.label}

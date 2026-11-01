@@ -101,35 +101,35 @@ export default function DocsPage() {
               </div>
 
               <div className="space-y-4 text-xs sm:text-sm text-foreground leading-relaxed">
-                <div className="p-5 rounded-xl bg-card border border-[var(--clay-line)] space-y-2">
+                <div className="p-5 rounded-xl bg-card border border-[var(--clay-line)] space-y-2 shadow-[var(--clay-elev-1)]">
                   <h3 className="font-bold text-foreground text-sm">Step 1: Create an Account or Sign In</h3>
                   <p className="text-xs text-muted-foreground">
                     Visit the Mavly homepage and click &quot;Continue with Google&quot; or &quot;Continue with GitHub&quot;. Authentication is secured directly through Supabase Auth without intermediary credentials.
                   </p>
                 </div>
 
-                <div className="p-5 rounded-xl bg-card border border-[var(--clay-line)] space-y-2">
+                <div className="p-5 rounded-xl bg-card border border-[var(--clay-line)] space-y-2 shadow-[var(--clay-elev-1)]">
                   <h3 className="font-bold text-foreground text-sm">Step 2: Open the Workspace</h3>
                   <p className="text-xs text-muted-foreground">
                     Navigate to your <Link href="/dashboard" className="text-black font-semibold hover:underline">Dashboard</Link>. Click &quot;New Project&quot; to launch an empty canvas with the AI prompt bar initialized.
                   </p>
                 </div>
 
-                <div className="p-5 rounded-xl bg-card border border-[var(--clay-line)] space-y-2">
+                <div className="p-5 rounded-xl bg-card border border-[var(--clay-line)] space-y-2 shadow-[var(--clay-elev-1)]">
                   <h3 className="font-bold text-foreground text-sm">Step 3: Describe Your Website</h3>
                   <p className="text-xs text-muted-foreground">
                     Type your project vision into the prompt input. Be specific: include purpose, target audience, layout sections (hero, features, testimonials, footer), and design vibe.
                   </p>
                 </div>
 
-                <div className="p-5 rounded-xl bg-card border border-[var(--clay-line)] space-y-2">
+                <div className="p-5 rounded-xl bg-card border border-[var(--clay-line)] space-y-2 shadow-[var(--clay-elev-1)]">
                   <h3 className="font-bold text-foreground text-sm">Step 4: Review the Live Preview</h3>
                   <p className="text-xs text-muted-foreground">
                     The AI generation worker outputs HTML and Tailwind CSS files into your workspace. The sandboxed iframe refreshes automatically to render the compiled preview.
                   </p>
                 </div>
 
-                <div className="p-5 rounded-xl bg-card border border-[var(--clay-line)] space-y-2">
+                <div className="p-5 rounded-xl bg-card border border-[var(--clay-line)] space-y-2 shadow-[var(--clay-elev-1)]">
                   <h3 className="font-bold text-foreground text-sm">Step 5: Save and Manage Your Project</h3>
                   <p className="text-xs text-muted-foreground">
                     Every generation creates an automated restore point. You can rename your project, download the source code as a ZIP file, or connect a GitHub repository.
@@ -149,7 +149,7 @@ export default function DocsPage() {
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-                <div className="p-5 rounded-xl bg-card border border-[var(--clay-line)] space-y-2">
+                <div className="p-5 rounded-xl bg-card border border-[var(--clay-line)] space-y-2 shadow-[var(--clay-elev-1)]">
                   <div className="flex items-center gap-2">
                     <Terminal className="w-4 h-4 text-foreground" />
                     <h3 className="font-bold text-foreground text-sm">Chat &amp; Generation Status</h3>
@@ -159,7 +159,7 @@ export default function DocsPage() {
                   </p>
                 </div>
 
-                <div className="p-5 rounded-xl bg-card border border-[var(--clay-line)] space-y-2">
+                <div className="p-5 rounded-xl bg-card border border-[var(--clay-line)] space-y-2 shadow-[var(--clay-elev-1)]">
                   <div className="flex items-center gap-2">
                     <Eye className="w-4 h-4 text-foreground" />
                     <h3 className="font-bold text-foreground text-sm">Preview Sandbox Panel</h3>
@@ -169,9 +169,9 @@ export default function DocsPage() {
                   </p>
                 </div>
 
-                <div className="p-5 rounded-xl bg-card border border-[var(--clay-line)] space-y-2">
+                <div className="p-5 rounded-xl bg-card border border-[var(--clay-line)] space-y-2 shadow-[var(--clay-elev-1)]">
                   <div className="flex items-center gap-2">
-                    <Code2 className="w-4 h-4 text-emerald-600" />
+                    <Code2 className="w-4 h-4 text-success" />
                     <h3 className="font-bold text-foreground text-sm">Code &amp; File Tree Panel</h3>
                   </div>
                   <p className="text-muted-foreground leading-relaxed">
@@ -179,9 +179,9 @@ export default function DocsPage() {
                   </p>
                 </div>
 
-                <div className="p-5 rounded-xl bg-card border border-[var(--clay-line)] space-y-2">
+                <div className="p-5 rounded-xl bg-card border border-[var(--clay-line)] space-y-2 shadow-[var(--clay-elev-1)]">
                   <div className="flex items-center gap-2">
-                    <RotateCcw className="w-4 h-4 text-amber-600" />
+                    <RotateCcw className="w-4 h-4 text-warning" />
                     <h3 className="font-bold text-foreground text-sm">Durable Restore Points</h3>
                   </div>
                   <p className="text-muted-foreground leading-relaxed">
@@ -202,14 +202,14 @@ export default function DocsPage() {
               </div>
 
               <div className="space-y-4 text-xs text-foreground leading-relaxed">
-                <div className="p-5 rounded-xl bg-card border border-[var(--clay-line)] space-y-2">
+                <div className="p-5 rounded-xl bg-card border border-[var(--clay-line)] space-y-2 shadow-[var(--clay-elev-1)]">
                   <h3 className="font-bold text-foreground text-sm">GitHub Connection &amp; First Push</h3>
                   <p className="text-xs text-muted-foreground">
                     Authorize the Mavly GitHub App from the Project Settings panel. You can select an existing repository or connect an empty repository. If the repository is brand new (zero commits), Mavly tracks <code>first_push_pending</code> and creates the branch and initial commit using the GitHub Git Data API upon first push.
                   </p>
                 </div>
 
-                <div className="p-5 rounded-xl bg-card border border-[var(--clay-line)] space-y-2">
+                <div className="p-5 rounded-xl bg-card border border-[var(--clay-line)] space-y-2 shadow-[var(--clay-elev-1)]">
                   <h3 className="font-bold text-foreground text-sm">Vercel Publishing Prerequisites</h3>
                   <p className="text-xs text-muted-foreground">
                     Publishing uploads the standalone static preview bytes to <code>&lt;project-id&gt;.mavly.xyz</code>. It is disabled by default and requires server operator configuration. If not configured, requests return a truthful 503 error.
@@ -228,21 +228,21 @@ export default function DocsPage() {
                 </p>
               </div>
 
-              <div className="p-6 rounded-2xl bg-card border border-[var(--clay-line)] space-y-4 text-xs">
+              <div className="p-6 rounded-2xl bg-card border border-[var(--clay-line)] space-y-4 text-xs shadow-[var(--clay-elev-1)]">
                 <p className="text-foreground leading-relaxed">
                   Every plan includes a monthly allocation of generation credits. Credits are consumed when an AI model processes a website prompt or refinement.
                 </p>
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
-                  <div className="p-3.5 rounded-xl bg-[var(--clay-sunken)] border border-[var(--clay-line)]">
+                  <div className="p-3.5 rounded-xl bg-[var(--clay-sunken)] border border-[var(--clay-line)] shadow-[var(--clay-well-1)]">
                     <span className="font-bold text-foreground block">Starter Tier</span>
                     <span className="text-muted-foreground text-[11px]">₹399/mo · Priority generation</span>
                   </div>
-                  <div className="p-3.5 rounded-xl bg-[var(--clay-sunken)] border border-[var(--clay-line)]">
+                  <div className="p-3.5 rounded-xl bg-[var(--clay-sunken)] border border-[var(--clay-line)] shadow-[var(--clay-well-1)]">
                     <span className="font-bold text-foreground block">Creator Tier</span>
                     <span className="text-muted-foreground text-[11px]">₹599/mo · GitHub sync &amp; restore</span>
                   </div>
-                  <div className="p-3.5 rounded-xl bg-[var(--clay-sunken)] border border-[var(--clay-line)]">
+                  <div className="p-3.5 rounded-xl bg-[var(--clay-sunken)] border border-[var(--clay-line)] shadow-[var(--clay-well-1)]">
                     <span className="font-bold text-foreground block">Pro Tier</span>
                     <span className="text-muted-foreground text-[11px]">₹899/mo · Unlimited custom domains</span>
                   </div>
@@ -270,9 +270,9 @@ export default function DocsPage() {
               </div>
 
               <div className="space-y-4 text-xs">
-                <div className="p-5 rounded-xl bg-card border border-[var(--clay-line)] space-y-1.5">
+                <div className="p-5 rounded-xl bg-card border border-[var(--clay-line)] space-y-1.5 shadow-[var(--clay-elev-1)]">
                   <div className="flex items-center gap-2 text-foreground font-bold text-sm">
-                    <AlertTriangle className="w-4 h-4 text-amber-500" />
+                    <AlertTriangle className="w-4 h-4 text-warning" />
                     <span>Generation Timeout or Model Error</span>
                   </div>
                   <p className="text-muted-foreground leading-relaxed">
@@ -280,9 +280,9 @@ export default function DocsPage() {
                   </p>
                 </div>
 
-                <div className="p-5 rounded-xl bg-card border border-[var(--clay-line)] space-y-1.5">
+                <div className="p-5 rounded-xl bg-card border border-[var(--clay-line)] space-y-1.5 shadow-[var(--clay-elev-1)]">
                   <div className="flex items-center gap-2 text-foreground font-bold text-sm">
-                    <AlertTriangle className="w-4 h-4 text-amber-500" />
+                    <AlertTriangle className="w-4 h-4 text-warning" />
                     <span>Empty Preview Screen</span>
                   </div>
                   <p className="text-muted-foreground leading-relaxed">
@@ -290,9 +290,9 @@ export default function DocsPage() {
                   </p>
                 </div>
 
-                <div className="p-5 rounded-xl bg-card border border-[var(--clay-line)] space-y-1.5">
+                <div className="p-5 rounded-xl bg-card border border-[var(--clay-line)] space-y-1.5 shadow-[var(--clay-elev-1)]">
                   <div className="flex items-center gap-2 text-foreground font-bold text-sm">
-                    <AlertTriangle className="w-4 h-4 text-amber-500" />
+                    <AlertTriangle className="w-4 h-4 text-warning" />
                     <span>GitHub Authorization Failed</span>
                   </div>
                   <p className="text-muted-foreground leading-relaxed">

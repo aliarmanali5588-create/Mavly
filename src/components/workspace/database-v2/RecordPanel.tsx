@@ -167,7 +167,7 @@ export function RecordPanel({
             control = <ForeignKeyPicker id={id} projectId={projectId} env={env} parent={tables.find(x => x.name === fk.table)} toColumn={fk.toColumn} value={String(value)} onChange={v => set(column.name, v)} />;
         } else if (kind === "options" && column.options) {
             control = (
-                <select {...common} className="border-input bg-background h-9 w-full rounded-md border px-2 text-sm" value={String(value)} onChange={e => set(column.name, e.target.value)}>
+                <select {...common} className="border-[var(--clay-line)] bg-[var(--clay-sunken)] h-9 w-full rounded-lg border px-2 text-sm shadow-[var(--clay-well-1)]" value={String(value)} onChange={e => set(column.name, e.target.value)}>
                     <option value="">{column.notNull ? "—" : t("engineV2.database.empty")}</option>
                     {column.options.map(option => (
                         <option key={option} value={option}>
@@ -219,7 +219,7 @@ export function RecordPanel({
     return (
         <Sheet open onOpenChange={open => !open && onClose()}>
             <SheetContent side="right" className={cn("w-full gap-0 border-l-2 p-0 sm:max-w-lg", theme.frame)} data-testid="record-panel">
-                <SheetHeader className="border-border border-b">
+                <SheetHeader className="border-[var(--clay-line)] border-b">
                     <div className="flex items-center gap-2 pr-6">
                         <span className={cn("rounded px-1.5 py-0.5 text-[11px] font-semibold", theme.selected)}>{envLabel(env)}</span>
                         <SheetTitle>{t(row ? "engineV2.database.editRowTitle" : "engineV2.database.newRowTitle", { table: tableName })}</SheetTitle>
@@ -227,7 +227,7 @@ export function RecordPanel({
                     <SheetDescription>{t("engineV2.database.formHint")}</SheetDescription>
                 </SheetHeader>
                 <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4">{table.columns.map(field)}</div>
-                <SheetFooter className="border-border gap-3 border-t">
+                <SheetFooter className="border-[var(--clay-line)] gap-3 border-t">
                     {statement ? (
                         <details className="text-xs" open>
                             <summary className="text-muted-foreground cursor-pointer">{t("engineV2.database.sqlToRun")}</summary>

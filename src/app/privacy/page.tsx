@@ -34,7 +34,7 @@ export default function PrivacyPage() {
         </div>
 
         {/* Legal Transparency Notice */}
-        <div className="p-4 rounded-xl bg-[var(--clay-sunken)] border border-[var(--clay-line)] text-xs text-foreground leading-relaxed">
+        <div className="p-4 rounded-xl bg-[var(--clay-sunken)] border border-[var(--clay-line)] text-xs text-foreground leading-relaxed shadow-[var(--clay-well-1)]">
           <strong>Privacy Commitment:</strong> This policy describes our actual data practices as implemented in our codebase. We do not sell your personal data or project files. For privacy questions, reach us at <code>hello@mavly.xyz</code>.
         </div>
 
@@ -156,7 +156,7 @@ export default function PrivacyPage() {
             <p>
               For privacy-related questions, data export requests, or security disclosures:
             </p>
-            <div className="p-4 rounded-xl bg-[var(--clay-sunken)] border border-black/[0.04] inline-block font-mono text-xs">
+            <div className="p-4 rounded-xl bg-[var(--clay-sunken)] border border-[var(--clay-line)] inline-block font-mono text-xs shadow-[var(--clay-well-1)]">
               <a href="mailto:hello@mavly.xyz" className="text-black font-semibold hover:underline">
                 hello@mavly.xyz
               </a>

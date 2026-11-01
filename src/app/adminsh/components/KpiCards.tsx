@@ -54,7 +54,7 @@ export function KpiCards({ data, loading, error, onRetry, periodLabel }: KpiCard
         <button
           type="button"
           onClick={onRetry}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-black/[0.1] text-xs font-semibold text-foreground hover:bg-[var(--clay-sunken)]"
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-[var(--clay-line)] text-xs font-semibold text-foreground hover:bg-[var(--clay-sunken)] shadow-[var(--clay-well-1)]"
         >
           <RefreshCw className="w-3.5 h-3.5" />
           <span>Try again</span>
@@ -114,7 +114,7 @@ export function KpiCards({ data, loading, error, onRetry, periodLabel }: KpiCard
   return (
     <div className="space-y-3">
       {error ? (
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-4 py-2.5 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-800">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-4 py-2.5 rounded-xl bg-warning-subtle border border-warning/25 text-xs text-warning-subtle-foreground">
           <span>Showing the last successful refresh. {error}</span>
           <button
             type="button"
@@ -136,12 +136,12 @@ export function KpiCards({ data, loading, error, onRetry, periodLabel }: KpiCard
         return (
           <div
             key={card.id}
-            className="group relative bg-card rounded-2xl p-5 border border-[var(--clay-line)] shadow-[var(--clay-elev-1)] hover:shadow-[var(--clay-elev-3)] hover:border-black/20 transition-all duration-200 overflow-hidden flex flex-col justify-between"
+            className="group relative bg-card rounded-2xl p-5 border border-[var(--clay-line)] shadow-[var(--clay-elev-1)] hover:border-[var(--clay-line-strong)] transition-all duration-200 overflow-hidden flex flex-col justify-between"
           >
             <div>
               <div className="flex items-center justify-between">
                 <span className="text-xs font-semibold text-muted-foreground tracking-wide">{card.title}</span>
-                <div className="p-2 rounded-xl bg-[var(--clay-sunken)] border border-[var(--clay-line)] text-foreground group-hover:bg-black group-hover:text-white transition-colors duration-200 shrink-0">
+                <div className="p-2 rounded-xl bg-[var(--clay-sunken)] border border-[var(--clay-line)] text-foreground group-hover:bg-black group-hover:text-white transition-colors duration-200 shrink-0 shadow-[var(--clay-elev-ink-1)]">
                   <Icon className="w-4 h-4" />
                 </div>
               </div>
@@ -163,9 +163,9 @@ export function KpiCards({ data, loading, error, onRetry, periodLabel }: KpiCard
                   <span
                     className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[11px] font-bold border font-mono ${
                       positive
-                        ? "bg-emerald-50 text-emerald-700 border-emerald-200/60"
+                        ? "bg-success-subtle text-success-subtle-foreground border-success/25/60"
                         : negative
-                          ? "bg-rose-50 text-rose-700 border-rose-200/60"
+                          ? "bg-destructive-subtle text-destructive-subtle-foreground border-destructive/25/60"
                           : "bg-[var(--clay-sunken)] text-muted-foreground border-[var(--clay-line)]"
                     }`}
                   >

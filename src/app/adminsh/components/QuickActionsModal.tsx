@@ -45,7 +45,7 @@ export function QuickActionsModal({
     <div className="bg-card rounded-2xl p-5 sm:p-6 border border-[var(--clay-line)] shadow-[var(--clay-elev-1)] space-y-4">
       <div className="flex items-center justify-between pb-3 border-b border-[var(--clay-line)]">
         <div className="flex items-center gap-2">
-          <div className="p-1.5 rounded-lg bg-black text-white">
+          <div className="p-1.5 rounded-lg bg-black text-white shadow-[var(--clay-elev-ink-1)]">
             <Sparkles className="w-4 h-4" />
           </div>
           <h2 className="text-base font-bold text-foreground">Administrative Shortcuts</h2>
@@ -56,7 +56,7 @@ export function QuickActionsModal({
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         <Shortcut
           href="/adminsh/announcements"
-          icon={<Megaphone className="w-5 h-5 text-amber-500 group-hover:text-white transition-colors" />}
+          icon={<Megaphone className="w-5 h-5 text-warning group-hover:text-white transition-colors" />}
           title="Broadcast Announcement"
           hint="Open the announcement workflow"
         />
@@ -68,13 +68,13 @@ export function QuickActionsModal({
         />
         <Shortcut
           href="/adminsh/generation-monitor"
-          icon={<AlertOctagon className="w-5 h-5 text-rose-500 group-hover:text-white transition-colors" />}
+          icon={<AlertOctagon className="w-5 h-5 text-destructive group-hover:text-white transition-colors" />}
           title="Build Queue Monitor"
           hint={queueHint}
         />
         <Shortcut
           href="/adminsh/billing"
-          icon={<CreditCard className="w-5 h-5 text-emerald-500 group-hover:text-white transition-colors" />}
+          icon={<CreditCard className="w-5 h-5 text-success group-hover:text-white transition-colors" />}
           title="Revenue & Invoices"
           hint="No Mavly billing source configured"
         />
@@ -97,7 +97,7 @@ function Shortcut({
   return (
     <Link
       href={href}
-      className="p-4 rounded-xl border border-[var(--clay-line)] bg-[var(--clay-sunken)]/70 hover:bg-primary hover:text-primary-foreground group transition-all text-left flex flex-col justify-between h-24 cursor-pointer"
+      className="p-4 rounded-xl border border-[var(--clay-line)] bg-[var(--clay-sunken)] hover:bg-primary hover:text-primary-foreground group transition-all text-left flex flex-col justify-between h-24 cursor-pointer shadow-[var(--clay-well-1)]"
     >
       <div className="flex items-center justify-between w-full">
         {icon}

@@ -84,7 +84,7 @@ export function FAQSection() {
                 className={`rounded-2xl transition-all duration-300 overflow-hidden ${
                   isOpen
                     ? "bg-card border border-[var(--clay-line-strong)] shadow-[var(--clay-elev-3)]"
-                    : "bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-1)] hover:border-[var(--clay-line-strong)] hover:shadow-[var(--clay-elev-2)]"
+                    : "bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-1)] hover:border-[var(--clay-line-strong)]"
                 }`}
               >
                 <h3>
@@ -94,15 +94,15 @@ export function FAQSection() {
                     aria-expanded={isOpen}
                     aria-controls={panelId}
                     onClick={() => toggleItem(idx)}
-                    className="w-full py-5 px-6 text-left flex items-center justify-between gap-4 font-bold text-sm sm:text-base text-foreground hover:text-foreground active:bg-black/[0.02] transition-colors cursor-pointer select-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black focus-visible:ring-offset-2 rounded-2xl"
+                    className="w-full py-5 px-6 text-left flex items-center justify-between gap-4 font-bold text-sm sm:text-base text-foreground hover:text-foreground active:bg-[var(--clay-sunken)] transition-colors cursor-pointer select-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black focus-visible:ring-offset-2 rounded-2xl"
                   >
                     <span className="pr-2">{faq.q}</span>
                     <div
                       aria-hidden="true"
                       className={`p-1.5 sm:p-2 rounded-xl bg-card border transition-[box-shadow,border-color] duration-300 ease-out shrink-0 flex items-center justify-center motion-reduce:transition-none pointer-events-none ${
                         isOpen
-                          ? "rotate-180 text-foreground border-black/[0.16] shadow-sm"
-                          : "rotate-0 text-muted-foreground border-black/[0.08]"
+                          ? "rotate-180 text-foreground border-[var(--clay-line-strong)] shadow-[var(--clay-elev-1)]"
+                          : "rotate-0 text-muted-foreground border-[var(--clay-line)]"
                       }`}
                     >
                       <ChevronDown className="w-4 h-4 transition-transform duration-300" />
@@ -120,7 +120,7 @@ export function FAQSection() {
                   className="mavly-accordion-content"
                 >
                   <div className="mavly-accordion-inner">
-                    <div className="px-6 pb-6 pt-1 text-xs sm:text-sm text-muted-foreground leading-relaxed border-t border-black/[0.04]">
+                    <div className="px-6 pb-6 pt-1 text-xs sm:text-sm text-muted-foreground leading-relaxed border-t border-[var(--clay-line)]">
                       {faq.a}
                     </div>
                   </div>

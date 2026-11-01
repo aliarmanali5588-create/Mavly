@@ -113,7 +113,7 @@ export function RunActivity({ progress }: { progress: RunProgressView | null }) 
                 </span>
                 {(s.added || s.removed) ? (
                   <span className="shrink-0 text-[11px] tabular-nums">
-                    {s.added ? <span className="text-emerald-600 dark:text-emerald-400">+{s.added}</span> : null}
+                    {s.added ? <span className="text-success">+{s.added}</span> : null}
                     {s.added && s.removed ? " " : null}
                     {s.removed ? <span className="text-destructive">−{s.removed}</span> : null}
                   </span>

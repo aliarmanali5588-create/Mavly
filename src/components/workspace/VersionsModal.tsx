@@ -197,7 +197,7 @@ export function VersionsModal({
                             {versions.map(version => (
                                 <li
                                     key={version._id}
-                                    className="border-border hover:border-border-strong rounded-lg border p-3 transition-colors"
+                                    className="border-[var(--clay-line)] bg-card hover:border-[var(--clay-line-strong)] rounded-lg border p-3 shadow-[var(--clay-elev-1)] transition-colors"
                                 >
                                     <div className="flex flex-wrap items-start gap-2">
                                         <div className="min-w-0 flex-1">
@@ -283,7 +283,7 @@ export function VersionsModal({
                                       what it is.
                                     */}
                                     {(version.prompt || version.commitMessage) && (
-                                        <p className="text-muted-foreground bg-muted/50 mt-2 line-clamp-2 rounded-md p-2 text-xs">
+                                        <p className="text-muted-foreground bg-[var(--clay-sunken)] mt-2 line-clamp-2 rounded-md p-2 text-xs">
                                             {version.prompt || version.commitMessage}
                                         </p>
                                     )}

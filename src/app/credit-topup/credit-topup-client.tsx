@@ -51,7 +51,7 @@ export function CreditTopupClient({ profile }: CreditTopupClientProps) {
               href={userEmail ? "/dashboard" : "/"}
               className="flex items-center gap-2.5 group select-none"
             >
-              <div className="w-8 h-8 rounded-xl overflow-hidden bg-card shadow-xs p-0.5 border border-[var(--clay-line)] flex items-center justify-center transition-transform duration-200 group-hover:scale-105 active:scale-95">
+              <div className="w-8 h-8 rounded-xl overflow-hidden bg-card shadow-[var(--clay-elev-1)] p-0.5 border border-[var(--clay-line)] flex items-center justify-center transition-transform duration-200 clay-press">
                 <Image
                   src="/logo/Mavly.png"
                   alt="Mavly Logo"
@@ -174,8 +174,8 @@ export function CreditTopupClient({ profile }: CreditTopupClientProps) {
                   tabIndex={0}
                   className={`p-5 rounded-2xl bg-card flex flex-col justify-between transition-all duration-200 cursor-pointer select-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black relative ${
                     isSelected
-                      ? "border-2 border-black shadow-[var(--clay-elev-3)] -translate-y-0.5"
-                      : "border border-[var(--clay-line)] shadow-[var(--clay-elev-1)] hover:border-black/[0.2] hover:-translate-y-0.5"
+                      ? "border-2 border-black shadow-[var(--clay-elev-2)]"
+                      : "border border-[var(--clay-line)] shadow-[var(--clay-elev-1)] hover:border-[var(--clay-line-strong)]"
                   }`}
                 >
                   {/* Top: Package Identifier & Selected Indicator */}
@@ -185,7 +185,7 @@ export function CreditTopupClient({ profile }: CreditTopupClientProps) {
                         {pkg.name}
                       </span>
                       {isSelected ? (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-black text-white text-[10px] font-bold uppercase tracking-wider">
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-black text-white text-[10px] font-bold uppercase tracking-wider shadow-[var(--clay-elev-ink-1)]">
                           <Check className="w-2.5 h-2.5" />
                           <span>Selected</span>
                         </span>
@@ -231,7 +231,7 @@ export function CreditTopupClient({ profile }: CreditTopupClientProps) {
                       }}
                       className={`w-full py-2 px-3 rounded-full text-xs font-semibold transition-all ${
                         isSelected
-                          ? "bg-black text-white shadow-xs"
+                          ? "bg-black text-white shadow-[var(--clay-elev-1)]"
                           : "bg-[var(--clay-sunken)] text-foreground hover:bg-[var(--clay-sunken-deep)]"
                       }`}
                     >
@@ -316,9 +316,9 @@ export function CreditTopupClient({ profile }: CreditTopupClientProps) {
         open={showCheckoutModal}
         onOpenChange={setShowCheckoutModal}
       >
-        <DialogContent className="max-w-md bg-card p-6 sm:p-8 rounded-3xl border border-black/[0.1] shadow-2xl">
+        <DialogContent className="max-w-md bg-card p-6 sm:p-8 rounded-3xl border border-[var(--clay-line)] shadow-[var(--clay-float)]">
           <DialogHeader>
-            <div className="w-10 h-10 rounded-2xl bg-amber-50 border border-amber-200/60 flex items-center justify-center text-amber-800 mb-2">
+            <div className="w-10 h-10 rounded-2xl bg-warning-subtle border border-warning/25 flex items-center justify-center text-warning-subtle-foreground mb-2">
               <ShieldAlert className="w-5 h-5" />
             </div>
             <DialogTitle className="text-xl font-bold tracking-tight text-foreground">

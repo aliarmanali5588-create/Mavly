@@ -409,7 +409,7 @@ export function PathPicker({
                     id={listboxId}
                     role="listbox"
                     aria-label={t("workspace.preview.pagesLabel")}
-                    className="bg-popover text-popover-foreground absolute top-full left-0 z-50 mt-1.5 max-h-72 w-72 max-w-[calc(100vw-2rem)] overflow-y-auto rounded-lg border p-1 shadow-md"
+                    className="bg-card text-popover-foreground absolute top-full left-0 z-50 mt-1.5 max-h-72 w-72 max-w-[calc(100vw-2rem)] overflow-y-auto rounded-xl border border-[var(--clay-line)] p-1 shadow-[var(--clay-float)]"
                 >
                     {loading && routes === null ? (
                         <div className="text-muted-foreground flex items-center gap-2 p-2 text-xs">
@@ -466,7 +466,7 @@ export function PathPicker({
                                           dropping it would hide half of a blog.
                                         */}
                                         {route.dynamic ? (
-                                            <span className="text-muted-foreground bg-muted shrink-0 rounded px-1 py-px font-sans text-[10px]">
+                                            <span className="text-muted-foreground bg-[var(--clay-sunken)] shrink-0 rounded px-1 py-px font-sans text-[10px]">
                                                 {t("workspace.preview.pagesDynamic")}
                                             </span>
                                         ) : null}

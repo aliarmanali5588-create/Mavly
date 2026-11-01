@@ -34,7 +34,7 @@ export default function TermsPage() {
         </div>
 
         {/* Legal Review Notice */}
-        <div className="p-4 rounded-xl bg-amber-50/70 border border-amber-200/60 text-xs text-amber-900 leading-relaxed">
+        <div className="p-4 rounded-xl bg-warning-subtle border border-warning/25 text-xs text-warning-subtle-foreground leading-relaxed">
           <strong>Notice:</strong> This document represents a working operational draft of our platform terms of service. For formal enterprise agreements or bespoke commercial terms, contact <code>hello@mavly.xyz</code>.
         </div>
 
@@ -129,7 +129,7 @@ export default function TermsPage() {
             <p>
               For legal questions, general notices, or compliance inquiries, please reach out directly:
             </p>
-            <div className="p-4 rounded-xl bg-[var(--clay-sunken)] border border-black/[0.04] inline-block font-mono text-xs">
+            <div className="p-4 rounded-xl bg-[var(--clay-sunken)] border border-[var(--clay-line)] inline-block font-mono text-xs shadow-[var(--clay-well-1)]">
               <a href="mailto:hello@mavly.xyz" className="text-black font-semibold hover:underline">
                 hello@mavly.xyz
               </a>

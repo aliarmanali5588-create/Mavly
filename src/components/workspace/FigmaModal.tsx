@@ -269,7 +269,7 @@ export function FigmaModal({
                     {!loading && !loadFailed && connected ? (
                         // ── Connected ────────────────────────────────────────
                         <div className="space-y-3">
-                            <div className="border-border rounded-lg border p-3">
+                            <div className="border-[var(--clay-line)] bg-card rounded-lg border p-3 shadow-[var(--clay-elev-1)]">
                                 <div className="flex items-center gap-3">
                                     {/* Figma serves avatars from its own CDN; a plain
                                         <img> avoids adding a remote host to next.config. */}
@@ -281,7 +281,7 @@ export function FigmaModal({
                                             className="size-9 shrink-0 rounded-full object-cover"
                                         />
                                     ) : (
-                                        <span className="bg-muted text-muted-foreground flex size-9 shrink-0 items-center justify-center rounded-full">
+                                        <span className="bg-[var(--clay-sunken)] text-muted-foreground flex size-9 shrink-0 items-center justify-center rounded-full shadow-[var(--clay-well-1)]">
                                             <FigmaIcon className="size-4" aria-hidden />
                                         </span>
                                     )}
@@ -383,7 +383,7 @@ export function FigmaModal({
                             </div>
 
                             {/* ── Where to get one, and with which scopes ──── */}
-                            <div className="border-border bg-muted/40 space-y-2 rounded-lg border p-3">
+                            <div className="border-[var(--clay-line)] bg-[var(--clay-sunken)] space-y-2 rounded-lg border p-3 shadow-[var(--clay-elev-1)]">
                                 <p className="text-xs font-medium">{t("workspace.figma.howToTitle")}</p>
                                 <ol className="text-muted-foreground list-decimal space-y-1 pl-4 text-xs">
                                     <li>{t("workspace.figma.howToStep1")}</li>
@@ -397,7 +397,7 @@ export function FigmaModal({
                                     {REQUIRED_SCOPES.map(scope => (
                                         <code
                                             key={scope}
-                                            className="bg-background border-border rounded border px-1.5 py-0.5 font-mono text-[11px]"
+                                            className="bg-[var(--clay-sunken)] border-[var(--clay-line)] rounded-md border px-1.5 py-0.5 font-mono text-[11px] shadow-[var(--clay-well-1)]"
                                         >
                                             {scope}
                                         </code>
@@ -457,7 +457,7 @@ export function FigmaModal({
  */
 function WhatItEnables({ t }: { t: ReturnType<typeof useT> }) {
     return (
-        <div className="border-border bg-muted/40 space-y-1.5 rounded-lg border p-3">
+        <div className="border-[var(--clay-line)] bg-[var(--clay-sunken)] space-y-1.5 rounded-lg border p-3 shadow-[var(--clay-elev-1)]">
             <p className="text-xs font-medium">{t("workspace.figma.enablesTitle")}</p>
             <ul className="text-muted-foreground space-y-1 text-xs">
                 <li>· {t("workspace.figma.enables1")}</li>

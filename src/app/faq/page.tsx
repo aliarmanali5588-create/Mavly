@@ -196,7 +196,7 @@ export default function FaqPage() {
               placeholder="Search questions or keywords (e.g. GitHub, credits, preview)..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-11 pr-4 py-3 text-xs sm:text-sm bg-card border border-[var(--clay-line)] rounded-2xl focus:outline-none focus:ring-2 focus:ring-black/10 text-foreground shadow-xs"
+              className="w-full pl-11 pr-4 py-3 text-xs sm:text-sm bg-card border border-[var(--clay-line)] rounded-2xl focus:outline-none focus:ring-2 focus:ring-black/10 text-foreground shadow-[var(--clay-elev-1)]"
             />
           </div>
 
@@ -221,7 +221,7 @@ export default function FaqPage() {
         {/* FAQs Accordion Grid */}
         <div className="max-w-3xl mx-auto space-y-4">
           {filtered.length === 0 ? (
-            <div className="p-8 text-center bg-card rounded-2xl border border-[var(--clay-line)] text-muted-foreground text-xs">
+            <div className="p-8 text-center bg-card rounded-2xl border border-[var(--clay-line)] text-muted-foreground text-xs shadow-[var(--clay-elev-1)]">
               No questions found matching your search.
             </div>
           ) : (
@@ -235,7 +235,7 @@ export default function FaqPage() {
                   <button
                     type="button"
                     onClick={() => setExpandedId(isExpanded ? "" : item.id)}
-                    className="w-full p-5 text-left flex items-start justify-between gap-4 cursor-pointer hover:bg-[var(--clay-sunken)]/50 transition-colors"
+                    className="w-full p-5 text-left flex items-start justify-between gap-4 cursor-pointer hover:bg-[var(--clay-sunken)] transition-colors"
                   >
                     <div className="space-y-1">
                       <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block">
@@ -245,7 +245,7 @@ export default function FaqPage() {
                         {item.question}
                       </h3>
                     </div>
-                    <div className="p-1.5 rounded-lg bg-[var(--clay-sunken)] border border-[var(--clay-line)] text-muted-foreground shrink-0 mt-1">
+                    <div className="p-1.5 rounded-lg bg-[var(--clay-sunken)] border border-[var(--clay-line)] text-muted-foreground shrink-0 mt-1 shadow-[var(--clay-well-1)]">
                       <ChevronDown
                         className={`w-4 h-4 transition-transform ${
                           isExpanded ? "rotate-180" : ""
@@ -277,7 +277,7 @@ export default function FaqPage() {
         </div>
 
         {/* Bottom Callout */}
-        <div className="p-8 rounded-3xl bg-card border border-[var(--clay-line)] text-center max-w-2xl mx-auto space-y-3 text-xs">
+        <div className="p-8 rounded-3xl bg-card border border-[var(--clay-line)] text-center max-w-2xl mx-auto space-y-3 text-xs shadow-[var(--clay-elev-1)]">
           <h3 className="text-sm font-bold text-foreground">Have a question that isn&apos;t answered here?</h3>
           <p className="text-muted-foreground">
             Reach out to our support specialists directly at <code>support@mavly.xyz</code>.

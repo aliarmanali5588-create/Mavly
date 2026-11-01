@@ -88,7 +88,7 @@ export default function CareersPage() {
             </div>
 
             <div className="p-6 rounded-2xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)] space-y-3">
-              <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center">
+              <div className="w-10 h-10 rounded-xl bg-success-subtle text-success flex items-center justify-center">
                 <Heart className="w-5 h-5" />
               </div>
               <h3 className="text-base font-bold text-foreground">User Empathy</h3>
@@ -114,19 +114,19 @@ export default function CareersPage() {
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-xs text-foreground">
-            <div className="p-4 rounded-xl bg-[var(--clay-sunken)] border border-[var(--clay-line)] space-y-1">
+            <div className="p-4 rounded-xl bg-[var(--clay-sunken)] border border-[var(--clay-line)] space-y-1 shadow-[var(--clay-well-1)]">
               <span className="font-bold text-foreground block">AI &amp; Systems Engineering</span>
               <p className="text-muted-foreground">Model prompt orchestration, streaming parsers, and sandboxed preview execution.</p>
             </div>
-            <div className="p-4 rounded-xl bg-[var(--clay-sunken)] border border-[var(--clay-line)] space-y-1">
+            <div className="p-4 rounded-xl bg-[var(--clay-sunken)] border border-[var(--clay-line)] space-y-1 shadow-[var(--clay-well-1)]">
               <span className="font-bold text-foreground block">Frontend Architecture</span>
               <p className="text-muted-foreground">Next.js App Router, Tailwind CSS design systems, and responsive workspace layout.</p>
             </div>
-            <div className="p-4 rounded-xl bg-[var(--clay-sunken)] border border-[var(--clay-line)] space-y-1">
+            <div className="p-4 rounded-xl bg-[var(--clay-sunken)] border border-[var(--clay-line)] space-y-1 shadow-[var(--clay-well-1)]">
               <span className="font-bold text-foreground block">UI &amp; Visual Design</span>
               <p className="text-muted-foreground">Luxury minimalist aesthetics, soft sculpted depth, and ergonomic component hierarchies.</p>
             </div>
-            <div className="p-4 rounded-xl bg-[var(--clay-sunken)] border border-[var(--clay-line)] space-y-1">
+            <div className="p-4 rounded-xl bg-[var(--clay-sunken)] border border-[var(--clay-line)] space-y-1 shadow-[var(--clay-well-1)]">
               <span className="font-bold text-foreground block">Developer Experience &amp; Docs</span>
               <p className="text-muted-foreground">Clear tutorials, actionable onboarding, and technical writing for creators.</p>
             </div>
@@ -148,7 +148,7 @@ export default function CareersPage() {
         </div>
 
         {/* Section D: Get In Touch */}
-        <div className="p-8 sm:p-12 rounded-3xl bg-black text-white max-w-3xl mx-auto text-center space-y-6">
+        <div className="p-8 sm:p-12 rounded-3xl bg-black text-white max-w-3xl mx-auto text-center space-y-6 shadow-[var(--clay-elev-ink-1)]">
           <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
             Interested in what we are doing?
           </h2>
@@ -159,7 +159,7 @@ export default function CareersPage() {
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
             <a
               href="mailto:careers@mavly.xyz?subject=Mavly%20Careers%20Inquiry"
-              className="px-5 py-2.5 rounded-xl bg-card text-black font-bold text-xs hover:bg-[var(--clay-sunken)] transition-colors inline-flex items-center gap-2"
+              className="px-5 py-2.5 rounded-xl bg-card text-black font-bold text-xs border border-[var(--clay-line)] shadow-[var(--clay-elev-2)] hover:border-[var(--clay-line-strong)] clay-press transition-[box-shadow,border-color,background-color] inline-flex items-center gap-2"
             >
               <span>Email careers@mavly.xyz</span>
               <ExternalLink className="w-3.5 h-3.5" />
@@ -167,12 +167,12 @@ export default function CareersPage() {
             <button
               type="button"
               onClick={handleCopy}
-              className="px-4 py-2.5 rounded-xl bg-black border border-white/10 text-xs text-muted-foreground hover:text-white transition-colors inline-flex items-center gap-2 cursor-pointer"
+              className="px-4 py-2.5 rounded-xl bg-[var(--clay-sunken-deep)] border border-[var(--clay-line)] text-xs text-muted-foreground hover:text-foreground transition-colors inline-flex items-center gap-2 cursor-pointer shadow-[var(--clay-well-1)]"
             >
               {copied ? (
                 <>
-                  <Check className="w-3.5 h-3.5 text-emerald-400" />
-                  <span className="text-emerald-400">Copied Address</span>
+                  <Check className="w-3.5 h-3.5 text-success" />
+                  <span className="text-success">Copied Address</span>
                 </>
               ) : (
                 <>

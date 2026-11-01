@@ -31,14 +31,14 @@ interface AdminHeaderProps {
 }
 
 const STATUS_DOT: Record<NonNullable<AdminHeaderProps["statusTone"]>, string> = {
-  ok: "bg-emerald-500",
-  warn: "bg-amber-500",
+  ok: "bg-success",
+  warn: "bg-warning",
   unknown: "bg-muted-foreground",
 };
 
 const STATUS_TEXT: Record<NonNullable<AdminHeaderProps["statusTone"]>, string> = {
-  ok: "text-emerald-700",
-  warn: "text-amber-700",
+  ok: "text-success",
+  warn: "text-warning-subtle-foreground",
   unknown: "text-muted-foreground",
 };
 
@@ -72,7 +72,7 @@ export function AdminHeader({
         <button
           type="button"
           onClick={onOpenMobileSidebar}
-          className="lg:hidden p-2 rounded-xl text-muted-foreground hover:text-black hover:bg-black/5 transition-colors cursor-pointer"
+          className="lg:hidden p-2 rounded-xl text-muted-foreground hover:text-black hover:bg-[var(--clay-sunken)] transition-colors cursor-pointer"
           aria-label="Open Sidebar"
         >
           <Menu className="w-5 h-5" />
@@ -104,7 +104,7 @@ export function AdminHeader({
       <div className="flex items-center gap-2 sm:gap-3">
         {/* Segmented Time Range Selector */}
         <div
-          className="hidden sm:flex items-center p-1 rounded-xl bg-[var(--clay-sunken)]/80 border border-[var(--clay-line)] text-xs font-semibold text-muted-foreground"
+          className="hidden sm:flex items-center p-1 rounded-xl bg-[var(--clay-sunken)] border border-[var(--clay-line)] text-xs font-semibold text-muted-foreground shadow-[var(--clay-well-1)]"
           role="group"
           aria-label="Dashboard period"
         >
@@ -118,7 +118,7 @@ export function AdminHeader({
                 aria-pressed={selected}
                 title={option.description}
                 className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${
-                  selected ? "bg-card text-foreground shadow-xs font-bold" : "hover:text-black"
+                  selected ? "bg-card text-foreground shadow-[var(--clay-elev-1)] font-bold" : "hover:text-black"
                 }`}
               >
                 {option.label}
@@ -132,12 +132,12 @@ export function AdminHeader({
           <button
             type="button"
             onClick={() => setShowNotifications(!showNotifications)}
-            className="relative p-2 rounded-xl text-muted-foreground hover:text-black hover:bg-black/5 transition-colors cursor-pointer"
+            className="relative p-2 rounded-xl text-muted-foreground hover:text-black hover:bg-[var(--clay-sunken)] transition-colors cursor-pointer"
             aria-label="Notifications"
           >
             <Bell className="w-4 h-4" />
             {!live ? (
-              <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-rose-500 ring-2 ring-white" />
+              <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-destructive ring-2 ring-white" />
             ) : null}
           </button>
 
@@ -147,7 +147,7 @@ export function AdminHeader({
                 <div className="flex items-center gap-2">
                   <h3 className="text-xs font-bold text-foreground">System Notifications</h3>
                   {!live ? (
-                    <span className="px-1.5 py-0.5 text-[9px] font-mono font-bold bg-black text-white rounded">
+                    <span className="px-1.5 py-0.5 text-[9px] font-mono font-bold bg-black text-white rounded shadow-[var(--clay-elev-ink-1)]">
                       3
                     </span>
                   ) : null}
@@ -155,7 +155,7 @@ export function AdminHeader({
                 <button
                   type="button"
                   onClick={() => setShowNotifications(false)}
-                  className="p-1 text-muted-foreground hover:text-black rounded-lg hover:bg-black/5"
+                  className="p-1 text-muted-foreground hover:text-black rounded-lg hover:bg-[var(--clay-sunken)]"
                   aria-label="Close notifications"
                 >
                   <X className="w-3.5 h-3.5" />
@@ -191,7 +191,7 @@ export function AdminHeader({
                   ].map((n) => (
                     <div
                       key={n.title}
-                      className="p-2.5 rounded-xl bg-[var(--clay-sunken)]/80 hover:bg-[var(--clay-sunken)]/80 transition-colors flex items-start gap-2.5"
+                      className="p-2.5 rounded-xl bg-[var(--clay-sunken)] hover:bg-[var(--clay-sunken)] transition-colors flex items-start gap-2.5"
                     >
                       <Layers className="w-4 h-4 shrink-0 mt-0.5 text-muted-foreground" />
                       <div className="min-w-0 flex-1">

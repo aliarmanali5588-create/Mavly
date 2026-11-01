@@ -221,7 +221,7 @@ export function ProjectMemoryPanel({
                                     description="Add an explicit architecture or compatibility decision to keep future changes consistent."
                                 />
                             ) : (
-                                <ul className="divide-border divide-y">
+                                <ul className="divide-[var(--clay-line)] divide-y">
                                     {decisions.map(memory => (
                                         <li key={memory.id} className="space-y-2 py-2">
                                             <div className="flex flex-wrap items-center gap-2">
@@ -290,7 +290,7 @@ export function ProjectMemoryPanel({
                             {failures.length === 0 ? (
                                 <p className="text-muted-foreground text-xs">No observed failure notes.</p>
                             ) : (
-                                <ul className="divide-border divide-y">
+                                <ul className="divide-[var(--clay-line)] divide-y">
                                     {failures.map(memory => (
                                         <li key={memory.id} className="flex flex-wrap items-start gap-2 py-2">
                                             <StatusPill tone="warning">observed</StatusPill>

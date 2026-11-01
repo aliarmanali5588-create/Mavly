@@ -61,7 +61,7 @@ export function PremiumAiActivity({
       aria-label="AI activity"
       aria-busy={active}
       data-testid="run-activity"
-      className={`mt-3 rounded-xl border border-border bg-card p-3 shadow-xs ${className}`}
+      className={`mt-3 rounded-xl border border-[var(--clay-line)] bg-card p-3 shadow-[var(--clay-elev-1)] ${className}`}
     >
       <div className="flex items-center gap-2">
         <GenerationIndicator className="size-6" active={active} />

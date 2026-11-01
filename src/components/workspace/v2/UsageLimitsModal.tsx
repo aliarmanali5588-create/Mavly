@@ -160,7 +160,7 @@ export function UsageLimitsModal({ open, onOpenChange, projectId }: { open: bool
     /** A render function, not a component: a component defined here would remount on every keystroke. */
     const featureList = (keys: FeatureKey[]) =>
         !draft ? null : (
-            <ul className="divide-border divide-y">
+            <ul className="divide-[var(--clay-line)] divide-y">
                 {keys.map(key => {
                     const limit = limits?.features?.[key] as FeatureLimit;
                     const editable = isEditableFeature(limit);
@@ -343,7 +343,7 @@ export function UsageLimitsModal({ open, onOpenChange, projectId }: { open: bool
                                 </thead>
                                 <tbody>
                                     {usageRows(usage).map(row => (
-                                        <tr key={row.dimension} className="border-border border-t">
+                                        <tr key={row.dimension} className="border-[var(--clay-line)] border-t">
                                             <td className="py-1.5 font-mono text-xs">{row.dimension}</td>
                                             <td className="py-1.5 text-right text-xs tabular-nums">
                                                 {row.units ?? "—"} {row.unit ?? ""}
@@ -353,7 +353,7 @@ export function UsageLimitsModal({ open, onOpenChange, projectId }: { open: bool
                                     ))}
                                 </tbody>
                                 <tfoot>
-                                    <tr className="border-border border-t font-medium">
+                                    <tr className="border-[var(--clay-line)] border-t font-medium">
                                         <td className="py-1.5">{t("engineV2.usage.total")}</td>
                                         <td />
                                         <td className="py-1.5 text-right tabular-nums">{total ?? "—"}</td>
@@ -439,7 +439,7 @@ export function UsageLimitsModal({ open, onOpenChange, projectId }: { open: bool
                                             const max = limit.planCeiling?.monthlyUnitCap;
                                             const error = capError(draft[key].units, max);
                                             return (
-                                                <tr key={key} className="border-border border-t align-top">
+                                                <tr key={key} className="border-[var(--clay-line)] border-t align-top">
                                                     <td className="py-2 pr-2">
                                                         {t(`engineV2.limits.name_${key}`)}
                                                     </td>

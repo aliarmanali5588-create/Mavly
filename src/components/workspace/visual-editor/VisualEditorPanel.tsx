@@ -157,10 +157,10 @@ export function VisualEditorPanel({
 
     return (
         <aside
-            className="bg-card border-border/60 flex h-full min-h-0 w-full flex-col border-l"
+            className="bg-card border-[var(--clay-line)] flex h-full min-h-0 w-full flex-col border-l"
             aria-label={t("workspace.visualEditor.panelLabel")}
         >
-            <header className="border-border/60 flex shrink-0 items-center gap-2 border-b px-3 py-2">
+            <header className="border-[var(--clay-line)] flex shrink-0 items-center gap-2 border-b px-3 py-2">
                 {/* The pencil, matching the composer's toggle — one icon means one feature. */}
                 <PencilIcon className="text-primary size-4 shrink-0" aria-hidden />
                 <h2 className="min-w-0 flex-1 truncate text-sm font-semibold">
@@ -404,7 +404,7 @@ export function VisualEditorPanel({
                         )}
 
                         {/* ── Ask the AI about THIS block ─────────────── */}
-                        <div className="border-border/60 space-y-2 border-t pt-4">
+                        <div className="border-[var(--clay-line)] space-y-2 border-t pt-4">
                             <Label htmlFor="ve-ask" className="flex items-center gap-1.5 text-xs">
                                 <SparklesIcon className="size-3.5" aria-hidden />
                                 {t("workspace.visualEditor.askTitle")}
@@ -556,7 +556,7 @@ function ImageDropzone({
                 }}
                 className={cn(
                     "flex flex-col items-center justify-center gap-1 rounded-lg border border-dashed px-3 py-4 text-center transition-colors",
-                    dragging ? "border-primary bg-primary-subtle" : "border-border/70",
+                    dragging ? "border-primary bg-primary-subtle" : "border-[var(--clay-line)]",
                     disabled && "opacity-50"
                 )}
             >
@@ -685,10 +685,10 @@ function ColorField({
                             aria-pressed={isCurrent}
                             className={cn(
                                 "focus-visible:ring-ring size-6 rounded-md border transition-transform focus-visible:ring-2 focus-visible:outline-none disabled:opacity-50",
-                                "motion-safe:hover:scale-110",
+                                "motion-safe:",
                                 isCurrent
                                     ? "border-primary ring-primary/40 ring-2 ring-offset-1"
-                                    : "border-border/70"
+                                    : "border-[var(--clay-line)]"
                             )}
                             style={{ backgroundColor: hex }}
                         />
@@ -803,7 +803,7 @@ function VisualEditorHelp() {
                     </div>
                 </div>
 
-                <p className="border-border/60 text-muted-foreground mt-3 border-t pt-2.5 text-[11px]">
+                <p className="border-[var(--clay-line)] text-muted-foreground mt-3 border-t pt-2.5 text-[11px]">
                     {t("workspace.visualEditor.helpCost")}
                 </p>
             </PopoverContent>

@@ -8,18 +8,19 @@ import { cn } from "@/lib/utils"
  * Claymorphic button.
  *
  * Every variant is the same physical material at a different elevation.
- * Hover lifts the button; press compresses it. Colour never signals
- * state — volume does. Semantic colour is preserved for `default` (ink)
- * and `destructive` (ember) so meaning survives the material.
+ * Hover holds the resting volume and only warms the edge; press sinks the
+ * button into the plane. Nothing lifts, moves, or rescales. Colour never
+ * signals state — volume does. Semantic colour is preserved for `default`
+ * (ink) and `destructive` (ember) so meaning survives the material.
  *
- * The material itself (sheen, ink shadow recipe, press transform) is
- * defined once in clay.css against `[data-slot="button"]`. These
- * variants only choose elevation and colour.
+ * The material itself (sheen, ink shadow recipe, press) is defined once in
+ * clay.css against `[data-slot="button"]`. These variants only choose
+ * elevation and colour.
  */
 const buttonVariants = cva(
   [
     "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-[var(--clay-r-md)] text-sm font-semibold",
-    "transition-[box-shadow,transform,background-color,border-color] duration-200 ease-[cubic-bezier(0.22,0.61,0.36,1)]",
+    "transition-[box-shadow,background-color,border-color] duration-200 ease-[cubic-bezier(0.22,0.61,0.36,1)]",
     "disabled:pointer-events-none disabled:opacity-45 disabled:shadow-none",
     "[&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0",
     "outline-none focus-visible:outline-none",
@@ -27,21 +28,21 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        // Raised ink clay — the primary action.
+        // Raised ink clay — the primary action. Hover holds elevation.
         default:
-          "bg-primary text-primary-foreground shadow-[var(--clay-elev-ink-1)] hover:shadow-[var(--clay-elev-ink-2)] hover:-translate-y-px active:shadow-[var(--clay-elev-ink-1)] active:translate-y-0",
+          "bg-primary text-primary-foreground shadow-[var(--clay-elev-ink-1)] active:shadow-[var(--clay-press-ink)]",
         // Ember — destructive stays unmistakably destructive.
         destructive:
-          "bg-destructive text-white shadow-[var(--clay-elev-ink-1)] hover:shadow-[var(--clay-elev-ink-2)] hover:-translate-y-px active:shadow-[var(--clay-elev-ink-1)] active:translate-y-0",
+          "bg-destructive text-white shadow-[var(--clay-elev-ink-1)] active:shadow-[var(--clay-press-ink)]",
         // Raised white clay with a soft moulded edge.
         outline:
-          "border border-[var(--clay-line)] bg-card text-foreground shadow-[var(--clay-elev-2)] hover:shadow-[var(--clay-elev-3)] hover:-translate-y-px hover:border-[var(--clay-line-strong)] active:shadow-[var(--clay-well-2)] active:translate-y-0",
+          "border border-[var(--clay-line)] bg-card text-foreground shadow-[var(--clay-elev-2)] hover:border-[var(--clay-line-strong)] active:shadow-[var(--clay-well-2)]",
         // Raised white clay, secondary weight.
         secondary:
-          "border border-[var(--clay-line)] bg-card text-foreground shadow-[var(--clay-elev-1)] hover:shadow-[var(--clay-elev-2)] hover:-translate-y-px active:shadow-[var(--clay-well-2)] active:translate-y-0",
+          "border border-[var(--clay-line)] bg-card text-foreground shadow-[var(--clay-elev-1)] hover:border-[var(--clay-line-strong)] active:shadow-[var(--clay-well-2)]",
         // No surface until touched; then it presses into the clay.
         ghost:
-          "text-foreground shadow-none hover:bg-[var(--clay-sunken)] hover:shadow-[var(--clay-well-1)] active:shadow-[var(--clay-well-2)]",
+          "text-foreground shadow-none hover:bg-[var(--clay-sunken)] active:shadow-[var(--clay-well-2)]",
         link: "text-foreground underline-offset-4 hover:underline shadow-none",
       },
       size: {

@@ -110,7 +110,7 @@ export function PublishedModal({
                             onOpenChange(false);
                             onOpenDomain();
                         }}
-                        className="group hover:border-border-strong hover:bg-accent/40 focus-visible:ring-ring flex w-full items-center gap-3 rounded-xl border p-3 text-left transition-colors focus-visible:ring-2 focus-visible:outline-none"
+                        className="group hover:border-[var(--clay-line-strong)] hover:bg-accent/40 focus-visible:ring-ring flex w-full items-center gap-3 rounded-xl border p-3 text-left transition-colors focus-visible:ring-2 focus-visible:outline-none"
                     >
                         <span
                             aria-hidden

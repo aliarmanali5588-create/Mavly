@@ -591,8 +591,8 @@ export function AndroidWorkspace({ project }: { project: VcaasProject }) {
             ? <ChevronDown className="size-3.5 shrink-0" />
             : <ChevronRight className="size-3.5 shrink-0" />}
           {expandedFolders.has(node.path) || codeSearch.trim()
-            ? <FolderOpen className="size-3.5 shrink-0 text-amber-600" />
-            : <Folder className="size-3.5 shrink-0 text-amber-600" />}
+            ? <FolderOpen className="size-3.5 shrink-0 text-warning" />
+            : <Folder className="size-3.5 shrink-0 text-warning" />}
           <span className="truncate">{node.name}</span>
         </button>
         {(expandedFolders.has(node.path) || codeSearch.trim()) && node.children
@@ -605,7 +605,7 @@ export function AndroidWorkspace({ project }: { project: VcaasProject }) {
         type="button"
         onClick={() => setSelectedPath(node.path)}
         aria-current={selectedPath === node.path ? "page" : undefined}
-        className={`flex w-full items-center gap-1.5 rounded-md py-1.5 pr-2 text-left text-xs ${selectedPath === node.path ? "bg-muted font-medium text-foreground" : "text-muted-foreground hover:bg-muted/70 hover:text-foreground"}`}
+        className={`flex w-full items-center gap-1.5 rounded-md py-1.5 pr-2 text-left text-xs ${selectedPath === node.path ? "bg-muted font-medium text-foreground" : "text-muted-foreground hover:bg-[var(--clay-sunken)] hover:text-foreground"}`}
         style={{ paddingLeft: `${22 + depth * 14}px` }}
         title={node.path}
       >
@@ -616,8 +616,8 @@ export function AndroidWorkspace({ project }: { project: VcaasProject }) {
   ))
 
   return (
-    <main className="flex h-dvh flex-col overflow-hidden bg-background text-foreground">
-      <header className="z-10 shrink-0 border-b border-border bg-background">
+    <main className="flex h-dvh flex-col overflow-hidden bg-[var(--clay-base)] text-foreground">
+      <header className="z-10 shrink-0 border-b border-[var(--clay-line)] bg-card" style={{ backgroundImage: "var(--clay-sheen)", boxShadow: "var(--clay-elev-1)" }}>
         <div className="flex h-14 items-center justify-between gap-3 px-3 sm:px-5">
           <div className="flex min-w-0 items-center gap-3">
             <Link href="/dashboard" className="inline-flex shrink-0 items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground">
@@ -627,7 +627,7 @@ export function AndroidWorkspace({ project }: { project: VcaasProject }) {
             <span className="h-5 w-px bg-border" aria-hidden="true" />
             <div className="flex min-w-0 items-center gap-2">
               <h1 className="truncate text-sm font-semibold">{projectName}</h1>
-              <span className="hidden shrink-0 items-center gap-1 rounded-full bg-muted px-2 py-1 text-[10px] font-medium text-muted-foreground sm:inline-flex">
+              <span className="hidden shrink-0 items-center gap-1 rounded-full border border-[var(--clay-line)] bg-[var(--clay-sunken)] px-2 py-1 text-[10px] font-medium text-muted-foreground shadow-[var(--clay-well-1)] sm:inline-flex">
                 <Smartphone className="size-3" aria-hidden="true" />
                 Android
               </span>
@@ -668,22 +668,22 @@ export function AndroidWorkspace({ project }: { project: VcaasProject }) {
             ) : null}
           </div>
         </div>
-        <nav className="grid grid-cols-3 gap-1 border-t border-border p-1.5 md:hidden" aria-label="Workspace view">
-          <button type="button" onClick={() => setMobileView("preview")} aria-pressed={mobileView === "preview"} className={`inline-flex h-9 items-center justify-center gap-1.5 rounded-md text-xs font-medium ${mobileView === "preview" ? "bg-muted text-foreground" : "text-muted-foreground"}`}>
+        <nav className="grid grid-cols-3 gap-1 border-t border-[var(--clay-line)] bg-[var(--clay-sunken)] p-1.5 md:hidden" aria-label="Workspace view">
+          <button type="button" onClick={() => setMobileView("preview")} aria-pressed={mobileView === "preview"} className={`inline-flex h-9 items-center justify-center gap-1.5 rounded-lg text-xs font-medium transition-[box-shadow,background-color] ${mobileView === "preview" ? "bg-card text-foreground shadow-[var(--clay-elev-1)]" : "text-muted-foreground"}`}>
             <Eye className="size-3.5" aria-hidden="true" /> Preview
           </button>
-          <button type="button" onClick={() => setMobileView("more")} aria-pressed={mobileView === "more"} className={`inline-flex h-9 items-center justify-center gap-1.5 rounded-md text-xs font-medium ${mobileView === "more" ? "bg-muted text-foreground" : "text-muted-foreground"}`}>
+          <button type="button" onClick={() => setMobileView("more")} aria-pressed={mobileView === "more"} className={`inline-flex h-9 items-center justify-center gap-1.5 rounded-lg text-xs font-medium transition-[box-shadow,background-color] ${mobileView === "more" ? "bg-card text-foreground shadow-[var(--clay-elev-1)]" : "text-muted-foreground"}`}>
             <LayoutGrid className="size-3.5" aria-hidden="true" /> More
           </button>
-          <button type="button" onClick={() => setMobileView("code")} aria-pressed={mobileView === "code"} className={`inline-flex h-9 items-center justify-center gap-1.5 rounded-md text-xs font-medium ${mobileView === "code" ? "bg-muted text-foreground" : "text-muted-foreground"}`}>
+          <button type="button" onClick={() => setMobileView("code")} aria-pressed={mobileView === "code"} className={`inline-flex h-9 items-center justify-center gap-1.5 rounded-lg text-xs font-medium transition-[box-shadow,background-color] ${mobileView === "code" ? "bg-card text-foreground shadow-[var(--clay-elev-1)]" : "text-muted-foreground"}`}>
             <Code2 className="size-3.5" aria-hidden="true" /> Code
           </button>
         </nav>
       </header>
 
       <div className="flex min-h-0 flex-1 flex-col md:flex-row">
-        <section aria-label="AI chat" className="flex h-[42%] min-h-0 w-full shrink-0 flex-col border-b border-border bg-background md:h-auto md:w-[40%] md:border-b-0 md:border-r lg:w-[38%]">
-          <div className="flex h-12 shrink-0 items-center justify-between border-b border-border px-4">
+        <section aria-label="AI chat" className="flex h-[42%] min-h-0 w-full shrink-0 flex-col border-b border-[var(--clay-line)] bg-card md:h-auto md:w-[40%] md:border-b-0 md:border-r lg:w-[38%]">
+          <div className="flex h-12 shrink-0 items-center justify-between border-b border-[var(--clay-line)] px-4">
             <div className="flex items-center gap-2">
               <Bot className="size-4 text-muted-foreground" aria-hidden="true" />
               <h2 className="text-sm font-medium">Build your Android app</h2>
@@ -697,7 +697,7 @@ export function AndroidWorkspace({ project }: { project: VcaasProject }) {
           <div ref={chatScrollRef} className="min-h-0 flex-1 overflow-y-auto px-3 py-4 sm:px-5">
             {hasOlderMessages ? (
               <div className="mb-4 flex justify-center">
-                <button type="button" onClick={() => void loadConversation(true)} disabled={conversationLoading} className="rounded-full border border-border px-3 py-1.5 text-xs text-muted-foreground hover:bg-muted disabled:opacity-50">
+                <button type="button" onClick={() => void loadConversation(true)} disabled={conversationLoading} className="rounded-full border border-[var(--clay-line)] bg-card px-3 py-1.5 text-xs text-muted-foreground shadow-[var(--clay-elev-1)] hover:bg-[var(--clay-sunken)] disabled:opacity-50">
                   {conversationLoading ? "Loading..." : "Load earlier messages"}
                 </button>
               </div>
@@ -757,13 +757,13 @@ export function AndroidWorkspace({ project }: { project: VcaasProject }) {
           </div>
 
           <form
-            className="shrink-0 border-t border-border bg-background p-3 sm:p-4"
+            className="shrink-0 border-t border-[var(--clay-line)] bg-card p-3 sm:p-4" style={{ backgroundImage: "var(--clay-sheen)" }}
             onSubmit={(event) => {
               event.preventDefault();
               void startGeneration();
             }}
           >
-            <div className="rounded-2xl border border-input bg-background shadow-sm focus-within:ring-2 focus-within:ring-ring/20">
+            <div className="rounded-2xl border border-[var(--clay-line)] bg-[var(--clay-sunken)] shadow-[var(--clay-well-2)] focus-within:ring-2 focus-within:ring-ring/20">
               <label htmlFor="android-chat-prompt" className="sr-only">Message Mavly about your Android app</label>
               <textarea
                 id="android-chat-prompt"
@@ -793,23 +793,23 @@ export function AndroidWorkspace({ project }: { project: VcaasProject }) {
 
         <section
           aria-label={mobileView === "code" ? "Android Code Explorer" : mobileView === "more" ? "Android workspace More" : "Android app preview"}
-          className="flex min-h-0 min-w-0 flex-1 flex-col bg-muted/40"
+          className="flex min-h-0 min-w-0 flex-1 flex-col bg-[var(--clay-sunken)]"
         >
           {mobileView === "preview" ? (
             <div className="flex min-h-0 flex-1 flex-col items-center justify-center overflow-hidden px-4 py-4 sm:px-8">
               <div
-                className="relative flex aspect-[9/19.5] w-auto min-h-0 max-h-full max-w-[420px] flex-col overflow-hidden rounded-[2.8rem] border-[7px] border-[var(--clay-line-strong)] bg-foreground p-1.5 shadow-2xl ring-1 ring-black/10"
+                className="relative flex aspect-[9/19.5] w-auto min-h-0 max-h-full max-w-[420px] flex-col overflow-hidden rounded-[2.8rem] border-[7px] border-[var(--clay-line-strong)] bg-foreground p-1.5 shadow-[var(--clay-float)] ring-1 ring-black/10"
                 style={{
                   height: "min(860px, calc(100% - 32px))",
                   maxWidth: "min(420px, calc(100% - 32px))",
                 }}
               >
-                <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-[2.2rem] bg-background">
-                  <div className="flex h-8 shrink-0 items-center justify-center bg-background">
+                <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-[2.2rem] bg-card">
+                  <div className="flex h-8 shrink-0 items-center justify-center bg-card">
                     <span className="h-1.5 w-16 rounded-full bg-foreground" aria-hidden="true" />
                   </div>
-                  <div className="flex min-h-0 flex-1 flex-col items-center justify-center border-y border-border bg-muted/30 px-5 text-center">
-                    <div className="mb-4 flex size-16 items-center justify-center rounded-2xl border border-border bg-background text-muted-foreground shadow-sm">
+                  <div className="flex min-h-0 flex-1 flex-col items-center justify-center border-y border-[var(--clay-line)] bg-[var(--clay-sunken)] px-5 text-center">
+                    <div className="mb-4 flex size-16 items-center justify-center rounded-2xl border border-[var(--clay-line)] bg-[var(--clay-sunken)] text-muted-foreground shadow-[var(--clay-well-1)]">
                       <Smartphone className="size-8" aria-hidden="true" />
                     </div>
                     <p className="text-base font-semibold">Native preview unavailable</p>
@@ -822,15 +822,15 @@ export function AndroidWorkspace({ project }: { project: VcaasProject }) {
                       </Button>
                     ) : null}
                   </div>
-                  <div className="flex h-7 shrink-0 items-center justify-center bg-background">
+                  <div className="flex h-7 shrink-0 items-center justify-center bg-card">
                     <span className="h-1 w-20 rounded-full bg-foreground" aria-hidden="true" />
                   </div>
                 </div>
               </div>
             </div>
           ) : mobileView === "code" ? (
-            <div className="flex min-h-0 flex-1 flex-col bg-background">
-              <div className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-3 sm:px-4">
+            <div className="flex min-h-0 flex-1 flex-col bg-card">
+              <div className="flex h-12 shrink-0 items-center gap-2 border-b border-[var(--clay-line)] px-3 sm:px-4">
                 <div className="flex min-w-0 items-center gap-2">
                   <Code2 className="size-4 shrink-0 text-muted-foreground" />
                   <h2 className="text-sm font-semibold">Code Explorer</h2>
@@ -848,15 +848,15 @@ export function AndroidWorkspace({ project }: { project: VcaasProject }) {
                 </div>
               </div>
               <div className="flex min-h-0 flex-1 flex-col md:flex-row">
-                <aside className="shrink-0 border-b border-border md:w-64 md:border-b-0 md:border-r">
-                  <div className="border-b border-border p-2">
+                <aside className="shrink-0 border-b border-[var(--clay-line)] md:w-64 md:border-b-0 md:border-r">
+                  <div className="border-b border-[var(--clay-line)] p-2">
                     <label className="relative block">
                       <Search className="absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
                       <input
                         value={codeSearch}
                         onChange={(event) => setCodeSearch(event.target.value)}
                         placeholder="Search files"
-                        className="h-8 w-full rounded-md border border-border bg-muted/30 pl-8 pr-2 text-xs outline-none focus:border-ring"
+                        className="h-8 w-full rounded-lg border border-[var(--clay-line)] bg-[var(--clay-sunken)] pl-8 pr-2 text-xs shadow-[var(--clay-well-1)] outline-none focus:border-ring"
                         aria-label="Search source files"
                       />
                     </label>
@@ -874,7 +874,7 @@ export function AndroidWorkspace({ project }: { project: VcaasProject }) {
                   </nav>
                 </aside>
                 <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-                  <div className="flex h-10 shrink-0 items-center gap-2 border-b border-border px-3">
+                  <div className="flex h-10 shrink-0 items-center gap-2 border-b border-[var(--clay-line)] px-3">
                     <span className="min-w-0 flex-1 truncate font-mono text-xs text-muted-foreground">{selectedPath || "Select a source file"}</span>
                     {fileContent?.encoding === "utf8" && !contentLoading ? (
                       editing ? (
@@ -914,8 +914,8 @@ export function AndroidWorkspace({ project }: { project: VcaasProject }) {
               </div>
             </div>
           ) : (
-            <div className="flex min-h-0 flex-1 flex-col bg-background md:flex-row">
-              <nav aria-label="Android More sections" className="flex shrink-0 gap-1 overflow-x-auto border-b border-border p-2 md:w-52 md:flex-col md:overflow-x-visible md:overflow-y-auto md:border-r md:border-b-0 md:p-3">
+            <div className="flex min-h-0 flex-1 flex-col bg-card md:flex-row">
+              <nav aria-label="Android More sections" className="flex shrink-0 gap-1 overflow-x-auto border-b border-[var(--clay-line)] p-2 md:w-52 md:flex-col md:overflow-x-visible md:overflow-y-auto md:border-r md:border-b-0 md:p-3">
                 <button
                   type="button"
                   aria-current={moreSection === "database" ? "page" : undefined}
@@ -939,8 +939,8 @@ export function AndroidWorkspace({ project }: { project: VcaasProject }) {
                 ) : (
                   <div className="p-4 sm:p-6">
                     <div className="mx-auto max-w-3xl">
-                      <button type="button" onClick={() => setGithubOpen(true)} className="flex w-full items-center gap-3 rounded-xl border border-border bg-card p-4 text-left transition-colors hover:bg-muted/50">
-                        <span className="flex size-10 items-center justify-center rounded-lg border border-border bg-background"><GitBranch className="size-5" /></span>
+                      <button type="button" onClick={() => setGithubOpen(true)} className="flex w-full items-center gap-3 rounded-xl border border-[var(--clay-line)] bg-card p-4 text-left transition-colors hover:bg-[var(--clay-sunken)] shadow-[var(--clay-well-1)]">
+                        <span className="flex size-10 items-center justify-center rounded-xl border border-[var(--clay-line)] bg-[var(--clay-sunken)] shadow-[var(--clay-well-1)]"><GitBranch className="size-5" /></span>
                         <span className="min-w-0 flex-1">
                           <span className="block text-sm font-medium">GitHub</span>
                           <span className="mt-0.5 block text-xs text-muted-foreground">{githubConnected ? "Connected repository and branches" : "Connect, push, or import source"}</span>
@@ -958,7 +958,7 @@ export function AndroidWorkspace({ project }: { project: VcaasProject }) {
 
       <Dialog open={buildsOpen} onOpenChange={setBuildsOpen}>
         <DialogContent className="flex h-[min(86dvh,760px)] w-[calc(100%-1rem)] max-w-3xl flex-col gap-0 overflow-hidden p-0">
-          <DialogHeader className="shrink-0 border-b border-border px-5 py-4 pr-12">
+          <DialogHeader className="shrink-0 border-b border-[var(--clay-line)] px-5 py-4 pr-12">
             <DialogTitle className="flex items-center gap-2 text-sm">
               <Smartphone className="size-4" aria-hidden="true" /> Android build status
             </DialogTitle>
@@ -977,13 +977,13 @@ export function AndroidWorkspace({ project }: { project: VcaasProject }) {
               </ul>
             ) : null}
             {buildCapability?.build.warnings.length ? (
-              <p className="text-xs text-amber-600 dark:text-amber-500">
+              <p className="text-xs text-warning dark:text-warning">
                 {buildCapability.build.warnings.join(" ")}
               </p>
             ) : null}
           </DialogHeader>
           <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-5">
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-muted/30 p-4">
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[var(--clay-line)] bg-[var(--clay-sunken)] p-4 shadow-[var(--clay-well-1)]">
               <div className="min-w-0">
                 <p className="text-sm font-medium">Debug APK</p>
                 <p className="text-xs text-muted-foreground">
@@ -1022,9 +1022,9 @@ export function AndroidWorkspace({ project }: { project: VcaasProject }) {
                       build.state === "infrastructure_error";
                     const log = buildLogs[build.id];
                     return (
-                      <li key={build.id} className="rounded-lg border border-border px-3 py-2 text-xs">
+                      <li key={build.id} className="rounded-lg border border-[var(--clay-line)] bg-card px-3 py-2 text-xs shadow-[var(--clay-elev-1)]">
                         <div className="flex flex-wrap items-center gap-2">
-                          <span className={`min-w-0 flex-1 font-medium ${failed ? "text-destructive" : succeeded ? "text-emerald-700" : "text-foreground"}`}>
+                          <span className={`min-w-0 flex-1 font-medium ${failed ? "text-destructive" : succeeded ? "text-success" : "text-foreground"}`}>
                             {build.state ?? build.status}
                             {build.stage ? ` · ${build.stage.replaceAll("_", " ")}` : ""}
                           </span>

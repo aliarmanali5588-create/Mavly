@@ -294,7 +294,7 @@ function HeroCard({
       aria-hidden={isClone}
     >
       <div
-        className={`relative w-full ${card.aspectClass} rounded-xl sm:rounded-2xl overflow-hidden bg-white shadow-[var(--clay-elev-3)] ring-1 ring-black/[0.06] transition-opacity duration-500 ease-out ${
+        className={`relative w-full ${card.aspectClass} rounded-xl sm:rounded-2xl overflow-hidden bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-3)] transition-opacity duration-500 ease-out ${
           isLoaded ? "opacity-100" : "opacity-0"
         }`}
       >
@@ -418,7 +418,7 @@ export function HeroSection() {
       <div className="relative max-w-3xl mx-auto px-4 sm:px-6 text-center z-20 pointer-events-auto">
         {/* Official Mavly Logo */}
         <div className="flex items-center justify-center mb-6 sm:mb-8">
-          <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl sm:rounded-3xl overflow-hidden bg-card shadow-[var(--clay-elev-3)] p-1.5 border border-[var(--clay-line)] flex items-center justify-center shrink-0 transition-[transform,box-shadow] duration-300 hover:scale-105 hover:shadow-[var(--clay-elev-4)] select-none">
+          <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl sm:rounded-3xl overflow-hidden bg-card shadow-[var(--clay-elev-3)] p-1.5 border border-[var(--clay-line)] flex items-center justify-center shrink-0 transition-[box-shadow] duration-300 select-none">
             <Image
               src="/logo/Mavly.png"
               alt="Mavly Logo"
@@ -449,7 +449,7 @@ export function HeroSection() {
             href="/login?provider=google"
             onClick={(event) => void handleProviderClick(event, "google")}
             aria-busy={loadingProvider === "google"}
-            className="w-full h-12 rounded-full bg-primary hover:bg-[var(--clay-brand-hover)] text-white font-medium text-sm flex items-center justify-center gap-3 shadow-[var(--clay-elev-ink-2)] hover:shadow-[var(--clay-elev-ink-3)] hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] active:shadow-[var(--clay-elev-ink-1)] transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black focus-visible:ring-offset-2 select-none"
+            className="w-full h-12 rounded-full bg-primary hover:bg-[var(--clay-brand-hover)] text-white font-medium text-sm flex items-center justify-center gap-3 shadow-[var(--clay-elev-ink-2)] clay-press active:shadow-[var(--clay-press-ink)] transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black focus-visible:ring-offset-2 select-none"
           >
             <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" aria-hidden="true">
               <path
@@ -477,7 +477,7 @@ export function HeroSection() {
             href="/login?provider=github"
             onClick={(event) => void handleProviderClick(event, "github")}
             aria-busy={loadingProvider === "github"}
-            className="w-full h-12 rounded-full bg-card text-foreground border border-[var(--clay-line)] font-medium text-sm flex items-center justify-center gap-3 shadow-[var(--clay-elev-2)] hover:shadow-[var(--clay-elev-3)] hover:-translate-y-0.5 active:translate-y-0 active:shadow-[var(--clay-well-2)] transition-[box-shadow,transform] duration-200 outline-none focus-visible:shadow-[var(--clay-focus)] select-none"
+            className="w-full h-12 rounded-full bg-card text-foreground border border-[var(--clay-line)] font-medium text-sm flex items-center justify-center gap-3 shadow-[var(--clay-elev-2)] active:shadow-[var(--clay-well-2)] transition-[box-shadow] duration-200 outline-none focus-visible:shadow-[var(--clay-focus)] select-none"
           >
             <svg className="w-4 h-4 shrink-0 fill-current text-foreground" viewBox="0 0 24 24" aria-hidden="true">
               <path

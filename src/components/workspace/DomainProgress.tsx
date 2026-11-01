@@ -68,7 +68,7 @@ const MARKER_ACTIVE: Record<StatusTone, string> = {
     success: "border-success/40 text-success",
     warning: "border-warning/50 text-warning",
     danger: "border-destructive/40 text-destructive",
-    outline: "border-border text-foreground",
+    outline: "border-[var(--clay-line)] text-foreground",
 };
 
 /**
@@ -139,7 +139,7 @@ function StepMarker({
         <span
             aria-hidden
             className={cn(
-                "border-border bg-card grid shrink-0 place-items-center rounded-full border-2",
+                "border-[var(--clay-line)] bg-card grid shrink-0 place-items-center rounded-full border-2",
                 box
             )}
         >
@@ -242,7 +242,7 @@ export function DomainProgressPanel({
                 // the instruction is legible before a single word is read.
                 needsRecords
                     ? "border-warning/40 bg-warning-subtle"
-                    : "border-border bg-surface-sunken",
+                    : "border-[var(--clay-line)] bg-surface-sunken",
                 className
             )}
             aria-live="polite"

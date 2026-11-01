@@ -380,19 +380,19 @@ function sortTree(node: TreeNode) {
 function iconForFile(path: string) {
   const ext = getExt(path);
   const kind = detectKind(path);
-  if (kind === "image") return <ImageIcon className="w-3.5 h-3.5 text-pink-500 shrink-0" />;
-  if (kind === "binary") return <FileType2 className="w-3.5 h-3.5 text-amber-500 shrink-0" />;
+  if (kind === "image") return <ImageIcon className="w-3.5 h-3.5 text-muted-foreground shrink-0" />;
+  if (kind === "binary") return <FileType2 className="w-3.5 h-3.5 text-warning shrink-0" />;
   switch (ext) {
     case "ts": case "tsx": case "js": case "jsx": case "mjs": case "cjs": case "cts": case "mts":
       return <FileCode2 className="w-3.5 h-3.5 text-muted-foreground shrink-0" />;
     case "json":
-      return <FileJson className="w-3.5 h-3.5 text-yellow-500 shrink-0" />;
+      return <FileJson className="w-3.5 h-3.5 text-warning shrink-0" />;
     case "md": case "mdx": case "txt":
       return <FileText className="w-3.5 h-3.5 text-muted-foreground shrink-0" />;
     case "css": case "scss": case "less":
       return <FileCode2 className="w-3.5 h-3.5 text-muted-foreground shrink-0" />;
     case "html": case "htm": case "xml":
-      return <FileCode2 className="w-3.5 h-3.5 text-orange-500 shrink-0" />;
+      return <FileCode2 className="w-3.5 h-3.5 text-muted-foreground shrink-0" />;
     default:
       return <FileIcon className="w-3.5 h-3.5 text-muted-foreground shrink-0" />;
   }
@@ -862,8 +862,8 @@ export function CodePanel({ projectId, darkMode, onAskAiEdit, wake, sourceRevisi
   if (error) {
     return (
       <div className="h-full flex flex-col items-center justify-center gap-4 px-6 text-center">
-        <div className="w-14 h-14 rounded-2xl bg-red-50 dark:bg-red-900/20 flex items-center justify-center">
-          <AlertTriangle className="w-6 h-6 text-red-500" />
+        <div className="w-14 h-14 rounded-2xl bg-destructive-subtle flex items-center justify-center">
+          <AlertTriangle className="w-6 h-6 text-destructive" />
         </div>
         <div>
           <p className="text-sm font-medium text-foreground mb-1">{"Failed to load source code"}</p>
@@ -896,7 +896,7 @@ export function CodePanel({ projectId, darkMode, onAskAiEdit, wake, sourceRevisi
             <Button
               size="sm"
               onClick={() => onAskAiEdit(selected)}
-              className="h-7 px-2.5 text-xs shadow-sm gap-1.5"
+              className="h-7 px-2.5 text-xs shadow-[var(--clay-elev-1)] gap-1.5"
               title={"Ask AI to edit this file"}
             >
               <Sparkles className="w-3.5 h-3.5" />
@@ -905,7 +905,7 @@ export function CodePanel({ projectId, darkMode, onAskAiEdit, wake, sourceRevisi
           )}
           <button
             onClick={() => fetchCode(true)}
-            className="flex items-center gap-1.5 h-7 px-2.5 rounded-lg text-xs font-medium text-muted-foreground border border-[var(--clay-line)] hover:bg-[var(--clay-sunken)] dark:hover:bg-foreground transition-colors"
+            className="flex items-center gap-1.5 h-7 px-2.5 rounded-lg text-xs font-medium text-muted-foreground border border-[var(--clay-line)] hover:bg-[var(--clay-sunken)] dark:hover:bg-foreground transition-colors shadow-[var(--clay-well-1)]"
             title={"Refresh"}
           >
             <RefreshCw className="w-3.5 h-3.5" /> {"Refresh"}
@@ -916,7 +916,7 @@ export function CodePanel({ projectId, darkMode, onAskAiEdit, wake, sourceRevisi
       {/* Body: tree + viewer */}
       <div className="flex-1 flex min-h-0">
         {/* Tree sidebar */}
-        <div className="w-64 shrink-0 border-r border-[var(--clay-line)] flex flex-col bg-[var(--clay-sunken)]/40 ">
+        <div className="w-64 shrink-0 border-r border-[var(--clay-line)] flex flex-col bg-[var(--clay-sunken)] ">
           {/* Search by file name or content */}
           <div className="p-2 border-b border-[var(--clay-line)] shrink-0">
             <div className="relative">
@@ -961,7 +961,7 @@ export function CodePanel({ projectId, darkMode, onAskAiEdit, wake, sourceRevisi
         <div className="flex-1 min-w-0 flex flex-col">
           {!selected ? (
             <div className="flex-1 flex flex-col items-center justify-center text-center gap-3 px-6">
-              <div className="w-14 h-14 rounded-2xl bg-[var(--clay-sunken)] border border-dashed border-[var(--clay-line)] flex items-center justify-center">
+              <div className="w-14 h-14 rounded-2xl bg-[var(--clay-sunken)] border border-dashed border-[var(--clay-line)] flex items-center justify-center shadow-[var(--clay-well-1)]">
                 <FileCode2 className="w-6 h-6 text-muted-foreground " />
               </div>
               <p className="text-sm text-muted-foreground">{"Select a file to view its contents"}</p>
@@ -973,7 +973,7 @@ export function CodePanel({ projectId, darkMode, onAskAiEdit, wake, sourceRevisi
                 <code className="text-xs font-mono text-muted-foreground truncate">{selected}</code>
                 {/* ⭐ The dot is the whole "unsaved" signal — see the `drafts` note. */}
                 {isDirty(selected) && (
-                  <span className="shrink-0 text-[10px] font-medium text-amber-600 dark:text-amber-400">
+                  <span className="shrink-0 text-[10px] font-medium text-warning">
                     ● unsaved
                   </span>
                 )}
@@ -1048,7 +1048,7 @@ export function CodePanel({ projectId, darkMode, onAskAiEdit, wake, sourceRevisi
                   <div className="absolute inset-0 flex items-center justify-center overflow-auto checkerboard p-6">
                     {imageUrl ? (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img src={imageUrl} alt={selected} className="max-w-full max-h-full object-contain rounded shadow-lg bg-white/10" />
+                      <img src={imageUrl} alt={selected} className="max-w-full max-h-full object-contain rounded-lg shadow-[var(--clay-float)] bg-white/10" />
                     ) : (
                       <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
                     )}
@@ -1083,7 +1083,7 @@ export function CodePanel({ projectId, darkMode, onAskAiEdit, wake, sourceRevisi
 function PlaceholderBinary({ onDownload }: { onDownload: () => void }) {
   return (
     <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 text-center px-6">
-      <div className="w-16 h-16 rounded-2xl bg-[var(--clay-sunken)] border border-[var(--clay-line)] flex items-center justify-center">
+      <div className="w-16 h-16 rounded-2xl bg-[var(--clay-sunken)] border border-[var(--clay-line)] flex items-center justify-center shadow-[var(--clay-well-1)]">
         <FileWarning className="w-7 h-7 text-muted-foreground " />
       </div>
       <p className="text-sm text-muted-foreground max-w-xs">{"Preview not available for this file type"}</p>

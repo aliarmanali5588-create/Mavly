@@ -54,15 +54,15 @@ export default function AuditLogsAdminPage() {
   const getStatusBadge = (status: AuditLogRecord["status"]) => {
     if (status === "Success") {
       return (
-        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200/60 font-mono">
-          <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-success-subtle text-success-subtle-foreground border border-success/25 font-mono">
+          <CheckCircle2 className="w-3 h-3 text-success" />
           Success
         </span>
       );
     }
     return (
-      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-rose-50 text-rose-700 border border-rose-200/60 font-mono">
-        <XCircle className="w-3 h-3 text-rose-600" />
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-destructive-subtle text-destructive-subtle-foreground border border-destructive/25 font-mono">
+        <XCircle className="w-3 h-3 text-destructive" />
         Failed
       </span>
     );
@@ -84,27 +84,27 @@ export default function AuditLogsAdminPage() {
         <div className="p-4 rounded-xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)]">
           <div className="flex items-center justify-between text-xs text-muted-foreground font-medium">
             <span>Console Actions</span>
-            <Lock className="w-3.5 h-3.5 text-emerald-600" />
+            <Lock className="w-3.5 h-3.5 text-success" />
           </div>
           <h3 className="text-xl font-bold tracking-tight text-foreground font-mono mt-1">214</h3>
-          <p className="text-[11px] text-emerald-600 font-medium mt-1">100% authenticated & signed</p>
+          <p className="text-[11px] text-success font-medium mt-1">100% authenticated & signed</p>
         </div>
 
         <div className="p-4 rounded-xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)]">
           <div className="flex items-center justify-between text-xs text-muted-foreground font-medium">
             <span>Edge Mitigations</span>
-            <FileText className="w-3.5 h-3.5 text-amber-500" />
+            <FileText className="w-3.5 h-3.5 text-warning" />
           </div>
-          <h3 className="text-xl font-bold tracking-tight text-amber-700 font-mono mt-1">18</h3>
+          <h3 className="text-xl font-bold tracking-tight text-warning-subtle-foreground font-mono mt-1">18</h3>
           <p className="text-[11px] text-muted-foreground mt-1">WAF rate limit triggers blocked</p>
         </div>
 
         <div className="p-4 rounded-xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)]">
           <div className="flex items-center justify-between text-xs text-muted-foreground font-medium">
             <span>Cryptographic Chain</span>
-            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+            <CheckCircle2 className="w-3.5 h-3.5 text-success" />
           </div>
-          <h3 className="text-xl font-bold tracking-tight text-emerald-700 font-mono mt-1">SHA-256 OK</h3>
+          <h3 className="text-xl font-bold tracking-tight text-success font-mono mt-1">SHA-256 OK</h3>
           <p className="text-[11px] text-muted-foreground mt-1">Tamper-evident event stream</p>
         </div>
       </div>
@@ -113,7 +113,7 @@ export default function AuditLogsAdminPage() {
       <div className="bg-card rounded-2xl p-5 sm:p-6 border border-[var(--clay-line)] shadow-[var(--clay-elev-1)] space-y-4">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pb-3 border-b border-[var(--clay-line)]">
           {/* Segmented Status Tabs */}
-          <div className="flex flex-wrap items-center gap-1 bg-[var(--clay-sunken)] p-0.5 rounded-lg border border-[var(--clay-line)] text-xs">
+          <div className="flex flex-wrap items-center gap-1 bg-[var(--clay-sunken)] p-0.5 rounded-lg border border-[var(--clay-line)] text-xs shadow-[var(--clay-well-1)]">
             {["All", "Success", "Failed"].map((st) => (
               <button
                 key={st}
@@ -121,7 +121,7 @@ export default function AuditLogsAdminPage() {
                 onClick={() => setStatusFilter(st)}
                 className={`px-3 py-1 rounded-md text-xs transition-all ${
                   statusFilter === st
-                    ? "bg-card text-foreground shadow-xs font-semibold"
+                    ? "bg-card text-foreground shadow-[var(--clay-elev-1)] font-semibold"
                     : "text-muted-foreground hover:text-foreground font-medium"
                 }`}
               >
@@ -138,14 +138,14 @@ export default function AuditLogsAdminPage() {
                 placeholder="Search actor, action, IP..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full h-8 pl-8 pr-3 text-xs rounded-lg bg-[var(--clay-sunken)] border border-[var(--clay-line)] text-foreground placeholder:text-muted-foreground focus:bg-card focus:outline-none focus:ring-1 focus:ring-black"
+                className="w-full h-8 pl-8 pr-3 text-xs rounded-lg bg-[var(--clay-sunken)] border border-[var(--clay-line)] text-foreground placeholder:text-muted-foreground focus:bg-card focus:outline-none focus:ring-1 focus:ring-black shadow-[var(--clay-well-1)]"
               />
             </div>
 
             <select
               value={sourceFilter}
               onChange={(e) => setSourceFilter(e.target.value)}
-              className="h-8 px-2.5 text-xs rounded-lg bg-[var(--clay-sunken)] border border-[var(--clay-line)] text-foreground focus:bg-card focus:outline-none"
+              className="h-8 px-2.5 text-xs rounded-lg bg-[var(--clay-sunken)] border border-[var(--clay-line)] text-foreground focus:bg-card focus:outline-none shadow-[var(--clay-well-1)]"
             >
               <option value="All">All Sources</option>
               <option value="Admin Console">Admin Console</option>
@@ -158,7 +158,7 @@ export default function AuditLogsAdminPage() {
               onClick={() => {
                 toast.info("Exporting cryptographic audit log (demo)");
               }}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-foreground bg-[var(--clay-sunken)] hover:bg-[var(--clay-sunken)] border border-[var(--clay-line)] rounded-lg transition-colors"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-foreground bg-[var(--clay-sunken)] hover:bg-[var(--clay-sunken)] border border-[var(--clay-line)] rounded-lg transition-colors shadow-[var(--clay-well-1)]"
             >
               <Download className="w-3.5 h-3.5" />
               <span>Export</span>
@@ -181,7 +181,7 @@ export default function AuditLogsAdminPage() {
                 <th className="pb-3 text-right">Payload</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-black/[0.04]">
+            <tbody className="divide-y divide-[var(--clay-line)]">
               {filtered.length === 0 ? (
                 <tr>
                   <td colSpan={8} className="py-8 text-center text-muted-foreground text-xs">
@@ -190,7 +190,7 @@ export default function AuditLogsAdminPage() {
                 </tr>
               ) : (
                 filtered.map((log) => (
-                  <tr key={log.id} className="hover:bg-[var(--clay-sunken)]/70 transition-colors">
+                  <tr key={log.id} className="hover:bg-[var(--clay-sunken)] transition-colors">
                     <td className="py-3.5 text-muted-foreground whitespace-nowrap font-mono text-[11px]">
                       {log.timestamp}
                     </td>
@@ -231,8 +231,8 @@ export default function AuditLogsAdminPage() {
 
       {/* Log Payload Inspection Modal */}
       {selectedLog && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs animate-in fade-in">
-          <div className="bg-card rounded-2xl max-w-lg w-full border border-black/[0.1] shadow-2xl p-6 relative space-y-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[var(--clay-scrim)] backdrop-blur-[3px] animate-in fade-in">
+          <div className="bg-card rounded-2xl max-w-lg w-full border border-[var(--clay-line)] shadow-[var(--clay-float)] p-6 relative space-y-4">
             <div className="flex items-center justify-between pb-3 border-b border-[var(--clay-line)]">
               <div className="flex items-center gap-2">
                 <Terminal className="w-4 h-4 text-foreground" />
@@ -247,7 +247,7 @@ export default function AuditLogsAdminPage() {
             </div>
 
             <div className="space-y-3 text-xs">
-              <div className="grid grid-cols-2 gap-2 bg-[var(--clay-sunken)] p-3 rounded-xl border border-[var(--clay-line)]">
+              <div className="grid grid-cols-2 gap-2 bg-[var(--clay-sunken)] p-3 rounded-xl border border-[var(--clay-line)] shadow-[var(--clay-well-1)]">
                 <div>
                   <span className="text-muted-foreground block text-[10px] uppercase font-bold">Principal Actor</span>
                   <p className="font-semibold text-foreground truncate">{selectedLog.actor}</p>
@@ -282,7 +282,7 @@ export default function AuditLogsAdminPage() {
                   )}
                 </div>
 
-                <pre className="p-3 bg-black text-emerald-400 font-mono text-[11px] rounded-xl overflow-x-auto leading-relaxed border border-black/10">
+                <pre className="p-3 bg-[var(--clay-sunken-deep)] text-success font-mono text-[11px] rounded-xl overflow-x-auto leading-relaxed border border-[var(--clay-line)] shadow-[var(--clay-well-1)]">
                   {selectedLog.payloadJson
                     ? JSON.stringify(JSON.parse(selectedLog.payloadJson), null, 2)
                     : '{"message": "No additional payload recorded."}'}

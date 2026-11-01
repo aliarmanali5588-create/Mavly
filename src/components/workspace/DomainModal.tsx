@@ -261,7 +261,7 @@ export function DomainModal({ open, onOpenChange, projectId, project, onChanged 
 
                         {/* The current production URL, so it is obvious what the domain replaces. */}
                         {productionUrl && (
-                            <div className="border-border bg-muted/40 rounded-lg border p-3">
+                            <div className="border-[var(--clay-line)] bg-[var(--clay-sunken)] rounded-lg border p-3 shadow-[var(--clay-elev-1)]">
                                 <p className="text-muted-foreground text-xs">
                                     {t("workspace.domain.currentUrl")}
                                 </p>
@@ -301,7 +301,7 @@ export function DomainModal({ open, onOpenChange, projectId, project, onChanged 
                         ) : domain?.hostname ? (
                             // ── An attached domain ────────────────────────────
                             <div className="space-y-3">
-                                <div className="border-border rounded-lg border p-3">
+                                <div className="border-[var(--clay-line)] bg-card rounded-lg border p-3 shadow-[var(--clay-elev-1)]">
                                     <div className="flex flex-wrap items-center gap-2">
                                         <GlobeIcon className="text-muted-foreground size-4 shrink-0" aria-hidden />
                                         <code className="min-w-0 flex-1 truncate font-mono text-sm font-medium">
@@ -411,10 +411,10 @@ export function DomainModal({ open, onOpenChange, projectId, project, onChanged 
 
                                         {/* domodal: one card per record, every field wraps — a table cut the
                                            values off at the dialog edge, the one thing that must be copied whole. */}
-                                        <ul className="border-border divide-border divide-y rounded-lg border" data-testid="domain-dns-records">
+                                        <ul className="border-[var(--clay-line)] divide-[var(--clay-line)] divide-y rounded-lg border" data-testid="domain-dns-records">
                                             {domain.dnsRecordsToAdd.map((record, index) => (
                                                 <li key={index} className="grid gap-1.5 p-3 text-xs sm:grid-cols-[4.5rem_1fr]">
-                                                    <span className="bg-muted h-fit w-fit rounded px-1.5 py-0.5 font-mono font-medium">
+                                                    <span className="bg-[var(--clay-sunken)] h-fit w-fit rounded-md px-1.5 py-0.5 font-mono font-medium shadow-[var(--clay-well-1)]">
                                                         {record.type}
                                                     </span>
                                                     <dl className="min-w-0 space-y-1.5">

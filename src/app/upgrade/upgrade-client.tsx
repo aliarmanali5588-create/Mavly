@@ -41,7 +41,7 @@ export function UpgradeClient({ profile }: UpgradeClientProps) {
               href={userEmail ? "/dashboard" : "/"}
               className="flex items-center gap-2.5 group select-none"
             >
-              <div className="w-8 h-8 rounded-xl overflow-hidden bg-card shadow-xs p-0.5 border border-[var(--clay-line)] flex items-center justify-center transition-transform duration-200 group-hover:scale-105 active:scale-95">
+              <div className="w-8 h-8 rounded-xl overflow-hidden bg-card shadow-[var(--clay-elev-1)] p-0.5 border border-[var(--clay-line)] flex items-center justify-center transition-transform duration-200 clay-press">
                 <Image
                   src="/logo/Mavly.png"
                   alt="Mavly Logo"
@@ -126,9 +126,9 @@ export function UpgradeClient({ profile }: UpgradeClientProps) {
           if (!open) setSelectedPlanForNotice(null);
         }}
       >
-        <DialogContent className="max-w-md bg-card p-6 sm:p-8 rounded-3xl border border-black/[0.1] shadow-2xl">
+        <DialogContent className="max-w-md bg-card p-6 sm:p-8 rounded-3xl border border-[var(--clay-line)] shadow-[var(--clay-float)]">
           <DialogHeader>
-            <div className="w-10 h-10 rounded-2xl bg-amber-50 border border-amber-200/60 flex items-center justify-center text-amber-800 mb-2">
+            <div className="w-10 h-10 rounded-2xl bg-warning-subtle border border-warning/25 flex items-center justify-center text-warning-subtle-foreground mb-2">
               <ShieldAlert className="w-5 h-5" />
             </div>
             <DialogTitle className="text-xl font-bold tracking-tight text-foreground">

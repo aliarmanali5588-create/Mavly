@@ -164,7 +164,7 @@ function FormattedText({ text }: { text: string }) {
       {parts.map((part, i) => {
         if (part.startsWith("```") && part.endsWith("```")) {
           const code = part.slice(3, -3).replace(/^\w+\n/, "");
-          return <pre key={i} className="bg-black text-white/80 rounded-lg p-3 text-xs font-mono overflow-x-auto my-2">{code}</pre>;
+          return <pre key={i} className="bg-black text-white/80 rounded-lg p-3 text-xs font-mono overflow-x-auto my-2 shadow-[var(--clay-elev-ink-1)]">{code}</pre>;
         }
         return part.split("\n").map((line, li) => {
           const lineKey = `${i}-${li}`;
@@ -293,15 +293,15 @@ function SecretKeysForm({ secretKeysNeeded, projectId, onTellAi, projectSecrets 
   // No unprovided secrets → nothing to render (all set)
   if (unprovided.length === 0 && provided.length > 0) {
     return (
-      <div className="mt-3 p-3 rounded-xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50/50 dark:bg-emerald-900/10">
+      <div className="mt-3 p-3 rounded-xl border border-success/25 bg-success-subtle">
         <div className="flex items-center gap-2 mb-2">
-          <CheckCircle className="w-4 h-4 text-emerald-500" />
-          <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-400">{"Required secrets"}</span>
+          <CheckCircle className="w-4 h-4 text-success" />
+          <span className="text-xs font-semibold text-success">{"Required secrets"}</span>
         </div>
         {provided.map(([key]) => (
           <div key={key} className="flex items-center gap-2 text-xs mt-1.5">
-            <code className="bg-emerald-100 dark:bg-emerald-900/30 px-1.5 py-0.5 rounded font-mono text-[10px] text-emerald-800 dark:text-emerald-300">{key}</code>
-            <Badge className="text-[9px] h-3.5 border-0 bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400">{"Already set"}</Badge>
+            <code className="bg-success-subtle px-1.5 py-0.5 rounded font-mono text-[10px] text-success-subtle-foreground">{key}</code>
+            <Badge className="text-[9px] h-3.5 border-0 bg-success-subtle text-success">{"Already set"}</Badge>
           </div>
         ))}
       </div>
@@ -364,20 +364,20 @@ function SecretKeysForm({ secretKeysNeeded, projectId, onTellAi, projectSecrets 
   if (submitted) {
     const totalKeys = secrets.length;
     return (
-      <div className="mt-3 p-3 rounded-xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50/50 dark:bg-emerald-900/10">
+      <div className="mt-3 p-3 rounded-xl border border-success/25 bg-success-subtle">
         <div className="flex items-center gap-2 mb-2">
-          <CheckCircle className="w-4 h-4 text-emerald-500" />
-          <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-400">{"Secret keys saved!"}</span>
+          <CheckCircle className="w-4 h-4 text-success" />
+          <span className="text-xs font-semibold text-success">{"Secret keys saved!"}</span>
         </div>
         {secrets.map((s) => (
           <div key={s.secretName} className="flex items-center gap-2 text-xs mt-1">
-            <code className="bg-emerald-100 dark:bg-emerald-900/30 px-1.5 py-0.5 rounded font-mono text-[10px] text-emerald-800 dark:text-emerald-300">{s.secretName}</code>
-            <span className="text-emerald-500 text-[10px]">{s.entries.map(e => envLabel(e.environment)).join(", ")}</span>
+            <code className="bg-success-subtle px-1.5 py-0.5 rounded font-mono text-[10px] text-success-subtle-foreground">{s.secretName}</code>
+            <span className="text-success text-[10px]">{s.entries.map(e => envLabel(e.environment)).join(", ")}</span>
           </div>
         ))}
         <button
           onClick={() => onTellAi(totalKeys)}
-          className="mt-3 w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl bg-primary text-primary-foreground text-xs font-semibold shadow-[var(--clay-elev-ink-1)] hover:shadow-[var(--clay-elev-ink-2)] active:shadow-[var(--clay-elev-ink-1)] transition-[box-shadow] duration-200"
+          className="mt-3 w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl bg-primary text-primary-foreground text-xs font-semibold shadow-[var(--clay-elev-ink-1)] active:shadow-[var(--clay-press-ink)] transition-[box-shadow] duration-200"
         >
           <ArrowRight className="w-3.5 h-3.5" />
           {"Tell AI secrets are ready"}
@@ -387,11 +387,11 @@ function SecretKeysForm({ secretKeysNeeded, projectId, onTellAi, projectSecrets 
   }
 
   return (
-    <div className="mt-3 rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50/30 dark:bg-amber-900/10 overflow-hidden">
+    <div className="mt-3 rounded-xl border border-warning/25 dark:border-warning/40 bg-warning-subtle overflow-hidden">
       <div className="flex items-center gap-2 px-3 pt-3 pb-1">
-        <Key className="w-4 h-4 text-amber-500" />
-        <span className="text-xs font-semibold text-amber-700 dark:text-amber-400">{"Required secrets"}</span>
-        <Badge className="text-[9px] h-3.5 border-0 bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400 ml-auto">{unprovided.length} {"Missing".toLowerCase()}</Badge>
+        <Key className="w-4 h-4 text-warning" />
+        <span className="text-xs font-semibold text-warning-subtle-foreground">{"Required secrets"}</span>
+        <Badge className="text-[9px] h-3.5 border-0 bg-warning-subtle text-warning-subtle-foreground ml-auto">{unprovided.length} {"Missing".toLowerCase()}</Badge>
       </div>
 
       {/* Already provided keys */}
@@ -399,8 +399,8 @@ function SecretKeysForm({ secretKeysNeeded, projectId, onTellAi, projectSecrets 
         <div className="px-3 pt-1">
           {provided.map(([key]) => (
             <div key={key} className="flex items-center gap-2 text-xs mt-1">
-              <code className="bg-emerald-100 dark:bg-emerald-900/30 px-1.5 py-0.5 rounded font-mono text-[10px] text-emerald-800 dark:text-emerald-300">{key}</code>
-              <Badge className="text-[9px] h-3.5 border-0 bg-emerald-100 text-emerald-700">{"Already set"}</Badge>
+              <code className="bg-success-subtle px-1.5 py-0.5 rounded font-mono text-[10px] text-success-subtle-foreground">{key}</code>
+              <Badge className="text-[9px] h-3.5 border-0 bg-success-subtle text-success">{"Already set"}</Badge>
             </div>
           ))}
         </div>
@@ -420,7 +420,7 @@ function SecretKeysForm({ secretKeysNeeded, projectId, onTellAi, projectSecrets 
                 {secret.entries.length > 1 && (
                   <div className="flex items-center justify-between mb-1">
                     <span className="text-[10px] text-muted-foreground font-medium">Environment {ei + 1}</span>
-                    <button onClick={() => removeEntry(si, ei)} className="text-[10px] text-red-400 hover:text-red-600 transition-colors">
+                    <button onClick={() => removeEntry(si, ei)} className="text-[10px] text-destructive hover:text-destructive transition-colors">
                       <X className="w-3 h-3" />
                     </button>
                   </div>
@@ -457,7 +457,7 @@ function SecretKeysForm({ secretKeysNeeded, projectId, onTellAi, projectSecrets 
             {secret.entries.length < 2 && (
               <button
                 onClick={() => addEntry(si)}
-                className="flex items-center gap-1 mt-2 text-[10px] text-amber-600 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-300 transition-colors"
+                className="flex items-center gap-1 mt-2 text-[10px] text-warning hover:text-warning-subtle-foreground transition-colors"
               >
                 <Plus className="w-3 h-3" />
                 {"Add another environment"}
@@ -471,7 +471,7 @@ function SecretKeysForm({ secretKeysNeeded, projectId, onTellAi, projectSecrets 
         <button
           onClick={handleSubmit}
           disabled={!allFilled || submitting}
-          className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-amber-500 hover:bg-amber-600 disabled:bg-[var(--clay-sunken-deep)] dark:disabled:bg-[var(--clay-sunken-deep)] text-white text-xs font-medium transition-colors disabled:cursor-not-allowed"
+          className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-warning hover:bg-warning disabled:bg-[var(--clay-sunken-deep)] dark:disabled:bg-[var(--clay-sunken-deep)] text-white text-xs font-medium transition-colors disabled:cursor-not-allowed"
         >
           {submitting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Key className="w-3.5 h-3.5" />}
           {submitting ? "Saving..." : "Save Secret Keys"}
@@ -515,14 +515,14 @@ function BuildGroup({ group, projectId, onTellAi, projectSecrets, onRestored }: 
         <div className="py-1">
           {group.finishMsg.messageType === "error" ? (
             <div className="flex items-start gap-2">
-              <AlertCircle className="w-4 h-4 text-red-500 mt-0.5 shrink-0" />
+              <AlertCircle className="w-4 h-4 text-destructive mt-0.5 shrink-0" />
               <FormattedText text={group.finishMsg.message} />
             </div>
           ) : (
             <div>
               <FormattedText text={group.finishMsg.message} />
               {/* Checkmark + Completed at the end */}
-              <div className="flex items-center gap-1.5 mt-3 text-sm text-emerald-600 dark:text-emerald-400">
+              <div className="flex items-center gap-1.5 mt-3 text-sm text-success">
                 <Check className="w-4 h-4" />
                 <span className="font-medium">{"Completed"}</span>
               </div>
@@ -732,7 +732,7 @@ export function ChatPanel({
           <div className="flex justify-center pb-1">
             <button
               onClick={handleLoadEarlier}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium text-muted-foreground bg-[var(--clay-sunken)] border border-[var(--clay-line)] shadow-[var(--clay-well-1)] hover:shadow-[var(--clay-elev-1)] transition-[box-shadow] duration-200"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium text-muted-foreground bg-[var(--clay-sunken)] border border-[var(--clay-line)] shadow-[var(--clay-well-1)] transition-[box-shadow] duration-200"
             >
               <ChevronUp className="w-3.5 h-3.5" />
               {"Load earlier messages"}
@@ -837,7 +837,7 @@ export function ChatPanel({
             <div className="flex items-center gap-0.5">
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <label className="cursor-pointer size-8 inline-flex items-center justify-center rounded-lg hover:bg-[var(--clay-sunken)] hover:shadow-[var(--clay-well-1)] transition-[box-shadow,background-color] duration-200">
+                  <label className="cursor-pointer size-8 inline-flex items-center justify-center rounded-lg hover:bg-[var(--clay-sunken)] transition-[box-shadow,background-color] duration-200">
                     <input type="file" multiple className="hidden" onChange={handleFileUpload} accept="image/*,.pdf,.svg" disabled={isBuilding} />
                     {uploading ? <Loader2 className="w-4 h-4 text-muted-foreground animate-spin" /> : <Paperclip className="w-4 h-4 text-muted-foreground" />}
                     <span className="sr-only">{t("prompt.attachments.attach")}</span>
@@ -888,10 +888,10 @@ export function ChatPanel({
               )}
             </div>
             {isBuilding ? (
-              <button onClick={() => setConfirmingStop(true)} aria-label={t("workspace.chat.stop")} className="w-8 h-8 rounded-full bg-red-500 hover:bg-red-600 flex items-center justify-center transition-colors"><Square className="w-3 h-3 text-white" /></button>
+              <button onClick={() => setConfirmingStop(true)} aria-label={t("workspace.chat.stop")} className="w-8 h-8 rounded-full bg-destructive hover:bg-destructive flex items-center justify-center transition-colors"><Square className="w-3 h-3 text-white" /></button>
             ) : (
               <button onClick={handleSend} disabled={(!prompt.trim() && attachedFiles.length === 0) || sending}
-                className="w-8 h-8 rounded-full bg-primary text-primary-foreground shadow-[var(--clay-elev-2)] hover:shadow-[var(--clay-elev-3)] active:shadow-[var(--clay-well-2)] disabled:opacity-40 disabled:pointer-events-none flex items-center justify-center transition-[box-shadow] duration-200">
+                className="w-8 h-8 rounded-full bg-primary text-primary-foreground shadow-[var(--clay-elev-2)] active:shadow-[var(--clay-well-2)] disabled:opacity-40 disabled:pointer-events-none flex items-center justify-center transition-[box-shadow] duration-200">
                 {sending ? <Loader2 className="w-3.5 h-3.5 animate-spin text-current" /> : <Send className="w-3.5 h-3.5 text-current" />}
               </button>
             )}

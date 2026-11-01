@@ -65,7 +65,7 @@ export default function BillingAdminPage() {
         );
       case "Pro":
         return (
-          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-black text-white">
+          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-black text-white shadow-[var(--clay-elev-ink-1)]">
             Pro
           </span>
         );
@@ -77,7 +77,7 @@ export default function BillingAdminPage() {
         );
       case "Free":
         return (
-          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-[var(--clay-sunken)] text-muted-foreground border border-black/[0.05]">
+          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-[var(--clay-sunken)] text-muted-foreground border border-[var(--clay-line)]">
             Free
           </span>
         );
@@ -94,15 +94,15 @@ export default function BillingAdminPage() {
     switch (status) {
       case "Paid":
         return (
-          <span className="text-emerald-700 font-semibold text-xs flex items-center gap-1.5">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+          <span className="text-success font-semibold text-xs flex items-center gap-1.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-success" />
             Paid
           </span>
         );
       case "Processing":
         return (
-          <span className="text-amber-600 font-semibold text-xs flex items-center gap-1.5">
-            <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+          <span className="text-warning font-semibold text-xs flex items-center gap-1.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-warning animate-pulse" />
             Processing
           </span>
         );
@@ -123,7 +123,7 @@ export default function BillingAdminPage() {
         <div className="p-5 rounded-2xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)]">
           <p className="text-xs font-semibold text-muted-foreground tracking-wide">Gross Platform Revenue</p>
           <h3 className="text-2xl sm:text-3xl font-extrabold text-foreground mt-1.5 font-mono">₹14,22,500</h3>
-          <span className="text-[11px] text-emerald-600 font-semibold mt-2 inline-flex items-center gap-1">
+          <span className="text-[11px] text-success font-semibold mt-2 inline-flex items-center gap-1">
             <TrendingUp className="w-3 h-3" /> +53.7% vs last 6 months
           </span>
         </div>
@@ -131,7 +131,7 @@ export default function BillingAdminPage() {
         <div className="p-5 rounded-2xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)]">
           <p className="text-xs font-semibold text-muted-foreground tracking-wide">Monthly Recurring (MRR)</p>
           <h3 className="text-2xl sm:text-3xl font-extrabold text-foreground mt-1.5 font-mono">₹2,84,500</h3>
-          <span className="text-[11px] text-emerald-600 font-semibold mt-2 inline-block">
+          <span className="text-[11px] text-success font-semibold mt-2 inline-block">
             +18.6% acceleration
           </span>
         </div>
@@ -146,7 +146,7 @@ export default function BillingAdminPage() {
 
         <div className="p-5 rounded-2xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)]">
           <p className="text-xs font-semibold text-muted-foreground tracking-wide">Gross Churn Rate</p>
-          <h3 className="text-2xl sm:text-3xl font-extrabold text-emerald-700 mt-1.5 font-mono">0.82%</h3>
+          <h3 className="text-2xl sm:text-3xl font-extrabold text-success mt-1.5 font-mono">0.82%</h3>
           <span className="text-[11px] text-muted-foreground font-medium mt-2 inline-block">
             Benchmark &lt; 2.0%
           </span>
@@ -193,7 +193,7 @@ export default function BillingAdminPage() {
                 <span className="font-mono text-foreground">12%</span>
               </div>
               <div className="w-full h-2 rounded-full bg-[var(--clay-sunken)] overflow-hidden">
-                <div className="h-full bg-[var(--clay-sunken)]0 rounded-full" style={{ width: "12%" }} />
+                <div className="h-full bg-primary rounded-full" style={{ width: "12%" }} />
               </div>
             </div>
 
@@ -203,7 +203,7 @@ export default function BillingAdminPage() {
                 <span className="font-mono text-foreground">8%</span>
               </div>
               <div className="w-full h-2 rounded-full bg-[var(--clay-sunken)] overflow-hidden">
-                <div className="h-full bg-amber-400 rounded-full" style={{ width: "8%" }} />
+                <div className="h-full bg-warning rounded-full" style={{ width: "8%" }} />
               </div>
             </div>
           </div>
@@ -232,14 +232,14 @@ export default function BillingAdminPage() {
                 placeholder="Search invoice ID, customer, email..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full h-8 pl-8 pr-3 text-xs rounded-xl bg-[var(--clay-sunken)] border border-[var(--clay-line)] text-foreground focus:bg-card focus:outline-none focus:ring-2 focus:ring-black"
+                className="w-full h-8 pl-8 pr-3 text-xs rounded-xl bg-[var(--clay-sunken)] border border-[var(--clay-line)] text-foreground focus:bg-card focus:outline-none focus:ring-2 focus:ring-black shadow-[var(--clay-well-1)]"
               />
             </div>
 
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
-              className="h-8 px-2.5 text-xs font-medium bg-[var(--clay-sunken)] border border-[var(--clay-line)] rounded-xl text-foreground focus:outline-none focus:ring-2 focus:ring-black cursor-pointer"
+              className="h-8 px-2.5 text-xs font-medium bg-[var(--clay-sunken)] border border-[var(--clay-line)] rounded-xl text-foreground focus:outline-none focus:ring-2 focus:ring-black cursor-pointer shadow-[var(--clay-well-1)]"
             >
               <option value="All">All Statuses</option>
               <option value="Paid">Paid</option>
@@ -250,7 +250,7 @@ export default function BillingAdminPage() {
             <button
               type="button"
               onClick={() => toast.info("Demo CSV download initiated")}
-              className="h-8 px-3 rounded-xl border border-[var(--clay-line)] bg-card hover:bg-[var(--clay-sunken)] text-xs font-semibold text-foreground flex items-center gap-1.5 shadow-xs"
+              className="h-8 px-3 rounded-xl border border-[var(--clay-line)] bg-card hover:bg-[var(--clay-sunken)] text-xs font-semibold text-foreground flex items-center gap-1.5 shadow-[var(--clay-elev-1)]"
             >
               <Download className="w-3.5 h-3.5" />
               <span>Export CSV</span>
@@ -259,10 +259,10 @@ export default function BillingAdminPage() {
         </div>
 
         {/* ── Dense Table ── */}
-        <div className="overflow-x-auto rounded-xl border border-[var(--clay-line)]">
+        <div className="overflow-x-auto rounded-xl border border-[var(--clay-line)] bg-card shadow-[var(--clay-elev-1)]">
           <table className="w-full text-left border-collapse text-xs">
             <thead>
-              <tr className="bg-[var(--clay-sunken)]/60 border-b border-[var(--clay-line)] text-muted-foreground font-bold uppercase tracking-wider text-[10px]">
+              <tr className="bg-[var(--clay-sunken)] border-b border-[var(--clay-line)] text-muted-foreground font-bold uppercase tracking-wider text-[10px]">
                 <th className="py-2.5 px-4">Invoice ID</th>
                 <th className="py-2.5 px-4">Customer</th>
                 <th className="py-2.5 px-4">Plan Tier</th>
@@ -272,7 +272,7 @@ export default function BillingAdminPage() {
                 <th className="py-2.5 px-4 text-right">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-black/[0.04]">
+            <tbody className="divide-y divide-[var(--clay-line)]">
               {filteredTxns.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="py-8 text-center text-muted-foreground">
@@ -281,7 +281,7 @@ export default function BillingAdminPage() {
                 </tr>
               ) : (
                 filteredTxns.map((tx) => (
-                  <tr key={tx.id} className="hover:bg-[var(--clay-sunken)]/60 transition-colors">
+                  <tr key={tx.id} className="hover:bg-[var(--clay-sunken)] transition-colors">
                     <td className="py-2.5 px-4 font-mono font-medium text-muted-foreground">
                       {tx.id}
                     </td>
@@ -310,7 +310,7 @@ export default function BillingAdminPage() {
                           <button
                             type="button"
                             onClick={() => handleRefund(tx)}
-                            className="px-2 py-1 rounded-lg text-[11px] font-semibold text-rose-600 hover:bg-rose-50 transition-colors"
+                            className="px-2 py-1 rounded-lg text-[11px] font-semibold text-destructive hover:bg-destructive-subtle transition-colors"
                           >
                             Refund
                           </button>
@@ -327,8 +327,8 @@ export default function BillingAdminPage() {
 
       {/* ── Invoice Details Modal ── */}
       {selectedTxn && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-in fade-in">
-          <div className="w-full max-w-md bg-card rounded-2xl border border-[var(--clay-line)] shadow-2xl p-6 space-y-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[var(--clay-scrim)] backdrop-blur-[3px] animate-in fade-in">
+          <div className="w-full max-w-md bg-card rounded-2xl border border-[var(--clay-line)] shadow-[var(--clay-float)] p-6 space-y-4">
             <div className="flex items-center justify-between pb-3 border-b border-[var(--clay-line)]">
               <div className="flex items-center gap-2">
                 <FileText className="w-4 h-4 text-foreground" />
@@ -337,13 +337,13 @@ export default function BillingAdminPage() {
               <button
                 type="button"
                 onClick={() => setSelectedTxn(null)}
-                className="p-1 text-muted-foreground hover:text-black rounded-lg hover:bg-black/5"
+                className="p-1 text-muted-foreground hover:text-black rounded-lg hover:bg-[var(--clay-sunken)]"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            <div className="space-y-2.5 text-xs bg-[var(--clay-sunken)] p-4 rounded-xl border border-[var(--clay-line)]">
+            <div className="space-y-2.5 text-xs bg-[var(--clay-sunken)] p-4 rounded-xl border border-[var(--clay-line)] shadow-[var(--clay-well-1)]">
               <div className="flex justify-between py-1 border-b border-[var(--clay-line)]">
                 <span className="text-muted-foreground">Invoice Number:</span>
                 <span className="font-mono font-bold text-foreground">{selectedTxn.id}</span>
@@ -384,7 +384,7 @@ export default function BillingAdminPage() {
                     handleRefund(selectedTxn);
                     setSelectedTxn(null);
                   }}
-                  className="px-3 py-1.5 text-xs font-semibold text-rose-600 hover:bg-rose-50 rounded-xl"
+                  className="px-3 py-1.5 text-xs font-semibold text-destructive hover:bg-destructive-subtle rounded-xl"
                 >
                   Issue Refund (Demo)
                 </button>

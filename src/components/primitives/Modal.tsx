@@ -121,7 +121,7 @@ export function Modal({
           ) : null}
           <div className={cn("min-w-0", bodyClassName)}>{children}</div>
           {footer ? (
-            <div className="bg-background/95 sticky bottom-0 mt-6 flex flex-col-reverse gap-2 border-t py-4 backdrop-blur-sm sm:flex-row sm:justify-end [&>*]:w-full sm:[&>*]:w-auto">
+            <div className="bg-card/95 border-[var(--clay-line)] sticky bottom-0 mt-6 flex flex-col-reverse gap-2 border-t py-4 backdrop-blur-sm sm:flex-row sm:justify-end [&>*]:w-full sm:[&>*]:w-auto">
               {footer}
             </div>
           ) : null}
@@ -137,7 +137,7 @@ export function Modal({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogPortal>
-        <DialogOverlay className="bg-ink-950/45 backdrop-blur-[2px]" />
+        <DialogOverlay className="bg-[var(--clay-scrim)] backdrop-blur-[3px]" />
         <DialogPrimitive.Content
           data-slot="modal-content"
           aria-describedby={description ? descriptionId : undefined}
@@ -147,7 +147,7 @@ export function Modal({
             if (!dismissible) event.preventDefault();
           }}
           className={cn(
-            "bg-card text-card-foreground fixed z-50 flex flex-col border shadow-xl",
+            "bg-card text-card-foreground border-[var(--clay-line)] fixed z-50 flex flex-col border shadow-[var(--clay-float)]",
             "data-[state=open]:animate-in data-[state=closed]:animate-out",
             "data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0",
             // Mobile: bottom sheet
@@ -166,7 +166,7 @@ export function Modal({
           {/* Grab handle — mobile only, purely affordance */}
           <span
             aria-hidden
-            className="bg-border mx-auto mt-2.5 h-1 w-9 shrink-0 rounded-full sm:hidden"
+            className="bg-[var(--clay-line-strong)] mx-auto mt-2.5 h-1 w-9 shrink-0 rounded-full sm:hidden"
           />
 
           {srTitle && !title ? (

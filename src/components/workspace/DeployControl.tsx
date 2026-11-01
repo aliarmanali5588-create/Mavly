@@ -390,7 +390,7 @@ export function DeployControl({
                                 onOpenDomain();
                             }}
                             className={cn(
-                                "group hover:border-border-strong hover:bg-accent/40 focus-visible:ring-ring mt-2.5 flex w-full items-center gap-3 rounded-xl border p-3 text-left transition-colors focus-visible:ring-2 focus-visible:outline-none"
+                                "group hover:border-[var(--clay-line-strong)] hover:bg-accent/40 focus-visible:ring-ring mt-2.5 flex w-full items-center gap-3 rounded-xl border p-3 text-left transition-colors focus-visible:ring-2 focus-visible:outline-none"
                             )}
                         >
                             <span
@@ -423,7 +423,7 @@ export function DeployControl({
                             ) : (
                                 <ArrowRightIcon
                                     aria-hidden
-                                    className="text-muted-foreground size-4 shrink-0 transition-transform group-hover:translate-x-0.5 motion-reduce:transition-none"
+                                    className="text-muted-foreground size-4 shrink-0 transition-transform motion-reduce:transition-none"
                                 />
                             )}
                         </button>
@@ -481,7 +481,7 @@ export function DeployControl({
                 confirmLabel={t("workspace.deploy.unpublishAction")}
                 onConfirm={handleUnpublish}
             >
-                <div className="border-border bg-surface-sunken rounded-xl border p-3">
+                <div className="border-[var(--clay-line)] bg-card bg-surface-sunken rounded-xl border p-3 shadow-[var(--clay-elev-1)]">
                     <p className="text-muted-foreground text-2xs font-medium tracking-wider uppercase">
                         {t("workspace.deploy.publicAddress")}
                     </p>
@@ -506,7 +506,7 @@ function Fact({ icon, children }: { icon: React.ReactNode; children: React.React
         <li className="flex items-start gap-2.5">
             <span
                 aria-hidden
-                className="bg-muted text-muted-foreground mt-px grid size-6 shrink-0 place-items-center rounded-md"
+                className="bg-[var(--clay-sunken)] text-muted-foreground mt-px grid size-6 shrink-0 place-items-center rounded-md shadow-[var(--clay-well-1)]"
             >
                 {icon}
             </span>

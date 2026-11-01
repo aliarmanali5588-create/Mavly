@@ -63,18 +63,18 @@ import { cn } from "@/lib/utils";
 const KIND_STYLE: Record<AttachmentKind, { Icon: typeof FileIcon; plate: string; glyph: string }> = {
     image: { Icon: FileImageIcon, plate: "bg-[var(--clay-sunken)]", glyph: "text-foreground" },
     video: { Icon: FileVideoIcon, plate: "bg-[var(--clay-sunken)]", glyph: "text-foreground" },
-    audio: { Icon: FileAudioIcon, plate: "bg-pink-500/10", glyph: "text-pink-600 dark:text-pink-400" },
-    pdf: { Icon: FileTextIcon, plate: "bg-red-500/10", glyph: "text-red-600 dark:text-red-400" },
-    sheet: { Icon: FileSpreadsheetIcon, plate: "bg-emerald-500/10", glyph: "text-emerald-600 dark:text-emerald-400" },
+    audio: { Icon: FileAudioIcon, plate: "bg-[var(--clay-sunken)]", glyph: "text-muted-foreground" },
+    pdf: { Icon: FileTextIcon, plate: "bg-destructive/10", glyph: "text-destructive dark:text-destructive" },
+    sheet: { Icon: FileSpreadsheetIcon, plate: "bg-success/10", glyph: "text-success" },
     doc: { Icon: FileTextIcon, plate: "bg-[var(--clay-sunken)]", glyph: "text-foreground" },
-    slides: { Icon: PresentationIcon, plate: "bg-orange-500/10", glyph: "text-orange-600 dark:text-orange-400" },
+    slides: { Icon: PresentationIcon, plate: "bg-[var(--clay-sunken)]", glyph: "text-muted-foreground" },
     text: { Icon: FileTextIcon, plate: "bg-[var(--clay-sunken-deep)]", glyph: "text-muted-foreground" },
     code: { Icon: FileCodeIcon, plate: "bg-[var(--clay-sunken)]", glyph: "text-foreground dark:text-muted-foreground" },
     data: { Icon: BracesIcon, plate: "bg-[var(--clay-sunken)]", glyph: "text-foreground" },
-    archive: { Icon: FileArchiveIcon, plate: "bg-amber-500/10", glyph: "text-amber-600 dark:text-amber-400" },
+    archive: { Icon: FileArchiveIcon, plate: "bg-warning/10", glyph: "text-warning" },
     model3d: { Icon: BoxIcon, plate: "bg-[var(--clay-sunken)]", glyph: "text-foreground" },
     font: { Icon: TypeIcon, plate: "bg-[var(--clay-sunken)]", glyph: "text-foreground" },
-    design: { Icon: PaletteIcon, plate: "bg-rose-500/10", glyph: "text-rose-600 dark:text-rose-400" },
+    design: { Icon: PaletteIcon, plate: "bg-destructive/10", glyph: "text-destructive dark:text-destructive" },
     file: { Icon: FileIcon, plate: "bg-[var(--clay-sunken)]", glyph: "text-muted-foreground " },
 };
 
@@ -186,7 +186,7 @@ function AttachmentChip({
                 target="_blank"
                 rel="noopener noreferrer"
                 title={item.name}
-                className={cn(shell, width, "transition-[box-shadow] hover:shadow-[var(--clay-elev-2)]")}
+                className={cn(shell, width, "transition-[box-shadow]")}
             >
                 {body}
             </a>
@@ -200,7 +200,7 @@ function AttachmentChip({
                 type="button"
                 onClick={onRemove}
                 aria-label={`Remove ${item.name}`}
-                className="grid size-5 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-black/5 hover:text-red-500 dark:hover:bg-white/10"
+                className="grid size-5 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-[var(--clay-sunken)] hover:text-destructive"
             >
                 <XIcon className="size-3" aria-hidden />
             </button>

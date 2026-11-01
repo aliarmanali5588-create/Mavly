@@ -1794,63 +1794,63 @@ export default function WorkspacePage() {
 
   // Popup menu content (shared between desktop and mobile)
   const popupMenu = menuOpen && (
-    <div data-popup-menu className="absolute top-full left-0 mt-1.5 w-56 rounded-xl shadow-xl z-[60] overflow-hidden" style={{ background: darkMode ? "#2a2a2a" : "#fff", border: `1px solid ${darkMode ? "#444" : "#e5e5e5"}` }}>
-      <div className="px-3 py-2 border-b" style={{ borderColor: darkMode ? "#444" : "#eee" }}>
+    <div data-popup-menu className="absolute top-full left-0 mt-1.5 w-56 rounded-xl border border-[var(--clay-line)] bg-card shadow-[var(--clay-float)] z-[60] overflow-hidden" style={{ backgroundImage: "var(--clay-sheen)" }}>
+      <div className="px-3 py-2 border-b border-[var(--clay-line)]">
         <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">{projectId}</p>
       </div>
       <div className="py-1">
         <button onClick={() => { setMenuOpen(false); router.push("/dashboard"); }}
-          className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm hover:bg-[var(--clay-sunken)] hover:shadow-[var(--clay-well-1)] transition-[box-shadow,background-color] duration-200 text-foreground">
+          className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm hover:bg-[var(--clay-sunken)] active:shadow-[var(--clay-well-1)] transition-[box-shadow,background-color] duration-200 text-foreground">
           <FolderOpen className="w-4 h-4 text-muted-foreground" /> {"My projects"}
         </button>
         <button onClick={() => { setMenuOpen(false); router.push("/dashboard"); }}
-          className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm hover:bg-[var(--clay-sunken)] hover:shadow-[var(--clay-well-1)] transition-[box-shadow,background-color] duration-200 text-foreground">
+          className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm hover:bg-[var(--clay-sunken)] active:shadow-[var(--clay-well-1)] transition-[box-shadow,background-color] duration-200 text-foreground">
           <Plus className="w-4 h-4 text-muted-foreground" /> {"New project"}
         </button>
         <button onClick={() => { setMenuOpen(false); router.push("/upgrade"); }}
-          className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm hover:bg-[var(--clay-sunken)] hover:shadow-[var(--clay-well-1)] transition-[box-shadow,background-color] duration-200 text-foreground">
+          className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm hover:bg-[var(--clay-sunken)] active:shadow-[var(--clay-well-1)] transition-[box-shadow,background-color] duration-200 text-foreground">
           <Sparkles className="w-4 h-4 text-muted-foreground" /> {"Upgrade plan"}
         </button>
         <button onClick={() => { setMenuOpen(false); router.push("/credit-topup"); }}
-          className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm hover:bg-[var(--clay-sunken)] hover:shadow-[var(--clay-well-1)] transition-[box-shadow,background-color] duration-200 text-foreground">
+          className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm hover:bg-[var(--clay-sunken)] active:shadow-[var(--clay-well-1)] transition-[box-shadow,background-color] duration-200 text-foreground">
           <Sparkles className="w-4 h-4 text-muted-foreground" /> {"Top up credits"}
         </button>
       </div>
       {/* Tabs - visible on mobile only */}
-      <div className="sm:hidden border-t py-1" style={{ borderColor: darkMode ? "#444" : "#eee" }}>
+      <div className="sm:hidden border-t border-[var(--clay-line)] py-1">
         {TABS.map((tab) => (
           <button key={tab.id} onClick={() => { setActiveTab(tab.id); setMobileTab("panel"); setMenuOpen(false); }}
-            className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-[box-shadow,background-color] duration-200 ${activeTab === tab.id ? "bg-[var(--clay-sunken)] shadow-[var(--clay-well-1)] text-foreground font-semibold" : "text-foreground hover:bg-[var(--clay-sunken)] hover:shadow-[var(--clay-well-1)]"}`}>
+            className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-[box-shadow,background-color] duration-200 ${activeTab === tab.id ? "bg-[var(--clay-sunken)] shadow-[var(--clay-well-1)] text-foreground font-semibold" : "text-foreground hover:bg-[var(--clay-sunken)]"}`}>
             <tab.icon className="w-4 h-4 text-muted-foreground" /> {tab.label}
           </button>
         ))}
       </div>
       {/* The errands — each opens a dialog over the workspace */}
-      <div className="border-t py-1" style={{ borderColor: darkMode ? "#444" : "#eee" }}>
+      <div className="border-t border-[var(--clay-line)] py-1">
         {MODAL_ENTRIES.map((entry) => {
           const connected = (entry.id === "github" && githubConnected) || (entry.id === "figma" && figmaConnected);
           return (
             <button key={entry.id} onClick={() => { openEntry(entry.id); setMenuOpen(false); }}
-              className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm hover:bg-[var(--clay-sunken)] hover:shadow-[var(--clay-well-1)] transition-[box-shadow,background-color] duration-200 text-foreground">
+              className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm hover:bg-[var(--clay-sunken)] active:shadow-[var(--clay-well-1)] transition-[box-shadow,background-color] duration-200 text-foreground">
               <span className="relative flex items-center">
                 <entry.icon className="w-4 h-4 text-muted-foreground" />
-                {connected && <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-emerald-500 ring-2 ring-white dark:ring-[#1e1e1e]" />}
+                {connected && <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-success ring-2 ring-white dark:ring-[#1e1e1e]" />}
               </span>
               <span className="flex-1 text-left">{entry.label}</span>
-              {connected && <span className="text-[10px] font-medium text-emerald-600 dark:text-emerald-400">{"Connected"}</span>}
+              {connected && <span className="text-[10px] font-medium text-success">{"Connected"}</span>}
             </button>
           );
         })}
         <button onClick={() => { setMenuOpen(false); void openClone(); }}
-          className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm hover:bg-[var(--clay-sunken)] hover:shadow-[var(--clay-well-1)] transition-[box-shadow,background-color] duration-200 text-foreground">
+          className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm hover:bg-[var(--clay-sunken)] active:shadow-[var(--clay-well-1)] transition-[box-shadow,background-color] duration-200 text-foreground">
           <Copy className="w-4 h-4 text-muted-foreground" /> {"Duplicate project"}
         </button>
       </div>
-      <div className="border-t py-1" style={{ borderColor: darkMode ? "#444" : "#eee" }}>
+      <div className="border-t border-[var(--clay-line)] py-1">
       </div>
-      <div className="border-t py-1" style={{ borderColor: darkMode ? "#444" : "#eee" }}>
+      <div className="border-t border-[var(--clay-line)] py-1">
         <button onClick={() => { handleRestartServer(); setMenuOpen(false); }}
-          className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm hover:bg-[var(--clay-sunken)] hover:shadow-[var(--clay-well-1)] transition-[box-shadow,background-color] duration-200 text-foreground">
+          className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm hover:bg-[var(--clay-sunken)] active:shadow-[var(--clay-well-1)] transition-[box-shadow,background-color] duration-200 text-foreground">
           <Server className="w-4 h-4 text-muted-foreground" /> {"Restart Agent Server"}
         </button>
       </div>
@@ -1903,25 +1903,25 @@ export default function WorkspacePage() {
       {/* ═══ DESKTOP LAYOUT ═══ */}
       <div className="hidden sm:flex flex-col h-full min-h-0">
         {/* Desktop header 48px */}
-        <header data-workspace-header className="flex items-stretch shrink-0 z-10" style={{ height: 48 }}>
+        <header data-workspace-header className="flex items-stretch shrink-0 z-10 border-b border-[var(--clay-line)] bg-card" style={{ height: 48, backgroundImage: "var(--clay-sheen)", boxShadow: "var(--clay-elev-1)" }}>
           {/* LEFT: aside width */}
           <div ref={leftHeaderRef} className="flex items-center gap-1.5 px-3 shrink-0" style={{ width: typeof leftHeaderWidth === "number" ? leftHeaderWidth : undefined }}>
-            <button type="button" onClick={() => { setLeaveWorkspaceHref("/dashboard"); setLeaveWorkspaceOpen(true); }} title="Back to Mavly" aria-label="Back to Mavly" className="h-7 px-1.5 flex items-center gap-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-[var(--clay-sunken)] hover:shadow-[var(--clay-well-1)] transition-[box-shadow,background-color,color] duration-200 shrink-0">
+            <button type="button" onClick={() => { setLeaveWorkspaceHref("/dashboard"); setLeaveWorkspaceOpen(true); }} title="Back to Mavly" aria-label="Back to Mavly" className="h-7 px-1.5 flex items-center gap-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-[var(--clay-sunken)] transition-[box-shadow,background-color,color] duration-200 shrink-0">
               <ArrowLeft className="w-4 h-4" />
               <Image src="/logo/Mavly.png" alt="" width={18} height={18} className="w-4.5 h-4.5 rounded object-contain shrink-0" priority referrerPolicy="no-referrer" />
             </button>
             <div className="relative flex-1 min-w-0" ref={menuRef}>
-              <button onClick={() => setMenuOpen(!menuOpen)} className="flex items-center gap-1.5 max-w-full rounded-lg px-1.5 py-1 hover:bg-[var(--clay-sunken)] hover:shadow-[var(--clay-well-1)] transition-[box-shadow,background-color] duration-200">
+              <button onClick={() => setMenuOpen(!menuOpen)} className="flex items-center gap-1.5 max-w-full rounded-lg px-1.5 py-1 hover:bg-[var(--clay-sunken)] transition-[box-shadow,background-color] duration-200">
                 <Image src="/logo/Mavly.png" alt="Mavly" width={20} height={20} className="w-5 h-5 rounded object-contain shrink-0" priority referrerPolicy="no-referrer" />
                 <span className="text-sm font-medium text-foreground truncate">{project.label || projectId}</span>
                 <ChevronDown className="w-3 h-3 text-muted-foreground shrink-0" />
               </button>
               {popupMenu}
             </div>
-            <button onClick={() => setOpenModal("versions")} className={`h-7 w-7 flex items-center justify-center rounded-lg transition-[box-shadow,background-color,color] duration-200 shrink-0 border ${btnBorder} bg-card text-muted-foreground shadow-[var(--clay-elev-1)] hover:text-foreground hover:shadow-[var(--clay-elev-2)] active:shadow-[var(--clay-well-1)]`} title={translate("workspace.versions.title")}>
+            <button onClick={() => setOpenModal("versions")} className={`h-7 w-7 flex items-center justify-center rounded-lg transition-[box-shadow,background-color,color] duration-200 shrink-0 border ${btnBorder} bg-card text-muted-foreground shadow-[var(--clay-elev-1)] hover:text-foreground active:shadow-[var(--clay-well-1)]`} title={translate("workspace.versions.title")}>
               <Clock className="w-3.5 h-3.5" />
             </button>
-            <button onClick={() => setChatCollapsed(!chatCollapsed)} className={`h-7 w-7 flex items-center justify-center rounded-lg bg-card text-muted-foreground border ${btnBorder} shadow-[var(--clay-elev-1)] hover:text-foreground hover:shadow-[var(--clay-elev-2)] active:shadow-[var(--clay-well-1)] transition-[box-shadow,background-color,color] duration-200 shrink-0`}>
+            <button onClick={() => setChatCollapsed(!chatCollapsed)} className={`h-7 w-7 flex items-center justify-center rounded-lg bg-card text-muted-foreground border ${btnBorder} shadow-[var(--clay-elev-1)] hover:text-foreground active:shadow-[var(--clay-well-1)] transition-[box-shadow,background-color,color] duration-200 shrink-0`}>
               {chatCollapsed ? <PanelLeft className="w-3.5 h-3.5" /> : <PanelLeftClose className="w-3.5 h-3.5" />}
             </button>
           </div>
@@ -1930,13 +1930,13 @@ export default function WorkspacePage() {
             <div className="flex items-center gap-1 shrink-0">
               {TABS.map((tab) => (
                 <button key={tab.id} onClick={() => setActiveTab(tab.id)}
-                  className={`flex items-center gap-1 h-7 px-2.5 rounded-lg text-sm font-medium transition-[box-shadow,background-color,color] duration-200 border ${btnBorder} ${activeTab === tab.id ? "bg-[var(--clay-sunken)] text-foreground shadow-[var(--clay-well-2)] font-semibold" : "text-muted-foreground hover:text-foreground hover:bg-[var(--clay-sunken)] hover:shadow-[var(--clay-well-1)] bg-transparent"}`}>
+                  className={`flex items-center gap-1 h-7 px-2.5 rounded-lg text-sm font-medium transition-[box-shadow,background-color,color] duration-200 border ${btnBorder} ${activeTab === tab.id ? "bg-[var(--clay-sunken)] text-foreground shadow-[var(--clay-well-2)] font-semibold" : "text-muted-foreground hover:text-foreground hover:bg-[var(--clay-sunken)] bg-transparent"}`}>
                   <tab.icon className="w-3.5 h-3.5" /><span className="hidden lg:inline">{tab.label}</span>
                 </button>
               ))}
             </div>
             <div className="flex-1 flex items-center justify-center min-w-0">
-              <div className={`flex items-center h-7 w-[320px] rounded-full border ${btnBorder} px-1.5 gap-1`}>
+              <div className={`flex items-center h-7 w-[320px] rounded-full border ${btnBorder} bg-[var(--clay-sunken)] px-1.5 gap-1 shadow-[var(--clay-well-1)]`}>
                 <button onClick={() => setMobilePreview(!mobilePreview)} className="p-1 rounded text-muted-foreground hover:text-muted-foreground dark:hover:text-muted-foreground shrink-0">{mobilePreview ? <Smartphone className="w-3.5 h-3.5" /> : <Monitor className="w-3.5 h-3.5" />}</button>
                 {/*
                   ⭐ THE ADDRESS BOX LISTS THE PROJECT'S OWN PAGES. It was a bare text
@@ -2020,7 +2020,7 @@ export default function WorkspacePage() {
                 <ServerWakeNotice wake={serverWake} manualRetry={!serverWake.willRetry} />
               </div>
             )}
-            <div className={`flex-1 min-h-0 overflow-hidden ${activeTab === "preview" ? "rounded-none" : "m-2 sm:m-3 rounded-xl shadow-sm"}`} style={{ background: cardBg }}>
+            <div className={`flex-1 min-h-0 overflow-hidden ${activeTab === "preview" ? "rounded-none" : "m-2 sm:m-3 rounded-xl border border-[var(--clay-line)] shadow-[var(--clay-elev-2)]"}`} style={{ background: cardBg }}>
               {activeTab === "preview" && (
                 <LiveRuntimePreview
                   projectId={projectId}
@@ -2095,13 +2095,13 @@ export default function WorkspacePage() {
       {/* ═══ MOBILE LAYOUT: header → content → fixed switch → fixed textarea ═══ */}
       <div className="flex sm:hidden flex-col h-full min-h-0">
         {/* Mobile header */}
-        <header data-workspace-header className="flex items-center gap-1.5 px-2 shrink-0 z-10" style={{ height: 44 }}>
-          <button type="button" onClick={() => { setLeaveWorkspaceHref("/"); setLeaveWorkspaceOpen(true); }} title="Back to Mavly" aria-label="Back to Mavly" className="h-7 px-1.5 flex items-center gap-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-[var(--clay-sunken)] hover:shadow-[var(--clay-well-1)] transition-[box-shadow,background-color,color] duration-200 shrink-0">
+        <header data-workspace-header className="flex items-center gap-1.5 px-2 shrink-0 z-10 border-b border-[var(--clay-line)] bg-card" style={{ height: 44, backgroundImage: "var(--clay-sheen)", boxShadow: "var(--clay-elev-1)" }}>
+          <button type="button" onClick={() => { setLeaveWorkspaceHref("/"); setLeaveWorkspaceOpen(true); }} title="Back to Mavly" aria-label="Back to Mavly" className="h-7 px-1.5 flex items-center gap-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-[var(--clay-sunken)] transition-[box-shadow,background-color,color] duration-200 shrink-0">
             <ArrowLeft className="w-4 h-4" />
             <Image src="/logo/Mavly.png" alt="" width={18} height={18} className="w-4.5 h-4.5 rounded object-contain shrink-0" priority referrerPolicy="no-referrer" />
           </button>
           <div className="relative" ref={menuRef}>
-            <button onClick={() => setMenuOpen(!menuOpen)} className="flex items-center gap-1.5 px-1.5 py-1 rounded-lg hover:bg-black/5 dark:hover:bg-card/10 transition-colors">
+            <button onClick={() => setMenuOpen(!menuOpen)} className="flex items-center gap-1.5 px-1.5 py-1 rounded-lg hover:bg-[var(--clay-sunken)] dark:hover:bg-card/10 transition-colors">
               <Image src="/logo/Mavly.png" alt="Mavly" width={20} height={20} className="w-5 h-5 rounded object-contain shrink-0" priority referrerPolicy="no-referrer" />
               <span className="text-sm font-medium text-foreground truncate max-w-[160px]">{project.label || projectId}</span>
               <ChevronDown className="w-3 h-3 text-muted-foreground shrink-0" />
@@ -2172,7 +2172,7 @@ export default function WorkspacePage() {
         description="You'll return to the Mavly dashboard. Any unsaved changes may be lost."
         cancelLabel="Stay here"
         confirmLabel="Leave workspace"
-        confirmClassName="bg-primary text-primary-foreground shadow-[var(--clay-elev-ink-1)] hover:shadow-[var(--clay-elev-ink-2)]"
+        confirmClassName="bg-primary text-primary-foreground shadow-[var(--clay-elev-ink-1)]"
         onConfirm={() => router.push(leaveWorkspaceHref)}
       />
       <ServerBlockedDialog reason={blocked.reason} onDismiss={blocked.dismiss} wake={serverWake} />

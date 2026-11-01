@@ -39,7 +39,7 @@ export function MoreView({ section, onSection, children }: { section: MoreSectio
             <nav
                 ref={nav}
                 aria-label={t("workspace.tabs.moreSections")}
-                className="border-border/60 tp-scroll flex shrink-0 gap-1 overflow-x-auto border-b p-2 md:w-52 md:flex-col md:overflow-x-visible md:overflow-y-auto md:border-r md:border-b-0 md:p-3"
+                className="border-[var(--clay-line)] tp-scroll flex shrink-0 gap-1 overflow-x-auto border-b p-2 md:w-52 md:flex-col md:overflow-x-visible md:overflow-y-auto md:border-r md:border-b-0 md:p-3"
             >
                 {MORE_SECTIONS.map(item => (
                     <button

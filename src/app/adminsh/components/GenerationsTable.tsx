@@ -39,18 +39,18 @@ function formatTimestamp(value: string | null): string {
 
 function StatusBadge({ status }: { status: AdminGenerationRow["status"] }) {
   const styles: Record<AdminGenerationRow["status"], string> = {
-    completed: "bg-emerald-50 text-emerald-700 border-emerald-200",
+    completed: "bg-success-subtle text-success-subtle-foreground border-success/25",
     running: "bg-[var(--clay-sunken)] text-foreground border-[var(--clay-line)]",
-    queued: "bg-amber-50 text-amber-700 border-amber-200",
-    failed: "bg-red-50 text-red-700 border-red-200",
+    queued: "bg-warning-subtle text-warning-subtle-foreground border-warning/25",
+    failed: "bg-destructive-subtle text-destructive-subtle-foreground border-destructive/25",
     cancelled: "bg-[var(--clay-sunken)] text-muted-foreground border-[var(--clay-line)]",
     interrupted: "bg-[var(--clay-sunken)] text-muted-foreground border-[var(--clay-line)]",
   };
   const dots: Record<AdminGenerationRow["status"], string> = {
-    completed: "bg-emerald-500",
-    running: "bg-[var(--clay-sunken)]0 animate-pulse",
-    queued: "bg-amber-500",
-    failed: "bg-red-500",
+    completed: "bg-success",
+    running: "bg-warning animate-pulse",
+    queued: "bg-warning",
+    failed: "bg-destructive",
     cancelled: "bg-muted-foreground",
     interrupted: "bg-muted-foreground",
   };
@@ -126,7 +126,7 @@ export function GenerationsTable() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-[var(--clay-line)]">
         <div>
           <div className="flex items-center gap-2">
-            <div className="p-1.5 rounded-lg bg-[var(--clay-sunken)] text-foreground border border-[var(--clay-line)]">
+            <div className="p-1.5 rounded-lg bg-[var(--clay-sunken)] text-foreground border border-[var(--clay-line)] shadow-[var(--clay-well-1)]">
               <Sparkles className="w-4 h-4" />
             </div>
             <h2 className="text-base font-bold text-foreground">Generation Operations Stream</h2>
@@ -166,11 +166,11 @@ export function GenerationsTable() {
             placeholder="Search by project, owner, or model..."
             value={searchInput}
             onChange={(event) => setSearchInput(event.target.value)}
-            className="w-full h-8 pl-8 pr-3 text-xs rounded-xl bg-[var(--clay-sunken)] border border-[var(--clay-line)] focus:bg-card focus:outline-none focus:ring-2 focus:ring-black text-foreground placeholder:text-muted-foreground"
+            className="w-full h-8 pl-8 pr-3 text-xs rounded-xl bg-[var(--clay-sunken)] border border-[var(--clay-line)] focus:bg-card focus:outline-none focus:ring-2 focus:ring-black text-foreground placeholder:text-muted-foreground shadow-[var(--clay-well-1)]"
           />
         </div>
 
-        <div className="flex items-center gap-1 bg-[var(--clay-sunken)] p-1 rounded-xl border border-[var(--clay-line)] text-xs">
+        <div className="flex items-center gap-1 bg-[var(--clay-sunken)] p-1 rounded-xl border border-[var(--clay-line)] text-xs shadow-[var(--clay-well-1)]">
           {FILTERS.map((filter) => (
             <button
               key={filter.id}
@@ -178,7 +178,7 @@ export function GenerationsTable() {
               onClick={() => setStatus(filter.id)}
               className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all cursor-pointer ${
                 status === filter.id
-                  ? "bg-card text-black shadow-xs font-bold"
+                  ? "bg-card text-black shadow-[var(--clay-elev-1)] font-bold"
                   : "text-muted-foreground hover:text-black"
               }`}
             >
@@ -189,10 +189,10 @@ export function GenerationsTable() {
       </div>
 
       {/* ── High-Density Data Table ── */}
-      <div className="overflow-x-auto rounded-xl border border-[var(--clay-line)]">
+      <div className="overflow-x-auto rounded-xl border border-[var(--clay-line)] bg-card shadow-[var(--clay-elev-1)]">
         <table className="w-full text-left border-collapse text-xs">
           <thead>
-            <tr className="bg-[var(--clay-sunken)]/60 border-b border-[var(--clay-line)] text-muted-foreground font-bold uppercase tracking-wider text-[10px]">
+            <tr className="bg-[var(--clay-sunken)] border-b border-[var(--clay-line)] text-muted-foreground font-bold uppercase tracking-wider text-[10px]">
               <th className="py-2.5 px-4">Project</th>
               <th className="py-2.5 px-4">Owner</th>
               <th className="py-2.5 px-4">Model Engine</th>
@@ -202,7 +202,7 @@ export function GenerationsTable() {
               <th className="py-2.5 px-4 text-right">Actions</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-black/[0.04]">
+          <tbody className="divide-y divide-[var(--clay-line)]">
             {error ? (
               <tr>
                 <td colSpan={7} className="py-8 text-center">
@@ -236,7 +236,7 @@ export function GenerationsTable() {
               </tr>
             ) : (
               rows.map((run) => (
-                <tr key={run.id} className="hover:bg-[var(--clay-sunken)]/60 transition-colors">
+                <tr key={run.id} className="hover:bg-[var(--clay-sunken)] transition-colors">
                   <td className="py-2.5 px-4 max-w-[200px]">
                     <p className="font-bold text-foreground truncate" title={run.projectLabel ?? run.projectId}>
                       {run.projectLabel ?? run.projectId}
@@ -288,7 +288,7 @@ export function GenerationsTable() {
             type="button"
             onClick={() => setPage((current) => Math.max(0, current - 1))}
             disabled={page === 0 || loading}
-            className="px-2.5 py-1 rounded-lg border border-[var(--clay-line)] font-semibold text-foreground hover:bg-[var(--clay-sunken)] disabled:opacity-40 disabled:cursor-not-allowed"
+            className="px-2.5 py-1 rounded-lg border border-[var(--clay-line)] font-semibold text-foreground hover:bg-[var(--clay-sunken)] disabled:opacity-40 disabled:cursor-not-allowed shadow-[var(--clay-well-1)]"
           >
             Previous
           </button>
@@ -296,7 +296,7 @@ export function GenerationsTable() {
             type="button"
             onClick={() => setPage((current) => current + 1)}
             disabled={loading || end >= total}
-            className="px-2.5 py-1 rounded-lg border border-[var(--clay-line)] font-semibold text-foreground hover:bg-[var(--clay-sunken)] disabled:opacity-40 disabled:cursor-not-allowed"
+            className="px-2.5 py-1 rounded-lg border border-[var(--clay-line)] font-semibold text-foreground hover:bg-[var(--clay-sunken)] disabled:opacity-40 disabled:cursor-not-allowed shadow-[var(--clay-well-1)]"
           >
             Next
           </button>
@@ -305,8 +305,8 @@ export function GenerationsTable() {
 
       {/* ── Inspection Modal (metadata only) ── */}
       {selected ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-in fade-in">
-          <div className="w-full max-w-lg bg-card rounded-2xl border border-[var(--clay-line)] shadow-2xl p-6 space-y-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[var(--clay-scrim)] backdrop-blur-[3px] animate-in fade-in">
+          <div className="w-full max-w-lg bg-card rounded-2xl border border-[var(--clay-line)] shadow-[var(--clay-float)] p-6 space-y-4">
             <div className="flex items-center justify-between pb-3 border-b border-[var(--clay-line)]">
               <div className="min-w-0">
                 <h3 className="text-base font-bold text-foreground truncate">
@@ -317,14 +317,14 @@ export function GenerationsTable() {
               <button
                 type="button"
                 onClick={() => setSelected(null)}
-                className="p-1 text-muted-foreground hover:text-black rounded-lg hover:bg-black/5"
+                className="p-1 text-muted-foreground hover:text-black rounded-lg hover:bg-[var(--clay-sunken)]"
                 aria-label="Close inspection"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            <div className="space-y-2.5 text-xs bg-[var(--clay-sunken)] p-4 rounded-xl border border-[var(--clay-line)]">
+            <div className="space-y-2.5 text-xs bg-[var(--clay-sunken)] p-4 rounded-xl border border-[var(--clay-line)] shadow-[var(--clay-well-1)]">
               <Detail label="Status" value={<StatusBadge status={selected.status} />} />
               <Detail label="Stage" value={<span className="font-mono">{selected.stage}</span>} />
               <Detail label="Owner" value={selected.ownerName} />

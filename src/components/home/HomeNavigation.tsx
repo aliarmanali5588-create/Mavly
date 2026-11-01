@@ -34,7 +34,7 @@ export function HomeNavigation() {
       <div className="max-w-7xl mx-auto px-4 sm:px-8 h-16 sm:h-20 flex items-center justify-between">
         {/* Brand Logo */}
         <Link href="/" className="flex items-center gap-2.5 group select-none">
-          <div className="w-8 h-8 rounded-xl overflow-hidden bg-card shadow-[var(--clay-elev-1)] p-0.5 border border-[var(--clay-line)] flex items-center justify-center transition-[box-shadow,transform] duration-200 group-hover:shadow-[var(--clay-elev-2)] active:shadow-[var(--clay-well-1)]">
+          <div className="w-8 h-8 rounded-xl overflow-hidden bg-card shadow-[var(--clay-elev-1)] p-0.5 border border-[var(--clay-line)] flex items-center justify-center transition-[box-shadow] duration-200 active:shadow-[var(--clay-well-1)]">
             <Image
               src="/logo/Mavly.png"
               alt="Mavly Logo"
@@ -56,7 +56,7 @@ export function HomeNavigation() {
             <Link
               key={link.href}
               href={link.href}
-              className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors duration-200 py-1 relative after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:bg-foreground after:scale-x-0 hover:after:scale-x-100 after:transition-transform after:duration-200"
+              className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors duration-200 py-1 relative after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:bg-foreground after:scale-x-0 hover:after:scale-x-100 after:transition-[transform] after:duration-200"
             >
               {link.label}
             </Link>

@@ -115,7 +115,7 @@ export default function ContactPage() {
               >
                 <div>
                   <div className="flex items-center justify-between gap-3 mb-4">
-                    <div className="w-12 h-12 rounded-2xl bg-[var(--clay-sunken)] border border-[var(--clay-line)] flex items-center justify-center text-foreground">
+                    <div className="w-12 h-12 rounded-2xl bg-[var(--clay-sunken)] border border-[var(--clay-line)] flex items-center justify-center text-foreground shadow-[var(--clay-well-1)]">
                       <Icon className="w-5 h-5" />
                     </div>
                     <span className="text-[11px] font-semibold text-muted-foreground bg-[var(--clay-sunken)] px-2.5 py-0.5 rounded-full">
@@ -145,12 +145,12 @@ export default function ContactPage() {
                     <button
                       type="button"
                       onClick={() => handleCopy(ch.email)}
-                      className="px-2.5 py-1.5 rounded-lg bg-card border border-[var(--clay-line)] text-xs font-medium text-foreground hover:text-black shadow-xs flex items-center gap-1.5 cursor-pointer"
+                      className="px-2.5 py-1.5 rounded-lg bg-card border border-[var(--clay-line)] text-xs font-medium text-foreground hover:text-black shadow-[var(--clay-elev-1)] flex items-center gap-1.5 cursor-pointer"
                     >
                       {isCopied ? (
                         <>
-                          <Check className="w-3.5 h-3.5 text-emerald-600" />
-                          <span className="text-[11px] text-emerald-700 font-semibold">Copied</span>
+                          <Check className="w-3.5 h-3.5 text-success" />
+                          <span className="text-[11px] text-success font-semibold">Copied</span>
                         </>
                       ) : (
                         <>
@@ -175,7 +175,7 @@ export default function ContactPage() {
         </div>
 
         {/* Operating Hours & Response Notice */}
-        <div className="max-w-2xl mx-auto p-6 rounded-2xl bg-card border border-[var(--clay-line)] text-center space-y-2 text-xs">
+        <div className="max-w-2xl mx-auto p-6 rounded-2xl bg-card border border-[var(--clay-line)] text-center space-y-2 text-xs shadow-[var(--clay-elev-1)]">
           <div className="flex items-center justify-center gap-2 text-foreground font-bold">
             <Clock className="w-4 h-4 text-foreground" />
             <span>Response Commitments</span>

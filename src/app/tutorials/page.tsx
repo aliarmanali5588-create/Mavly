@@ -211,7 +211,7 @@ export default function TutorialsPage() {
               onClick={() => setActiveCategory(cat)}
               className={`px-3.5 py-1.5 text-xs font-semibold rounded-xl transition-all cursor-pointer ${
                 activeCategory === cat
-                  ? "bg-black text-white shadow-xs"
+                  ? "bg-black text-white shadow-[var(--clay-elev-1)]"
                   : "bg-card text-muted-foreground hover:text-black border border-[var(--clay-line)]"
               }`}
             >
@@ -233,7 +233,7 @@ export default function TutorialsPage() {
                 <button
                   type="button"
                   onClick={() => setExpandedId(isExpanded ? "" : tut.id)}
-                  className="w-full p-6 text-left flex items-start justify-between gap-4 cursor-pointer hover:bg-[var(--clay-sunken)]/50 transition-colors"
+                  className="w-full p-6 text-left flex items-start justify-between gap-4 cursor-pointer hover:bg-[var(--clay-sunken)] transition-colors"
                 >
                   <div className="space-y-1.5 flex-1">
                     <div className="flex items-center gap-2 text-xs text-muted-foreground font-medium">
@@ -245,7 +245,7 @@ export default function TutorialsPage() {
                     <p className="text-xs text-muted-foreground leading-relaxed">{tut.intro}</p>
                   </div>
 
-                  <div className="p-2 rounded-xl bg-[var(--clay-sunken)] border border-[var(--clay-line)] text-muted-foreground shrink-0">
+                  <div className="p-2 rounded-xl bg-[var(--clay-sunken)] border border-[var(--clay-line)] text-muted-foreground shrink-0 shadow-[var(--clay-well-1)]">
                     <ChevronDown
                       className={`w-4 h-4 transition-transform ${
                         isExpanded ? "rotate-180" : ""
@@ -278,7 +278,7 @@ export default function TutorialsPage() {
                         {tut.steps.map((s) => (
                           <div
                             key={s.stepNumber}
-                            className="p-3.5 rounded-xl bg-card border border-[var(--clay-line)] space-y-1"
+                            className="p-3.5 rounded-xl bg-card border border-[var(--clay-line)] space-y-1 shadow-[var(--clay-elev-1)]"
                           >
                             <p className="font-bold text-foreground">
                               Step {s.stepNumber}: {s.instruction}
@@ -290,21 +290,21 @@ export default function TutorialsPage() {
                     </div>
 
                     {/* Expected Outcome */}
-                    <div className="flex items-start gap-2.5 p-3.5 rounded-xl bg-emerald-50/70 border border-emerald-200/60 text-emerald-900">
-                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                    <div className="flex items-start gap-2.5 p-3.5 rounded-xl bg-success-subtle border border-success/25 text-success-subtle-foreground">
+                      <CheckCircle2 className="w-4 h-4 text-success shrink-0 mt-0.5" />
                       <div>
                         <span className="font-bold block">Expected Outcome:</span>
-                        <p className="text-emerald-800 text-xs mt-0.5">{tut.outcome}</p>
+                        <p className="text-success-subtle-foreground text-xs mt-0.5">{tut.outcome}</p>
                       </div>
                     </div>
 
                     {/* Warning if any */}
                     {tut.warnings && (
-                      <div className="flex items-start gap-2.5 p-3.5 rounded-xl bg-amber-50/70 border border-amber-200/60 text-amber-900">
-                        <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                      <div className="flex items-start gap-2.5 p-3.5 rounded-xl bg-warning-subtle border border-warning/25 text-warning-subtle-foreground">
+                        <AlertCircle className="w-4 h-4 text-warning shrink-0 mt-0.5" />
                         <div>
                           <span className="font-bold block">Important Notice:</span>
-                          <p className="text-amber-800 text-xs mt-0.5">{tut.warnings}</p>
+                          <p className="text-warning-subtle-foreground text-xs mt-0.5">{tut.warnings}</p>
                         </div>
                       </div>
                     )}
@@ -316,7 +316,7 @@ export default function TutorialsPage() {
         </div>
 
         {/* CTA to Builder */}
-        <div className="p-8 rounded-3xl bg-card border border-[var(--clay-line)] text-center max-w-2xl mx-auto space-y-4">
+        <div className="p-8 rounded-3xl bg-card border border-[var(--clay-line)] text-center max-w-2xl mx-auto space-y-4 shadow-[var(--clay-elev-1)]">
           <h3 className="text-lg font-bold text-foreground">Ready to put these tutorials into practice?</h3>
           <p className="text-xs text-muted-foreground">
             Open the workspace to begin building your website with the AI assistant.

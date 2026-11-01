@@ -150,7 +150,7 @@ function StepRail({ current }: { current: TransferPhase }) {
                                 "flex size-4 shrink-0 items-center justify-center rounded-full border",
                                 done && "border-success bg-success text-success-foreground",
                                 active && "border-primary text-primary",
-                                !done && !active && "border-border text-muted-foreground"
+                                !done && !active && "border-[var(--clay-line)] text-muted-foreground"
                             )}
                         >
                             {done ? (
@@ -269,7 +269,7 @@ export function ExportProjectDialog({ open, onOpenChange, projectId }: ExportPro
                           code believing it carries no credentials, or expect a
                           clone to come up already configured.
                         */}
-                        <div className="border-border bg-muted/40 space-y-2 rounded-lg border p-3">
+                        <div className="border-[var(--clay-line)] bg-[var(--clay-sunken)] space-y-2 rounded-lg border p-3 shadow-[var(--clay-elev-1)]">
                             <p className="text-xs font-medium">{t("transfer.export.includesTitle")}</p>
                             <ul className="text-muted-foreground space-y-1 text-xs">
                                 <li>· {t("transfer.export.includes1")}</li>
@@ -328,7 +328,7 @@ export function ExportProjectDialog({ open, onOpenChange, projectId }: ExportPro
                         <div className="space-y-1.5">
                             <Label className="text-xs">{t("transfer.export.codeLabel")}</Label>
                             <div className="flex items-center gap-1.5">
-                                <code className="border-border bg-muted/60 min-w-0 flex-1 truncate rounded-md border px-2 py-1.5 font-mono text-xs">
+                                <code className="border-[var(--clay-line)] bg-[var(--clay-sunken)] min-w-0 flex-1 truncate rounded-md border px-2 py-1.5 font-mono text-xs shadow-[var(--clay-well-1)]">
                                     {revealed ? code : "•".repeat(28)}
                                 </code>
                                 <Button variant="outline" size="sm" onClick={() => setRevealed(v => !v)}>

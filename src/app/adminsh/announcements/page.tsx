@@ -116,28 +116,28 @@ export default function AnnouncementsAdminPage() {
     switch (type) {
       case "Information":
         return (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-[var(--clay-sunken)] text-foreground border border-[var(--clay-line)]/60 font-mono">
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-[var(--clay-sunken)] text-foreground border border-[var(--clay-line)] font-mono">
             <Info className="w-3 h-3 text-foreground" />
             Information
           </span>
         );
       case "Success":
         return (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200/60 font-mono">
-            <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-success-subtle text-success-subtle-foreground border border-success/25 font-mono">
+            <CheckCircle2 className="w-3 h-3 text-success" />
             Success
           </span>
         );
       case "Warning":
         return (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-amber-50 text-amber-700 border border-amber-200/60 font-mono">
-            <AlertTriangle className="w-3 h-3 text-amber-600" />
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-warning-subtle text-warning-subtle-foreground border border-warning/25 font-mono">
+            <AlertTriangle className="w-3 h-3 text-warning" />
             Warning
           </span>
         );
       case "Maintenance":
         return (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-[var(--clay-sunken)] text-foreground border border-[var(--clay-line)]/60 font-mono">
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-[var(--clay-sunken)] text-foreground border border-[var(--clay-line)] font-mono">
             <Wrench className="w-3 h-3 text-foreground" />
             Maintenance
           </span>
@@ -149,14 +149,14 @@ export default function AnnouncementsAdminPage() {
     switch (status) {
       case "Published":
         return (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200/60 font-mono">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-success-subtle text-success-subtle-foreground border border-success/25 font-mono">
+            <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
             Published
           </span>
         );
       case "Scheduled":
         return (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-[var(--clay-sunken)] text-foreground border border-[var(--clay-line)]/60 font-mono">
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-[var(--clay-sunken)] text-foreground border border-[var(--clay-line)] font-mono">
             <Clock className="w-3 h-3" />
             Scheduled
           </span>
@@ -169,7 +169,7 @@ export default function AnnouncementsAdminPage() {
         );
       case "Expired":
         return (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-rose-50 text-rose-700 border border-rose-200/60 font-mono">
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-destructive-subtle text-destructive-subtle-foreground border border-destructive/25 font-mono">
             Expired
           </span>
         );
@@ -192,9 +192,9 @@ export default function AnnouncementsAdminPage() {
         <div className="p-4 rounded-xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)]">
           <div className="flex items-center justify-between text-xs text-muted-foreground font-medium">
             <span>Live in Workspaces</span>
-            <Radio className="w-3.5 h-3.5 text-emerald-600" />
+            <Radio className="w-3.5 h-3.5 text-success" />
           </div>
-          <h3 className="text-xl font-bold tracking-tight text-emerald-700 font-mono mt-1">
+          <h3 className="text-xl font-bold tracking-tight text-success font-mono mt-1">
             {announcements.filter((a) => a.status === "Published").length}
           </h3>
           <p className="text-[11px] text-muted-foreground mt-1">Active customer banners</p>
@@ -241,19 +241,19 @@ export default function AnnouncementsAdminPage() {
           <div
             className={`p-3.5 rounded-xl border flex items-start justify-between gap-3 text-xs ${
               previewItem.type === "Information"
-                ? "bg-[var(--clay-sunken)]/60 border-[var(--clay-line)] text-foreground"
+                ? "bg-[var(--clay-sunken)] border-[var(--clay-line)] text-foreground"
                 : previewItem.type === "Success"
-                ? "bg-emerald-50/60 border-emerald-200 text-emerald-950"
+                ? "bg-success-subtle border-success/25 text-success-subtle-foreground"
                 : previewItem.type === "Warning"
-                ? "bg-amber-50/60 border-amber-200 text-amber-950"
-                : "bg-[var(--clay-sunken)]/60 border-[var(--clay-line)] text-foreground"
+                ? "bg-warning-subtle border-warning/25 text-warning-subtle-foreground"
+                : "bg-[var(--clay-sunken)] border-[var(--clay-line)] text-foreground"
             }`}
           >
             <div className="flex items-start gap-2.5">
               <div className="mt-0.5">
                 {previewItem.type === "Information" && <Info className="w-4 h-4 text-foreground" />}
-                {previewItem.type === "Success" && <CheckCircle2 className="w-4 h-4 text-emerald-600" />}
-                {previewItem.type === "Warning" && <AlertTriangle className="w-4 h-4 text-amber-600" />}
+                {previewItem.type === "Success" && <CheckCircle2 className="w-4 h-4 text-success" />}
+                {previewItem.type === "Warning" && <AlertTriangle className="w-4 h-4 text-warning" />}
                 {previewItem.type === "Maintenance" && <Wrench className="w-4 h-4 text-foreground" />}
               </div>
               <div>
@@ -275,7 +275,7 @@ export default function AnnouncementsAdminPage() {
       <div className="bg-card rounded-2xl p-5 sm:p-6 border border-[var(--clay-line)] shadow-[var(--clay-elev-1)] space-y-4">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pb-3 border-b border-[var(--clay-line)]">
           {/* Segmented Filter */}
-          <div className="flex flex-wrap items-center gap-1 bg-[var(--clay-sunken)] p-0.5 rounded-lg border border-[var(--clay-line)] text-xs">
+          <div className="flex flex-wrap items-center gap-1 bg-[var(--clay-sunken)] p-0.5 rounded-lg border border-[var(--clay-line)] text-xs shadow-[var(--clay-well-1)]">
             {["All", "Published", "Scheduled", "Draft", "Expired"].map((st) => (
               <button
                 key={st}
@@ -283,7 +283,7 @@ export default function AnnouncementsAdminPage() {
                 onClick={() => setStatusFilter(st)}
                 className={`px-3 py-1 rounded-md text-xs transition-all ${
                   statusFilter === st
-                    ? "bg-card text-foreground shadow-xs font-semibold"
+                    ? "bg-card text-foreground shadow-[var(--clay-elev-1)] font-semibold"
                     : "text-muted-foreground hover:text-foreground font-medium"
                 }`}
               >
@@ -300,7 +300,7 @@ export default function AnnouncementsAdminPage() {
                 placeholder="Search announcements..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full h-8 pl-8 pr-3 text-xs rounded-lg bg-[var(--clay-sunken)] border border-[var(--clay-line)] text-foreground placeholder:text-muted-foreground focus:bg-card focus:outline-none focus:ring-1 focus:ring-black"
+                className="w-full h-8 pl-8 pr-3 text-xs rounded-lg bg-[var(--clay-sunken)] border border-[var(--clay-line)] text-foreground placeholder:text-muted-foreground focus:bg-card focus:outline-none focus:ring-1 focus:ring-black shadow-[var(--clay-well-1)]"
               />
             </div>
 
@@ -324,7 +324,7 @@ export default function AnnouncementsAdminPage() {
             filtered.map((item) => (
               <div
                 key={item.id}
-                className="p-4 rounded-xl border border-[var(--clay-line)] hover:border-black/20 transition-all flex flex-col md:flex-row md:items-center justify-between gap-4"
+                className="p-4 rounded-xl border border-[var(--clay-line)] bg-card shadow-[var(--clay-elev-1)] hover:border-[var(--clay-line-strong)] transition-[box-shadow,border-color] flex flex-col md:flex-row md:items-center justify-between gap-4"
               >
                 <div className="space-y-1.5 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
@@ -367,8 +367,8 @@ export default function AnnouncementsAdminPage() {
                     onClick={() => handleToggleStatus(item.id)}
                     className={`px-2.5 py-1 text-[11px] font-medium rounded-md transition-colors ${
                       item.status === "Published"
-                        ? "text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-200"
-                        : "text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200"
+                        ? "text-warning-subtle-foreground bg-warning-subtle hover:bg-warning-subtle border border-warning/25"
+                        : "text-success-subtle-foreground bg-success-subtle hover:bg-success-subtle border border-success/25"
                     }`}
                   >
                     {item.status === "Published" ? "Unpublish" : "Publish"}
@@ -376,7 +376,7 @@ export default function AnnouncementsAdminPage() {
 
                   <button
                     onClick={() => handleDelete(item.id, item.title)}
-                    className="p-1.5 text-muted-foreground hover:text-rose-600 transition-colors"
+                    className="p-1.5 text-muted-foreground hover:text-destructive transition-colors"
                     title="Delete"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
@@ -390,8 +390,8 @@ export default function AnnouncementsAdminPage() {
 
       {/* Create Announcement Modal */}
       {isCreateModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs animate-in fade-in">
-          <div className="bg-card rounded-2xl max-w-lg w-full border border-black/[0.1] shadow-2xl p-6 relative space-y-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[var(--clay-scrim)] backdrop-blur-[3px] animate-in fade-in">
+          <div className="bg-card rounded-2xl max-w-lg w-full border border-[var(--clay-line)] shadow-[var(--clay-float)] p-6 relative space-y-4">
             <div className="flex items-center justify-between pb-3 border-b border-[var(--clay-line)]">
               <div className="flex items-center gap-2">
                 <Megaphone className="w-4 h-4 text-foreground" />
@@ -415,7 +415,7 @@ export default function AnnouncementsAdminPage() {
                   placeholder="e.g. Major Platform Upgrade: DeepSeek V4.1 Ready"
                   value={newTitle}
                   onChange={(e) => setNewTitle(e.target.value)}
-                  className="w-full px-3 py-2 bg-[var(--clay-sunken)] border border-[var(--clay-line)] rounded-xl focus:outline-none focus:bg-card"
+                  className="w-full px-3 py-2 bg-[var(--clay-sunken)] border border-[var(--clay-line)] rounded-xl focus:outline-none focus:bg-card shadow-[var(--clay-well-1)]"
                 />
               </div>
 
@@ -428,7 +428,7 @@ export default function AnnouncementsAdminPage() {
                   placeholder="Describe the upgrade, maintenance schedule, or notice..."
                   value={newContent}
                   onChange={(e) => setNewContent(e.target.value)}
-                  className="w-full px-3 py-2 bg-[var(--clay-sunken)] border border-[var(--clay-line)] rounded-xl focus:outline-none focus:bg-card leading-relaxed"
+                  className="w-full px-3 py-2 bg-[var(--clay-sunken)] border border-[var(--clay-line)] rounded-xl focus:outline-none focus:bg-card leading-relaxed shadow-[var(--clay-well-1)]"
                 />
               </div>
 
@@ -442,7 +442,7 @@ export default function AnnouncementsAdminPage() {
                     onChange={(e) =>
                       setNewType(e.target.value as AnnouncementRecord["type"])
                     }
-                    className="w-full px-3 py-2 bg-[var(--clay-sunken)] border border-[var(--clay-line)] rounded-xl focus:outline-none focus:bg-card"
+                    className="w-full px-3 py-2 bg-[var(--clay-sunken)] border border-[var(--clay-line)] rounded-xl focus:outline-none focus:bg-card shadow-[var(--clay-well-1)]"
                   >
                     <option value="Information">Information (Blue)</option>
                     <option value="Success">Success (Green)</option>
@@ -458,7 +458,7 @@ export default function AnnouncementsAdminPage() {
                   <select
                     value={newTargetPlan}
                     onChange={(e) => setNewTargetPlan(e.target.value)}
-                    className="w-full px-3 py-2 bg-[var(--clay-sunken)] border border-[var(--clay-line)] rounded-xl focus:outline-none focus:bg-card"
+                    className="w-full px-3 py-2 bg-[var(--clay-sunken)] border border-[var(--clay-line)] rounded-xl focus:outline-none focus:bg-card shadow-[var(--clay-well-1)]"
                   >
                     <option value="All Plans">All Plans (Global)</option>
                     <option value="Free Tier">Free Tier Only</option>

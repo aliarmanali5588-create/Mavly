@@ -79,10 +79,10 @@ export function FeaturesSection() {
             return (
               <div
                 key={idx}
-                className="p-8 sm:p-10 rounded-3xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)] hover:shadow-[var(--clay-elev-4)] hover:border-[var(--clay-line-strong)] hover:-translate-y-1 active:translate-y-0 active:shadow-[var(--clay-elev-1)] transition-[box-shadow,transform,border-color] duration-300 flex flex-col justify-between"
+                className="p-8 sm:p-10 rounded-3xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)] hover:border-[var(--clay-line-strong)] active:shadow-[var(--clay-well-2)] transition-[box-shadow,border-color] duration-300 flex flex-col justify-between"
               >
                 <div>
-                  <div className="w-12 h-12 rounded-2xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)] flex items-center justify-center text-foreground mb-6 transition-[transform,box-shadow] duration-200 group-hover:scale-105 group-hover:shadow-[var(--clay-elev-3)]">
+                  <div className="w-12 h-12 rounded-2xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)] flex items-center justify-center text-foreground mb-6 transition-[box-shadow] duration-200">
                     <Icon className="w-6 h-6" />
                   </div>
                   <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
@@ -94,7 +94,7 @@ export function FeaturesSection() {
                   <p className="text-sm text-muted-foreground leading-relaxed mb-6 font-normal">
                     {feat.description}
                   </p>
-                  <ul className="space-y-2.5 pt-4 border-t border-black/[0.06]">
+                  <ul className="space-y-2.5 pt-4 border-t border-[var(--clay-line)]">
                     {feat.bullets.map((b, bIdx) => (
                       <li key={bIdx} className="flex items-start gap-2.5 text-xs text-foreground">
                         <Check className="w-4 h-4 text-black shrink-0 mt-0.5" />

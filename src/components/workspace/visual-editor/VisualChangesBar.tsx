@@ -195,13 +195,13 @@ export function VisualChangesBar({
 
     return (
         <div
-            className="border-border/60 bg-card/95 supports-[backdrop-filter]:bg-card/80 shrink-0 border-t backdrop-blur-sm"
+            className="border-[var(--clay-line)] bg-card/95 supports-[backdrop-filter]:bg-card/80 shrink-0 border-t backdrop-blur-sm"
             role="region"
             aria-label={t("workspace.visualEditor.barLabel")}
         >
             {/* ── The outcome of the last apply ──────────────────────────── */}
             {(outcome || error) && !busy && (
-                <div className="border-border/60 flex items-start gap-2 border-b px-3 py-2 text-xs">
+                <div className="border-[var(--clay-line)] flex items-start gap-2 border-b px-3 py-2 text-xs">
                     {error ? (
                         <>
                             <AlertTriangleIcon className="text-destructive mt-0.5 size-4 shrink-0" aria-hidden />
@@ -361,7 +361,7 @@ export function VisualChangesBar({
                                             "grid size-4 shrink-0 place-items-center rounded-full border text-[9px]",
                                             state === "done" && "border-success/40 bg-success-subtle text-success",
                                             state === "active" && "border-primary bg-primary-subtle text-primary",
-                                            state === "todo" && "border-border text-muted-foreground/50"
+                                            state === "todo" && "border-[var(--clay-line)] text-muted-foreground/50"
                                         )}
                                     >
                                         {state === "done" ? "✓" : index + 1}
@@ -445,7 +445,7 @@ export function VisualChangesBar({
                     </div>
 
                     {expanded && (
-                        <ul className="divide-border/60 border-border/60 max-h-40 divide-y overflow-y-auto border-t">
+                        <ul className="divide-[var(--clay-line)] border-[var(--clay-line)] max-h-40 divide-y overflow-y-auto border-t">
                             {changes.map(change => {
                                 const summary = describeChange(change);
                                 const aspects = aspectsOf(change);

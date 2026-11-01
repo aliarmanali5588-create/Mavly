@@ -81,7 +81,7 @@ export function ErrorState({
       className={cn(
         "flex flex-col items-center justify-center text-center",
         variant === "page"
-          ? "bg-card min-h-[22rem] rounded-2xl border px-6 py-14 shadow-2xs"
+          ? "bg-card min-h-[22rem] rounded-2xl border px-6 py-14 shadow-[var(--clay-elev-1)]"
           : "px-6 py-10",
         className,
       )}

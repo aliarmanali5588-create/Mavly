@@ -148,7 +148,7 @@ export function SqlDatabasePanel({ project }: { project: VcaasProject }) {
 
     return (
         <div data-db-env={env} className={cn("flex h-full min-h-0 flex-col border", theme.frame)}>
-            <div className="border-border flex flex-wrap items-center gap-2 border-b px-3 py-2">
+            <div className="border-[var(--clay-line)] flex flex-wrap items-center gap-2 border-b px-3 py-2">
                 <div role="group" aria-label={t("engineV2.database.envSwitch")} className="bg-muted flex rounded-lg p-0.5">
                     {(hasDev ? (["dev", "live"] as const) : (["live"] as const)).map(value => (
                         // The selected database must be obvious (a write on Live reaches real users): its own colour, filled.
@@ -192,7 +192,7 @@ export function SqlDatabasePanel({ project }: { project: VcaasProject }) {
 
             <div className="flex min-h-0 flex-1">
                 {view === "data" ? (
-                    <aside className="border-border w-56 shrink-0 overflow-y-auto border-r p-2" aria-labelledby="db-tables-title">
+                    <aside className="border-[var(--clay-line)] w-56 shrink-0 overflow-y-auto border-r p-2" aria-labelledby="db-tables-title">
                         <h2 id="db-tables-title" className="text-muted-foreground flex items-center gap-1.5 px-2 pt-1 pb-2 text-xs font-semibold tracking-wide uppercase">
                             <DatabaseIcon className="size-3.5" aria-hidden />
                             {t("engineV2.database.tablesTitle")}

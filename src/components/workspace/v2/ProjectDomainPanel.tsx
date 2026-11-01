@@ -29,7 +29,7 @@ export function ProjectDomainPanel({
     return (
         <Modal open={open} onOpenChange={onOpenChange} size="lg" title={t("engineV2.address.title")} description={t("engineV2.address.intro")}>
             <div className="space-y-5">
-                <section className="border-border space-y-2 rounded-xl border p-4">
+                <section className="border-[var(--clay-line)] bg-card space-y-2 rounded-xl border p-4 shadow-[var(--clay-elev-1)]">
                     <div className="flex flex-wrap items-center gap-2">
                         <GlobeIcon className="text-muted-foreground size-4" aria-hidden />
                         <span className="text-sm font-medium">{t("engineV2.domains.liveAddress")}</span>
@@ -54,7 +54,7 @@ export function ProjectDomainPanel({
                     ) : null}
                 </section>
 
-                <section className="border-border space-y-2 border-t pt-4">
+                <section className="border-[var(--clay-line)] space-y-2 border-t pt-4">
                     <h3 className="text-sm font-medium">{t("engineV2.address.customTitle")}</h3>
                     <div className="flex gap-2 text-xs">
                         <InfoIcon className="text-muted-foreground mt-0.5 size-4 shrink-0" aria-hidden />

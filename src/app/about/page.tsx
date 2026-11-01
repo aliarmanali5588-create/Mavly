@@ -59,7 +59,7 @@ export default function AboutPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-5xl mx-auto">
           {/* Why Mavly Exists */}
           <div className="p-8 rounded-3xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)] space-y-4">
-            <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-700 flex items-center justify-center">
+            <div className="w-10 h-10 rounded-xl bg-warning-subtle text-warning-subtle-foreground flex items-center justify-center">
               <Compass className="w-5 h-5" />
             </div>
             <h2 className="text-xl font-bold text-foreground">Why Mavly Exists</h2>
@@ -121,19 +121,19 @@ export default function AboutPage() {
         <div className="max-w-5xl mx-auto space-y-6">
           <h2 className="text-xl font-bold text-foreground text-center">Who Mavly is For</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-xs">
-            <div className="p-5 rounded-2xl bg-card border border-[var(--clay-line)] space-y-2 text-center">
+            <div className="p-5 rounded-2xl bg-card border border-[var(--clay-line)] space-y-2 text-center shadow-[var(--clay-elev-1)]">
               <h3 className="font-bold text-foreground">Solo Founders</h3>
               <p className="text-muted-foreground">Launch MVPs and validate business ideas in hours instead of weeks.</p>
             </div>
-            <div className="p-5 rounded-2xl bg-card border border-[var(--clay-line)] space-y-2 text-center">
+            <div className="p-5 rounded-2xl bg-card border border-[var(--clay-line)] space-y-2 text-center shadow-[var(--clay-elev-1)]">
               <h3 className="font-bold text-foreground">Freelancers</h3>
               <p className="text-muted-foreground">Deliver client concepts and rapid initial mockups with ease.</p>
             </div>
-            <div className="p-5 rounded-2xl bg-card border border-[var(--clay-line)] space-y-2 text-center">
+            <div className="p-5 rounded-2xl bg-card border border-[var(--clay-line)] space-y-2 text-center shadow-[var(--clay-elev-1)]">
               <h3 className="font-bold text-foreground">Small Businesses</h3>
               <p className="text-muted-foreground">Establish a professional online presence without large agency costs.</p>
             </div>
-            <div className="p-5 rounded-2xl bg-card border border-[var(--clay-line)] space-y-2 text-center">
+            <div className="p-5 rounded-2xl bg-card border border-[var(--clay-line)] space-y-2 text-center shadow-[var(--clay-elev-1)]">
               <h3 className="font-bold text-foreground">Creative Teams</h3>
               <p className="text-muted-foreground">Prototype landing pages and collaborate on web experiences quickly.</p>
             </div>
@@ -141,7 +141,7 @@ export default function AboutPage() {
         </div>
 
         {/* Final CTA */}
-        <div className="p-8 sm:p-14 rounded-3xl bg-black text-white text-center space-y-6 max-w-5xl mx-auto">
+        <div className="p-8 sm:p-14 rounded-3xl bg-black text-white text-center space-y-6 max-w-5xl mx-auto shadow-[var(--clay-elev-ink-1)]">
           <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
             Have an idea? Start building with Mavly.
           </h2>
@@ -151,7 +151,7 @@ export default function AboutPage() {
           <div>
             <Link
               href="/dashboard"
-              className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-card text-black font-bold text-xs sm:text-sm hover:bg-[var(--clay-sunken)] transition-colors"
+              className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-card text-black font-bold text-xs sm:text-sm border border-[var(--clay-line)] shadow-[var(--clay-elev-2)] hover:border-[var(--clay-line-strong)] clay-press transition-[box-shadow,border-color,background-color]"
             >
               <span>Launch Builder</span>
               <ArrowRight className="w-4 h-4" />

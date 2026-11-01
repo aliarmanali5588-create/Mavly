@@ -73,7 +73,7 @@ export function ImportOverlay({ elapsedMs, projectId }: ImportOverlayProps) {
              * import started (versions, GitHub…) would otherwise sit on top of this
              * and offer actions the server is refusing.
              */
-            className="bg-background fixed inset-0 z-[100] flex items-center justify-center p-6"
+            className="bg-[var(--clay-base)] fixed inset-0 z-[100] flex items-center justify-center p-6"
         >
             {/*
               ⭐ THE WAY OUT, AT THE TOP. It navigates, it does not cancel — the import
@@ -81,13 +81,13 @@ export function ImportOverlay({ elapsedMs, projectId }: ImportOverlayProps) {
             */}
             <Link
                 href="/dashboard"
-                className="text-muted-foreground hover:text-foreground focus-visible:ring-ring bg-card/80 border-border/60 absolute top-3 left-3 inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium shadow-2xs backdrop-blur transition-colors focus-visible:ring-2 focus-visible:outline-none sm:top-4 sm:left-4"
+                className="text-muted-foreground hover:text-foreground bg-card border-[var(--clay-line)] absolute top-3 left-3 inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium shadow-[var(--clay-elev-1)] transition-colors focus-visible:outline-none sm:top-4 sm:left-4"
             >
                 <ArrowLeftIcon aria-hidden className="size-3.5" />
                 {t("workspace.importRun.backToProjects")}
             </Link>
 
-            <div className="bg-card border-border/60 w-full max-w-md rounded-2xl border p-8 text-center shadow-lg">
+            <div className="bg-card border-[var(--clay-line)] w-full max-w-md rounded-[var(--clay-r-2xl)] border p-8 text-center shadow-[var(--clay-float)]">
                 <LoaderIcon aria-hidden className="text-primary mx-auto size-8 animate-spin" />
 
                 <h1 className="font-display mt-5 text-lg font-semibold">Importing the project</h1>

@@ -234,7 +234,7 @@ export function PaymentsModal({
                             </a>
                         ) : null}
                         {sw.canToggle ? (
-                            <div className="border-border flex items-center gap-3 border-t pt-3" data-testid="payments-mode-switch">
+                            <div className="border-[var(--clay-line)] flex items-center gap-3 border-t pt-3" data-testid="payments-mode-switch">
                                 <div className="flex-1">
                                     <p className="font-medium">{t("engineV2.payments.liveSwitch")}</p>
                                     <p className="text-muted-foreground text-xs">{t(sw.on ? "engineV2.payments.switchOn" : "engineV2.payments.switchOff")}</p>
@@ -253,7 +253,7 @@ export function PaymentsModal({
                 <Callout testId="payments-preview-note">
                     <span>{t("engineV2.payments.previewNote")}</span>{" "}
                     <span className="inline-flex items-center gap-1 align-middle">
-                        <code className="bg-background/70 rounded px-1.5 py-0.5 font-mono text-xs">{TEST_CARD}</code>
+                        <code className="bg-[var(--clay-sunken)] rounded px-1.5 py-0.5 font-mono text-xs">{TEST_CARD}</code>
                         <CopyButton value={TEST_CARD.replace(/ /g, "")} size="sm" />
                     </span>
                 </Callout>

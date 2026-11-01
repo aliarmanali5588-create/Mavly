@@ -90,7 +90,7 @@ export function BackupsPanel({ projectId, env }: { projectId: string; env: DbEnv
     return (
         <div className="space-y-5 text-sm">
             {env === "live" ? (
-                <section className="bg-muted/40 space-y-1 rounded-md border p-3" data-testid="backup-schedule">
+                <section className="bg-[var(--clay-sunken)] space-y-1 rounded-md border p-3 shadow-[var(--clay-well-1)]" data-testid="backup-schedule">
                     <h3 className="font-medium">
                         {schedule.enabled ? t(schedule.frequency === "weekly" ? "engineV2.backups.scheduleWeekly" : "engineV2.backups.scheduleDaily", { kept }) : t("engineV2.backups.needsPlan")}
                     </h3>
@@ -109,7 +109,7 @@ export function BackupsPanel({ projectId, env }: { projectId: string; env: DbEnv
                 <p className="text-muted-foreground text-xs">{t("engineV2.backups.scheduleDevNote")}</p>
             )}
             {restoring ? (
-                <p role="status" className="bg-muted/40 flex items-center gap-2 rounded-md border p-3 text-xs">
+                <p role="status" className="bg-[var(--clay-sunken)] flex items-center gap-2 rounded-md border p-3 text-xs shadow-[var(--clay-well-1)]">
                     <LoaderIcon className="size-3.5 animate-spin" aria-hidden />
                     {t("engineV2.backups.restoring")}
                 </p>

@@ -80,8 +80,8 @@ export function MigrationsPanel({ projectId, env }: { projectId: string; env: Db
                     const text = item.tag ? sql[item.tag] : undefined;
                     const expanded = open === key;
                     return (
-                        <li key={key} className="border-border rounded-lg border">
-                            <button type="button" className="hover:bg-muted/60 flex w-full items-start gap-3 px-3 py-2 text-left" aria-expanded={expanded} onClick={() => setOpen(expanded ? null : key)}>
+                        <li key={key} className="border-[var(--clay-line)] rounded-lg border">
+                            <button type="button" className="hover:bg-[var(--clay-sunken)] flex w-full items-start gap-3 px-3 py-2 text-left" aria-expanded={expanded} onClick={() => setOpen(expanded ? null : key)}>
                                 <ChevronRightIcon className={`mt-0.5 size-4 shrink-0 transition-transform ${expanded ? "rotate-90" : ""}`} aria-hidden />
                                 <span className="text-muted-foreground mt-0.5 font-mono text-xs tabular-nums">{name?.number || "—"}</span>
                                 <span className="min-w-0 flex-1">
@@ -96,7 +96,7 @@ export function MigrationsPanel({ projectId, env }: { projectId: string; env: Db
                                 </span>
                             </button>
                             {expanded ? (
-                                <div className="border-border space-y-1 border-t px-3 py-2">
+                                <div className="border-[var(--clay-line)] space-y-1 border-t px-3 py-2">
                                     <p className="text-muted-foreground flex items-center gap-1.5 font-mono text-[11px]">
                                         <FileCodeIcon className="size-3.5" aria-hidden />
                                         {item.tag ? `drizzle/${item.tag}.sql` : item.hash}

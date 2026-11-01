@@ -170,7 +170,7 @@ function RunRow({ run }: { run: ProjectActivityRun }) {
                     ? t("engineV2.activity.cancelled")
                     : t("engineV2.activity.interrupted");
     return (
-        <li className="border-border flex flex-wrap items-center gap-2 rounded-lg border px-3 py-2 text-sm">
+        <li className="border-[var(--clay-line)] flex flex-wrap items-center gap-2 rounded-lg border px-3 py-2 text-sm">
             <StatusPill tone={TONE[run.outcome]}>{label}</StatusPill>
             <span className="text-muted-foreground text-xs">{new Date(run.startedAt).toLocaleString()}</span>
             <span className="text-muted-foreground min-w-0 flex-1 truncate text-xs">{run.model || "—"}</span>

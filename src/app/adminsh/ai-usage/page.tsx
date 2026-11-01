@@ -121,7 +121,7 @@ export default function AiUsageAdminPage() {
       {/* 1. Gateway Status & Period Bar */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-5 rounded-2xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)]">
         <div className="flex items-start sm:items-center gap-3.5">
-          <div className="w-10 h-10 rounded-xl bg-black text-white flex items-center justify-center shrink-0">
+          <div className="w-10 h-10 rounded-xl bg-black text-white flex items-center justify-center shrink-0 shadow-[var(--clay-elev-ink-1)]">
             <Cpu className="w-5 h-5" />
           </div>
           <div>
@@ -129,8 +129,8 @@ export default function AiUsageAdminPage() {
               <h2 className="text-sm font-semibold tracking-tight text-foreground">
                 AI Orchestration & Compute Telemetry
               </h2>
-              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200/60 font-mono">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-medium bg-success-subtle text-success-subtle-foreground border border-success/25 font-mono">
+                <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
                 Active Gateway: OpenRouter (DeepSeek V4.1)
               </span>
             </div>
@@ -142,7 +142,7 @@ export default function AiUsageAdminPage() {
 
         <div className="flex items-center gap-2.5 self-start md:self-auto">
           {/* Segmented Timeframe Switcher */}
-          <div className="flex items-center bg-[var(--clay-sunken)] p-0.5 rounded-lg border border-[var(--clay-line)]">
+          <div className="flex items-center bg-[var(--clay-sunken)] p-0.5 rounded-lg border border-[var(--clay-line)] shadow-[var(--clay-well-1)]">
             {["7D", "30D", "3M", "YTD"].map((t) => (
               <button
                 key={t}
@@ -153,7 +153,7 @@ export default function AiUsageAdminPage() {
                 }}
                 className={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${
                   timeRange === t
-                    ? "bg-card text-foreground shadow-xs font-semibold"
+                    ? "bg-card text-foreground shadow-[var(--clay-elev-1)] font-semibold"
                     : "text-muted-foreground hover:text-foreground"
                 }`}
               >
@@ -165,7 +165,7 @@ export default function AiUsageAdminPage() {
           <button
             type="button"
             onClick={() => handleRunPingTest("DeepSeek V4.1 Flash")}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-foreground bg-[var(--clay-sunken)] hover:bg-[var(--clay-sunken)] border border-[var(--clay-line)] rounded-lg transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-foreground bg-[var(--clay-sunken)] hover:bg-[var(--clay-sunken)] border border-[var(--clay-line)] rounded-lg transition-colors shadow-[var(--clay-well-1)]"
           >
             <Activity className="w-3.5 h-3.5 text-muted-foreground" />
             <span>Probe Gateway</span>
@@ -178,10 +178,10 @@ export default function AiUsageAdminPage() {
         <div className="p-4 rounded-xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)]">
           <div className="flex items-center justify-between text-xs text-muted-foreground font-medium">
             <span>Total Requests</span>
-            <Zap className="w-3.5 h-3.5 text-amber-500" />
+            <Zap className="w-3.5 h-3.5 text-warning" />
           </div>
           <h3 className="text-xl font-bold tracking-tight text-foreground font-mono mt-1">1,42,500</h3>
-          <div className="flex items-center gap-1 mt-1 text-[11px] text-emerald-600 font-medium">
+          <div className="flex items-center gap-1 mt-1 text-[11px] text-success font-medium">
             <ArrowUpRight className="w-3 h-3" />
             <span>+24.2% vs last {timeRange}</span>
           </div>
@@ -190,7 +190,7 @@ export default function AiUsageAdminPage() {
         <div className="p-4 rounded-xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)]">
           <div className="flex items-center justify-between text-xs text-muted-foreground font-medium">
             <span>Success Rate</span>
-            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+            <CheckCircle2 className="w-3.5 h-3.5 text-success" />
           </div>
           <h3 className="text-xl font-bold tracking-tight text-foreground font-mono mt-1">96.84%</h3>
           <p className="text-[11px] text-muted-foreground mt-1">1,38,000 successful runs</p>
@@ -199,9 +199,9 @@ export default function AiUsageAdminPage() {
         <div className="p-4 rounded-xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)]">
           <div className="flex items-center justify-between text-xs text-muted-foreground font-medium">
             <span>Error Rate</span>
-            <AlertTriangle className="w-3.5 h-3.5 text-rose-500" />
+            <AlertTriangle className="w-3.5 h-3.5 text-destructive" />
           </div>
-          <h3 className="text-xl font-bold tracking-tight text-rose-600 font-mono mt-1">3.16%</h3>
+          <h3 className="text-xl font-bold tracking-tight text-destructive font-mono mt-1">3.16%</h3>
           <p className="text-[11px] text-muted-foreground mt-1">4,500 timeouts / rate caps</p>
         </div>
 
@@ -248,7 +248,7 @@ export default function AiUsageAdminPage() {
             <div className="bg-black h-full w-[45%]" title="DeepSeek V4.1: 45%" />
             <div className="bg-foreground h-full w-[28%]" title="Claude 3.5 Sonnet: 28%" />
             <div className="bg-foreground h-full w-[18%]" title="Gemini 1.5 Pro: 18%" />
-            <div className="bg-emerald-600 h-full w-[9%]" title="GPT-4o: 9%" />
+            <div className="bg-success h-full w-[9%]" title="GPT-4o: 9%" />
           </div>
           <div className="flex flex-wrap items-center gap-4 text-xs pt-1 text-muted-foreground font-medium">
             <div className="flex items-center gap-1.5">
@@ -264,7 +264,7 @@ export default function AiUsageAdminPage() {
               <span>Gemini 1.5 Pro (18%)</span>
             </div>
             <div className="flex items-center gap-1.5">
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-600" />
+              <span className="w-2.5 h-2.5 rounded-full bg-success" />
               <span>GPT-4o (9%)</span>
             </div>
           </div>
@@ -277,8 +277,8 @@ export default function AiUsageAdminPage() {
               key={m.name}
               className={`p-3 rounded-xl border transition-all ${
                 selectedModel === m.name
-                  ? "bg-[var(--clay-sunken)]/80 border-black/20"
-                  : "bg-card border-[var(--clay-line)] hover:border-black/10"
+                  ? "bg-[var(--clay-sunken)] border-[var(--clay-line-strong)]"
+                  : "bg-card border-[var(--clay-line)] hover:border-[var(--clay-line-strong)]"
               }`}
               onClick={() => setSelectedModel(m.name)}
             >
@@ -290,7 +290,7 @@ export default function AiUsageAdminPage() {
                 <div className="flex items-center gap-4 text-xs font-mono text-muted-foreground">
                   <span>Tokens: <strong className="text-foreground">{m.tokens}</strong></span>
                   <span>Avg Latency: <strong className="text-foreground">{m.avgLatency}</strong></span>
-                  <span>Success: <strong className="text-emerald-700">{m.successRate}</strong></span>
+                  <span>Success: <strong className="text-success">{m.successRate}</strong></span>
                   <span className="font-bold text-foreground">{m.cost}</span>
                 </div>
               </div>
@@ -310,7 +310,7 @@ export default function AiUsageAdminPage() {
               Real-time latency percentiles (p50 / p95) and token split ratio
             </p>
           </div>
-          <span className="text-xs font-mono text-muted-foreground bg-[var(--clay-sunken)] px-2.5 py-1 rounded-md border border-[var(--clay-line)]">
+          <span className="text-xs font-mono text-muted-foreground bg-[var(--clay-sunken)] px-2.5 py-1 rounded-md border border-[var(--clay-line)] shadow-[var(--clay-well-1)]">
             Server-side OpenRouter Proxy
           </span>
         </div>
@@ -330,9 +330,9 @@ export default function AiUsageAdminPage() {
                 <th className="pb-3 text-right">Action</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-black/[0.04]">
+            <tbody className="divide-y divide-[var(--clay-line)]">
               {modelTableData.map((row) => (
-                <tr key={row.model} className="hover:bg-[var(--clay-sunken)]/70 transition-colors">
+                <tr key={row.model} className="hover:bg-[var(--clay-sunken)] transition-colors">
                   <td className="py-3.5">
                     <p className="font-semibold text-foreground">{row.model}</p>
                     <p className="text-[11px] text-muted-foreground">{row.provider} · {row.tier}</p>
@@ -353,7 +353,7 @@ export default function AiUsageAdminPage() {
                     {row.p50} / {row.p95}
                   </td>
                   <td className="py-3.5 text-center">
-                    <span className="inline-flex items-center gap-1 font-mono font-semibold text-emerald-700">
+                    <span className="inline-flex items-center gap-1 font-mono font-semibold text-success">
                       {row.successRate}%
                     </span>
                   </td>
@@ -378,8 +378,8 @@ export default function AiUsageAdminPage() {
 
       {/* Upstream Health Probe Modal */}
       {isTestPingOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs animate-in fade-in">
-          <div className="w-full max-w-md bg-card rounded-2xl border border-black/[0.1] shadow-2xl p-6 space-y-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[var(--clay-scrim)] backdrop-blur-[3px] animate-in fade-in">
+          <div className="w-full max-w-md bg-card rounded-2xl border border-[var(--clay-line)] shadow-[var(--clay-float)] p-6 space-y-4">
             <div className="flex items-center justify-between pb-3 border-b border-[var(--clay-line)]">
               <div className="flex items-center gap-2">
                 <Terminal className="w-4 h-4 text-foreground" />
@@ -394,17 +394,17 @@ export default function AiUsageAdminPage() {
               </button>
             </div>
 
-            <div className="p-4 rounded-xl bg-black text-white/80 font-mono text-xs space-y-2">
+            <div className="p-4 rounded-xl bg-black text-white/80 font-mono text-xs space-y-2 shadow-[var(--clay-elev-ink-1)]">
               <p className="text-muted-foreground">
                 &gt; Pinging OpenRouter endpoint: <span className="text-white">https://openrouter.ai/api/v1</span>
               </p>
               {pingStatus === "running" ? (
-                <div className="flex items-center gap-2 text-amber-400 py-2">
+                <div className="flex items-center gap-2 text-warning py-2">
                   <Activity className="w-4 h-4 animate-spin" />
                   <span>Measuring SSL handshake and token stream TTL...</span>
                 </div>
               ) : pingResult ? (
-                <div className="space-y-1.5 text-emerald-400 py-1">
+                <div className="space-y-1.5 text-success py-1">
                   <p>✔ HTTP 200 OK — Ready</p>
                   <p className="text-muted-foreground">Model: {pingResult.provider}</p>
                   <p className="text-muted-foreground">Round-trip Latency: {pingResult.latency}ms</p>

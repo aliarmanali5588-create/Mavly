@@ -29,7 +29,7 @@ export function DomainChoice({ onChoose }: { onChoose: (path: "buy" | "connect")
                     type="button"
                     data-testid={`domain-choice-${path}`}
                     onClick={() => onChoose(path)}
-                    className="group border-border hover:border-primary/60 hover:bg-primary-subtle/40 focus-visible:ring-ring flex flex-col gap-3 rounded-xl border p-4 text-left transition-colors focus-visible:ring-2 focus-visible:outline-none"
+                    className="group border-[var(--clay-line)] hover:border-primary/60 hover:bg-primary-subtle/40 focus-visible:ring-ring flex flex-col gap-3 rounded-xl border p-4 text-left transition-colors focus-visible:ring-2 focus-visible:outline-none"
                 >
                     <span aria-hidden className="bg-primary-subtle text-primary grid size-10 place-items-center rounded-lg">
                         <Icon className="size-5" />
@@ -40,7 +40,7 @@ export function DomainChoice({ onChoose }: { onChoose: (path: "buy" | "connect")
                     </span>
                     <span className="text-primary flex items-center gap-1 text-xs font-medium">
                         {t("workspace.domain.choice.start")}
-                        <ChevronRightIcon className="size-3.5 transition-transform group-hover:translate-x-0.5" aria-hidden />
+                        <ChevronRightIcon className="size-3.5 transition-transform" aria-hidden />
                     </span>
                 </button>
             ))}
@@ -53,7 +53,7 @@ export function ApexPreview({ hostname }: { hostname: string }) {
     const t = useT();
     if (!isApexHostname(hostname)) return null;
     return (
-        <p className="bg-muted/40 flex items-start gap-1.5 rounded-lg p-2.5 text-xs" data-testid="domain-apex-preview">
+        <p className="bg-[var(--clay-sunken)] flex items-start gap-1.5 rounded-lg p-2.5 text-xs" data-testid="domain-apex-preview">
             <InfoIcon className="text-primary mt-px size-3.5 shrink-0" aria-hidden />
             <span>{t("workspace.domain.connect.apexPreview", { apex: hostname, www: servedHostname(hostname) })}</span>
         </p>
@@ -71,7 +71,7 @@ export function ApexRedirectNote({ hostname, hostnames }: { hostname: string; ho
     const apex = redirect?.hostname ?? apexOf(hostname);
     if (!apex) return null;
     return (
-        <p className="bg-muted/40 flex items-start gap-1.5 rounded-lg p-2.5 text-xs" data-testid="domain-apex-note">
+        <p className="bg-[var(--clay-sunken)] flex items-start gap-1.5 rounded-lg p-2.5 text-xs" data-testid="domain-apex-note">
             <InfoIcon className="text-primary mt-px size-3.5 shrink-0" aria-hidden />
             <span>{t(redirect ? "workspace.domain.connect.apexRedirectRecords" : "workspace.domain.connect.apexRedirect", { apex, www: hostname })}</span>
         </p>
@@ -105,7 +105,7 @@ const TIPS = ["tipProvider", "tipConflicts", "tipName", "tipProxy", "tipWait"] a
 export function DomainTroubleshooting() {
     const t = useT();
     return (
-        <details className="border-border group rounded-lg border" data-testid="domain-troubleshooting">
+        <details className="border-[var(--clay-line)] group rounded-lg border" data-testid="domain-troubleshooting">
             <summary className="flex cursor-pointer list-none items-center gap-2 px-3 py-2 text-xs font-medium">
                 <LifeBuoyIcon className="text-muted-foreground size-3.5" aria-hidden />
                 <span className="flex-1">{t("workspace.domain.connect.troubleTitle")}</span>
@@ -131,7 +131,7 @@ export function DomainPrefixField({ domain, value, onChange }: { domain: string;
     const chip = (active: boolean) =>
         cn(
             "rounded-md border px-2.5 py-1 font-mono text-xs transition-colors focus-visible:ring-ring focus-visible:ring-2 focus-visible:outline-none",
-            active ? "border-primary bg-primary/10 text-primary font-medium" : "border-border hover:bg-accent",
+            active ? "border-primary bg-primary/10 text-primary font-medium" : "border-[var(--clay-line)] hover:bg-accent",
         );
     return (
         <fieldset className="space-y-2" data-testid="domain-prefix">
@@ -196,12 +196,12 @@ export function DomainPrefixField({ domain, value, onChange }: { domain: string;
 export function DomainHostnames({ site, hostnames }: { site: string; hostnames: VcaasDomainHostname[] }) {
     const t = useT();
     return (
-        <ul className="border-border mt-3 space-y-1.5 border-t pt-3 text-xs" data-testid="domain-hostnames">
+        <ul className="border-[var(--clay-line)] mt-3 space-y-1.5 border-t pt-3 text-xs" data-testid="domain-hostnames">
             {hostnames.map(h => {
                 const live = h.status === "active" && h.sslStatus === "active";
                 return (
                     <li key={h.hostname} className="flex flex-wrap items-center gap-2">
-                        <span aria-hidden className={cn("size-1.5 shrink-0 rounded-full", live ? "bg-emerald-500" : "bg-warning animate-pulse")} />
+                        <span aria-hidden className={cn("size-1.5 shrink-0 rounded-full", live ? "bg-success" : "bg-warning animate-pulse")} />
                         <code className="font-mono">{h.hostname}</code>
                         <span className="text-muted-foreground">
                             {h.role === "alias" ? t("workspace.domain.hostRedirect", { site }) : t("workspace.domain.hostSite")}

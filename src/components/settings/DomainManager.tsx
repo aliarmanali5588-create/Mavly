@@ -14,7 +14,7 @@ import type { AccountDomain, DomainDnsRecord, DomainDnsRecordInput, DomainForwar
 const TYPES: DomainDnsRecordInput["type"][] = ["A", "AAAA", "CNAME", "ALIAS", "MX", "TXT", "SRV", "NS"];
 const EMPTY: DomainDnsRecordInput = { type: "A", host: "", answer: "", ttl: 300 };
 const FORWARD_TYPES: DomainForward["type"][] = ["redirect", "302", "masked"];
-const selectClass = "border-input bg-background h-8 rounded-md border px-2 text-xs";
+const selectClass = "border-[var(--clay-line)] bg-[var(--clay-sunken)] h-8 rounded-lg border px-2 text-xs shadow-[var(--clay-well-1)]";
 
 /**
  * One domain's management panel on Settings → Domains (plan 22 §3.4–§3.6), everything the VCaaS API
@@ -95,7 +95,7 @@ export function DomainManager({ domain, onChanged }: { domain: AccountDomain; on
     const needsPriority = draft.type === "MX" || draft.type === "SRV";
 
     return (
-        <div className="bg-muted/30 w-full space-y-6 rounded-lg p-4" data-testid={`domain-manager-${domain.domain}`}>
+        <div className="bg-[var(--clay-sunken)] w-full space-y-6 rounded-lg p-4" data-testid={`domain-manager-${domain.domain}`}>
             <section className="space-y-2">
                 <h3 className="text-sm font-medium">{t("engineV2.domains.dnsTitle")}</h3>
                 <table className="w-full text-left text-xs">
@@ -110,7 +110,7 @@ export function DomainManager({ domain, onChanged }: { domain: AccountDomain; on
                     </thead>
                     <tbody>
                         {(records ?? []).map(record => (
-                            <tr key={record.id} className="border-border border-t">
+                            <tr key={record.id} className="border-[var(--clay-line)] border-t">
                                 <td className="py-1.5 pr-2 font-mono">{record.type}</td>
                                 <td className="py-1.5 pr-2 font-mono">{record.host || "@"}</td>
                                 <td className="py-1.5 pr-2 font-mono break-all">
@@ -245,7 +245,7 @@ export function DomainManager({ domain, onChanged }: { domain: AccountDomain; on
                     </div>
                     {authCode ? (
                         <div className="flex items-center gap-2">
-                            <code className="bg-background rounded border px-2 py-1 text-sm" data-testid="domain-auth-code">
+                            <code className="bg-[var(--clay-sunken)] rounded-md border border-[var(--clay-line)] px-2 py-1 text-sm shadow-[var(--clay-well-1)]" data-testid="domain-auth-code">
                                 {authCode}
                             </code>
                             <Button size="sm" variant="ghost" aria-label={t("engineV2.domains.copy")} onClick={() => void navigator.clipboard.writeText(authCode)}>

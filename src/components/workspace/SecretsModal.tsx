@@ -179,7 +179,7 @@ export function SecretsModal({
                 description={t("workspace.secrets.description")}
             >
                 <div className="space-y-4">
-                    <p className="text-muted-foreground border-border rounded-lg border p-3 text-xs leading-relaxed">
+                    <p className="text-muted-foreground border-[var(--clay-line)] rounded-lg border p-3 text-xs leading-relaxed">
                         {t("workspace.secrets.notInjected")}
                     </p>
 
@@ -201,7 +201,7 @@ export function SecretsModal({
                                 {secrets.map(secret => (
                                     <li
                                         key={secret._id}
-                                        className="border-border flex items-center gap-2 rounded-lg border p-2"
+                                        className="border-[var(--clay-line)] bg-card flex items-center gap-2 rounded-lg border p-2 shadow-[var(--clay-elev-1)]"
                                     >
                                         <code className="min-w-0 flex-1 truncate font-mono text-xs font-medium">
                                             {secret.secretName}
@@ -233,14 +233,14 @@ export function SecretsModal({
                     </section>
 
                     {/* ── Add ─────────────────────────────────────────────── */}
-                    <section className="border-border/60 border-t pt-4">
+                    <section className="border-[var(--clay-line)] border-t pt-4">
                         <div className="bg-muted mb-3 flex w-fit gap-0.5 rounded-lg p-0.5">
                             <Button
                                 variant="ghost"
                                 size="sm"
                                 onClick={() => setMode("single")}
                                 aria-pressed={mode === "single"}
-                                className={cn("h-7 px-2.5 text-xs", mode === "single" && "bg-card shadow-2xs")}
+                                className={cn("h-7 px-2.5 text-xs", mode === "single" && "bg-card shadow-[var(--clay-elev-1)]")}
                             >
                                 {t("workspace.secrets.addOne")}
                             </Button>
@@ -249,7 +249,7 @@ export function SecretsModal({
                                 size="sm"
                                 onClick={() => setMode("bulk")}
                                 aria-pressed={mode === "bulk"}
-                                className={cn("h-7 px-2.5 text-xs", mode === "bulk" && "bg-card shadow-2xs")}
+                                className={cn("h-7 px-2.5 text-xs", mode === "bulk" && "bg-card shadow-[var(--clay-elev-1)]")}
                             >
                                 {t("workspace.secrets.pasteEnv")}
                             </Button>

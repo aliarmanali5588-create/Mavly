@@ -33,7 +33,7 @@ export function BuildingLoader({
       data-motion={motionActive ? "active" : "settled"}
       data-motion-paused={motionPaused || undefined}
       aria-busy={motionActive}
-      className="preview-loader absolute inset-0 overflow-y-auto bg-background px-4 py-5 sm:px-6"
+      className="preview-loader absolute inset-0 overflow-y-auto bg-[var(--clay-base)] px-4 py-5 sm:px-6"
     >
       <div className="preview-loader-content">
         <p className="preview-loader-eyebrow">THE LIVING CANVAS</p>

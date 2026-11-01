@@ -72,12 +72,12 @@ export function V2ProjectSettings({ project, onChanged }: { project: VcaasProjec
                 </Button>
             </div>
 
-            <section className="border-border space-y-2 border-t pt-5">
+            <section className="border-[var(--clay-line)] space-y-2 border-t pt-5">
                 <SectionTitle icon={GlobeIcon} title={t("engineV2.domains.liveAddress")} description={t("engineV2.domains.liveAddressHint")} />
                 <p className="font-mono text-xs">{getPublishedHost(project, project.projectId)}</p>
             </section>
 
-            <section className="border-border flex gap-2 border-t pt-4 text-xs">
+            <section className="border-[var(--clay-line)] flex gap-2 border-t pt-4 text-xs">
                 <InfoIcon className="text-muted-foreground mt-0.5 size-4 shrink-0" aria-hidden />
                 <p className="text-muted-foreground leading-relaxed">{t("engineV2.projectSettings.unavailable")}</p>
             </section>

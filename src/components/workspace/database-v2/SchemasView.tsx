@@ -48,8 +48,8 @@ export function SchemasView({ tables, usersHaveRows, onOpenTable }: { tables: Sq
             {shown.map(({ table, columns }) => {
                 const incoming = tables.flatMap(other => other.foreignKeys.filter(fk => fk.table === table.name).map(fk => ({ from: other.name, ...fk })));
                 return (
-                    <section key={table.name} id={anchor(table.name)} className="border-border scroll-mt-2 rounded-lg border" aria-label={table.name}>
-                        <header className="border-border bg-muted/40 flex flex-wrap items-center gap-x-2 gap-y-1 border-b px-3 py-2">
+                    <section key={table.name} id={anchor(table.name)} className="border-[var(--clay-line)] scroll-mt-2 rounded-lg border" aria-label={table.name}>
+                        <header className="border-[var(--clay-line)] bg-[var(--clay-sunken)] flex flex-wrap items-center gap-x-2 gap-y-1 border-b px-3 py-2">
                             <TableIcon className="text-muted-foreground size-3.5 shrink-0" aria-hidden />
                             <button type="button" className="min-w-0 truncate font-mono text-sm font-semibold hover:underline" onClick={() => onOpenTable(table.name)}>
                                 {table.name}
@@ -60,14 +60,14 @@ export function SchemasView({ tables, usersHaveRows, onOpenTable }: { tables: Sq
                                 <span className="text-muted-foreground ml-auto text-xs tabular-nums">{t("engineV2.database.rowsTotal", { count: table.rowCount })}</span>
                             ) : null}
                         </header>
-                        <ul className="divide-border divide-y">
+                        <ul className="divide-[var(--clay-line)] divide-y">
                             {columns.map(column => {
                                 const pk = table.primaryKey?.includes(column.name) || (!table.primaryKey?.length && column.name === "id" && column.unique);
                                 const fks = table.foreignKeys.filter(fk => fk.column === column.name);
                                 return (
                                     <li key={column.name} className="grid gap-x-3 gap-y-1 px-3 py-1.5 text-xs sm:grid-cols-[minmax(9rem,1fr)_8rem_2fr]">
                                         <span className="flex min-w-0 items-center gap-1.5 font-mono font-medium break-all">
-                                            {pk ? <KeyRoundIcon className="size-3 shrink-0 text-amber-600" aria-label="PRIMARY KEY" /> : null}
+                                            {pk ? <KeyRoundIcon className="size-3 shrink-0 text-warning" aria-label="PRIMARY KEY" /> : null}
                                             {column.name}
                                             <span className="text-muted-foreground font-normal sm:hidden">· {column.sqlType}</span>
                                         </span>
@@ -93,7 +93,7 @@ export function SchemasView({ tables, usersHaveRows, onOpenTable }: { tables: Sq
                             })}
                         </ul>
                         {incoming.length ? (
-                            <p className="border-border text-muted-foreground flex flex-wrap items-center gap-1 border-t px-3 py-1.5 text-xs">
+                            <p className="border-[var(--clay-line)] text-muted-foreground flex flex-wrap items-center gap-1 border-t px-3 py-1.5 text-xs">
                                 {t("engineV2.database.schemaReferencedBy")}
                                 {incoming.map(fk => (
                                     <button key={`${fk.from}.${fk.column}`} type="button" onClick={() => jump(fk.from)} className="text-primary font-mono hover:underline">

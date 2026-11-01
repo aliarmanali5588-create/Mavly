@@ -117,7 +117,7 @@ export function PreviewPanel({ previewUrl, onRefresh, loading, mobilePreview = f
         {/* Cached snapshot indicator: shown when the dev server is not active and
             we're displaying the cachedDevelopmentUrl static snapshot */}
         {previewUrl && cached && (
-          <div className={`absolute ${showStalePreview ? "top-12" : "top-2"} left-1/2 -translate-x-1/2 z-20 flex items-center gap-1.5 bg-amber-50 border border-amber-200 text-amber-700 text-[11px] font-medium px-2.5 py-1 rounded-full shadow-sm`}>
+          <div className={`absolute ${showStalePreview ? "top-12" : "top-2"} left-1/2 -translate-x-1/2 z-20 flex items-center gap-1.5 bg-warning-subtle border border-warning/25 text-warning-subtle-foreground text-[11px] font-medium px-2.5 py-1 rounded-full shadow-[var(--clay-elev-1)]`}>
             <Archive className="w-3 h-3" />
             <span>Cached snapshot · server sleeping</span>
           </div>
@@ -125,7 +125,7 @@ export function PreviewPanel({ previewUrl, onRefresh, loading, mobilePreview = f
         {showStalePreview && (
           <div
             role="status"
-            className="absolute top-2 left-1/2 -translate-x-1/2 z-20 flex max-w-[92%] items-center gap-1.5 bg-amber-50 border border-amber-200 text-amber-800 text-[11px] font-medium px-2.5 py-1 rounded-full shadow-sm"
+            className="absolute top-2 left-1/2 -translate-x-1/2 z-20 flex max-w-[92%] items-center gap-1.5 bg-warning-subtle border border-warning/25 text-warning-subtle-foreground text-[11px] font-medium px-2.5 py-1 rounded-full shadow-[var(--clay-elev-1)]"
           >
             <AlertTriangle className="w-3 h-3 shrink-0" />
             <span className="truncate">
@@ -171,7 +171,7 @@ export function PreviewPanel({ previewUrl, onRefresh, loading, mobilePreview = f
           )
         ) : (
           <div className={`preview-panel-enter bg-card transition-all duration-300 relative ${
-            mobilePreview ? "w-[375px] h-[667px] rounded-[2rem] border-[8px] border-white/10 overflow-hidden shadow-2xl" : "w-full h-full"
+            mobilePreview ? "w-[375px] h-[667px] rounded-[2rem] border-[8px] border-white/10 overflow-hidden shadow-[var(--clay-float)]" : "w-full h-full"
           }`}>
             <div className="absolute inset-0">
               <iframe

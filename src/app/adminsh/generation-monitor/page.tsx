@@ -77,29 +77,29 @@ export default function GenerationMonitorAdminPage() {
     switch (status) {
       case "Completed":
         return (
-          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200/60 font-mono">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-medium bg-success-subtle text-success-subtle-foreground border border-success/25 font-mono">
+            <span className="w-1.5 h-1.5 rounded-full bg-success" />
             Completed
           </span>
         );
       case "Running":
         return (
-          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-medium bg-[var(--clay-sunken)] text-foreground border border-[var(--clay-line)]/60 font-mono">
-            <span className="w-1.5 h-1.5 rounded-full bg-[var(--clay-sunken)]0 animate-pulse" />
+          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-medium bg-[var(--clay-sunken)] text-foreground border border-[var(--clay-line)] font-mono">
+            <span className="w-1.5 h-1.5 rounded-full bg-warning animate-pulse" />
             Running
           </span>
         );
       case "Failed":
         return (
-          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-medium bg-rose-50 text-rose-700 border border-rose-200/60 font-mono">
-            <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
+          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-medium bg-destructive-subtle text-destructive-subtle-foreground border border-destructive/25 font-mono">
+            <span className="w-1.5 h-1.5 rounded-full bg-destructive" />
             Failed
           </span>
         );
       case "Queued":
         return (
-          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-medium bg-amber-50 text-amber-700 border border-amber-200/60 font-mono">
-            <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-medium bg-warning-subtle text-warning-subtle-foreground border border-warning/25 font-mono">
+            <span className="w-1.5 h-1.5 rounded-full bg-warning" />
             Queued
           </span>
         );
@@ -111,7 +111,7 @@ export default function GenerationMonitorAdminPage() {
       {/* 1. Worker Telemetry & Pipeline Status */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-5 rounded-2xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)]">
         <div className="flex items-start sm:items-center gap-3.5">
-          <div className="w-10 h-10 rounded-xl bg-black text-white flex items-center justify-center shrink-0">
+          <div className="w-10 h-10 rounded-xl bg-black text-white flex items-center justify-center shrink-0 shadow-[var(--clay-elev-ink-1)]">
             <Terminal className="w-5 h-5" />
           </div>
           <div>
@@ -119,8 +119,8 @@ export default function GenerationMonitorAdminPage() {
               <h2 className="text-sm font-semibold tracking-tight text-foreground">
                 AI Generation & Build Queue Engine
               </h2>
-              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200/60 font-mono">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-medium bg-success-subtle text-success-subtle-foreground border border-success/25 font-mono">
+                <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
                 Worker Pool: 4/4 Available
               </span>
             </div>
@@ -135,15 +135,15 @@ export default function GenerationMonitorAdminPage() {
             <span className="text-muted-foreground block text-[10px] uppercase font-semibold">Active Jobs</span>
             <span className="font-bold text-foreground">6 Running</span>
           </div>
-          <div className="h-6 w-px bg-black/[0.08]" />
+          <div className="h-6 w-px bg-[var(--clay-line)]" />
           <div>
             <span className="text-muted-foreground block text-[10px] uppercase font-semibold">Queue Depth</span>
-            <span className="font-bold text-amber-700">14 in Buffer</span>
+            <span className="font-bold text-warning-subtle-foreground">14 in Buffer</span>
           </div>
-          <div className="h-6 w-px bg-black/[0.08]" />
+          <div className="h-6 w-px bg-[var(--clay-line)]" />
           <div>
             <span className="text-muted-foreground block text-[10px] uppercase font-semibold">Avg Latency</span>
-            <span className="font-bold text-emerald-700">12.4s</span>
+            <span className="font-bold text-success">12.4s</span>
           </div>
         </div>
       </div>
@@ -152,7 +152,7 @@ export default function GenerationMonitorAdminPage() {
       <div className="bg-card rounded-2xl p-5 sm:p-6 border border-[var(--clay-line)] shadow-[var(--clay-elev-1)] space-y-4">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pb-3 border-b border-[var(--clay-line)]">
           {/* Segmented Filter Buttons */}
-          <div className="flex flex-wrap items-center gap-1 bg-[var(--clay-sunken)] p-0.5 rounded-lg border border-[var(--clay-line)] text-xs">
+          <div className="flex flex-wrap items-center gap-1 bg-[var(--clay-sunken)] p-0.5 rounded-lg border border-[var(--clay-line)] text-xs shadow-[var(--clay-well-1)]">
             {["All", "Running", "Queued", "Completed", "Failed"].map((st) => (
               <button
                 key={st}
@@ -160,7 +160,7 @@ export default function GenerationMonitorAdminPage() {
                 onClick={() => setStatusFilter(st)}
                 className={`px-3 py-1 rounded-md text-xs transition-all ${
                   statusFilter === st
-                    ? "bg-card text-foreground shadow-xs font-semibold"
+                    ? "bg-card text-foreground shadow-[var(--clay-elev-1)] font-semibold"
                     : "text-muted-foreground hover:text-foreground font-medium"
                 }`}
               >
@@ -177,7 +177,7 @@ export default function GenerationMonitorAdminPage() {
               placeholder="Filter by Job ID, project, user..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full h-8 pl-8 pr-3 text-xs rounded-lg bg-[var(--clay-sunken)] border border-[var(--clay-line)] text-foreground placeholder:text-muted-foreground focus:bg-card focus:outline-none focus:ring-1 focus:ring-black"
+              className="w-full h-8 pl-8 pr-3 text-xs rounded-lg bg-[var(--clay-sunken)] border border-[var(--clay-line)] text-foreground placeholder:text-muted-foreground focus:bg-card focus:outline-none focus:ring-1 focus:ring-black shadow-[var(--clay-well-1)]"
             />
           </div>
         </div>
@@ -197,10 +197,10 @@ export default function GenerationMonitorAdminPage() {
                 <th className="pb-3 text-right">Job Controls</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-black/[0.04]">
+            <tbody className="divide-y divide-[var(--clay-line)]">
               {filtered.length > 0 ? (
                 filtered.map((job) => (
-                  <tr key={job.id} className="hover:bg-[var(--clay-sunken)]/70 transition-colors">
+                  <tr key={job.id} className="hover:bg-[var(--clay-sunken)] transition-colors">
                     <td className="py-3.5">
                       <div className="flex items-center gap-1.5 font-mono">
                         <span className="font-semibold text-foreground">{job.id}</span>
@@ -253,7 +253,7 @@ export default function GenerationMonitorAdminPage() {
                           <button
                             type="button"
                             onClick={() => handleCancelJob(job)}
-                            className="px-2 py-1 text-[11px] font-medium text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200/60 rounded-md transition-colors"
+                            className="px-2 py-1 text-[11px] font-medium text-destructive-subtle-foreground bg-destructive-subtle hover:bg-destructive-subtle border border-destructive/25 rounded-md transition-colors"
                           >
                             Cancel
                           </button>
@@ -285,8 +285,8 @@ export default function GenerationMonitorAdminPage() {
 
       {/* Enterprise Job Inspector Drawer */}
       {selectedJob && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs animate-in fade-in">
-          <div className="w-full max-w-xl bg-card rounded-2xl border border-black/[0.1] shadow-2xl p-6 space-y-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[var(--clay-scrim)] backdrop-blur-[3px] animate-in fade-in">
+          <div className="w-full max-w-xl bg-card rounded-2xl border border-[var(--clay-line)] shadow-[var(--clay-float)] p-6 space-y-4">
             <div className="flex items-center justify-between pb-3 border-b border-[var(--clay-line)]">
               <div className="flex items-center gap-2">
                 <Terminal className="w-4 h-4 text-foreground" />
@@ -305,12 +305,12 @@ export default function GenerationMonitorAdminPage() {
             </div>
 
             {/* Segmented Inspector Tabs */}
-            <div className="flex items-center gap-1 bg-[var(--clay-sunken)] p-0.5 rounded-lg border border-[var(--clay-line)] text-xs">
+            <div className="flex items-center gap-1 bg-[var(--clay-sunken)] p-0.5 rounded-lg border border-[var(--clay-line)] text-xs shadow-[var(--clay-well-1)]">
               <button
                 type="button"
                 onClick={() => setInspectorTab("overview")}
                 className={`flex-1 py-1 text-center rounded-md font-medium transition-all ${
-                  inspectorTab === "overview" ? "bg-card text-foreground shadow-xs font-semibold" : "text-muted-foreground"
+                  inspectorTab === "overview" ? "bg-card text-foreground shadow-[var(--clay-elev-1)] font-semibold" : "text-muted-foreground"
                 }`}
               >
                 Job Metadata
@@ -319,7 +319,7 @@ export default function GenerationMonitorAdminPage() {
                 type="button"
                 onClick={() => setInspectorTab("prompt")}
                 className={`flex-1 py-1 text-center rounded-md font-medium transition-all ${
-                  inspectorTab === "prompt" ? "bg-card text-foreground shadow-xs font-semibold" : "text-muted-foreground"
+                  inspectorTab === "prompt" ? "bg-card text-foreground shadow-[var(--clay-elev-1)] font-semibold" : "text-muted-foreground"
                 }`}
               >
                 User Prompt Input
@@ -328,7 +328,7 @@ export default function GenerationMonitorAdminPage() {
                 type="button"
                 onClick={() => setInspectorTab("logs")}
                 className={`flex-1 py-1 text-center rounded-md font-medium transition-all ${
-                  inspectorTab === "logs" ? "bg-card text-foreground shadow-xs font-semibold" : "text-muted-foreground"
+                  inspectorTab === "logs" ? "bg-card text-foreground shadow-[var(--clay-elev-1)] font-semibold" : "text-muted-foreground"
                 }`}
               >
                 Console & Errors
@@ -338,7 +338,7 @@ export default function GenerationMonitorAdminPage() {
             {/* Tab Contents */}
             {inspectorTab === "overview" && (
               <div className="space-y-2.5 text-xs">
-                <div className="grid grid-cols-2 gap-2 bg-[var(--clay-sunken)] p-3 rounded-xl border border-[var(--clay-line)]">
+                <div className="grid grid-cols-2 gap-2 bg-[var(--clay-sunken)] p-3 rounded-xl border border-[var(--clay-line)] shadow-[var(--clay-well-1)]">
                   <div>
                     <span className="text-muted-foreground block text-[10px] uppercase font-bold">Project Name</span>
                     <span className="font-semibold text-foreground">{selectedJob.project}</span>
@@ -372,7 +372,7 @@ export default function GenerationMonitorAdminPage() {
                 <span className="text-muted-foreground text-[10px] uppercase font-bold block">
                   Natural Language Prompt Context
                 </span>
-                <div className="p-3 bg-black text-white/80 font-mono text-[11px] rounded-xl overflow-x-auto leading-relaxed border border-black/10">
+                <div className="p-3 bg-black text-white/80 font-mono text-[11px] rounded-xl overflow-x-auto leading-relaxed border border-[var(--clay-line-strong)] shadow-[var(--clay-elev-ink-1)]">
                   {selectedJob.promptSnippet || "Create modern landing page with pricing calculator and dark mode toggle."}
                 </div>
               </div>
@@ -384,14 +384,14 @@ export default function GenerationMonitorAdminPage() {
                   Diagnostic Log Stream
                 </span>
                 {selectedJob.errorLog ? (
-                  <div className="p-3 bg-rose-950/20 border border-rose-300 text-rose-800 font-mono text-[11px] rounded-xl space-y-1">
+                  <div className="p-3 bg-destructive-subtle border border-destructive/40 text-destructive-subtle-foreground font-mono text-[11px] rounded-xl space-y-1 shadow-[var(--clay-well-1)]">
                     <p className="font-bold flex items-center gap-1">
                       <AlertCircle className="w-3.5 h-3.5" /> Error Log Output:
                     </p>
                     <p className="break-all">{selectedJob.errorLog}</p>
                   </div>
                 ) : (
-                  <div className="p-3 bg-black text-emerald-400 font-mono text-[11px] rounded-xl space-y-1">
+                  <div className="p-3 bg-[var(--clay-sunken-deep)] text-success font-mono text-[11px] rounded-xl space-y-1 border border-[var(--clay-line)] shadow-[var(--clay-well-1)]">
                     <p>&gt; [AST Engine] Parsed 14 React components successfully.</p>
                     <p>&gt; [Bundler] Static preview.html compiled (184 KB).</p>
                     <p>&gt; [Status] Pipeline exit code 0 — Completed.</p>
@@ -405,7 +405,7 @@ export default function GenerationMonitorAdminPage() {
                 <button
                   type="button"
                   onClick={() => handleRetryJob(selectedJob)}
-                  className="px-3 py-1.5 bg-black text-white text-xs font-semibold rounded-lg flex items-center gap-1.5"
+                  className="px-3 py-1.5 bg-black text-white text-xs font-semibold rounded-lg flex items-center gap-1.5 shadow-[var(--clay-elev-ink-1)]"
                 >
                   <RotateCcw className="w-3 h-3" />
                   <span>Re-run Job</span>

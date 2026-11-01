@@ -18,7 +18,7 @@ export function TransactionsTable() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-[var(--clay-line)]">
         <div>
           <div className="flex items-center gap-2">
-            <div className="p-1.5 rounded-lg bg-[var(--clay-sunken)] text-muted-foreground border border-[var(--clay-line)]">
+            <div className="p-1.5 rounded-lg bg-[var(--clay-sunken)] text-muted-foreground border border-[var(--clay-line)] shadow-[var(--clay-well-1)]">
               <CreditCard className="w-4 h-4" />
             </div>
             <h2 className="text-base font-bold text-foreground">Recent Billing Transactions</h2>
@@ -46,7 +46,7 @@ export function TransactionsTable() {
             disabled
             placeholder="Billing search unavailable"
             aria-label="Billing search unavailable"
-            className="w-full h-8 pl-8 pr-3 text-xs rounded-xl bg-[var(--clay-sunken)] border border-[var(--clay-line)] text-muted-foreground placeholder:text-muted-foreground cursor-not-allowed"
+            className="w-full h-8 pl-8 pr-3 text-xs rounded-xl bg-[var(--clay-sunken)] border border-[var(--clay-line)] text-muted-foreground placeholder:text-muted-foreground cursor-not-allowed shadow-[var(--clay-well-1)]"
           />
         </div>
 
@@ -62,10 +62,10 @@ export function TransactionsTable() {
       </div>
 
       {/* ── Table ── */}
-      <div className="overflow-x-auto rounded-xl border border-[var(--clay-line)]">
+      <div className="overflow-x-auto rounded-xl border border-[var(--clay-line)] bg-card shadow-[var(--clay-elev-1)]">
         <table className="w-full text-left border-collapse text-xs">
           <thead>
-            <tr className="bg-[var(--clay-sunken)]/60 border-b border-[var(--clay-line)] text-muted-foreground font-bold uppercase tracking-wider text-[10px]">
+            <tr className="bg-[var(--clay-sunken)] border-b border-[var(--clay-line)] text-muted-foreground font-bold uppercase tracking-wider text-[10px]">
               <th className="py-2.5 px-4">Invoice</th>
               <th className="py-2.5 px-4">Customer</th>
               <th className="py-2.5 px-4">Plan Tier</th>

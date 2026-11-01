@@ -58,10 +58,10 @@ function stateLabel(session: RuntimeSandboxView | null): string {
 
 function stateTone(session: RuntimeSandboxView | null): string {
   if (!session) return "bg-muted-foreground";
-  if (session.state === "ready") return "bg-emerald-500";
-  if (session.state === "failed" || session.state === "expired") return "bg-amber-500";
+  if (session.state === "ready") return "bg-success";
+  if (session.state === "failed" || session.state === "expired") return "bg-warning";
   if (session.state === "stopped") return "bg-muted-foreground";
-  return "bg-[var(--clay-sunken)]0";
+  return "bg-warning";
 }
 
 function isPending(session: RuntimeSandboxView | null): boolean {
@@ -72,8 +72,8 @@ function isPending(session: RuntimeSandboxView | null): boolean {
 }
 
 function checkTone(status: string): string {
-  if (status === "passed") return "text-emerald-600 dark:text-emerald-400";
-  if (status === "failed") return "text-red-600 dark:text-red-400";
+  if (status === "passed") return "text-success";
+  if (status === "failed") return "text-destructive dark:text-destructive";
   if (status === "pending") return "text-foreground";
   return "text-muted-foreground";
 }
@@ -254,7 +254,7 @@ export function LiveRuntimePreview({
     if (!showReason) return <>{fallback}</>;
     return (
       <div className="flex h-full min-h-0 flex-col">
-        <p className="shrink-0 border-b border-amber-200/60 bg-amber-50 px-3 py-1.5 text-[11px] text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-200">
+        <p className="shrink-0 border-b border-warning/25 bg-warning-subtle px-3 py-1.5 text-[11px] text-warning-subtle-foreground dark:border-warning/30">
           Static preview · {status.capability.message ?? "Live runtime previews are unavailable."}
         </p>
         <div className="relative min-h-0 flex-1">{fallback}</div>
@@ -287,7 +287,7 @@ export function LiveRuntimePreview({
               type="button"
               onClick={() => void runBuild()}
               disabled={building}
-              className="flex items-center gap-1 rounded-md border border-[var(--clay-line)]/70 px-2 py-0.5 text-muted-foreground hover:bg-[var(--clay-sunken)] disabled:opacity-50 dark:hover:bg-foreground"
+              className="flex items-center gap-1 rounded-md border border-[var(--clay-line)] px-2 py-0.5 text-muted-foreground hover:bg-[var(--clay-sunken)] disabled:opacity-50 dark:hover:bg-foreground shadow-[var(--clay-well-1)]"
             >
               {building ? <Loader2 className="h-3 w-3 animate-spin" /> : null} Build
             </button>
@@ -296,7 +296,7 @@ export function LiveRuntimePreview({
             <button
               type="button"
               onClick={() => setLogsOpen(false)}
-              className="rounded-md border border-[var(--clay-line)]/70 px-2 py-0.5 text-muted-foreground hover:bg-[var(--clay-sunken)] dark:hover:bg-foreground"
+              className="rounded-md border border-[var(--clay-line)] px-2 py-0.5 text-muted-foreground hover:bg-[var(--clay-sunken)] dark:hover:bg-foreground shadow-[var(--clay-well-1)]"
             >
               Hide logs
             </button>
@@ -305,7 +305,7 @@ export function LiveRuntimePreview({
               type="button"
               onClick={() => void refreshLogs()}
               disabled={!session}
-              className="flex items-center gap-1 rounded-md border border-[var(--clay-line)]/70 px-2 py-0.5 text-muted-foreground hover:bg-[var(--clay-sunken)] disabled:opacity-50 dark:hover:bg-foreground"
+              className="flex items-center gap-1 rounded-md border border-[var(--clay-line)] px-2 py-0.5 text-muted-foreground hover:bg-[var(--clay-sunken)] disabled:opacity-50 dark:hover:bg-foreground shadow-[var(--clay-well-1)]"
             >
               <FileTerminal className="h-3 w-3" /> Logs
             </button>
@@ -315,7 +315,7 @@ export function LiveRuntimePreview({
               type="button"
               onClick={() => void invoke("start")}
               disabled={unsupported}
-              className="flex items-center gap-1 rounded-md border border-[var(--clay-line)]/70 px-2 py-0.5 text-foreground hover:bg-[var(--clay-sunken)] disabled:cursor-not-allowed disabled:opacity-50 dark:hover:bg-foreground"
+              className="flex items-center gap-1 rounded-md border border-[var(--clay-line)] px-2 py-0.5 text-foreground hover:bg-[var(--clay-sunken)] disabled:cursor-not-allowed disabled:opacity-50 dark:hover:bg-foreground shadow-[var(--clay-well-1)]"
             >
               <Play className="h-3 w-3" /> Start live preview
             </button>
@@ -324,7 +324,7 @@ export function LiveRuntimePreview({
             <button
               type="button"
               onClick={() => void invoke("restart")}
-              className="flex items-center gap-1 rounded-md border border-[var(--clay-line)]/70 px-2 py-0.5 text-foreground hover:bg-[var(--clay-sunken)] dark:hover:bg-foreground"
+              className="flex items-center gap-1 rounded-md border border-[var(--clay-line)] px-2 py-0.5 text-foreground hover:bg-[var(--clay-sunken)] dark:hover:bg-foreground shadow-[var(--clay-well-1)]"
             >
               <RotateCw className="h-3 w-3" /> Restart
             </button>
@@ -333,7 +333,7 @@ export function LiveRuntimePreview({
             <button
               type="button"
               onClick={() => void invoke("stop")}
-              className="flex items-center gap-1 rounded-md border border-[var(--clay-line)]/70 px-2 py-0.5 text-foreground hover:bg-[var(--clay-sunken)] dark:hover:bg-foreground"
+              className="flex items-center gap-1 rounded-md border border-[var(--clay-line)] px-2 py-0.5 text-foreground hover:bg-[var(--clay-sunken)] dark:hover:bg-foreground shadow-[var(--clay-well-1)]"
             >
               <Square className="h-3 w-3" /> Stop
             </button>
@@ -343,7 +343,7 @@ export function LiveRuntimePreview({
             <button
               type="button"
               onClick={() => setFrameNonce((value) => value + 1)}
-              className="flex items-center gap-1 rounded-md border border-[var(--clay-line)]/70 px-2 py-0.5 text-muted-foreground hover:bg-[var(--clay-sunken)] dark:hover:bg-foreground"
+              className="flex items-center gap-1 rounded-md border border-[var(--clay-line)] px-2 py-0.5 text-muted-foreground hover:bg-[var(--clay-sunken)] dark:hover:bg-foreground shadow-[var(--clay-well-1)]"
             >
               <RotateCw className="h-3 w-3" /> Refresh
             </button>
@@ -353,7 +353,7 @@ export function LiveRuntimePreview({
               href={session.previewUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center gap-1 rounded-md border border-[var(--clay-line)]/70 px-2 py-0.5 text-muted-foreground hover:bg-[var(--clay-sunken)] dark:hover:bg-foreground"
+              className="flex items-center gap-1 rounded-md border border-[var(--clay-line)] px-2 py-0.5 text-muted-foreground hover:bg-[var(--clay-sunken)] dark:hover:bg-foreground shadow-[var(--clay-well-1)]"
             >
               <ExternalLink className="h-3 w-3" /> Open
             </a>
@@ -362,7 +362,7 @@ export function LiveRuntimePreview({
       </div>
 
       {unsupported && (
-        <p className="border-b border-amber-200/60 bg-amber-50 px-3 py-1.5 text-[11px] text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-200">
+        <p className="border-b border-warning/25 bg-warning-subtle px-3 py-1.5 text-[11px] text-warning-subtle-foreground dark:border-warning/30">
           {status.support.detail ?? "Live runtime previews support React + Vite projects only."}
         </p>
       )}
@@ -370,9 +370,9 @@ export function LiveRuntimePreview({
       {(error || notice || (failed && session)) && (
         <div
           role="status"
-          className="flex items-start gap-1.5 border-b border-[var(--clay-line)]/70 bg-[var(--clay-sunken)] px-3 py-1.5 text-[11px] "
+          className="flex items-start gap-1.5 border-b border-[var(--clay-line)] bg-[var(--clay-sunken)] px-3 py-1.5 text-[11px] "
         >
-          {(error || failed) && <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0 text-amber-600" />}
+          {(error || failed) && <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0 text-warning" />}
           <span className="min-w-0 flex-1 text-foreground ">
             {error ??
               (failed
@@ -415,7 +415,7 @@ export function LiveRuntimePreview({
       </div>
 
       {logsOpen && (
-        <div className="max-h-48 shrink-0 overflow-auto border-t border-[var(--clay-line)]/70 bg-[#111] px-3 py-2 ">
+        <div className="max-h-48 shrink-0 overflow-auto border-t border-[var(--clay-line)] bg-[#111] px-3 py-2 ">
           <div className="mb-1.5 flex flex-wrap gap-3 text-[10px]">
             {(session?.checks ?? []).map((entry) => (
               <span key={entry.id} className={checkTone(entry.status)}>

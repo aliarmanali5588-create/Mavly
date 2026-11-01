@@ -175,7 +175,7 @@ export default function SettingsAdminPage() {
               <select
                 value={defaultModel}
                 onChange={(e) => setDefaultModel(e.target.value)}
-                className="w-full h-8 px-2.5 bg-[var(--clay-sunken)] border border-[var(--clay-line)] rounded-lg focus:outline-none focus:bg-card font-medium text-foreground"
+                className="w-full h-8 px-2.5 bg-[var(--clay-sunken)] border border-[var(--clay-line)] rounded-lg focus:outline-none focus:bg-card font-medium text-foreground shadow-[var(--clay-well-1)]"
               >
                 <option value="deepseek/deepseek-v4.1-flash">
                   DeepSeek V4.1 Flash (Fast, Built-in Default)
@@ -197,7 +197,7 @@ export default function SettingsAdminPage() {
               <select
                 value={fallbackModel}
                 onChange={(e) => setFallbackModel(e.target.value)}
-                className="w-full h-8 px-2.5 bg-[var(--clay-sunken)] border border-[var(--clay-line)] rounded-lg focus:outline-none focus:bg-card font-medium text-foreground"
+                className="w-full h-8 px-2.5 bg-[var(--clay-sunken)] border border-[var(--clay-line)] rounded-lg focus:outline-none focus:bg-card font-medium text-foreground shadow-[var(--clay-well-1)]"
               >
                 <option value="anthropic/claude-3.5-sonnet">
                   Anthropic Claude 3.5 Sonnet
@@ -217,7 +217,7 @@ export default function SettingsAdminPage() {
                 type="text"
                 value={maxTokens}
                 onChange={(e) => setMaxTokens(e.target.value)}
-                className="w-full h-8 px-3 bg-[var(--clay-sunken)] border border-[var(--clay-line)] rounded-lg focus:outline-none focus:bg-card font-mono text-foreground"
+                className="w-full h-8 px-3 bg-[var(--clay-sunken)] border border-[var(--clay-line)] rounded-lg focus:outline-none focus:bg-card font-mono text-foreground shadow-[var(--clay-well-1)]"
               />
               <span className="text-[11px] text-muted-foreground mt-1 block">
                 Standard output cap for generated Next.js AST files
@@ -232,7 +232,7 @@ export default function SettingsAdminPage() {
                 type="text"
                 value={temperature}
                 onChange={(e) => setTemperature(e.target.value)}
-                className="w-full h-8 px-3 bg-[var(--clay-sunken)] border border-[var(--clay-line)] rounded-lg focus:outline-none focus:bg-card font-mono text-foreground"
+                className="w-full h-8 px-3 bg-[var(--clay-sunken)] border border-[var(--clay-line)] rounded-lg focus:outline-none focus:bg-card font-mono text-foreground shadow-[var(--clay-well-1)]"
               />
               <span className="text-[11px] text-muted-foreground mt-1 block">
                 0.2 ensures code determinism and syntax stability
@@ -244,7 +244,7 @@ export default function SettingsAdminPage() {
         {/* 3. Regional Billing & Payment Processing */}
         <div className="p-5 sm:p-6 rounded-2xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)] space-y-4">
           <div className="flex items-center gap-2 pb-2 border-b border-[var(--clay-line)]">
-            <DollarSign className="w-4 h-4 text-emerald-600" />
+            <DollarSign className="w-4 h-4 text-success" />
             <h4 className="text-xs font-bold text-foreground uppercase tracking-wider">
               Regional Billing & Payment Gateway
             </h4>
@@ -258,7 +258,7 @@ export default function SettingsAdminPage() {
               <select
                 value={currency}
                 onChange={(e) => setCurrency(e.target.value)}
-                className="w-full h-8 px-2.5 bg-[var(--clay-sunken)] border border-[var(--clay-line)] rounded-lg focus:outline-none focus:bg-card font-medium text-foreground"
+                className="w-full h-8 px-2.5 bg-[var(--clay-sunken)] border border-[var(--clay-line)] rounded-lg focus:outline-none focus:bg-card font-medium text-foreground shadow-[var(--clay-well-1)]"
               >
                 <option value="INR">INR (₹) Indian Rupee</option>
                 <option value="USD">USD ($) United States Dollar</option>
@@ -274,7 +274,7 @@ export default function SettingsAdminPage() {
               <select
                 value={gateway}
                 onChange={(e) => setGateway(e.target.value)}
-                className="w-full h-8 px-2.5 bg-[var(--clay-sunken)] border border-[var(--clay-line)] rounded-lg focus:outline-none focus:bg-card font-medium text-foreground"
+                className="w-full h-8 px-2.5 bg-[var(--clay-sunken)] border border-[var(--clay-line)] rounded-lg focus:outline-none focus:bg-card font-medium text-foreground shadow-[var(--clay-well-1)]"
               >
                 <option value="Razorpay">Razorpay (Cards, UPI, NetBanking)</option>
                 <option value="Stripe">Stripe (International Credit Cards)</option>
@@ -289,7 +289,7 @@ export default function SettingsAdminPage() {
                 type="text"
                 value={invoicePrefix}
                 onChange={(e) => setInvoicePrefix(e.target.value)}
-                className="w-full h-8 px-3 bg-[var(--clay-sunken)] border border-[var(--clay-line)] rounded-lg focus:outline-none focus:bg-card font-mono text-foreground"
+                className="w-full h-8 px-3 bg-[var(--clay-sunken)] border border-[var(--clay-line)] rounded-lg focus:outline-none focus:bg-card font-mono text-foreground shadow-[var(--clay-well-1)]"
               />
             </div>
           </div>
@@ -305,7 +305,7 @@ export default function SettingsAdminPage() {
           </div>
 
           <div className="space-y-2.5 text-xs">
-            <div className="flex items-center justify-between p-3 rounded-xl bg-[var(--clay-sunken)]/80 border border-[var(--clay-line)]">
+            <div className="flex items-center justify-between p-3 rounded-xl bg-[var(--clay-sunken)] border border-[var(--clay-line)] shadow-[var(--clay-well-1)]">
               <div>
                 <p className="font-semibold text-foreground">Enforce Multi-Factor Authentication</p>
                 <p className="text-muted-foreground text-[11px]">
@@ -320,7 +320,7 @@ export default function SettingsAdminPage() {
               />
             </div>
 
-            <div className="flex items-center justify-between p-3 rounded-xl bg-[var(--clay-sunken)]/80 border border-[var(--clay-line)]">
+            <div className="flex items-center justify-between p-3 rounded-xl bg-[var(--clay-sunken)] border border-[var(--clay-line)] shadow-[var(--clay-well-1)]">
               <div>
                 <p className="font-semibold text-foreground">High-Fidelity Event Journaling</p>
                 <p className="text-muted-foreground text-[11px]">
@@ -335,7 +335,7 @@ export default function SettingsAdminPage() {
               />
             </div>
 
-            <div className="flex items-center justify-between p-3 rounded-xl bg-[var(--clay-sunken)]/80 border border-[var(--clay-line)]">
+            <div className="flex items-center justify-between p-3 rounded-xl bg-[var(--clay-sunken)] border border-[var(--clay-line)] shadow-[var(--clay-well-1)]">
               <div>
                 <p className="font-semibold text-foreground">Session Inactivity Timeout</p>
                 <p className="text-muted-foreground text-[11px]">
@@ -345,7 +345,7 @@ export default function SettingsAdminPage() {
               <select
                 value={sessionTimeout}
                 onChange={(e) => setSessionTimeout(e.target.value)}
-                className="h-8 px-2.5 text-xs bg-card border border-[var(--clay-line)] rounded-lg"
+                className="h-8 px-2.5 text-xs bg-card border border-[var(--clay-line)] rounded-lg shadow-[var(--clay-elev-1)]"
               >
                 <option value="15">15 Minutes</option>
                 <option value="30">30 Minutes</option>
@@ -359,14 +359,14 @@ export default function SettingsAdminPage() {
         {/* 5. Notification Webhooks & Alerts */}
         <div className="p-5 sm:p-6 rounded-2xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)] space-y-4">
           <div className="flex items-center gap-2 pb-2 border-b border-[var(--clay-line)]">
-            <Bell className="w-4 h-4 text-amber-600" />
+            <Bell className="w-4 h-4 text-warning" />
             <h4 className="text-xs font-bold text-foreground uppercase tracking-wider">
               Alerts & Operational Dispatch
             </h4>
           </div>
 
           <div className="space-y-2.5 text-xs">
-            <div className="flex items-center justify-between p-3 rounded-xl bg-[var(--clay-sunken)]/80 border border-[var(--clay-line)]">
+            <div className="flex items-center justify-between p-3 rounded-xl bg-[var(--clay-sunken)] border border-[var(--clay-line)] shadow-[var(--clay-well-1)]">
               <div>
                 <p className="font-semibold text-foreground">Critical Error & Spike Alerts</p>
                 <p className="text-muted-foreground text-[11px]">
@@ -381,7 +381,7 @@ export default function SettingsAdminPage() {
               />
             </div>
 
-            <div className="flex items-center justify-between p-3 rounded-xl bg-[var(--clay-sunken)]/80 border border-[var(--clay-line)]">
+            <div className="flex items-center justify-between p-3 rounded-xl bg-[var(--clay-sunken)] border border-[var(--clay-line)] shadow-[var(--clay-well-1)]">
               <div>
                 <p className="font-semibold text-foreground">Daily MRR & Revenue Digest</p>
                 <p className="text-muted-foreground text-[11px]">
@@ -413,13 +413,13 @@ export default function SettingsAdminPage() {
         {/* 6. Admin Account Information */}
         <div className="p-5 sm:p-6 rounded-2xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)] flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-full bg-black text-white flex items-center justify-center font-bold text-xs shrink-0">
+            <div className="w-9 h-9 rounded-full bg-black text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-[var(--clay-elev-ink-1)]">
               SA
             </div>
             <div>
               <div className="flex items-center gap-2">
                 <h4 className="text-xs font-bold text-foreground">Mavly Super Admin</h4>
-                <span className="font-mono text-[10px] font-semibold px-1.5 py-0.5 rounded bg-[var(--clay-sunken)] text-foreground border border-[var(--clay-line)]/60">
+                <span className="font-mono text-[10px] font-semibold px-1.5 py-0.5 rounded bg-[var(--clay-sunken)] text-foreground border border-[var(--clay-line)]">
                   Organization Owner
                 </span>
               </div>

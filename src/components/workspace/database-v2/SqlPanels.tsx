@@ -149,7 +149,7 @@ export function RawSqlPanel({ projectId, env, hasDev, seed }: { projectId: strin
                         size="sm"
                         variant="ghost"
                         aria-pressed={mode === value}
-                        className={`h-7 ${mode === value ? "bg-background text-foreground hover:bg-background shadow-sm" : "text-muted-foreground"}`}
+                        className={`h-7 ${mode === value ? "bg-card text-foreground shadow-[var(--clay-elev-1)]" : "text-muted-foreground"}`}
                         onClick={() => setMode(value)}
                     >
                         {value === "plain" ? <SparklesIcon className="size-3.5" aria-hidden /> : null}
@@ -183,7 +183,7 @@ export function RawSqlPanel({ projectId, env, hasDev, seed }: { projectId: strin
                 </div>
             ) : null}
             {mode === "sql" && answer ? (
-                <div className="border-border bg-muted/40 flex flex-wrap items-center gap-2 rounded-md border px-2 py-1.5 text-xs" data-testid="ask-answer">
+                <div className="border-[var(--clay-line)] bg-[var(--clay-sunken)] flex flex-wrap items-center gap-2 rounded-md border px-2 py-1.5 text-xs shadow-[var(--clay-well-1)]" data-testid="ask-answer">
                     <SparklesIcon className="size-3.5 shrink-0" aria-hidden />
                     <span className="min-w-0 flex-1">{answer.explanation || t("engineV2.database.askToEditor")}</span>
                     <StatusPill tone={answer.isReadOnly ? "success" : "warning"}>{answer.isReadOnly ? t("engineV2.database.readOnly") : t("engineV2.database.changesData")}</StatusPill>

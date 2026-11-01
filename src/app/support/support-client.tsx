@@ -109,7 +109,7 @@ export function SupportClient({ profile }: SupportClientProps) {
               className="flex items-center gap-2.5 group select-none"
               aria-label="Mavly Home"
             >
-              <div className="w-8 h-8 rounded-xl overflow-hidden bg-card shadow-xs p-0.5 border border-[var(--clay-line)] flex items-center justify-center transition-transform duration-200 group-hover:scale-105 active:scale-95">
+              <div className="w-8 h-8 rounded-xl overflow-hidden bg-card shadow-[var(--clay-elev-1)] p-0.5 border border-[var(--clay-line)] flex items-center justify-center transition-transform duration-200 clay-press">
                 <Image
                   src="/logo/Mavly.png"
                   alt="Mavly Logo"
@@ -199,7 +199,7 @@ export function SupportClient({ profile }: SupportClientProps) {
               >
                 <div>
                   <div className="flex items-center justify-between gap-3 mb-4">
-                    <div className="w-11 h-11 rounded-2xl bg-card border border-[var(--clay-line)] shadow-xs flex items-center justify-center text-foreground shrink-0">
+                    <div className="w-11 h-11 rounded-2xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-1)] flex items-center justify-center text-foreground shrink-0">
                       <Icon className="w-5 h-5 text-foreground" aria-hidden="true" />
                     </div>
                     <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-[var(--clay-sunken)] text-foreground border border-[var(--clay-line)]">
@@ -220,7 +220,7 @@ export function SupportClient({ profile }: SupportClientProps) {
                 </div>
 
                 <div className="pt-5 border-t border-[var(--clay-line)] space-y-3.5">
-                  <div className="flex items-center justify-between gap-2 p-2 sm:p-2.5 rounded-xl bg-[var(--clay-base)] border border-black/[0.05]">
+                  <div className="flex items-center justify-between gap-2 p-2 sm:p-2.5 rounded-xl bg-[var(--clay-base)] border border-[var(--clay-line)]">
                     <div className="min-w-0 flex-1 pl-1">
                       <span className="block text-[10px] uppercase font-bold tracking-wider text-muted-foreground">
                         Recipient Address
@@ -236,13 +236,13 @@ export function SupportClient({ profile }: SupportClientProps) {
                     <button
                       type="button"
                       onClick={() => handleCopy(channel.email)}
-                      className="px-2.5 py-1.5 rounded-lg bg-card border border-[var(--clay-line)] text-xs font-medium text-foreground hover:text-black hover:bg-[var(--clay-sunken)] shadow-xs active:scale-95 transition-all flex items-center gap-1.5 shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--clay-brand)]"
+                      className="px-2.5 py-1.5 rounded-lg bg-card border border-[var(--clay-line)] text-xs font-medium text-foreground hover:text-black hover:bg-[var(--clay-sunken)] shadow-[var(--clay-elev-1)] clay-press transition-all flex items-center gap-1.5 shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--clay-brand)]"
                       aria-label={`Copy ${channel.email} to clipboard`}
                     >
                       {isCopied ? (
                         <>
-                          <Check className="w-3.5 h-3.5 text-emerald-600" aria-hidden="true" />
-                          <span className="text-[11px] text-emerald-700 font-semibold">Copied</span>
+                          <Check className="w-3.5 h-3.5 text-success" aria-hidden="true" />
+                          <span className="text-[11px] text-success font-semibold">Copied</span>
                         </>
                       ) : (
                         <>
@@ -275,7 +275,7 @@ export function SupportClient({ profile }: SupportClientProps) {
           <p className="text-xs text-muted-foreground leading-relaxed">
             When reporting a bug or generation issue, please provide your <strong>Project ID</strong> (from the URL <code>/project/&#123;id&#125;</code>), the prompt text that caused the error, and any visible message in the chat panel.
           </p>
-          <div className="p-3 rounded-xl bg-amber-50/70 border border-amber-200/60 text-[11px] text-amber-900">
+          <div className="p-3 rounded-xl bg-warning-subtle border border-warning/25 text-[11px] text-warning-subtle-foreground">
             <strong>Security Notice:</strong> Never share passwords, GitHub personal access tokens, Supabase database secrets, or API keys with support or anyone else. Our team will never ask for your credentials.
           </div>
         </div>
@@ -324,7 +324,7 @@ export function SupportClient({ profile }: SupportClientProps) {
         </div>
 
         {/* Return to Dashboard / Return to Mavly Banner */}
-        <div className="rounded-3xl bg-card border border-[var(--clay-line)] shadow-sm p-6 sm:p-8 flex flex-col sm:flex-row items-center justify-between gap-6">
+        <div className="rounded-3xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-1)] p-6 sm:p-8 flex flex-col sm:flex-row items-center justify-between gap-6">
           <div>
             <h3 className="text-base font-bold text-foreground tracking-tight">
               {isAuthenticated ? "Ready to continue building?" : "Ready to start building with Mavly?"}

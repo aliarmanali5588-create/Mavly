@@ -77,7 +77,7 @@ export function AuthNav({ profile }: { profile: ProfileSummary | null }) {
     return (
       <Link
         href="/login"
-        className="text-xs text-foreground font-medium px-3.5 py-1.5 rounded-full bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-1)] hover:shadow-[var(--clay-elev-2)] active:shadow-[var(--clay-well-1)] active:scale-95 transition-[box-shadow,transform] outline-none focus-visible:shadow-[var(--clay-focus)]"
+        className="text-xs text-foreground font-medium px-3.5 py-1.5 rounded-full bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-1)] active:shadow-[var(--clay-well-1)] clay-press transition-[box-shadow] outline-none focus-visible:shadow-[var(--clay-focus)]"
       >
         Sign in
       </Link>
@@ -96,11 +96,11 @@ export function AuthNav({ profile }: { profile: ProfileSummary | null }) {
             type="button"
             aria-label={`Open account menu for ${accountLabel}`}
             title={accountLabel}
-            className="group flex h-9 w-9 items-center justify-center rounded-full border border-[var(--clay-line)] bg-card p-0.5 shadow-[var(--clay-elev-2)] transition-[box-shadow,border-color] hover:border-[var(--clay-line-strong)] hover:shadow-[var(--clay-elev-3)] active:shadow-[var(--clay-well-1)] active:scale-95 outline-none focus-visible:shadow-[var(--clay-focus)]"
+            className="group flex h-9 w-9 items-center justify-center rounded-full border border-[var(--clay-line)] bg-card p-0.5 shadow-[var(--clay-elev-2)] transition-[box-shadow,border-color] hover:border-[var(--clay-line-strong)] active:shadow-[var(--clay-well-1)] clay-press outline-none focus-visible:shadow-[var(--clay-focus)]"
           >
             <ProfileAvatar
               profile={profile}
-              className="h-8 w-8 transition-transform group-hover:scale-[1.03]"
+              className="h-8 w-8 transition-transform"
             />
           </button>
         </DropdownMenuTrigger>
@@ -114,7 +114,7 @@ export function AuthNav({ profile }: { profile: ProfileSummary | null }) {
             <div className="flex items-center gap-3 px-2.5 py-2">
               <ProfileAvatar
                 profile={profile}
-                className="h-10 w-10 ring-1 ring-black/[0.06]"
+                className="h-10 w-10 ring-1 ring-[var(--clay-line)]"
               />
               <div className="min-w-0">
                 <p className="truncate text-sm font-semibold text-foreground">
@@ -127,7 +127,7 @@ export function AuthNav({ profile }: { profile: ProfileSummary | null }) {
             </div>
           </DropdownMenuLabel>
 
-          <DropdownMenuSeparator className="bg-black/[0.06]" />
+          <DropdownMenuSeparator className="bg-[var(--clay-sunken)]" />
 
           <DropdownMenuItem
             asChild
@@ -164,14 +164,14 @@ export function AuthNav({ profile }: { profile: ProfileSummary | null }) {
              to place directly in the menu content. */}
           <InstallButton />
 
-          <DropdownMenuSeparator className="bg-black/[0.06]" />
+          <DropdownMenuSeparator className="bg-[var(--clay-sunken)]" />
 
           <DropdownMenuItem
             onSelect={(event) => {
               event.preventDefault();
               setConfirmSignOutOpen(true);
             }}
-            className="cursor-pointer gap-2.5 rounded-xl px-2.5 py-2 text-[13px] text-red-600 focus:bg-red-50 focus:text-red-700 [&_svg]:text-red-500"
+            className="cursor-pointer gap-2.5 rounded-xl px-2.5 py-2 text-[13px] text-destructive focus:bg-destructive-subtle focus:text-destructive-subtle-foreground [&_svg]:text-destructive"
           >
             <LogOut className="h-4 w-4" aria-hidden="true" />
             <span>Sign out</span>

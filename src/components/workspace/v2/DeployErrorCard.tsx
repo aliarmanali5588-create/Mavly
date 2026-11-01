@@ -55,7 +55,7 @@ export function ConfirmDestructive({ statement, onConfirm }: { statement: string
         <div className="w-full space-y-1.5 text-xs">
             <p>{t("engineV2.deployError.destructive")}</p>
             {statement ? (
-                <pre className="bg-background/60 text-foreground overflow-auto rounded p-2 font-mono whitespace-pre-wrap">{statement}</pre>
+                <pre className="bg-[var(--clay-sunken)] text-foreground overflow-auto rounded p-2 font-mono whitespace-pre-wrap">{statement}</pre>
             ) : null}
             <Button
                 size="sm"
@@ -103,13 +103,13 @@ export function DeployErrorCard({ error, onAskFix }: { error: VcaasDeployError; 
                 </p>
             ) : null}
             {isDevDestructive(error) ? <p className="text-xs">{t("engineV2.deployError.devDestructive")}</p> : null}
-            <pre className="bg-background/60 text-foreground max-h-48 overflow-auto rounded p-2 font-mono text-xs whitespace-pre-wrap">
+            <pre className="bg-[var(--clay-sunken)] text-foreground max-h-48 overflow-auto rounded p-2 font-mono text-xs whitespace-pre-wrap">
                 {error.message}
             </pre>
             {error.logExcerpt ? (
                 <details className="text-xs">
                     <summary className="cursor-pointer">{t("engineV2.deployError.logExcerpt")}</summary>
-                    <pre className="bg-background/60 text-foreground mt-1 max-h-64 overflow-auto rounded p-2 font-mono whitespace-pre-wrap">
+                    <pre className="bg-[var(--clay-sunken)] text-foreground mt-1 max-h-64 overflow-auto rounded p-2 font-mono whitespace-pre-wrap">
                         {error.logExcerpt}
                     </pre>
                 </details>

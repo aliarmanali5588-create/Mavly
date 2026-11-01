@@ -51,7 +51,7 @@ export function UndoDbChange({ projectId, agentBusy = false }: { projectId: stri
 
     if (step === "idle")
         return (
-            <div data-testid="undo-db-change" className="border-border flex flex-wrap items-center justify-between gap-2 rounded-lg border p-3 text-sm">
+            <div data-testid="undo-db-change" className="border-[var(--clay-line)] bg-card flex flex-wrap items-center justify-between gap-2 rounded-lg border p-3 text-sm shadow-[var(--clay-elev-1)]">
                 <p className="text-muted-foreground min-w-0 flex-1 text-xs">{t("engineV2.undoDb.hint")}</p>
                 <Button size="sm" variant="outline" onClick={() => setStep("confirm")}>
                     <Undo2Icon className="size-3.5" aria-hidden />

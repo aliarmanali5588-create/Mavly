@@ -142,7 +142,7 @@ export default function UsersAdminPage() {
         );
       case "Pro":
         return (
-          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-black text-white">
+          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-black text-white shadow-[var(--clay-elev-ink-1)]">
             Pro
           </span>
         );
@@ -160,7 +160,7 @@ export default function UsersAdminPage() {
         );
       case "Free":
         return (
-          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-[var(--clay-sunken)] text-muted-foreground border border-black/[0.05]">
+          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-[var(--clay-sunken)] text-muted-foreground border border-[var(--clay-line)]">
             Free
           </span>
         );
@@ -174,7 +174,7 @@ export default function UsersAdminPage() {
         <div className="p-5 rounded-2xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)]">
           <p className="text-xs font-semibold text-muted-foreground tracking-wide">Total Users</p>
           <h3 className="text-2xl sm:text-3xl font-extrabold text-foreground mt-1.5 font-mono">12,480</h3>
-          <span className="text-[11px] text-emerald-600 font-semibold mt-2 inline-block">
+          <span className="text-[11px] text-success font-semibold mt-2 inline-block">
             +14.2% growth this month
           </span>
         </div>
@@ -182,7 +182,7 @@ export default function UsersAdminPage() {
         <div className="p-5 rounded-2xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)]">
           <p className="text-xs font-semibold text-muted-foreground tracking-wide">Active Tenants</p>
           <h3 className="text-2xl sm:text-3xl font-extrabold text-foreground mt-1.5 font-mono">9,840</h3>
-          <span className="text-[11px] text-emerald-600 font-semibold mt-2 inline-block">
+          <span className="text-[11px] text-success font-semibold mt-2 inline-block">
             Active in last 7 days
           </span>
         </div>
@@ -197,7 +197,7 @@ export default function UsersAdminPage() {
 
         <div className="p-5 rounded-2xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)]">
           <p className="text-xs font-semibold text-muted-foreground tracking-wide">Account Health SLA</p>
-          <h3 className="text-2xl sm:text-3xl font-extrabold text-emerald-700 mt-1.5 font-mono">99.8%</h3>
+          <h3 className="text-2xl sm:text-3xl font-extrabold text-success mt-1.5 font-mono">99.8%</h3>
           <span className="text-[11px] text-muted-foreground font-medium mt-2 inline-block">
             16 suspended accounts
           </span>
@@ -227,7 +227,7 @@ export default function UsersAdminPage() {
                   setSearchQuery(e.target.value);
                   setCurrentPage(1);
                 }}
-                className="w-full h-8 pl-8 pr-3 text-xs rounded-xl bg-[var(--clay-sunken)] border border-[var(--clay-line)] text-foreground focus:bg-card focus:outline-none focus:ring-2 focus:ring-black"
+                className="w-full h-8 pl-8 pr-3 text-xs rounded-xl bg-[var(--clay-sunken)] border border-[var(--clay-line)] text-foreground focus:bg-card focus:outline-none focus:ring-2 focus:ring-black shadow-[var(--clay-well-1)]"
               />
             </div>
 
@@ -238,7 +238,7 @@ export default function UsersAdminPage() {
                 setPlanFilter(e.target.value);
                 setCurrentPage(1);
               }}
-              className="h-8 px-2.5 text-xs font-medium bg-[var(--clay-sunken)] border border-[var(--clay-line)] rounded-xl text-foreground focus:outline-none focus:ring-2 focus:ring-black cursor-pointer"
+              className="h-8 px-2.5 text-xs font-medium bg-[var(--clay-sunken)] border border-[var(--clay-line)] rounded-xl text-foreground focus:outline-none focus:ring-2 focus:ring-black cursor-pointer shadow-[var(--clay-well-1)]"
             >
               <option value="All">All Plans</option>
               <option value="Agency">Agency</option>
@@ -255,7 +255,7 @@ export default function UsersAdminPage() {
                 setStatusFilter(e.target.value);
                 setCurrentPage(1);
               }}
-              className="h-8 px-2.5 text-xs font-medium bg-[var(--clay-sunken)] border border-[var(--clay-line)] rounded-xl text-foreground focus:outline-none focus:ring-2 focus:ring-black cursor-pointer"
+              className="h-8 px-2.5 text-xs font-medium bg-[var(--clay-sunken)] border border-[var(--clay-line)] rounded-xl text-foreground focus:outline-none focus:ring-2 focus:ring-black cursor-pointer shadow-[var(--clay-well-1)]"
             >
               <option value="All">All Statuses</option>
               <option value="Active">Active Only</option>
@@ -275,10 +275,10 @@ export default function UsersAdminPage() {
         </div>
 
         {/* ── High-Density Directory Table ── */}
-        <div className="overflow-x-auto rounded-xl border border-[var(--clay-line)]">
+        <div className="overflow-x-auto rounded-xl border border-[var(--clay-line)] bg-card shadow-[var(--clay-elev-1)]">
           <table className="w-full text-left border-collapse text-xs">
             <thead>
-              <tr className="bg-[var(--clay-sunken)]/60 border-b border-[var(--clay-line)] text-muted-foreground font-bold uppercase tracking-wider text-[10px]">
+              <tr className="bg-[var(--clay-sunken)] border-b border-[var(--clay-line)] text-muted-foreground font-bold uppercase tracking-wider text-[10px]">
                 <th className="py-2.5 px-4">User</th>
                 <th className="py-2.5 px-4">Role</th>
                 <th className="py-2.5 px-4">Plan</th>
@@ -289,7 +289,7 @@ export default function UsersAdminPage() {
                 <th className="py-2.5 px-4 text-right">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-black/[0.04]">
+            <tbody className="divide-y divide-[var(--clay-line)]">
               {paginatedUsers.length === 0 ? (
                 <tr>
                   <td colSpan={8} className="py-8 text-center text-muted-foreground">
@@ -298,10 +298,10 @@ export default function UsersAdminPage() {
                 </tr>
               ) : (
                 paginatedUsers.map((user) => (
-                  <tr key={user.id} className="hover:bg-[var(--clay-sunken)]/60 transition-colors">
+                  <tr key={user.id} className="hover:bg-[var(--clay-sunken)] transition-colors">
                     <td className="py-2.5 px-4">
                       <div className="flex items-center gap-2.5">
-                        <div className="w-7 h-7 rounded-full bg-black text-white flex items-center justify-center font-bold text-[10px] shrink-0">
+                        <div className="w-7 h-7 rounded-full bg-black text-white flex items-center justify-center font-bold text-[10px] shrink-0 shadow-[var(--clay-elev-ink-1)]">
                           {user.name.slice(0, 2).toUpperCase()}
                         </div>
                         <div>
@@ -322,13 +322,13 @@ export default function UsersAdminPage() {
                     </td>
                     <td className="py-2.5 px-4">
                       {user.status === "Active" ? (
-                        <span className="text-emerald-700 font-semibold text-xs flex items-center gap-1.5">
-                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                        <span className="text-success font-semibold text-xs flex items-center gap-1.5">
+                          <span className="w-1.5 h-1.5 rounded-full bg-success" />
                           Active
                         </span>
                       ) : (
-                        <span className="text-rose-600 font-semibold text-xs flex items-center gap-1.5">
-                          <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
+                        <span className="text-destructive font-semibold text-xs flex items-center gap-1.5">
+                          <span className="w-1.5 h-1.5 rounded-full bg-destructive" />
                           Suspended
                         </span>
                       )}
@@ -360,8 +360,8 @@ export default function UsersAdminPage() {
                           onClick={() => handleToggleStatus(user)}
                           className={`p-1 rounded-lg transition-colors ${
                             user.status === "Active"
-                              ? "text-amber-600 hover:bg-amber-50"
-                              : "text-emerald-600 hover:bg-emerald-50"
+                              ? "text-warning hover:bg-warning-subtle"
+                              : "text-success hover:bg-success-subtle"
                           }`}
                           title={user.status === "Active" ? "Suspend Account" : "Activate Account"}
                         >
@@ -389,7 +389,7 @@ export default function UsersAdminPage() {
               type="button"
               disabled={currentPage === 1}
               onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-              className="p-1.5 rounded-lg border border-[var(--clay-line)] hover:bg-[var(--clay-sunken)] disabled:opacity-40 disabled:pointer-events-none transition-colors"
+              className="p-1.5 rounded-lg border border-[var(--clay-line)] hover:bg-[var(--clay-sunken)] disabled:opacity-40 disabled:pointer-events-none transition-colors shadow-[var(--clay-well-1)]"
             >
               <ChevronLeft className="w-3.5 h-3.5" />
             </button>
@@ -400,7 +400,7 @@ export default function UsersAdminPage() {
               type="button"
               disabled={currentPage === totalPages}
               onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-              className="p-1.5 rounded-lg border border-[var(--clay-line)] hover:bg-[var(--clay-sunken)] disabled:opacity-40 disabled:pointer-events-none transition-colors"
+              className="p-1.5 rounded-lg border border-[var(--clay-line)] hover:bg-[var(--clay-sunken)] disabled:opacity-40 disabled:pointer-events-none transition-colors shadow-[var(--clay-well-1)]"
             >
               <ChevronRight className="w-3.5 h-3.5" />
             </button>
@@ -410,11 +410,11 @@ export default function UsersAdminPage() {
 
       {/* ── User Details Modal ── */}
       {selectedUser && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-in fade-in">
-          <div className="w-full max-w-md bg-card rounded-2xl border border-[var(--clay-line)] shadow-2xl p-6 space-y-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[var(--clay-scrim)] backdrop-blur-[3px] animate-in fade-in">
+          <div className="w-full max-w-md bg-card rounded-2xl border border-[var(--clay-line)] shadow-[var(--clay-float)] p-6 space-y-4">
             <div className="flex items-center justify-between pb-3 border-b border-[var(--clay-line)]">
               <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-full bg-black text-white flex items-center justify-center font-bold text-xs">
+                <div className="w-9 h-9 rounded-full bg-black text-white flex items-center justify-center font-bold text-xs shadow-[var(--clay-elev-ink-1)]">
                   {selectedUser.name.slice(0, 2).toUpperCase()}
                 </div>
                 <div>
@@ -425,13 +425,13 @@ export default function UsersAdminPage() {
               <button
                 type="button"
                 onClick={() => setSelectedUser(null)}
-                className="p-1 text-muted-foreground hover:text-black rounded-lg hover:bg-black/5"
+                className="p-1 text-muted-foreground hover:text-black rounded-lg hover:bg-[var(--clay-sunken)]"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            <div className="space-y-2.5 text-xs bg-[var(--clay-sunken)] p-4 rounded-xl border border-[var(--clay-line)]">
+            <div className="space-y-2.5 text-xs bg-[var(--clay-sunken)] p-4 rounded-xl border border-[var(--clay-line)] shadow-[var(--clay-well-1)]">
               <div className="flex justify-between py-1 border-b border-[var(--clay-line)]">
                 <span className="text-muted-foreground">Email:</span>
                 <span className="font-mono text-foreground">{selectedUser.email}</span>
@@ -456,7 +456,7 @@ export default function UsersAdminPage() {
               </div>
               <div className="flex justify-between py-1 border-b border-[var(--clay-line)]">
                 <span className="text-muted-foreground">Account Status:</span>
-                <span className="font-semibold text-emerald-700">{selectedUser.status}</span>
+                <span className="font-semibold text-success">{selectedUser.status}</span>
               </div>
               <div className="flex justify-between pt-1">
                 <span className="text-muted-foreground">Joined Date:</span>
@@ -468,7 +468,7 @@ export default function UsersAdminPage() {
               <button
                 type="button"
                 onClick={() => setDeletingUser(selectedUser)}
-                className="px-3 py-1.5 text-xs font-semibold text-rose-600 hover:bg-rose-50 rounded-xl transition-colors"
+                className="px-3 py-1.5 text-xs font-semibold text-destructive hover:bg-destructive-subtle rounded-xl transition-colors"
               >
                 Delete Account
               </button>
@@ -486,8 +486,8 @@ export default function UsersAdminPage() {
 
       {/* ── Edit Plan Modal ── */}
       {editingPlanUser && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-in fade-in">
-          <div className="w-full max-w-sm bg-card rounded-2xl border border-[var(--clay-line)] shadow-2xl p-6 space-y-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[var(--clay-scrim)] backdrop-blur-[3px] animate-in fade-in">
+          <div className="w-full max-w-sm bg-card rounded-2xl border border-[var(--clay-line)] shadow-[var(--clay-float)] p-6 space-y-4">
             <h3 className="text-base font-bold text-foreground">
               Change Plan for {editingPlanUser.name}
             </h3>
@@ -497,7 +497,7 @@ export default function UsersAdminPage() {
                 <select
                   value={selectedNewPlan}
                   onChange={(e) => setSelectedNewPlan(e.target.value as UserRecord["plan"])}
-                  className="w-full h-9 px-3 text-xs rounded-xl border border-black/[0.1] bg-card text-foreground"
+                  className="w-full h-9 px-3 text-xs rounded-xl border border-[var(--clay-line)] bg-card text-foreground shadow-[var(--clay-elev-1)]"
                 >
                   <option value="Free">Free Starter (₹0)</option>
                   <option value="Starter">Starter Tier (₹399/mo)</option>
@@ -529,14 +529,14 @@ export default function UsersAdminPage() {
 
       {/* ── Invite Member Modal ── */}
       {showInviteModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-in fade-in">
-          <div className="w-full max-w-md bg-card rounded-2xl border border-[var(--clay-line)] shadow-2xl p-6 space-y-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[var(--clay-scrim)] backdrop-blur-[3px] animate-in fade-in">
+          <div className="w-full max-w-md bg-card rounded-2xl border border-[var(--clay-line)] shadow-[var(--clay-float)] p-6 space-y-4">
             <div className="flex items-center justify-between pb-3 border-b border-[var(--clay-line)]">
               <h3 className="text-base font-bold text-foreground">Invite Team Member</h3>
               <button
                 type="button"
                 onClick={() => setShowInviteModal(false)}
-                className="p-1 text-muted-foreground hover:text-black rounded-lg hover:bg-black/5"
+                className="p-1 text-muted-foreground hover:text-black rounded-lg hover:bg-[var(--clay-sunken)]"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -550,7 +550,7 @@ export default function UsersAdminPage() {
                   placeholder="e.g. Vikram Malhotra"
                   value={inviteName}
                   onChange={(e) => setInviteName(e.target.value)}
-                  className="w-full h-9 px-3 text-xs rounded-xl border border-black/[0.1] focus:ring-2 focus:ring-black text-foreground"
+                  className="w-full h-9 px-3 text-xs rounded-xl border border-[var(--clay-line)] focus:ring-2 focus:ring-black text-foreground"
                 />
               </div>
 
@@ -561,7 +561,7 @@ export default function UsersAdminPage() {
                   placeholder="vikram@enterprise.in"
                   value={inviteEmail}
                   onChange={(e) => setInviteEmail(e.target.value)}
-                  className="w-full h-9 px-3 text-xs rounded-xl border border-black/[0.1] focus:ring-2 focus:ring-black text-foreground"
+                  className="w-full h-9 px-3 text-xs rounded-xl border border-[var(--clay-line)] focus:ring-2 focus:ring-black text-foreground"
                 />
               </div>
 
@@ -570,7 +570,7 @@ export default function UsersAdminPage() {
                 <select
                   value={invitePlan}
                   onChange={(e) => setInvitePlan(e.target.value as UserRecord["plan"])}
-                  className="w-full h-9 px-3 text-xs rounded-xl border border-black/[0.1] bg-card text-foreground"
+                  className="w-full h-9 px-3 text-xs rounded-xl border border-[var(--clay-line)] bg-card text-foreground shadow-[var(--clay-elev-1)]"
                 >
                   <option value="Starter">Starter Tier (₹399/mo)</option>
                   <option value="Creator">Creator Tier (₹599/mo)</option>

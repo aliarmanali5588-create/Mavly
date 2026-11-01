@@ -62,22 +62,22 @@ export default function ProjectsAdminPage() {
     switch (status) {
       case "Ready":
         return (
-          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200/60 font-mono">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-medium bg-success-subtle text-success-subtle-foreground border border-success/25 font-mono">
+            <span className="w-1.5 h-1.5 rounded-full bg-success" />
             Ready
           </span>
         );
       case "Building":
         return (
-          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-medium bg-[var(--clay-sunken)] text-foreground border border-[var(--clay-line)]/60 font-mono">
-            <span className="w-1.5 h-1.5 rounded-full bg-[var(--clay-sunken)]0 animate-pulse" />
+          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-medium bg-[var(--clay-sunken)] text-foreground border border-[var(--clay-line)] font-mono">
+            <span className="w-1.5 h-1.5 rounded-full bg-warning animate-pulse" />
             Building
           </span>
         );
       case "Failed":
         return (
-          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-medium bg-rose-50 text-rose-700 border border-rose-200/60 font-mono">
-            <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
+          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-medium bg-destructive-subtle text-destructive-subtle-foreground border border-destructive/25 font-mono">
+            <span className="w-1.5 h-1.5 rounded-full bg-destructive" />
             Failed
           </span>
         );
@@ -100,10 +100,10 @@ export default function ProjectsAdminPage() {
         <div className="p-4 rounded-xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)]">
           <div className="flex items-center justify-between text-xs text-muted-foreground font-medium">
             <span>Weekly Velocity</span>
-            <ArrowUpRight className="w-3.5 h-3.5 text-emerald-600" />
+            <ArrowUpRight className="w-3.5 h-3.5 text-success" />
           </div>
           <h3 className="text-xl font-bold tracking-tight text-foreground font-mono mt-1">+420</h3>
-          <div className="flex items-center gap-1 mt-1 text-[11px] text-emerald-600 font-medium">
+          <div className="flex items-center gap-1 mt-1 text-[11px] text-success font-medium">
             <span>+18.4% acceleration</span>
           </div>
         </div>
@@ -111,9 +111,9 @@ export default function ProjectsAdminPage() {
         <div className="p-4 rounded-xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)]">
           <div className="flex items-center justify-between text-xs text-muted-foreground font-medium">
             <span>Deployed & Live</span>
-            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+            <CheckCircle2 className="w-3.5 h-3.5 text-success" />
           </div>
-          <h3 className="text-xl font-bold tracking-tight text-emerald-700 font-mono mt-1">16,210</h3>
+          <h3 className="text-xl font-bold tracking-tight text-success font-mono mt-1">16,210</h3>
           <p className="text-[11px] text-muted-foreground mt-1">96.2% operational health</p>
         </div>
 
@@ -131,7 +131,7 @@ export default function ProjectsAdminPage() {
       <div className="bg-card rounded-2xl p-5 sm:p-6 border border-[var(--clay-line)] shadow-[var(--clay-elev-1)] space-y-4">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pb-3 border-b border-[var(--clay-line)]">
           {/* Segmented Status Tabs */}
-          <div className="flex flex-wrap items-center gap-1 bg-[var(--clay-sunken)] p-0.5 rounded-lg border border-[var(--clay-line)] text-xs">
+          <div className="flex flex-wrap items-center gap-1 bg-[var(--clay-sunken)] p-0.5 rounded-lg border border-[var(--clay-line)] text-xs shadow-[var(--clay-well-1)]">
             {["All", "Ready", "Building", "Failed"].map((st) => (
               <button
                 key={st}
@@ -139,7 +139,7 @@ export default function ProjectsAdminPage() {
                 onClick={() => setStatusFilter(st)}
                 className={`px-3 py-1 rounded-md text-xs transition-all ${
                   statusFilter === st
-                    ? "bg-card text-foreground shadow-xs font-semibold"
+                    ? "bg-card text-foreground shadow-[var(--clay-elev-1)] font-semibold"
                     : "text-muted-foreground hover:text-foreground font-medium"
                 }`}
               >
@@ -156,14 +156,14 @@ export default function ProjectsAdminPage() {
                 placeholder="Search project, owner, domain..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full h-8 pl-8 pr-3 text-xs rounded-lg bg-[var(--clay-sunken)] border border-[var(--clay-line)] text-foreground placeholder:text-muted-foreground focus:bg-card focus:outline-none focus:ring-1 focus:ring-black"
+                className="w-full h-8 pl-8 pr-3 text-xs rounded-lg bg-[var(--clay-sunken)] border border-[var(--clay-line)] text-foreground placeholder:text-muted-foreground focus:bg-card focus:outline-none focus:ring-1 focus:ring-black shadow-[var(--clay-well-1)]"
               />
             </div>
 
             <select
               value={visibilityFilter}
               onChange={(e) => setVisibilityFilter(e.target.value)}
-              className="h-8 px-2.5 text-xs rounded-lg bg-[var(--clay-sunken)] border border-[var(--clay-line)] text-foreground focus:bg-card focus:outline-none"
+              className="h-8 px-2.5 text-xs rounded-lg bg-[var(--clay-sunken)] border border-[var(--clay-line)] text-foreground focus:bg-card focus:outline-none shadow-[var(--clay-well-1)]"
             >
               <option value="All">All Visibility</option>
               <option value="Custom Domain">Custom Domain</option>
@@ -188,10 +188,10 @@ export default function ProjectsAdminPage() {
                 <th className="pb-3 text-right">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-black/[0.04]">
+            <tbody className="divide-y divide-[var(--clay-line)]">
               {filtered.length > 0 ? (
                 filtered.map((proj) => (
-                  <tr key={proj.id} className="hover:bg-[var(--clay-sunken)]/70 transition-colors">
+                  <tr key={proj.id} className="hover:bg-[var(--clay-sunken)] transition-colors">
                     <td className="py-3.5">
                       <div className="flex items-center gap-1.5">
                         <p className="font-semibold text-foreground">{proj.name}</p>
@@ -246,7 +246,7 @@ export default function ProjectsAdminPage() {
                         <button
                           type="button"
                           onClick={() => handleDeleteProject(proj)}
-                          className="p-1 text-muted-foreground hover:text-rose-600 transition-colors"
+                          className="p-1 text-muted-foreground hover:text-destructive transition-colors"
                           title="Delete Project"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
@@ -269,8 +269,8 @@ export default function ProjectsAdminPage() {
 
       {/* Project Detail Dialog */}
       {selectedProject && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs animate-in fade-in">
-          <div className="w-full max-w-md bg-card rounded-2xl border border-black/[0.1] shadow-2xl p-6 space-y-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[var(--clay-scrim)] backdrop-blur-[3px] animate-in fade-in">
+          <div className="w-full max-w-md bg-card rounded-2xl border border-[var(--clay-line)] shadow-[var(--clay-float)] p-6 space-y-4">
             <div className="flex items-center justify-between pb-3 border-b border-[var(--clay-line)]">
               <div className="flex items-center gap-2">
                 <FolderGit2 className="w-4 h-4 text-foreground" />
@@ -289,7 +289,7 @@ export default function ProjectsAdminPage() {
             </div>
 
             <div className="space-y-2.5 text-xs">
-              <div className="grid grid-cols-2 gap-2 bg-[var(--clay-sunken)] p-3 rounded-xl border border-[var(--clay-line)]">
+              <div className="grid grid-cols-2 gap-2 bg-[var(--clay-sunken)] p-3 rounded-xl border border-[var(--clay-line)] shadow-[var(--clay-well-1)]">
                 <div>
                   <span className="text-muted-foreground block text-[10px] uppercase font-bold">Owner</span>
                   <span className="font-semibold text-foreground">{selectedProject.owner}</span>
@@ -321,7 +321,7 @@ export default function ProjectsAdminPage() {
               <button
                 type="button"
                 onClick={() => setSelectedProject(null)}
-                className="px-4 py-1.5 bg-black text-white text-xs font-semibold rounded-lg"
+                className="px-4 py-1.5 bg-black text-white text-xs font-semibold rounded-lg shadow-[var(--clay-elev-ink-1)]"
               >
                 Close Drawer
               </button>

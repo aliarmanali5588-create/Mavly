@@ -1007,7 +1007,7 @@ export default function DashboardPage({ profile }: { profile: ProfileSummary }) 
               alt="Mavly Logo"
               width={28}
               height={28}
-              className="w-7 h-7 rounded-lg object-contain shrink-0 transition-transform group-hover:scale-105 active:scale-95"
+              className="w-7 h-7 rounded-lg object-contain shrink-0 transition-transform clay-press"
               priority
               referrerPolicy="no-referrer"
             />
@@ -1050,7 +1050,7 @@ export default function DashboardPage({ profile }: { profile: ProfileSummary }) 
                   className={`inline-flex h-10 min-w-[100px] items-center justify-center gap-1.5 rounded-lg border px-3 text-sm font-medium transition-[box-shadow,background-color,color] duration-200 outline-none focus-visible:shadow-[var(--clay-focus)] sm:min-w-[116px] ${
                     promptMode === "website"
                       ? "border-[var(--clay-line)] bg-card text-foreground shadow-[var(--clay-elev-1)]"
-                      : "border-transparent bg-transparent text-muted-foreground hover:bg-[var(--clay-sunken)] hover:text-foreground hover:shadow-[var(--clay-well-1)]"
+                      : "border-transparent bg-transparent text-muted-foreground hover:bg-[var(--clay-sunken)] hover:text-foreground"
                   }`}
                 >
                   <Globe className="h-4 w-4 shrink-0" aria-hidden="true" />
@@ -1064,7 +1064,7 @@ export default function DashboardPage({ profile }: { profile: ProfileSummary }) 
                   className={`inline-flex h-10 min-w-[100px] items-center justify-center gap-1.5 rounded-lg border px-3 text-sm font-medium transition-[box-shadow,background-color,color] duration-200 outline-none focus-visible:shadow-[var(--clay-focus)] sm:min-w-[116px] ${
                     promptMode === "android"
                       ? "border-[var(--clay-line)] bg-card text-foreground shadow-[var(--clay-elev-1)]"
-                      : "border-transparent bg-transparent text-muted-foreground hover:bg-[var(--clay-sunken)] hover:text-foreground hover:shadow-[var(--clay-well-1)]"
+                      : "border-transparent bg-transparent text-muted-foreground hover:bg-[var(--clay-sunken)] hover:text-foreground"
                   }`}
                 >
                   <Smartphone className="h-4 w-4 shrink-0" aria-hidden="true" />
@@ -1121,9 +1121,9 @@ export default function DashboardPage({ profile }: { profile: ProfileSummary }) 
                 items={attachedFiles.map((f) => ({ name: f.name, file: f.file, type: f.file.type, size: f.file.size }))}
                 onRemove={(index) => setAttachedFiles((prev) => prev.filter((_, j) => j !== index))}
               />
-              <div className="flex items-center justify-between px-4 py-2.5 border-t border-black/[0.05]">
+              <div className="flex items-center justify-between px-4 py-2.5 border-t border-[var(--clay-line)]">
                 <div className="flex items-center gap-1">
-                  <label className="cursor-pointer flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors px-2 py-1.5 rounded-lg hover:bg-black/5 active:scale-95">
+                  <label className="cursor-pointer flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors px-2 py-1.5 rounded-lg hover:bg-[var(--clay-sunken)] clay-press">
                     <input type="file" multiple className="hidden" onChange={handleFileSelect} accept="image/*,.pdf,.svg" />
                     {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Paperclip className="w-4 h-4" />}
                     <span className="hidden sm:inline">Attach</span>
@@ -1154,7 +1154,7 @@ export default function DashboardPage({ profile }: { profile: ProfileSummary }) 
               </div>
             </div>
             {buildError && (
-              <div role="alert" className="mt-3 flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+              <div role="alert" className="mt-3 flex items-start gap-2 rounded-lg border border-destructive/25 bg-destructive-subtle p-3 text-sm text-destructive-subtle-foreground">
                 <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
                 <span>{buildError} Your prompt is still here; you can correct it and retry.</span>
               </div>
@@ -1232,12 +1232,12 @@ export default function DashboardPage({ profile }: { profile: ProfileSummary }) 
                 {[1, 2, 3].map((i) => <Skeleton key={i} className="h-48 rounded-xl" />)}
               </div>
             ) : projectLoadError ? (
-              <div role="alert" className="rounded-2xl border border-red-200 bg-red-50 px-5 py-8 text-center">
-                <p className="text-sm text-red-700">{projectLoadError}</p>
+              <div role="alert" className="rounded-2xl border border-destructive/25 bg-destructive-subtle px-5 py-8 text-center">
+                <p className="text-sm text-destructive-subtle-foreground">{projectLoadError}</p>
                 <button
                   type="button"
                   onClick={() => void refreshProjects()}
-                  className="mt-3 text-sm font-medium text-red-800 underline underline-offset-2"
+                  className="mt-3 text-sm font-medium text-destructive-subtle-foreground underline underline-offset-2"
                 >
                   Retry
                 </button>
@@ -1274,8 +1274,8 @@ export default function DashboardPage({ profile }: { profile: ProfileSummary }) 
                   const updated = formatProjectDate(p);
                   return (
                     <Link key={p.projectId} href={`/project/${p.projectId}`} className="block h-full">
-                      <div className="bg-card rounded-2xl border border-[var(--clay-line)] shadow-[var(--clay-elev-2)] hover:shadow-[var(--clay-elev-4)] hover:border-[var(--clay-line-strong)] hover:-translate-y-1 active:translate-y-0 active:shadow-[var(--clay-elev-1)] transition-[box-shadow,transform,border-color] duration-300 overflow-hidden cursor-pointer group h-full flex flex-col">
-                        <div className="aspect-[16/10] relative overflow-hidden border-b border-black/[0.04]">
+                      <div className="bg-card rounded-2xl border border-[var(--clay-line)] shadow-[var(--clay-elev-2)] hover:border-[var(--clay-line-strong)] active:shadow-[var(--clay-well-2)] transition-[box-shadow,border-color] duration-300 overflow-hidden cursor-pointer group h-full flex flex-col">
+                        <div className="aspect-[16/10] relative overflow-hidden border-b border-[var(--clay-line)]">
                           {p.projectType === "android" ? (
                             <AndroidProjectPlaceholder isRow={false} />
                           ) : (
@@ -1318,7 +1318,7 @@ export default function DashboardPage({ profile }: { profile: ProfileSummary }) 
                                   <Upload className="w-3.5 h-3.5 mr-2" /> Export…
                                 </DropdownMenuItem>
                                 <DropdownMenuItem
-                                  className="text-red-600 focus:text-red-600 focus:bg-red-50 cursor-pointer"
+                                  className="text-destructive focus:text-destructive focus:bg-destructive-subtle cursor-pointer"
                                   onSelect={(e) => { e.preventDefault(); setDeleteTarget(p.projectId); }}
                                 >
                                   <Trash2 className="w-3.5 h-3.5 mr-2" /> Delete
@@ -1345,7 +1345,7 @@ export default function DashboardPage({ profile }: { profile: ProfileSummary }) 
                 <div className="overflow-x-auto">
                   <table className="w-full text-left">
                     <thead>
-                      <tr className="border-b border-[var(--clay-line)]/70 text-[11px] uppercase tracking-wider text-muted-foreground">
+                      <tr className="border-b border-[var(--clay-line)] text-[11px] uppercase tracking-wider text-muted-foreground">
                         <th className="font-medium px-4 py-2.5 w-16">Preview</th>
                         <th className="font-medium px-2 py-2.5">Project</th>
                         <th className="font-medium px-2 py-2.5 hidden md:table-cell">Description</th>
@@ -1358,10 +1358,10 @@ export default function DashboardPage({ profile }: { profile: ProfileSummary }) 
                         <tr
                           key={p.projectId}
                           onClick={() => router.push(`/project/${p.projectId}`)}
-                          className="border-b border-[var(--clay-line)]/70 last:border-0 hover:bg-[var(--clay-sunken)]/60 cursor-pointer transition-colors group"
+                          className="border-b border-[var(--clay-line)] last:border-0 hover:bg-[var(--clay-sunken)] cursor-pointer transition-colors group"
                         >
                           <td className="px-4 py-2">
-                            <div className="relative w-14 aspect-[16/10] rounded-md overflow-hidden border border-[var(--clay-line)]/60">
+                            <div className="relative w-14 aspect-[16/10] rounded-md overflow-hidden border border-[var(--clay-line)]">
                               {p.projectType === "android" ? (
                                 <AndroidProjectPlaceholder isRow />
                               ) : (
@@ -1410,7 +1410,7 @@ export default function DashboardPage({ profile }: { profile: ProfileSummary }) 
                                   <Upload className="w-3.5 h-3.5 mr-2" /> Export…
                                 </DropdownMenuItem>
                                 <DropdownMenuItem
-                                  className="text-red-600 focus:text-red-600 focus:bg-red-50 cursor-pointer"
+                                  className="text-destructive focus:text-destructive focus:bg-destructive-subtle cursor-pointer"
                                   onSelect={(e) => { e.preventDefault(); setDeleteTarget(p.projectId); }}
                                 >
                                   <Trash2 className="w-3.5 h-3.5 mr-2" /> Delete
@@ -1432,7 +1432,7 @@ export default function DashboardPage({ profile }: { profile: ProfileSummary }) 
                 <button
                   onClick={() => setPage((p) => Math.max(1, p - 1))}
                   disabled={safePage <= 1}
-                  className="h-8 w-8 flex items-center justify-center rounded-lg border border-[var(--clay-line)] bg-card text-muted-foreground shadow-[var(--clay-elev-1)] hover:shadow-[var(--clay-elev-2)] active:shadow-[var(--clay-well-1)] disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none transition-[box-shadow] duration-200"
+                  className="h-8 w-8 flex items-center justify-center rounded-lg border border-[var(--clay-line)] bg-card text-muted-foreground shadow-[var(--clay-elev-1)] active:shadow-[var(--clay-well-1)] disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none transition-[box-shadow] duration-200"
                 >
                   <ChevronLeft className="w-4 h-4" />
                 </button>
@@ -1440,7 +1440,7 @@ export default function DashboardPage({ profile }: { profile: ProfileSummary }) 
                 <button
                   onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                   disabled={safePage >= totalPages}
-                  className="h-8 w-8 flex items-center justify-center rounded-lg border border-[var(--clay-line)] bg-card text-muted-foreground shadow-[var(--clay-elev-1)] hover:shadow-[var(--clay-elev-2)] active:shadow-[var(--clay-well-1)] disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none transition-[box-shadow] duration-200"
+                  className="h-8 w-8 flex items-center justify-center rounded-lg border border-[var(--clay-line)] bg-card text-muted-foreground shadow-[var(--clay-elev-1)] active:shadow-[var(--clay-well-1)] disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none transition-[box-shadow] duration-200"
                 >
                   <ChevronRight className="w-4 h-4" />
                 </button>
@@ -1484,7 +1484,7 @@ export default function DashboardPage({ profile }: { profile: ProfileSummary }) 
               </p>
             </div>
             {githubNameError && (
-              <div className="flex items-start gap-2 text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg p-2.5">
+              <div className="flex items-start gap-2 text-xs text-destructive bg-destructive-subtle border border-destructive/25 rounded-lg p-2.5">
                 <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
                 <span>{githubNameError}</span>
               </div>
@@ -1506,9 +1506,9 @@ export default function DashboardPage({ profile }: { profile: ProfileSummary }) 
       <Dialog open={!!deleteTarget} onOpenChange={(o) => { if (!o && !deleting) setDeleteTarget(null); }}>
         <DialogContent className="sm:max-w-md overflow-hidden p-0 gap-0">
           {/* Red accent header */}
-          <div className="relative bg-gradient-to-br from-red-50 to-rose-100/60 px-6 pt-7 pb-6 text-center">
+          <div className="relative bg-[var(--clay-sunken)] px-6 pt-7 pb-6 text-center">
             <div className="mx-auto w-14 h-14 rounded-2xl bg-[var(--clay-sunken)] border border-[var(--clay-line)] shadow-[var(--clay-well-2)] flex items-center justify-center">
-              <AlertTriangle className="w-7 h-7 text-red-500" />
+              <AlertTriangle className="w-7 h-7 text-destructive" />
             </div>
             <DialogHeader className="mt-4">
               <DialogTitle className="text-center text-lg font-semibold text-foreground">Delete this project?</DialogTitle>
@@ -1520,7 +1520,7 @@ export default function DashboardPage({ profile }: { profile: ProfileSummary }) 
               You&rsquo;re about to permanently delete{" "}
               <span className="font-semibold text-foreground font-mono break-all">{deleteTarget}</span>.
             </p>
-            <div className="flex items-start gap-2.5 text-xs text-red-700 bg-red-50 border border-red-200 rounded-xl p-3">
+            <div className="flex items-start gap-2.5 text-xs text-destructive-subtle-foreground bg-destructive-subtle border border-destructive/25 rounded-xl p-3">
               <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
               <span>This action is <strong>irreversible</strong>. Once deleted, the project and all its data cannot be recovered.</span>
             </div>
@@ -1535,7 +1535,7 @@ export default function DashboardPage({ profile }: { profile: ProfileSummary }) 
                 Cancel
               </Button>
               <Button
-                className="flex-1 bg-red-600 hover:bg-red-700 text-white"
+                className="flex-1 bg-destructive hover:bg-destructive text-white"
                 onClick={confirmDelete}
                 disabled={deleting}
               >

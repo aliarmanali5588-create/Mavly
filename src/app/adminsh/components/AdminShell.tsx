@@ -69,7 +69,7 @@ export function AdminShell({
           {showNotice && (
             <div className="px-4 py-2.5 rounded-xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)] flex items-center justify-between gap-3 text-xs">
               <div className="flex items-center gap-2.5 min-w-0">
-                <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
+                <span className="w-2 h-2 rounded-full bg-success shrink-0" />
                 <span className="font-bold text-foreground tracking-tight shrink-0">
                   {live ? "Live Admin Console" : "Visual Admin Console"}
                 </span>
@@ -85,7 +85,7 @@ export function AdminShell({
               <div className="flex items-center gap-2 shrink-0">
                 <span
                   className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold tracking-wider uppercase ${
-                    live ? "bg-emerald-700 text-white" : "bg-black text-white"
+                    live ? "bg-success text-success-foreground" : "bg-black text-white"
                   }`}
                 >
                   {live ? "LIVE DATA" : "MOCK TELEMETRY"}
@@ -93,7 +93,7 @@ export function AdminShell({
                 <button
                   type="button"
                   onClick={() => setShowNotice(false)}
-                  className="p-1 text-muted-foreground hover:text-black rounded-lg hover:bg-black/5 cursor-pointer"
+                  className="p-1 text-muted-foreground hover:text-black rounded-lg hover:bg-[var(--clay-sunken)] cursor-pointer"
                   title="Dismiss notice"
                 >
                   <X className="w-3.5 h-3.5" />
@@ -118,7 +118,7 @@ export function AdminShell({
                 <span>Release v2.4.0 (Enterprise Suite)</span>
               )}
               <span>·</span>
-              <span className={live ? "text-muted-foreground font-medium" : "text-emerald-600 font-medium"}>
+              <span className={live ? "text-muted-foreground font-medium" : "text-success font-medium"}>
                 {live ? "p99: not measured" : "p99: 18ms"}
               </span>
             </div>

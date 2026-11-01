@@ -79,7 +79,7 @@ export function useRowWriter(projectId: string, env: DbEnv, hasDev: boolean) {
                 <>
                     {pending?.description ? <span className="block">{pending.description}</span> : null}
                     {env === "live" ? (
-                        <span className="mt-2 block rounded-md border border-emerald-300 bg-emerald-50 px-2 py-1.5 text-emerald-900 dark:border-emerald-500/40 dark:bg-emerald-500/10 dark:text-emerald-100" data-testid="editing-live">
+                        <span className="mt-2 block rounded-md border border-success/40 bg-success-subtle px-2 py-1.5 text-success-subtle-foreground dark:border-success/40 dark:bg-success/10" data-testid="editing-live">
                             <strong className="block">{t("engineV2.database.editingLive")}</strong>
                             {hasDev ? t("engineV2.database.liveConfirmBody") : t("engineV2.database.liveOnlyWarning")}
                         </span>
@@ -243,7 +243,7 @@ export function TableDataView({
             ) : null}
 
             {aiOpen ? (
-                <div className="border-border bg-muted/40 space-y-2 rounded-lg border p-3" data-testid="ai-search">
+                <div className="border-[var(--clay-line)] bg-[var(--clay-sunken)] space-y-2 rounded-lg border p-3 shadow-[var(--clay-elev-1)]" data-testid="ai-search">
                     <div className="flex flex-wrap gap-2">
                         <Input
                             className="h-8 min-w-64 flex-1"
@@ -266,7 +266,7 @@ export function TableDataView({
                             {aiSql.where ? (
                                 <>
                                     <p className="text-xs font-medium">{t("engineV2.database.aiFilterShown")}</p>
-                                    <pre className="bg-background border-border rounded border p-2 font-mono text-xs whitespace-pre-wrap">
+                                    <pre className="bg-[var(--clay-sunken)] border-[var(--clay-line)] rounded-md border p-2 font-mono text-xs whitespace-pre-wrap shadow-[var(--clay-well-1)]">
                                         <span className="text-muted-foreground">WHERE </span>
                                         {aiSql.where}
                                     </pre>
@@ -274,7 +274,7 @@ export function TableDataView({
                             ) : (
                                 <>
                                     <p className="text-xs">{t("engineV2.database.aiFilterNotFilter")}</p>
-                                    <pre className="bg-background border-border rounded border p-2 font-mono text-xs whitespace-pre-wrap">{aiSql.sql}</pre>
+                                    <pre className="bg-[var(--clay-sunken)] border-[var(--clay-line)] rounded-md border p-2 font-mono text-xs whitespace-pre-wrap shadow-[var(--clay-well-1)]">{aiSql.sql}</pre>
                                 </>
                             )}
                             <div className="flex flex-wrap items-center gap-2">

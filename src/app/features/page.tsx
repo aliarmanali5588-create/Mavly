@@ -124,7 +124,7 @@ export default function FeaturesPage() {
                       <span className="font-mono text-xs font-bold text-muted-foreground">
                         {item.step}
                       </span>
-                      <div className="p-2 rounded-xl bg-[var(--clay-sunken)] border border-[var(--clay-line)]">
+                      <div className="p-2 rounded-xl bg-[var(--clay-sunken)] border border-[var(--clay-line)] shadow-[var(--clay-well-1)]">
                         <Icon className="w-4 h-4 text-foreground" />
                       </div>
                     </div>
@@ -155,7 +155,7 @@ export default function FeaturesPage() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             <div className="p-6 rounded-2xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)] space-y-3">
-              <div className="w-10 h-10 rounded-xl bg-[var(--clay-sunken)] border border-[var(--clay-line)]/50 flex items-center justify-center text-foreground">
+              <div className="w-10 h-10 rounded-xl bg-[var(--clay-sunken)] border border-[var(--clay-line)] flex items-center justify-center text-foreground shadow-[var(--clay-well-1)]">
                 <Wand2 className="w-5 h-5" />
               </div>
               <h3 className="text-base font-bold text-foreground">Prompt-Based Website Generation</h3>
@@ -165,7 +165,7 @@ export default function FeaturesPage() {
             </div>
 
             <div className="p-6 rounded-2xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)] space-y-3">
-              <div className="w-10 h-10 rounded-xl bg-emerald-50 border border-emerald-200/50 flex items-center justify-center text-emerald-700">
+              <div className="w-10 h-10 rounded-xl bg-success-subtle border border-success/25 flex items-center justify-center text-success">
                 <Eye className="w-5 h-5" />
               </div>
               <h3 className="text-base font-bold text-foreground">Sandboxed Live Preview</h3>
@@ -175,7 +175,7 @@ export default function FeaturesPage() {
             </div>
 
             <div className="p-6 rounded-2xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)] space-y-3">
-              <div className="w-10 h-10 rounded-xl bg-[var(--clay-sunken)] border border-[var(--clay-line)]/50 flex items-center justify-center text-foreground">
+              <div className="w-10 h-10 rounded-xl bg-[var(--clay-sunken)] border border-[var(--clay-line)] flex items-center justify-center text-foreground shadow-[var(--clay-well-1)]">
                 <Code2 className="w-5 h-5" />
               </div>
               <h3 className="text-base font-bold text-foreground">File Tree &amp; Code Inspector</h3>
@@ -185,7 +185,7 @@ export default function FeaturesPage() {
             </div>
 
             <div className="p-6 rounded-2xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)] space-y-3">
-              <div className="w-10 h-10 rounded-xl bg-[var(--clay-sunken)] border border-[var(--clay-line)] flex items-center justify-center text-foreground">
+              <div className="w-10 h-10 rounded-xl bg-[var(--clay-sunken)] border border-[var(--clay-line)] flex items-center justify-center text-foreground shadow-[var(--clay-well-1)]">
                 <GitBranch className="w-5 h-5" />
               </div>
               <h3 className="text-base font-bold text-foreground">GitHub App Integration</h3>
@@ -195,7 +195,7 @@ export default function FeaturesPage() {
             </div>
 
             <div className="p-6 rounded-2xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)] space-y-3">
-              <div className="w-10 h-10 rounded-xl bg-[var(--clay-sunken)] border border-[var(--clay-line)] flex items-center justify-center text-foreground">
+              <div className="w-10 h-10 rounded-xl bg-[var(--clay-sunken)] border border-[var(--clay-line)] flex items-center justify-center text-foreground shadow-[var(--clay-well-1)]">
                 <ShieldCheck className="w-5 h-5" />
               </div>
               <h3 className="text-base font-bold text-foreground">Durable Restore Points</h3>
@@ -247,7 +247,7 @@ export default function FeaturesPage() {
                 desc: "Structure responsive blog layouts, company announcements, and resource libraries.",
               },
             ].map((useCase) => (
-              <div key={useCase.title} className="p-5 rounded-xl bg-[var(--clay-sunken)]/70 border border-[var(--clay-line)] space-y-2">
+              <div key={useCase.title} className="p-5 rounded-xl bg-[var(--clay-sunken)] border border-[var(--clay-line)] space-y-2 shadow-[var(--clay-well-1)]">
                 <h4 className="text-sm font-bold text-foreground">{useCase.title}</h4>
                 <p className="text-xs text-muted-foreground leading-relaxed">{useCase.desc}</p>
               </div>
@@ -264,15 +264,15 @@ export default function FeaturesPage() {
             </p>
             <ul className="space-y-2.5 text-xs text-foreground">
               <li className="flex items-start gap-2">
-                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                <CheckCircle2 className="w-4 h-4 text-success shrink-0 mt-0.5" />
                 <span>Export clean HTML and CSS as a downloadable ZIP package anytime.</span>
               </li>
               <li className="flex items-start gap-2">
-                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                <CheckCircle2 className="w-4 h-4 text-success shrink-0 mt-0.5" />
                 <span>Synchronize directly with your own personal or organization GitHub repositories.</span>
               </li>
               <li className="flex items-start gap-2">
-                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                <CheckCircle2 className="w-4 h-4 text-success shrink-0 mt-0.5" />
                 <span>No hidden tracking cookies or proprietary runtime locks injected into export files.</span>
               </li>
             </ul>
@@ -293,7 +293,7 @@ export default function FeaturesPage() {
         </section>
 
         {/* 6. Final CTA */}
-        <div className="p-8 sm:p-14 rounded-3xl bg-black text-white text-center space-y-6">
+        <div className="p-8 sm:p-14 rounded-3xl bg-black text-white text-center space-y-6 shadow-[var(--clay-elev-ink-1)]">
           <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight">
             Your next website starts with an idea.
           </h2>
@@ -303,7 +303,7 @@ export default function FeaturesPage() {
           <div>
             <Link
               href="/dashboard"
-              className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-card text-black font-bold text-xs sm:text-sm hover:bg-[var(--clay-sunken)] transition-colors"
+              className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-card text-black font-bold text-xs sm:text-sm border border-[var(--clay-line)] shadow-[var(--clay-elev-2)] hover:border-[var(--clay-line-strong)] clay-press transition-[box-shadow,border-color,background-color]"
             >
               <span>Launch Builder</span>
               <ArrowRight className="w-4 h-4" />

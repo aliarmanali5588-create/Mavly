@@ -109,7 +109,7 @@ export default function ChangelogPage() {
             >
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-[var(--clay-line)] pb-4">
                 <div className="flex items-center gap-3">
-                  <span className="font-mono text-xs font-bold px-2.5 py-1 rounded-lg bg-black text-white">
+                  <span className="font-mono text-xs font-bold px-2.5 py-1 rounded-lg bg-black text-white shadow-[var(--clay-elev-ink-1)]">
                     {rel.version}
                   </span>
                   <span className="text-xs text-muted-foreground font-medium">
@@ -120,7 +120,7 @@ export default function ChangelogPage() {
                 <span
                   className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full self-start sm:self-auto ${
                     rel.status === "Shipped"
-                      ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                      ? "bg-success-subtle text-success-subtle-foreground border border-success/25"
                       : "bg-[var(--clay-sunken)] text-foreground border border-[var(--clay-line)]"
                   }`}
                 >
@@ -135,7 +135,7 @@ export default function ChangelogPage() {
               <ul className="space-y-3 text-xs sm:text-sm text-foreground">
                 {rel.highlights.map((item, idx) => (
                   <li key={idx} className="flex items-start gap-2.5 leading-relaxed">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                    <CheckCircle2 className="w-4 h-4 text-success shrink-0 mt-0.5" />
                     <span>{item}</span>
                   </li>
                 ))}
