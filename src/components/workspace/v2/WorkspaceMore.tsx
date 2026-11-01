@@ -15,7 +15,7 @@ import { V2ProjectSettings } from "./V2ProjectSettings";
 import { ProjectPaymentsIntegration } from "./ProjectPaymentsIntegration";
 import { ProjectMemoryPanel } from "./ProjectMemoryPanel";
 import { ProjectWorkflowPanel } from "./ProjectWorkflowPanel";
-import { DatabasePlaceholder } from "../DatabasePlaceholder";
+import { BackendCenter } from "./BackendCenter";
 
 const noop = () => {};
 
@@ -33,6 +33,8 @@ export function WorkspaceMore({
     completionSoundError,
     onEnableCompletionSounds,
     onDisableCompletionSounds,
+    onOpenGithub,
+    githubConnected,
 }: {
     project: VcaasProject;
     onProjectChanged: () => void;
@@ -40,6 +42,9 @@ export function WorkspaceMore({
     completionSoundError: string | null;
     onEnableCompletionSounds: () => void | Promise<void>;
     onDisableCompletionSounds: () => void;
+    /** Opens the workspace's existing GitHub dialog; this view never reimplements it. */
+    onOpenGithub: () => void;
+    githubConnected: boolean;
 }) {
     const t = useT();
     const [section, setSection] = React.useState<MoreSection>("analytics");
@@ -54,7 +59,16 @@ export function WorkspaceMore({
             {section === "analytics" ? (
                 <ProjectActivityModal open onOpenChange={noop} projectId={projectId} />
             ) : section === "database" ? (
-                <DatabasePlaceholder />
+                /**
+                 * The Backend & Source Control Center. GitHub is opened through the
+                 * workspace's own dialog rather than duplicated here, so there is one
+                 * GitHub surface and one place its state lives.
+                 */
+                <BackendCenter
+                    project={project}
+                    onOpenGithub={onOpenGithub}
+                    githubConnected={githubConnected}
+                />
             ) : section === "usage" ? (
                 <UsageLimitsModal open onOpenChange={noop} projectId={projectId} />
             ) : section === "secrets" ? (

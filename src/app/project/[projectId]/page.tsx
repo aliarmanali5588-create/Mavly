@@ -2038,6 +2038,8 @@ export default function WorkspacePage() {
                 completionSoundError={completionSounds.error}
                 onEnableCompletionSounds={completionSounds.enable}
                 onDisableCompletionSounds={completionSounds.disable}
+                onOpenGithub={() => setOpenModal("github")}
+                githubConnected={githubConnected}
               />}
             </div>
             {/* The unsaved-changes bar owns the whole batch: count, undo, discard and apply. */}
@@ -2146,6 +2148,8 @@ export default function WorkspacePage() {
                 completionSoundError={completionSounds.error}
                 onEnableCompletionSounds={completionSounds.enable}
                 onDisableCompletionSounds={completionSounds.disable}
+                onOpenGithub={() => setOpenModal("github")}
+                githubConnected={githubConnected}
               />}
             </div>
           )}
