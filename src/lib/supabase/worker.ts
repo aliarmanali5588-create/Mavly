@@ -39,7 +39,9 @@ function isServiceRoleConfigured(): boolean {
  * A non-persistent client. There is no session to refresh and no cookie jar:
  * every call carries the service-role authorization header.
  */
-function createServiceRoleClient(actor: "generation-worker" | "credit-accounting"): SupabaseClient | null {
+function createServiceRoleClient(
+  actor: "generation-worker" | "credit-accounting" | "account-administration"
+): SupabaseClient | null {
   if (!isServiceRoleConfigured()) return null;
 
   return createClient(SUPABASE_URL, process.env[SERVICE_ROLE_ENV]!.trim(), {
@@ -61,4 +63,20 @@ export function createSupabaseWorkerClient(): SupabaseClient | null {
 /** Used only by the server-side credit RPC wrappers; never expose to a client. */
 export function createSupabaseCreditClient(): SupabaseClient | null {
   return createServiceRoleClient("credit-accounting");
+}
+
+/**
+ * ═══ ACCOUNT ADMINISTRATION (block / unblock) ═══════════════════════════════
+ *
+ * Only the admin account-status route may use this. It exists because banning
+ * an account is a Supabase Auth ADMIN operation, which requires the service-role
+ * key — there is no session-scoped equivalent.
+ *
+ * ⚠️ THE CALLER MUST ALREADY HAVE PROVEN IT IS AN ADMIN, SERVER-SIDE, through
+ * `requireAdmin()`. This client grants no authority of its own; it is a
+ * capability, and the route is the only place allowed to hold it.
+ * ⚠️ NEVER import this from a client component or a page.
+ */
+export function createSupabaseAccountAdminClient(): SupabaseClient | null {
+  return createServiceRoleClient("account-administration");
 }

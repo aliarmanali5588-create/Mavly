@@ -3,7 +3,6 @@
 import React from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import {
   LayoutDashboard,
   Users,
@@ -61,7 +60,12 @@ export const ADMIN_NAV_GROUPS: NavGroup[] = [
     groupName: "Overview & Core",
     items: [
       { id: "Overview", label: "Overview", href: "/adminsh/dashboard", icon: LayoutDashboard },
-      { id: "Users", label: "Users", href: "/adminsh/users", icon: Users, badge: "12.4k" },
+      /**
+       * ⚠️ NO BADGE HERE. The Users count is a live database figure supplied by
+       * `AdminShell`; a literal here is what made the sidebar claim 12.4k while
+       * the directory showed the real total.
+       */
+      { id: "Users", label: "Users", href: "/adminsh/users", icon: Users },
       { id: "Projects", label: "Projects", href: "/adminsh/projects", icon: FolderGit2 },
     ],
   },
@@ -99,15 +103,23 @@ export function AdminSidebar({
   userCount = null,
   environment = "unknown",
 }: AdminSidebarProps) {
-  const router = useRouter();
 
-  const handleSignOut = () => {
-    toast.info("Signing out from Admin Console...", {
-      description: "Session terminated. Returning to login screen.",
-    });
-    setTimeout(() => {
-      router.push("/adminsh/auth");
-    }, 700);
+  const handleSignOut = async () => {
+    /**
+     * ⚠️ NO FAKE DELAY, AND NO FAKE SUCCESS.
+     *
+     * This used to show a "Session terminated" toast and `setTimeout` a
+     * client-side navigation to `/adminsh/auth` — a page that never ended the
+     * Supabase session. It now calls the real sign-out route (POST only, same
+     * as `AuthNav`) and only reports success once the server confirms it.
+     */
+    try {
+      const response = await fetch("/auth/signout", { method: "POST", cache: "no-store" });
+      if (!response.ok) throw new Error(`sign out failed (${response.status})`);
+      window.location.href = "/";
+    } catch {
+      toast.error("We couldn't sign you out. Please try again.");
+    }
   };
 
   const content = (
@@ -167,15 +179,20 @@ export function AdminSidebar({
             {group.items.map((item) => {
               const Icon = item.icon;
               const isActive = activeNav === item.id;
-              const badge = live
-                ? item.id === "Users"
+              /**
+               * The Users badge is ALWAYS the live count — on every admin page,
+               * not only the Overview. `userCount` is `null` until the count is
+               * known, and an unknown count renders no badge rather than a
+               * placeholder number.
+               */
+              const badge =
+                item.id === "Users"
                   ? userCount === null
                     ? undefined
                     : compactCount(userCount)
-                  : item.id === "System Health"
+                  : live && item.id === "System Health"
                     ? undefined
-                    : item.badge
-                : item.badge;
+                    : item.badge;
 
               return (
                 <Link
@@ -210,6 +227,15 @@ export function AdminSidebar({
                     >
                       {badge}
                     </span>
+                  ) : item.id === "Users" ? (
+                    /* The count is still loading: hold the space so the row does
+                       not jump when the real figure arrives. */
+                    <span
+                      aria-hidden="true"
+                      className={`h-3.5 w-7 rounded-md shrink-0 ml-1.5 animate-pulse ${
+                        isActive ? "bg-card/20" : "bg-[var(--clay-sunken)]"
+                      }`}
+                    />
                   ) : isActive ? (
                     <ChevronRight className="w-3.5 h-3.5 text-white/60 shrink-0" />
                   ) : null}

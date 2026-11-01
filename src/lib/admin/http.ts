@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { createSupabaseServerClient, getCurrentUser } from "@/lib/supabase/server";
+import { createSupabaseServerClient, getRequestUser } from "@/lib/supabase/server";
 
 /**
  * Shared guard for `/api/adminsh/*`.
@@ -26,9 +26,10 @@ export function adminError(status: number, code: string, error: string): NextRes
 }
 
 export async function requireAdmin(): Promise<
-  { ok: true; supabase: ServerSupabase } | { ok: false; response: NextResponse }
+  | { ok: true; supabase: ServerSupabase; user: { id: string; email: string | null } }
+  | { ok: false; response: NextResponse }
 > {
-  const user = await getCurrentUser();
+  const user = await getRequestUser();
   if (!user) {
     return { ok: false, response: adminError(401, "UNAUTHENTICATED", "Sign in required.") };
   }
@@ -63,7 +64,15 @@ export async function requireAdmin(): Promise<
     };
   }
 
-  return { ok: true, supabase };
+  return {
+    ok: true,
+    supabase,
+    /**
+     * The verified caller. Routes that record an audit trail need to know WHO
+     * acted; this is the Auth-server-verified identity, never a header or body.
+     */
+    user: { id: user.id, email: user.email ?? null },
+  };
 }
 
 /** Bound a database call so a stuck aggregate cannot hold the request open. */

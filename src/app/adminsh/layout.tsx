@@ -17,7 +17,7 @@
 import { notFound, redirect } from "next/navigation";
 
 import { loginUrlFor } from "@/lib/auth/redirect";
-import { createSupabaseServerClient, getCurrentUser } from "@/lib/supabase/server";
+import { createSupabaseServerClient, getRequestUser } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
@@ -26,7 +26,11 @@ export default async function AdminLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const user = await getCurrentUser();
+  /**
+   * `getRequestUser` is request-memoised, so the API route's own `requireAdmin`
+   * call reuses this verified answer instead of asking the Auth server again.
+   */
+  const user = await getRequestUser();
   if (!user) redirect(loginUrlFor("/adminsh/dashboard"));
 
   const supabase = await createSupabaseServerClient();

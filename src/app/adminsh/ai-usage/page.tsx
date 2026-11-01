@@ -28,7 +28,7 @@ export default function AiUsageAdminPage() {
   const [timeRange, setTimeRange] = useState("30D");
   const [selectedModel, setSelectedModel] = useState<string>("DeepSeek V4.1 Flash");
   const [isTestPingOpen, setIsTestPingOpen] = useState(false);
-  const [pingStatus, setPingStatus] = useState<"idle" | "running" | "done">("idle");
+  const [pingStatus, setPingStatus] = useState<"idle" | "running" | "done" | "unavailable">("idle");
   const [pingResult, setPingResult] = useState<{ latency: number; provider: string; ok: boolean } | null>(null);
 
   const modelTableData = [
@@ -99,21 +99,21 @@ export default function AiUsageAdminPage() {
   ];
 
   const handleRunPingTest = (modelName: string) => {
+    /**
+     * ⚠️ THIS NO LONGER FABRICATES A RESULT.
+     *
+     * It used to `setTimeout` 650 ms and then report a latency of
+     * `38 + Math.random() * 24` ms and "Verified HTTP 200 via OpenRouter
+     * gateway (simulated)" — a made-up measurement presented as a health probe.
+     * An operator reading that would believe a provider had been checked when
+     * nothing was contacted.
+     *
+     * No live provider probe is implemented in this build, so the panel says so
+     * instead of inventing a number.
+     */
     setIsTestPingOpen(true);
-    setPingStatus("running");
+    setPingStatus("unavailable");
     setPingResult(null);
-
-    setTimeout(() => {
-      setPingStatus("done");
-      setPingResult({
-        latency: Math.floor(38 + Math.random() * 24),
-        provider: modelName,
-        ok: true,
-      });
-      toast.success(`Upstream health probe OK: ${modelName}`, {
-        description: `Verified HTTP 200 via OpenRouter gateway (simulated).`,
-      });
-    }, 650);
   };
 
   return (
@@ -402,6 +402,15 @@ export default function AiUsageAdminPage() {
                 <div className="flex items-center gap-2 text-warning py-2">
                   <Activity className="w-4 h-4 animate-spin" />
                   <span>Measuring SSL handshake and token stream TTL...</span>
+                </div>
+              ) : pingStatus === "unavailable" ? (
+                <div className="space-y-1.5 py-1 text-white/70">
+                  <p className="text-warning">No live provider probe is implemented in this build.</p>
+                  <p className="text-muted-foreground">
+                    Nothing was contacted, so no latency is reported. Provider reachability is
+                    not measured here; check the generation worker logs for real provider
+                    outcomes.
+                  </p>
                 </div>
               ) : pingResult ? (
                 <div className="space-y-1.5 text-success py-1">

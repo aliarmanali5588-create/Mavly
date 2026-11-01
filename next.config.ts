@@ -26,12 +26,37 @@ const nextConfig: NextConfig = {
   async headers() {
     // Only cache-control headers here. CSP and CORS are handled exclusively in proxy.ts
     return [
+      /**
+       * ⚠️ IMMUTABLE BUILD ASSETS ARE EXCLUDED FROM `no-store`.
+       *
+       * The blanket rule below used to apply to EVERY path, including
+       * `/_next/static/*` — files whose names contain a content hash and which
+       * Next serves with `immutable` semantics. Forcing `no-store` on them made
+       * the browser re-download the same JavaScript and CSS on every single
+       * navigation, which is a large part of why moving between pages felt slow.
+       *
+       * These are public, content-addressed build outputs. They carry no user
+       * data, so caching them cannot leak one session into another.
+       */
       {
-        source: '/:path*',
+        source: "/_next/static/:path*",
         headers: [
           {
-            key: 'Cache-Control',
-            value: 'no-cache, no-store, must-revalidate',
+            key: "Cache-Control",
+            value: "public, max-age=31536000, immutable",
+          },
+        ],
+      },
+      /**
+       * Everything else keeps the original no-cache policy. Application HTML and
+       * API responses are per-user and must never be stored by a shared cache.
+       */
+      {
+        source: "/:path*",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "no-cache, no-store, must-revalidate",
           },
           { key: "Pragma", value: "no-cache" },
           { key: "Expires", value: "0" },

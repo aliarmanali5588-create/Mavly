@@ -28,16 +28,23 @@ export default function SystemHealthAdminPage() {
   const [services, setServices] = useState<SystemServiceStatus[]>(MOCK_SYSTEM_HEALTH);
   const [incidents] = useState<IncidentRecord[]>(MOCK_INCIDENTS_LIST);
   const [selectedIncident, setSelectedIncident] = useState<IncidentRecord | null>(null);
-  const [isRefreshing, setIsRefreshing] = useState(false);
 
   const handlePingAll = () => {
-    setIsRefreshing(true);
-    setTimeout(() => {
-      setIsRefreshing(false);
-      toast.success("Health heartbeat check completed", {
-        description: "All 6 core services responded with HTTP 200 OK within 38ms.",
-      });
-    }, 600);
+    /**
+     * ⚠️ THIS NO LONGER FABRICATES A RESULT.
+     *
+     * It used to `setTimeout` 600 ms and then claim "All 6 core services
+     * responded with HTTP 200 OK within 38ms" — a measurement that was never
+     * taken. Nothing here contacts a service.
+     *
+     * The real, measured health checks live on the Overview page, which reads
+     * `public.admin_overview` and reports actual database latency. This page's
+     * service list is static reference data, so the button says that plainly.
+     */
+    toast.info("No live health probe is implemented on this page", {
+      description:
+        "No service was contacted, so no latency is reported. Measured checks are on the Overview page.",
+    });
   };
 
   const getServiceIcon = (name: string) => {
@@ -100,11 +107,10 @@ export default function SystemHealthAdminPage() {
 
         <button
           onClick={handlePingAll}
-          disabled={isRefreshing}
           className="self-start md:self-auto flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-foreground bg-[var(--clay-sunken)] hover:bg-[var(--clay-sunken)] border border-[var(--clay-line)] rounded-lg transition-colors shrink-0 shadow-[var(--clay-well-1)]"
         >
-          <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? "animate-spin" : ""}`} />
-          <span>{isRefreshing ? "Probing..." : "Probe All Services"}</span>
+          <RefreshCw className="w-3.5 h-3.5" />
+          <span>Probe All Services</span>
         </button>
       </div>
 

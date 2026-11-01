@@ -37,7 +37,7 @@ export async function updateSupabaseSession(request: NextRequest) {
   // Without keys there is nothing to refresh and nobody to verify. The caller
   // gets `configured: false` and knows that the deployment has no auth at all.
   if (!isSupabaseConfigured()) {
-    return { response, user: null, configured: false };
+    return { response, user: null, configured: false, restricted: false };
   }
 
   const supabase = createServerClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
@@ -60,10 +60,38 @@ export async function updateSupabaseSession(request: NextRequest) {
 
   const { data, error } = await supabase.auth.getUser();
 
+  /**
+   * ═══ IS THIS VERIFIED CALLER CURRENTLY RESTRICTED? ═══════════════════════
+   *
+   * A ban in Supabase Auth stops FUTURE sign-ins but does not invalidate an
+   * access token already in the browser, so the token above can still be valid
+   * for a blocked account. This asks the database — the same
+   * `auth.users.banned_until` the Auth server enforces — so an already-issued
+   * token stops working the moment an administrator blocks the account.
+   *
+   * ⚠️ ONLY ASKED FOR A VERIFIED USER. A signed-out request has no account to
+   * check, and an anonymous caller must never be able to probe this.
+   * ⚠️ A FAILED CHECK FAILS CLOSED-ISH: it is treated as "not restricted" so a
+   * database hiccup cannot lock every user out of the product. The protected
+   * routes behind this still verify the session and ownership independently.
+   */
+  let restricted = false;
+  if (!error && data?.user) {
+    try {
+      const { data: restrictedResult, error: restrictedError } = await supabase.rpc(
+        "current_user_is_restricted"
+      );
+      if (!restrictedError) restricted = restrictedResult === true;
+    } catch {
+      restricted = false;
+    }
+  }
+
   return {
     response,
     user: error ? null : data?.user ?? null,
     configured: true,
+    restricted,
   };
 }
 
@@ -72,6 +100,6 @@ export async function updateSupabaseSession(request: NextRequest) {
  * `isSupabaseConfigured()` themselves.
  */
 export async function refreshSession(request: NextRequest) {
-  const { response, user } = await updateSupabaseSession(request);
-  return { response, user };
+  const { response, user, restricted } = await updateSupabaseSession(request);
+  return { response, user, restricted };
 }

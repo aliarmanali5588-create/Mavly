@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { apiSessionDecision } from "@/lib/api-access";
+import { RESTRICTED_PATH, restrictionDecision } from "@/lib/account-restriction";
 import { crossOriginMutationReason, isAllowedAppOrigin } from "@/lib/api-origin";
 import { isSharedHostingRuntimeEnabled } from "@/lib/hosting/config";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
@@ -266,9 +267,59 @@ export async function proxy(request: NextRequest) {
   }
 
   const configured = isSupabaseConfigured();
-  const { response, user } = configured
+  const { response, user, restricted } = configured
     ? await refreshSession(request)
-    : { response: NextResponse.next({ request }), user: null };
+    : { response: NextResponse.next({ request }), user: null, restricted: false };
+
+  /**
+   * ═══⭐ A RESTRICTED ACCOUNT IS STOPPED HERE, BEFORE ANY ROUTE RUNS ════════
+   *
+   * `restricted` comes from `public.current_user_is_restricted()` — the same
+   * `auth.users.banned_until` Supabase Auth enforces. Checking it in the proxy
+   * is what makes blocking effective against an access token that was already
+   * issued: the token is still cryptographically valid, but no protected page
+   * or API is reachable with it.
+   *
+   * ⚠️ IT RUNS BEFORE THE ROOT REDIRECT AND THE API GATE, so a blocked user is
+   * never bounced into the builder on the way to the restriction screen.
+   * ⚠️ THE RESTRICTION SCREEN, SIGN-OUT AND SUPPORT STAY REACHABLE. Without
+   * them the account would have no way to read why it is blocked or to recover.
+   */
+  const restriction = restrictionDecision(request.nextUrl.pathname, restricted);
+
+  if (restriction === "deny_api") {
+    const denied = carrySessionCookies(
+      NextResponse.json(
+        {
+          ok: false,
+          code: "ACCOUNT_RESTRICTED",
+          error:
+            "This account is restricted. Protected operations are unavailable while the restriction is active.",
+        },
+        { status: 403, headers: { "cache-control": "private, no-store, max-age=0" } },
+      ),
+      response,
+    );
+    addCorsHeaders(denied, request);
+    addCspHeaders(denied, request);
+    return denied;
+  }
+
+  if (restriction === "redirect_page") {
+    const restrictedUrl = new URL(RESTRICTED_PATH, request.nextUrl.origin);
+    const redirectResponse = carrySessionCookies(
+      NextResponse.redirect(restrictedUrl, 307),
+      response,
+    );
+    redirectResponse.headers.set(
+      "Cache-Control",
+      "private, no-store, no-cache, must-revalidate, max-age=0",
+    );
+    redirectResponse.headers.append("Vary", "Cookie");
+    addCorsHeaders(redirectResponse, request);
+    addCspHeaders(redirectResponse, request);
+    return redirectResponse;
+  }
 
   /**
    * ── THE FRONT DOOR (authenticated visitors) ──────────────────────────────

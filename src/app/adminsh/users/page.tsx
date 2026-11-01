@@ -11,6 +11,7 @@ import {
   X,
 } from "lucide-react";
 import { AdminShell } from "../components/AdminShell";
+import { toast } from "sonner";
 import type {
   AdminUserDirectoryResponse,
   AdminUserDirectoryRow,
@@ -45,9 +46,23 @@ export default function UsersAdminPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
+  /** The account whose status is being changed, and the in-flight state. */
+  const [statusTarget, setStatusTarget] = useState<AdminUserDirectoryRow | null>(null);
+  const [statusReason, setStatusReason] = useState("");
+  const [statusSubmitting, setStatusSubmitting] = useState(false);
+  const [statusError, setStatusError] = useState<string | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
+    /**
+     * ⚠️ THE DEBOUNCE IS FOR TYPING ONLY.
+     *
+     * A flat 200 ms delay ran on EVERY fetch — including the first load, a
+     * filter change and a page step — adding a fifth of a second of pure wait
+     * to interactions that have nothing to do with typing. It now applies only
+     * while a search term is present, which is the one case it was meant for.
+     */
+    const debounceMs = searchQuery.trim() === "" ? 0 : 200;
     const timer = setTimeout(async () => {
       setLoading(true);
       setError(null);
@@ -65,7 +80,12 @@ export default function UsersAdminPage() {
         });
         const result = await response.json();
         if (!response.ok || !result.ok || !result.data) {
-          throw new Error(result.error || "The user directory could not be loaded.");
+          // The route names the condition and the raw database code; show both
+          // so the operator can act on evidence instead of a guess.
+          const detail = result.code ? ` [${result.code}]` : "";
+          throw new Error(
+            (result.error || "The user directory could not be loaded.") + detail
+          );
         }
         setDirectory(result.data as AdminUserDirectoryResponse);
       } catch (requestError) {
@@ -79,7 +99,7 @@ export default function UsersAdminPage() {
       } finally {
         if (!controller.signal.aborted) setLoading(false);
       }
-    }, 200);
+    }, debounceMs);
 
     return () => {
       clearTimeout(timer);
@@ -91,6 +111,63 @@ export default function UsersAdminPage() {
   const total = directory?.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / USERS_PER_PAGE));
   const metrics = directory?.metrics;
+
+  /**
+   * ═══ APPLY A BLOCK / UNBLOCK ═════════════════════════════════════════════
+   *
+   * The server owns the decision: it re-checks admin authority, refuses a
+   * self-block, changes the enforced state in Supabase Auth and writes the audit
+   * row. This function only reports what the server actually did — it never
+   * assumes success, and it refreshes the directory from the database rather
+   * than patching the row locally with a guessed status.
+   */
+  const submitStatusChange = async () => {
+    if (!statusTarget || statusSubmitting) return;
+    const action = statusTarget.status === "Banned" ? "unblock" : "block";
+
+    setStatusSubmitting(true);
+    setStatusError(null);
+    try {
+      const response = await fetch("/api/adminsh/users/status", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        cache: "no-store",
+        body: JSON.stringify({
+          userId: statusTarget.id,
+          action,
+          reason: statusReason.trim() === "" ? null : statusReason.trim(),
+        }),
+      });
+      const result = await response.json().catch(() => null);
+
+      if (!response.ok || result?.ok !== true) {
+        const detail = result?.code ? ` [${result.code}]` : "";
+        throw new Error((result?.error || "The account status could not be changed.") + detail);
+      }
+
+      const data = result.data as { changed?: boolean; message?: string; auditRecorded?: boolean };
+      if (data.changed === false) {
+        toast.info(data.message ?? "No change was needed.");
+      } else if (data.auditRecorded === false) {
+        toast.warning(data.message ?? "The status changed but the audit record is missing.");
+      } else {
+        toast.success(action === "block" ? "Account blocked" : "Account unblocked");
+      }
+
+      setStatusTarget(null);
+      setStatusReason("");
+      // Re-read from the database: the row's status is the server's answer.
+      setRefreshKey((value) => value + 1);
+    } catch (requestError) {
+      setStatusError(
+        requestError instanceof Error
+          ? requestError.message
+          : "The account status could not be changed."
+      );
+    } finally {
+      setStatusSubmitting(false);
+    }
+  };
 
   const getPlanBadge = () => (
     <span
@@ -277,9 +354,26 @@ export default function UsersAdminPage() {
                         </button>
                         <button
                           type="button"
-                          disabled
-                          title="Account status changes are not supported"
-                          className="p-1 rounded-lg text-muted-foreground cursor-not-allowed opacity-60"
+                          onClick={() => {
+                            setStatusTarget(user);
+                            setStatusReason("");
+                            setStatusError(null);
+                          }}
+                          title={
+                            user.status === "Banned"
+                              ? "Unblock this account"
+                              : "Block this account"
+                          }
+                          aria-label={
+                            user.status === "Banned"
+                              ? `Unblock ${user.email ?? user.id}`
+                              : `Block ${user.email ?? user.id}`
+                          }
+                          className={`p-1 rounded-lg transition-colors ${
+                            user.status === "Banned"
+                              ? "text-success hover:bg-success-subtle"
+                              : "text-muted-foreground hover:text-destructive hover:bg-destructive-subtle"
+                          }`}
                         >
                           {user.status === "Not Banned" ? <UserX className="w-3.5 h-3.5" /> : <UserCheck className="w-3.5 h-3.5" />}
                         </button>
@@ -318,6 +412,105 @@ export default function UsersAdminPage() {
           </div>
         </div>
       </div>
+
+      {statusTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[var(--clay-scrim)] backdrop-blur-[3px]">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="status-dialog-title"
+            className="w-full max-w-md bg-card rounded-2xl border border-[var(--clay-line)] shadow-[var(--clay-float)] p-6 space-y-4"
+          >
+            <div className="flex items-start gap-3 pb-3 border-b border-[var(--clay-line)]">
+              <div
+                className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${
+                  statusTarget.status === "Banned"
+                    ? "bg-success-subtle text-success"
+                    : "bg-destructive-subtle text-destructive"
+                }`}
+              >
+                {statusTarget.status === "Banned" ? (
+                  <UserCheck className="w-4 h-4" />
+                ) : (
+                  <UserX className="w-4 h-4" />
+                )}
+              </div>
+              <div className="min-w-0">
+                <h3 id="status-dialog-title" className="text-sm font-bold text-foreground">
+                  {statusTarget.status === "Banned" ? "Unblock this account?" : "Block this account?"}
+                </h3>
+                <p className="text-xs text-muted-foreground mt-0.5 break-all">
+                  {statusTarget.name ?? "Name not recorded"}
+                  {statusTarget.email ? ` · ${statusTarget.email}` : ""}
+                </p>
+              </div>
+            </div>
+
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              {statusTarget.status === "Banned"
+                ? "Access will be restored. The account's projects, files, credits and billing history are untouched."
+                : "The account will be signed out of protected areas immediately and cannot use the dashboard, workspaces, generation or protected APIs. Its projects, files, credits and billing history are NOT deleted."}
+            </p>
+
+            {statusTarget.status !== "Banned" && (
+              <label className="block space-y-1.5">
+                <span className="text-[11px] font-semibold text-foreground">
+                  Reason <span className="text-muted-foreground font-normal">(optional, may be shown to the user)</span>
+                </span>
+                <textarea
+                  value={statusReason}
+                  onChange={(event) => setStatusReason(event.target.value)}
+                  maxLength={500}
+                  rows={2}
+                  placeholder="Why is this account being restricted?"
+                  className="w-full px-3 py-2 text-xs rounded-xl bg-[var(--clay-sunken)] border border-[var(--clay-line)] text-foreground focus:bg-card focus:outline-none focus:ring-2 focus:ring-black resize-none"
+                />
+                <span className="text-[10px] text-muted-foreground font-mono">
+                  {statusReason.length}/500
+                </span>
+              </label>
+            )}
+
+            {statusError && (
+              <div
+                role="alert"
+                className="rounded-xl border border-destructive/25 bg-destructive-subtle px-3 py-2 text-[11px] text-destructive-subtle-foreground"
+              >
+                {statusError}
+              </div>
+            )}
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-[var(--clay-line)]">
+              <button
+                type="button"
+                onClick={() => {
+                  setStatusTarget(null);
+                  setStatusReason("");
+                  setStatusError(null);
+                }}
+                disabled={statusSubmitting}
+                className="mavly-btn-secondary px-4 py-2 text-xs font-semibold disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void submitStatusChange()}
+                disabled={statusSubmitting}
+                className={`px-4 py-2 text-xs font-semibold rounded-xl text-white shadow-[var(--clay-elev-ink-1)] disabled:opacity-60 ${
+                  statusTarget.status === "Banned" ? "bg-success" : "bg-destructive"
+                }`}
+              >
+                {statusSubmitting
+                  ? "Applying…"
+                  : statusTarget.status === "Banned"
+                    ? "Unblock account"
+                    : "Block account"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {selectedUser && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[var(--clay-scrim)] backdrop-blur-[3px] animate-in fade-in">

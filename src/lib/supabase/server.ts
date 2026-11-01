@@ -1,6 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
+import { cache } from "react";
 import type { NextRequest } from "next/server";
 import {
   SUPABASE_ANON_KEY,
@@ -133,3 +134,22 @@ export async function getCurrentUser() {
     return null;
   }
 }
+
+/**
+ * ═══⭐ ONE AUTH ROUND-TRIP PER REQUEST ══════════════════════════════════════
+ *
+ * `getUser()` is a network call to the Supabase Auth server. A single admin
+ * page used to make it TWICE — once in `app/adminsh/layout.tsx` and again in
+ * `requireAdmin()` — and every extra call is a full round-trip added to the
+ * time before anything renders.
+ *
+ * This memoises the answer for the lifetime of one request. It is keyed by
+ * `React.cache`, which is request-scoped by design: two different users' requests
+ * never share an entry, so this cannot leak a session between visitors.
+ *
+ * ⚠️ THE CACHED VALUE IS THE VERIFIED USER OR `null`. A `null` is cached too, so
+ * a signed-out request does not retry the Auth server on every call site.
+ * ⚠️ NEVER use this for a mutation that must re-verify a session it just
+ * changed (sign-in/sign-out routes use `getCurrentUser` directly).
+ */
+export const getRequestUser = cache(getCurrentUser);

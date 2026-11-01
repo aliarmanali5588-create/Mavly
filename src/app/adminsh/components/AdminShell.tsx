@@ -7,6 +7,7 @@ import type { AdminPeriod } from "@/lib/admin/overview";
 import { AdminNavSection } from "./types";
 import { AdminSidebar } from "./AdminSidebar";
 import { AdminHeader } from "./AdminHeader";
+import { useAdminUserCount } from "./useAdminUserCount";
 
 interface AdminShellProps {
   activeNav: AdminNavSection;
@@ -45,6 +46,17 @@ export function AdminShell({
   const isRealDataSection = REAL_DATA_SECTIONS.has(activeNav);
   const showLiveFooter = live || isRealDataSection;
 
+  /**
+   * ═══ ONE USER COUNT FOR THE WHOLE CONSOLE ═════════════════════════════════
+   *
+   * The sidebar badge is fetched here, in the shell every admin page shares, so
+   * it agrees with the Users page on every route. A caller that already has an
+   * authoritative figure (Overview, from its own payload) passes it in and
+   * wins; otherwise the shell's own count is used.
+   */
+  const fetchedUserCount = useAdminUserCount();
+  const resolvedUserCount = userCount ?? fetchedUserCount;
+
   return (
     <div className="min-h-screen bg-[var(--clay-base)] text-foreground font-sans flex flex-col lg:flex-row mavly-page-enter antialiased">
       {/* 1. Sidebar */}
@@ -53,7 +65,7 @@ export function AdminShell({
         isOpenMobile={isOpenMobile}
         setIsOpenMobile={setIsOpenMobile}
         live={live}
-        userCount={userCount}
+        userCount={resolvedUserCount}
         environment={environment}
       />
 

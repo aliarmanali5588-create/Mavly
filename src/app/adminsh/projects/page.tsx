@@ -65,6 +65,15 @@ export default function ProjectsAdminPage() {
 
   useEffect(() => {
     const controller = new AbortController();
+    /**
+     * ⚠️ THE DEBOUNCE IS FOR TYPING ONLY.
+     *
+     * A flat 200 ms delay ran on EVERY fetch — including the first load, a
+     * filter change and a page step — adding a fifth of a second of pure wait
+     * to interactions that have nothing to do with typing. It now applies only
+     * while a search term is present, which is the one case it was meant for.
+     */
+    const debounceMs = searchQuery.trim() === "" ? 0 : 200;
     const timer = setTimeout(async () => {
       setLoading(true);
       setError(null);
@@ -83,7 +92,12 @@ export default function ProjectsAdminPage() {
         });
         const result = await response.json();
         if (!response.ok || !result.ok || !result.data) {
-          throw new Error(result.error || "The project directory could not be loaded.");
+          // The route names the condition and the raw database code; show both
+          // so the operator can act on evidence instead of a guess.
+          const detail = result.code ? ` [${result.code}]` : "";
+          throw new Error(
+            (result.error || "The project directory could not be loaded.") + detail
+          );
         }
         setDirectory(result.data as AdminProjectDirectoryResponse);
       } catch (requestError) {
@@ -97,7 +111,7 @@ export default function ProjectsAdminPage() {
       } finally {
         if (!controller.signal.aborted) setLoading(false);
       }
-    }, 200);
+    }, debounceMs);
 
     return () => {
       clearTimeout(timer);
