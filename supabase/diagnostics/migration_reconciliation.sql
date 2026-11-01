@@ -37,11 +37,11 @@
 
 select
   '1. recorded migration history' as section,
-  version,
-  name,
-  inserted_at
-from supabase_migrations.schema_migrations
-order by version;
+  case
+    when to_regclass('supabase_migrations.schema_migrations') is null
+      then 'supabase_migrations.schema_migrations is not installed; migration history is unavailable (manual SQL editor applies do not record here).'
+    else 'supabase_migrations.schema_migrations is installed; run `select version, name, inserted_at from supabase_migrations.schema_migrations order by version;` to list applied migrations.'
+  end as detail;
 
 
 -- ───────────────────────────────────────────────────────────────────────────
