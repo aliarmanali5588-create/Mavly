@@ -48,6 +48,7 @@ import {
   type AgentGenerationFailure,
   type AgentGenerationResult,
   type AgentManifest,
+  type AgentPlanningCheckpoint,
   type AgentProjectType,
   type AgentProgressEvent,
   type AgentProviderAttempt,
@@ -1020,6 +1021,7 @@ async function execute(
   }
 
   let resumeManifest: AgentManifest | null = parseManifest(run.generation_manifest);
+  let resumePlanningCheckpoint = parsePlanningCheckpoint(run.generation_manifest);
   let completedPaths: string[] = [];
   let nextBatchIndex = 0;
 
@@ -1048,12 +1050,15 @@ async function execute(
   }
 
   /**
-   * A retried/reopened run needs its plan. If the manifest was not persisted
-   * (the run died before planning finished), the agent plans again and still
-   * skips the verified completed paths.
+   * A retried/reopened run needs its plan. If planning stopped after an output
+   * limit, its compact-retry marker resumes that bounded recovery directly.
    */
   if (input.resume && !resumeManifest) {
-    console.warn(`[mavly] run ${runId} has no persisted manifest; it will be re-planned`);
+    console.warn(
+      resumePlanningCheckpoint
+        ? `[mavly] run ${runId} has a compact-planning checkpoint; it will resume compact planning`
+        : `[mavly] run ${runId} has no persisted manifest; it will be re-planned`,
+    );
   }
 
   const writtenPaths = new Set<string>(completedPaths);
@@ -1456,8 +1461,26 @@ async function execute(
       throw new RunStoreError(`Could not save the generation plan: ${saved.error}`);
     }
     resumeManifest = manifest;
+    resumePlanningCheckpoint = null;
     await prepareManagedBackend(manifest);
     await prepareImageStage(manifest);
+  };
+
+  const onPlanningCheckpoint = async (
+    checkpoint: AgentPlanningCheckpoint,
+  ): Promise<void> => {
+    const saved = await setRunManifest(
+      runId,
+      checkpoint,
+      guard.claimedAt ?? undefined,
+      guard.leaseToken ?? undefined,
+      client,
+    );
+    if (isStoreFailure(saved)) {
+      if (saved.code === "CONFLICT") throw new RunLeaseLostError();
+      throw new RunStoreError(`Could not save planner recovery state: ${saved.error}`);
+    }
+    resumePlanningCheckpoint = checkpoint;
   };
 
   const onBatch = async (batch: AgentBatchCheckpoint): Promise<void> => {
@@ -1692,16 +1715,21 @@ async function execute(
       : {}),
     ...(generationPlanContext ? { planContext: generationPlanContext } : {}),
     ...(designDirectives ? { designDirectives } : {}),
-    ...(resumeManifest || completedPaths.length > 0 || nextBatchIndex > 0
+    ...(resumeManifest ||
+    resumePlanningCheckpoint ||
+    completedPaths.length > 0 ||
+    nextBatchIndex > 0
       ? {
           resume: {
             manifest: resumeManifest,
+            planningCheckpoint: resumePlanningCheckpoint,
             completedPaths,
             nextBatchIndex,
           },
         }
       : {}),
     onManifest,
+    onPlanningCheckpoint,
     onBatch,
     onProgress,
   };
@@ -2984,5 +3012,22 @@ function parseManifest(value: unknown): AgentManifest | null {
     ...resumeModelFields,
     files,
     deletedPaths,
+  };
+}
+
+function parsePlanningCheckpoint(value: unknown): AgentPlanningCheckpoint | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const record = value as Record<string, unknown>;
+  if (
+    record.type !== "mavly_planning_checkpoint" ||
+    record.version !== 1 ||
+    record.nextAttempt !== "compact"
+  ) {
+    return null;
+  }
+  return {
+    type: "mavly_planning_checkpoint",
+    version: 1,
+    nextAttempt: "compact",
   };
 }

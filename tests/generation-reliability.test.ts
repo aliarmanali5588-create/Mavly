@@ -3,15 +3,18 @@ import assert from "node:assert/strict";
 
 import {
   BATCH_OUTPUT_TOKENS,
+  MANIFEST_OUTPUT_TOKENS,
   MAX_FILE_BYTES,
   PREVIEW_OUTPUT_TOKENS,
   generateApp,
   isGenerationFailure,
   type AgentDependencies,
   type AgentGenerationInput,
+  type AgentPlanningCheckpoint,
 } from "../src/lib/ai/agent";
 import {
   type ChatCompletionFailure,
+  type ChatCompletionOptions,
   type ChatCompletionResult,
   type ChatCompletionSuccess,
   type ChatMessage,
@@ -32,6 +35,10 @@ import { resolveModel } from "../src/lib/ai/models";
  */
 
 const model = resolveModel();
+const effectiveManifestOutputTokens = Math.min(
+  model.maxOutputTokens,
+  MANIFEST_OUTPUT_TOKENS,
+);
 
 function success(content: string, finishReason = "stop"): ChatCompletionSuccess {
   return {
@@ -64,8 +71,15 @@ function success(content: string, finishReason = "stop"): ChatCompletionSuccess 
 
 function failure(
   code: ChatCompletionFailure["code"],
-  options: { retryable?: boolean; finishReason?: string | null } = {},
+  options: {
+    retryable?: boolean;
+    finishReason?: string | null;
+    promptTokens?: number | null;
+    completionTokens?: number | null;
+  } = {},
 ): ChatCompletionFailure {
+  const promptTokens = options.promptTokens ?? null;
+  const completionTokens = options.completionTokens ?? null;
   return {
     ok: false,
     code,
@@ -78,9 +92,12 @@ function failure(
       model: model.id,
       finishReason: options.finishReason ?? null,
       usage: {
-        promptTokens: null,
-        completionTokens: null,
-        totalTokens: null,
+        promptTokens,
+        completionTokens,
+        totalTokens:
+          promptTokens !== null && completionTokens !== null
+            ? promptTokens + completionTokens
+            : null,
         reasoningTokens: null,
         cachedReadTokens: null,
         cachedWriteTokens: null,
@@ -133,6 +150,187 @@ function provider(handler: (messages: ChatMessage[]) => ChatCompletionResult) {
 }
 
 const noop = async () => {};
+
+test("a planner output-limit response retries once with a compact complete plan", async () => {
+  const checkpointed: string[][] = [];
+  const planningCheckpoints: AgentPlanningCheckpoint[] = [];
+  const attempts: Array<{ phase: string; completionTokens: number | null }> = [];
+  const plannerMaxTokens: number[] = [];
+  let plannerCalls = 0;
+
+  const outcome = await generateApp(
+    {
+      prompt: "Build a small notes app.",
+      mode: "update",
+      onManifest: (manifest) => {
+        checkpointed.push(manifest.files.map((file) => file.path));
+      },
+      onPlanningCheckpoint: (checkpoint) => {
+        planningCheckpoints.push(checkpoint);
+      },
+      onBatch: (batch) => {
+        checkpointed.push(batch.files.map((file) => file.path));
+      },
+    },
+    {
+      complete: async (_selectedModel, messages, options: number | ChatCompletionOptions = {}) => {
+        const maxTokens = typeof options === "number" ? null : options.maxTokens ?? null;
+        if (isPlanner(messages)) {
+          plannerCalls += 1;
+          if (maxTokens !== null) plannerMaxTokens.push(maxTokens);
+          if (plannerCalls === 1) {
+            return failure("OUTPUT_LIMIT", {
+              finishReason: "length",
+              promptTokens: 500,
+              completionTokens: effectiveManifestOutputTokens,
+            });
+          }
+          assert.match(messages.at(-1)?.content ?? "", /complete replacement plan/i);
+          assert.match(messages.at(-1)?.content ?? "", /never omit paths/i);
+          return success(JSON.stringify({
+            message: "A focused notes app.",
+            files: ["app/page.tsx"],
+            deletedPaths: [],
+          }));
+        }
+        return success(batchJson([["app/page.tsx", "complete source"]]));
+      },
+      onProviderAttempt: (event) => {
+        if (event.type === "result") {
+          attempts.push({
+            phase: event.attempt.phase,
+            completionTokens: event.attempt.completionTokens,
+          });
+        }
+      },
+      sleep: noop,
+    },
+  );
+
+  assert.equal(isGenerationFailure(outcome), false);
+  if (isGenerationFailure(outcome)) return;
+  assert.equal(plannerCalls, 2);
+  assert.deepEqual(planningCheckpoints, [{
+    type: "mavly_planning_checkpoint",
+    version: 1,
+    nextAttempt: "compact",
+  }]);
+  assert.deepEqual(plannerMaxTokens, [
+    effectiveManifestOutputTokens,
+    effectiveManifestOutputTokens,
+  ]);
+  assert.deepEqual(attempts.map((attempt) => attempt.phase), ["manifest", "manifest", "batch"]);
+  assert.deepEqual(
+    attempts.slice(0, 2).map((attempt) => attempt.completionTokens),
+    [effectiveManifestOutputTokens, 7],
+  );
+  assert.deepEqual(checkpointed[0], ["app/page.tsx"]);
+  assert.deepEqual(outcome.result.manifest.files.map((file) => file.path), ["app/page.tsx"]);
+  assert.equal(outcome.result.usage.completionTokens, effectiveManifestOutputTokens + 14);
+});
+
+test("repeated planner output limits persist a compact-retry checkpoint for resume", async () => {
+  let plannerCalls = 0;
+  let manifestCheckpointCount = 0;
+  const planningCheckpoints: AgentPlanningCheckpoint[] = [];
+  const outcome = await generateApp(
+    {
+      prompt: "Build a large app.",
+      mode: "update",
+      onManifest: () => {
+        manifestCheckpointCount += 1;
+      },
+      onPlanningCheckpoint: (checkpoint) => {
+        planningCheckpoints.push(checkpoint);
+      },
+    },
+    {
+      complete: async (_selectedModel, messages) => {
+        if (isPlanner(messages)) {
+          plannerCalls += 1;
+          return failure("OUTPUT_LIMIT", {
+            finishReason: "length",
+            promptTokens: 500,
+            completionTokens: effectiveManifestOutputTokens,
+          });
+        }
+        throw new Error("Planning failure must not continue to code generation.");
+      },
+      sleep: noop,
+    },
+  );
+
+  assert.equal(isGenerationFailure(outcome), true);
+  if (!isGenerationFailure(outcome)) return;
+  assert.equal(outcome.code, "GENERATION_TRUNCATED");
+  assert.match(outcome.error, /incomplete plan was discarded/i);
+  assert.equal(plannerCalls, 2);
+  assert.equal(manifestCheckpointCount, 0);
+  assert.equal(planningCheckpoints.length, 1);
+  const planningCheckpoint = planningCheckpoints[0];
+  assert.ok(planningCheckpoint);
+  assert.equal(outcome.usage.completionTokens, effectiveManifestOutputTokens * 2);
+  assert.equal(outcome.attempts.every((attempt) => attempt.phase === "manifest"), true);
+
+  let resumedPlannerCalls = 0;
+  let resumedManifestCheckpoints = 0;
+  const resumed = await generateApp(
+    {
+      prompt: "Build a large app.",
+      mode: "update",
+      resume: { planningCheckpoint },
+      onManifest: () => {
+        resumedManifestCheckpoints += 1;
+      },
+    },
+    {
+      complete: async (_selectedModel, messages) => {
+        if (isPlanner(messages)) {
+          resumedPlannerCalls += 1;
+          assert.match(messages.at(-1)?.content ?? "", /previous project plan reached the output-token limit/i);
+          return success(manifestJson(["app/page.tsx"]));
+        }
+        return success(batchJson([["app/page.tsx", "complete source"]]));
+      },
+      sleep: noop,
+    },
+  );
+
+  assert.equal(isGenerationFailure(resumed), false);
+  if (isGenerationFailure(resumed)) return;
+  assert.equal(resumedPlannerCalls, 1);
+  assert.equal(resumedManifestCheckpoints, 1);
+  assert.deepEqual(resumed.result.manifest.files.map((file) => file.path), ["app/page.tsx"]);
+});
+
+test("planner checkpoint persistence failure stops before the compact retry", async () => {
+  let plannerCalls = 0;
+  const outcome = await generateApp(
+    {
+      prompt: "Build a project.",
+      mode: "update",
+      onPlanningCheckpoint: () => {
+        throw new Error("storage unavailable");
+      },
+    },
+    {
+      complete: async () => {
+        plannerCalls += 1;
+        return failure("OUTPUT_LIMIT", {
+          finishReason: "length",
+          promptTokens: 500,
+          completionTokens: effectiveManifestOutputTokens,
+        });
+      },
+      sleep: noop,
+    },
+  );
+
+  assert.equal(isGenerationFailure(outcome), true);
+  if (!isGenerationFailure(outcome)) return;
+  assert.equal(outcome.code, "GENERATION_PERSIST_FAILED");
+  assert.equal(plannerCalls, 1);
+});
 
 test("a truncated batch is split; only validated content is checkpointed", async () => {
   const persisted: string[][] = [];

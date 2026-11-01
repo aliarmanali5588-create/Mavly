@@ -118,6 +118,20 @@ Consequences worth stating plainly:
    (`inline_dispatch_failed`).
    The equivalent silent case in the worker path — orchestration setup throwing — now also
    emits `orchestration.skipped` (`setup_failed`) instead of only a console line.
+7. **The planner had a 4k output ceiling and no truncation recovery.** OpenRouter sends
+   the configured manifest ceiling as `max_tokens`, clamped to the selected model's
+   catalog limit (24k for the default model, 32k for Claude Sonnet 5). A complete
+   manifest can include every planned path plus applicable backend/image plans and
+   optional planning context; the user prompt is not the only output-size factor. A
+   `finish_reason: "length"` was correctly rejected and its partial response discarded,
+   but planning failed immediately instead of reducing scope. Fixed: the manifest ceiling
+   now reaches the highest catalog limit, and one compact complete-plan attempt follows an
+   output-limit response. A versioned marker is saved through the existing fenced
+   `generation_manifest` write before that retry; a later run resume continues directly
+   with compact planning. Only a fully validated manifest replaces the marker. Provider
+   usage remains attached to each attempt. No production response/usage logs were available
+   for this diagnosis, so it describes repository behavior rather than measured incident
+   tokens.
 
 ## 4. Structural costs that are *not* bugs
 

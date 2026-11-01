@@ -125,9 +125,17 @@ export interface AgentManifest {
   deletedPaths: string[];
 }
 
+export interface AgentPlanningCheckpoint {
+  type: "mavly_planning_checkpoint";
+  version: 1;
+  nextAttempt: "compact";
+}
+
 export interface AgentResumeState {
   /** The manifest a previous attempt planned, when it was persisted. */
   manifest?: AgentManifest | null;
+  /** Resume a planning output-limit recovery without repeating the full request. */
+  planningCheckpoint?: AgentPlanningCheckpoint | null;
   /** Paths whose persisted content has already been verified by the caller. */
   completedPaths?: readonly string[];
   /** Continue checkpoint indexes after the last persisted batch. */
@@ -251,6 +259,8 @@ export interface AgentGenerationInput {
   onBatch?: (batch: AgentBatchCheckpoint) => Promise<void> | void;
   /** Persist the manifest so a later attempt can resume without re-planning. */
   onManifest?: (manifest: AgentManifest) => Promise<void> | void;
+  /** Persist safe planner recovery state; never receives provider response text. */
+  onPlanningCheckpoint?: (checkpoint: AgentPlanningCheckpoint) => Promise<void> | void;
   onProgress?: (event: AgentProgressEvent) => Promise<void> | void;
 }
 
@@ -391,7 +401,8 @@ export const MAX_BATCH_FILES = 8;
 export const MAX_BATCH_ESTIMATED_BYTES = 48_000;
 export const DEFAULT_ESTIMATED_FILE_BYTES = 8_000;
 export const BATCH_OUTPUT_TOKENS = 12_000;
-export const MANIFEST_OUTPUT_TOKENS = 4_000;
+/** Highest catalog output cap; the provider adapter clamps this per model. */
+export const MANIFEST_OUTPUT_TOKENS = 32_000;
 /**
  * The standalone prototype is the largest file the website profile produces and
  * the most likely to hit a provider's output ceiling. It gets its own batch and
@@ -1511,23 +1522,53 @@ async function planManifest(
   const manifestPolicy = providerCallPolicyFor("manifest", {
     modelMaxTokens: model.maxOutputTokens,
   });
-  const call = await callModel(
-    "manifest",
-    model,
-    messages,
-    {
-      policy: manifestPolicy,
-      // The plan is useless if it consumes the budget of the first batch.
-      reserveForOthersMs: MIN_USEFUL_ATTEMPT_MS,
-    },
-    state,
-    deps,
-    deadlineAt,
-    now,
-    input.onProgress,
-    "manifest",
-    providerAttemptCeiling(),
-  );
+  const callManifest = (requestMessages: ChatMessage[]) =>
+    callModel(
+      "manifest",
+      model,
+      requestMessages,
+      {
+        policy: manifestPolicy,
+        // The plan is useless if it consumes the budget of the first batch.
+        reserveForOthersMs: MIN_USEFUL_ATTEMPT_MS,
+      },
+      state,
+      deps,
+      deadlineAt,
+      now,
+      input.onProgress,
+      "manifest",
+      providerAttemptCeiling(),
+    );
+
+  const resumeCompact = input.resume?.planningCheckpoint?.nextAttempt === "compact";
+  let call = resumeCompact
+    ? await callManifest(compactManifestMessages(messages, input))
+    : await callManifest(messages);
+  if (!resumeCompact && isChatCompletionFailure(call) && call.code === "OUTPUT_LIMIT") {
+    /**
+     * The provider deliberately does not expose text from an output-limited
+     * response as usable content. Never salvage or checkpoint that partial JSON.
+     * Make one bounded scope reduction instead: paths may be strings (the
+     * parser supplies the default estimate), while the complete path list and
+     * any applicable backend/image plan remain required.
+     */
+    try {
+      await input.onPlanningCheckpoint?.({
+        type: "mavly_planning_checkpoint",
+        version: 1,
+        nextAttempt: "compact",
+      });
+    } catch (error) {
+      console.error("[mavly] planning checkpoint failed:", errorMessage(error));
+      return {
+        ok: false,
+        code: "GENERATION_PERSIST_FAILED",
+        error: "The planner recovery state could not be saved. Nothing was changed.",
+      };
+    }
+    call = await callManifest(compactManifestMessages(messages, input));
+  }
 
   let parsed: ParseManifestOutcome;
   let previousContent = "";
@@ -1538,7 +1579,9 @@ async function planManifest(
       return {
         ok: false,
         code: "GENERATION_TRUNCATED",
-        error: "The model hit its output limit while planning the project. Nothing was changed.",
+        error: resumeCompact
+          ? "The compact planning retry also hit its output limit. The incomplete plan was discarded; nothing was changed. Resume to retry planning."
+          : "The planner hit its output limit on both complete-plan attempts. The incomplete plan was discarded; nothing was changed. Resume to retry planning.",
       };
     }
     return { ok: false, code: mapped.code, error: call.error };
@@ -1602,6 +1645,35 @@ async function planManifest(
 
   if (parsed.ok === false) return parsed;
   return { ok: true, manifest: parsed.manifest };
+}
+
+function compactManifestMessages(
+  messages: readonly ChatMessage[],
+  input: AgentGenerationInput,
+): ChatMessage[] {
+  const preserveImagePlan =
+    input.projectType !== "android" && input.imagePlanning !== undefined;
+  return [
+    ...messages,
+    {
+      role: "user",
+      content: [
+        "The previous project plan reached the output-token limit. Its incomplete response was discarded and was not saved.",
+        "Return a complete replacement plan as one JSON object. Do not continue from or refer to the discarded response.",
+        'Use this compact shape: {"message":"short summary","files":["relative/path"],"deletedPaths":["optional/path"]}.',
+        "Use path strings in files instead of objects; the server supplies a bounded default size estimate.",
+        "Include every file required by the complete request, up to the existing 80-file limit. Never omit paths to fit the response.",
+        'Keep message concise. Omit only the optional "plan" field.',
+        "Preserve backendRequirement and its complete dataModel whenever the requested product needs persistent data.",
+        preserveImagePlan
+          ? "Preserve the complete siteType and images plan required by the image-planning instructions."
+          : "",
+        "Return no partial list, ellipsis, placeholders, or truncated JSON.",
+      ]
+        .filter(Boolean)
+        .join("\n"),
+    },
+  ];
 }
 
 type ParseManifestOutcome =
