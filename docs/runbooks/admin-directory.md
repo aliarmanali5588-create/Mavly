@@ -16,6 +16,51 @@ from an email prefix or project ID. Apply migration 44 after migration 43; it
 assumes migration 41's RPCs exist and replaces their exposed wrappers without
 creating new tables.
 
+Migration 46 makes the project directory tolerate a database without migration
+14's `project_published_versions` table. See "Publication is an optional
+dependency" below.
+
+## Publication is an optional dependency
+
+The project directory reads six relations. Five are always present on a Mavly
+deployment: `public.projects` (02), `auth.users`, `public.profiles` (01),
+`public.project_runs` (03) and `public.project_deployments` (07). The sixth,
+`public.project_published_versions`, arrives with migration 14 and only matters
+when shared tenant hosting is enabled.
+
+Migration 41's function body named that table unconditionally. Because a
+plpgsql body is resolved at RUN time, migration 41 applied cleanly on a database
+without migration 14 and then failed on every request with
+`relation "public.project_published_versions" does not exist` (SQLSTATE
+`42P01`), which the route correctly reported as `DIRECTORY_TABLE_MISSING`.
+
+Migration 46 removes that hard dependency the same way migration 41 already
+handles the optional `credit_accounts` table: it probes `to_regclass` and reads
+publication state through dynamic SQL, so the relation name never appears in a
+planned statement. The response then carries:
+
+- `publicationState: "available"` — the table is installed; publication reads
+  normally.
+- `publicationState: "schema_missing"` — the table is absent. `published` and
+  `verifiedMavlyDomains` are `null`, `visibility` is `"unknown"`, and
+  `publishedUrl` is `null`. The page states this in a banner and renders `—`
+  for those metrics. It never reports `0` published or `draft` for every
+  project, because "not recorded" and "nothing is published" are different
+  facts.
+
+To enable publication, apply `14_shared_hosting.sql` then
+`15_shared_hosting_attempt_state.sql`. The directory picks the table up on the
+next request; migration 46 needs no re-run.
+
+### Naming the exact missing relation
+
+`GET /api/adminsh/diagnostics` (admin-only, read-only) returns
+`admin_directory_schema_report()`: which relations the directories need, which
+are present, and which absences are required versus optional. Call it before
+changing the database — `42P01` names a condition, not an object.
+
+The equivalent SQL is `select public.admin_directory_schema_report();`.
+
 ## Users
 
 `GET /api/adminsh/users` reads `auth.users`, optional `profiles` names,

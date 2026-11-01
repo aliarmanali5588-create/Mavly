@@ -43,7 +43,26 @@ export type AdminProjectGenerationStatus =
 export type AdminProjectVisibility =
   | "custom_domain"
   | "preview_url"
-  | "draft";
+  | "draft"
+  /**
+   * ⚠️ NOT A PUBLICATION STATE — an ABSENCE OF ONE.
+   *
+   * `unknown` means migration 14's `project_published_versions` table is not
+   * installed, so publication was never recorded and cannot be read. It is
+   * deliberately distinct from `draft`, which asserts that nothing is
+   * published. Collapsing the two would report a schema gap as a fact about
+   * the customer's projects.
+   */
+  | "unknown";
+
+/**
+ * Whether the publication dependency is installed.
+ *
+ * `schema_missing` is a truthful, non-fatal state: the directory still returns
+ * real project, owner, generation and deployment records, and reports the
+ * publication columns as unrecorded rather than zero.
+ */
+export type AdminPublicationState = "available" | "schema_missing";
 
 export interface AdminProjectDirectoryRow {
   id: string;
@@ -67,8 +86,16 @@ export interface AdminProjectDirectoryMetrics {
   total: number;
   createdThisMonth: number;
   createdLast7Days: number;
-  published: number;
-  verifiedMavlyDomains: number;
+  /**
+   * ⚠️ NULL WHEN PUBLICATION IS UNRECORDED, never 0.
+   *
+   * These two are the only metrics that depend on migration 14's publication
+   * table. When it is absent the database returns null and the page must say
+   * "unavailable" — a 0 here would be a fabricated claim that nothing is
+   * published.
+   */
+  published: number | null;
+  verifiedMavlyDomains: number | null;
 }
 
 export interface AdminProjectDirectoryResponse {
@@ -79,6 +106,8 @@ export interface AdminProjectDirectoryResponse {
   status: AdminProjectGenerationStatus;
   visibility: "all" | AdminProjectVisibility;
   metrics: AdminProjectDirectoryMetrics;
+  /** Whether migration 14's publication table is installed. */
+  publicationState: AdminPublicationState;
   generatedAt: string;
 }
 
@@ -97,7 +126,8 @@ function isCount(value: unknown): value is number {
 const PROJECT_STATUSES = new Set([
   "queued", "running", "completed", "failed", "cancelled", "interrupted", "no_run",
 ]);
-const PROJECT_VISIBILITIES = new Set(["custom_domain", "preview_url", "draft"]);
+const PROJECT_VISIBILITIES = new Set(["custom_domain", "preview_url", "draft", "unknown"]);
+const PUBLICATION_STATES = new Set(["available", "schema_missing"]);
 const PROJECT_DEPLOYMENT_STATUSES = new Set([
   "published", "deploying", "failed", "unpublished", "draft",
 ]);
@@ -140,6 +170,19 @@ export function isAdminProjectDirectoryResponse(
   value: unknown
 ): value is AdminProjectDirectoryResponse {
   if (!isRecord(value) || !Array.isArray(value.rows) || !isRecord(value.metrics)) return false;
+  /**
+   * ⚠️ PUBLICATION METRICS ARE VALID AS NULL, BUT ONLY WHEN THE TABLE IS ABSENT.
+   *
+   * `null` is accepted for `published` / `verifiedMavlyDomains` exactly when
+   * `publicationState === "schema_missing"`. A null alongside
+   * `publicationState: "available"` is an inconsistent response and is still
+   * rejected, so a genuinely broken query cannot hide behind the optional path.
+   */
+  const publicationState = value.publicationState;
+  const publicationMissing = publicationState === "schema_missing";
+  const publicationMetric = (metric: unknown) =>
+    publicationMissing ? metric === null || isCount(metric) : isCount(metric);
+
   return (
     isCount(value.total)
     && isCount(value.page)
@@ -148,11 +191,13 @@ export function isAdminProjectDirectoryResponse(
     && value.pageSize > 0
     && (value.status === "all" || (typeof value.status === "string" && PROJECT_STATUSES.has(value.status)))
     && (value.visibility === "all" || (typeof value.visibility === "string" && PROJECT_VISIBILITIES.has(value.visibility)))
+    && typeof publicationState === "string"
+    && PUBLICATION_STATES.has(publicationState)
     && isCount(value.metrics.total)
     && isCount(value.metrics.createdThisMonth)
     && isCount(value.metrics.createdLast7Days)
-    && isCount(value.metrics.published)
-    && isCount(value.metrics.verifiedMavlyDomains)
+    && publicationMetric(value.metrics.published)
+    && publicationMetric(value.metrics.verifiedMavlyDomains)
     && typeof value.generatedAt === "string"
     && value.rows.every((row: unknown) =>
       isRecord(row)

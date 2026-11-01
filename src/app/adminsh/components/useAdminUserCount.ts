@@ -13,10 +13,19 @@ import * as React from "react";
  * must never substitute a constant, because a fabricated count is exactly the
  * defect this replaces.
  */
-export function useAdminUserCount(): number | null {
+export function useAdminUserCount(enabled = true): number | null {
   const [total, setTotal] = React.useState<number | null>(null);
 
   React.useEffect(() => {
+    /**
+     * ⚠️ A SKELETON MUST NOT FETCH.
+     *
+     * The loading boundaries render this shell with `enabled = false`, so a
+     * navigation does not fire a second count request that the real page will
+     * immediately duplicate. The badge holds its space and stays unknown.
+     */
+    if (!enabled) return;
+
     const controller = new AbortController();
 
     fetch("/api/adminsh/users/count", {
@@ -38,7 +47,7 @@ export function useAdminUserCount(): number | null {
       });
 
     return () => controller.abort();
-  }, []);
+  }, [enabled]);
 
   return total;
 }

@@ -127,3 +127,4 @@ test("admin pages contain no customer, project, or Mavly billing demo records", 
   assert.match(BILLING_PAGE, /No Mavly platform billing records are available/);
   assert.match(BILLING_PAGE, /Customer-owned Razorpay/);
 });
+

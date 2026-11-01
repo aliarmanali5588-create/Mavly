@@ -21,6 +21,16 @@ interface AdminShellProps {
   environment?: string;
   version?: string | null;
   userCount?: number | null;
+  /**
+   * ⚠️ SET ONLY BY A LOADING BOUNDARY.
+   *
+   * The chrome (sidebar, header, footer, content container) is identical to the
+   * real page, so a navigation paints the shell immediately and the skeleton
+   * occupies exactly the space the real content will. The one behavioural
+   * difference is that the sidebar's user-count fetch is suppressed: a
+   * placeholder must not issue a request the real page will duplicate.
+   */
+  loading?: boolean;
 }
 
 const REAL_DATA_SECTIONS = new Set<AdminNavSection>([
@@ -40,6 +50,7 @@ export function AdminShell({
   environment,
   version,
   userCount,
+  loading = false,
 }: AdminShellProps) {
   const [isOpenMobile, setIsOpenMobile] = useState(false);
   const [showNotice, setShowNotice] = useState(true);
@@ -54,7 +65,7 @@ export function AdminShell({
    * authoritative figure (Overview, from its own payload) passes it in and
    * wins; otherwise the shell's own count is used.
    */
-  const fetchedUserCount = useAdminUserCount();
+  const fetchedUserCount = useAdminUserCount(!loading);
   const resolvedUserCount = userCount ?? fetchedUserCount;
 
   return (

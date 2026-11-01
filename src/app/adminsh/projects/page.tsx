@@ -123,6 +123,15 @@ export default function ProjectsAdminPage() {
   const total = directory?.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / PROJECTS_PER_PAGE));
   const metrics = directory?.metrics;
+  /**
+   * ⚠️ PUBLICATION IS A DECLARED AVAILABILITY, NOT A GUESS.
+   *
+   * When migration 14's publication table is absent the directory still returns
+   * real projects, owners and generation state; only publication is unrecorded.
+   * The page says so instead of rendering "Draft" for every project and 0 for
+   * every publication metric.
+   */
+  const publicationMissing = directory?.publicationState === "schema_missing";
 
   const getStatusBadge = (status: AdminProjectDirectoryRow["generationStatus"]) => {
     const label = status === "no_run"
@@ -168,8 +177,20 @@ export default function ProjectsAdminPage() {
             metrics?.createdLast7Days,
             metrics ? `${metrics.createdThisMonth.toLocaleString()} created this month` : "Recorded project creation",
           ],
-          ["Published Records", metrics?.published, "Active version or recorded ready state"],
-          ["Verified Mavly Domains", metrics?.verifiedMavlyDomains, "Verified mavly.xyz hostname"],
+          [
+            "Published Records",
+            metrics?.published,
+            publicationMissing
+              ? "Publication table not installed"
+              : "Active version or recorded ready state",
+          ],
+          [
+            "Verified Mavly Domains",
+            metrics?.verifiedMavlyDomains,
+            publicationMissing
+              ? "Publication table not installed"
+              : "Verified mavly.xyz hostname",
+          ],
         ].map(([label, value, description]) => (
           <div
             key={String(label)}
@@ -188,6 +209,7 @@ export default function ProjectsAdminPage() {
               )}
             </div>
             <h3 className="text-xl font-bold tracking-tight text-foreground font-mono mt-1">
+              {/* A null publication metric renders "—", never "0". */}
               {loading && value === undefined ? "…" : typeof value === "number" ? value.toLocaleString() : "—"}
             </h3>
             <p className="text-[11px] text-muted-foreground mt-1">
@@ -270,6 +292,23 @@ export default function ProjectsAdminPage() {
           </div>
         )}
 
+        {/**
+         * ⚠️ A SCHEMA GAP IS STATED, NOT HIDDEN.
+         *
+         * Project, owner and generation records below are real. Only publication
+         * could not be read, because migration 14's table is not installed on
+         * this deployment. Saying so is the difference between "we don't know"
+         * and a false "nothing is published".
+         */}
+        {!error && publicationMissing && (
+          <div className="rounded-xl border border-warning/25 bg-warning-subtle px-4 py-3 text-xs text-warning-subtle-foreground" role="status">
+            <span className="font-semibold">Publication state is not recorded on this deployment.</span>{" "}
+            Project, owner and generation records below are live. Published counts, visibility and
+            published URLs require the shared-hosting schema (<code className="font-mono">14_shared_hosting.sql</code>),
+            which is not installed, so they are shown as unavailable rather than as zero.
+          </div>
+        )}
+
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
             <thead>
@@ -334,7 +373,11 @@ export default function ProjectsAdminPage() {
                         ) : (
                           <span className="inline-flex items-center gap-1 font-mono text-[11px] text-muted-foreground">
                             <Globe className="w-3 h-3" />
-                            {project.visibility === "draft" ? "Draft" : "URL unavailable"}
+                            {project.visibility === "unknown"
+                              ? "Not recorded"
+                              : project.visibility === "draft"
+                                ? "Draft"
+                                : "URL unavailable"}
                           </span>
                         )}
                       </td>
