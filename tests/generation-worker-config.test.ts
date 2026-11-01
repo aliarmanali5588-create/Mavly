@@ -6,6 +6,7 @@ import {
   parseWorkerConfig,
   type WorkerEnvironment,
 } from "../src/lib/generation/worker-config";
+import { runGenerationWorkerOnce } from "../src/lib/generation/worker";
 
 function env(overrides: WorkerEnvironment = {}): WorkerEnvironment {
   return {
@@ -74,7 +75,21 @@ test("the Render background worker selects production dispatch", () => {
   assert.equal(dispatchModeForProject("any-project", config), "worker");
 });
 
-test("Render remains disabled while AWS is the active host", () => {
+test("AWS remains ready and production-enabled when Render is disabled", () => {
+  const config = parseWorkerConfig(env({
+    VERCEL_ENV: undefined,
+    MAVLY_AWS_WORKER: "true",
+    MAVLY_RENDER_WORKER: "true",
+    MAVLY_RENDER_WORKER_DISABLED: "true",
+  }));
+  assert.equal(config.requested, true);
+  assert.equal(config.ready, true);
+  assert.equal(config.production, true);
+  assert.equal(config.workerId, "aws-generation-worker");
+  assert.equal(dispatchModeForProject("any-project", config), "worker");
+});
+
+test("the Render disable flag disables the Render worker when AWS is inactive", () => {
   const config = parseWorkerConfig(env({
     VERCEL_ENV: undefined,
     MAVLY_RENDER_WORKER: "true",
@@ -85,4 +100,23 @@ test("Render remains disabled while AWS is the active host", () => {
   assert.equal(config.production, false);
   assert.equal(config.workerId, "render-generation-worker-disabled");
   assert.equal(dispatchModeForProject("any-project", config), "inline");
+});
+
+test("AWS reports unavailable when Supabase credentials are missing", async () => {
+  const config = parseWorkerConfig(env({
+    VERCEL_ENV: undefined,
+    MAVLY_AWS_WORKER: "true",
+    MAVLY_RENDER_WORKER_DISABLED: "true",
+    SUPABASE_SERVICE_ROLE_KEY: "",
+    NEXT_PUBLIC_SUPABASE_URL: " ",
+  }));
+  assert.equal(config.requested, true);
+  assert.equal(config.ready, false);
+  assert.equal(config.production, true);
+  assert.equal(config.workerId, "aws-generation-worker");
+  assert.deepEqual(config.problems, ["missing_service_role", "missing_supabase_url"]);
+
+  const result = await runGenerationWorkerOnce({ config });
+  assert.equal(result.status, "unavailable");
+  assert.equal(result.reason, "misconfigured");
 });

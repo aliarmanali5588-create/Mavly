@@ -2,9 +2,10 @@
  * Platform-wide generation worker configuration.
  *
  * Production deployments always dispatch eligible runs to the durable queue.
- * The Render background worker uses the existing server-side Supabase
- * service-role key, Supabase URL and OpenRouter key. Local development, local
- * production-mode starts and Vercel preview deployments retain inline execution.
+ * AWS and Render workers use the existing server-side Supabase service-role
+ * key, Supabase URL and OpenRouter key. The Render disable flag applies only
+ * when the Render worker is selected. Local development, local production-mode
+ * starts and Vercel preview deployments retain inline execution.
  */
 
 import { sanitizeWorkerId } from "./leases";
@@ -43,27 +44,29 @@ export function parseWorkerConfig(env: WorkerEnvironment): GenerationWorkerConfi
     env[AWS_WORKER_ENV]?.trim().toLowerCase() === "true" ||
     env[AWS_WORKER_ENV]?.trim() === "1";
 
+  const renderWorkerRequested = env[RENDER_WORKER_ENV] === "true";
+  const renderWorkerDisabled = renderWorkerRequested && renderDisabled;
+
   const productionRuntime =
-    !renderDisabled &&
-    (awsWorkerActive ||
-      env.VERCEL_ENV === "production" ||
-      env[CLOUDFLARE_WORKER_ENV] === "true" ||
-      env[RENDER_WORKER_ENV] === "true");
+    awsWorkerActive ||
+    env.VERCEL_ENV === "production" ||
+    env[CLOUDFLARE_WORKER_ENV] === "true" ||
+    (renderWorkerRequested && !renderDisabled);
 
   const workerId =
-    renderDisabled
+    renderWorkerDisabled
       ? "render-generation-worker-disabled"
       : awsWorkerActive
         ? "aws-generation-worker"
-        : env[RENDER_WORKER_ENV] === "true"
+        : renderWorkerRequested
           ? "render-generation-worker"
           : "cloudflare-generation-worker";
 
   return {
-    requested: !renderDisabled,
-    ready: !renderDisabled && problems.length === 0,
+    requested: !renderWorkerDisabled,
+    ready: !renderWorkerDisabled && problems.length === 0,
     workerId: sanitizeWorkerId(workerId),
-    production: !renderDisabled && env.NODE_ENV === "production" && productionRuntime,
+    production: !renderWorkerDisabled && env.NODE_ENV === "production" && productionRuntime,
     problems,
   };
 }
