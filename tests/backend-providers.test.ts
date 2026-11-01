@@ -527,8 +527,15 @@ test("the backend route authorizes before it reads or writes", async () => {
   assert.ok(authIndex >= 0, "the route must authorize");
   assert.ok(readIndex >= 0, "the route must read the center");
   assert.ok(readIndex > authIndex, "authorization must run before the provider read");
-  // The verified user id must reach the service: the ciphertext AAD binds to it.
-  assert.match(route, /userId: auth\.userId/);
+  /**
+   * The verified user id still reaches the service layer: `authorize()` derives it
+   * from the ownership-checked session, and the switch/disconnect paths use that
+   * same `auth` object. The manual `connect_supabase` branch that previously
+   * carried `userId: auth.userId` is gone — it accepted a pasted service-role key,
+   * which the Management API OAuth flow replaces — so the assertion now targets
+   * the helper that every method goes through.
+   */
+  assert.match(route, /userId: authorized\.team\.userId/);
   assert.ok(!/userId: ""/.test(route), "an empty user id would make the key undecryptable");
 });
 
@@ -609,7 +616,7 @@ test("the UI keeps GitHub independent of backend selection", async () => {
   );
 });
 
-test("the old empty placeholder is no longer rendered by the workspace", async () => {
+test("the old empty placeholder is gone from every workspace, not just the website one", async () => {
   const more = await readFile(
     new URL("../src/components/workspace/v2/WorkspaceMore.tsx", import.meta.url),
     "utf8",
@@ -618,5 +625,32 @@ test("the old empty placeholder is no longer rendered by the workspace", async (
   assert.ok(
     !/DatabasePlaceholder/.test(more),
     "the empty placeholder must be replaced by the real center",
+  );
+
+  /**
+   * ⚠️ THE ANDROID WORKSPACE HAD ITS OWN COPY OF THE DEAD TAB. Replacing only the
+   * website one would leave an Android project with a Database tab that renders
+   * an empty box, which is exactly the state this integration removes.
+   */
+  const android = await readFile(
+    new URL("../src/components/workspace/AndroidWorkspace.tsx", import.meta.url),
+    "utf8",
+  );
+  assert.match(android, /BackendCenter/);
+  assert.ok(
+    !/DatabasePlaceholder/.test(android),
+    "the Android Database tab must render the real center too",
+  );
+
+  /**
+   * The placeholder component itself must be deleted, not merely unreferenced: a
+   * leftover file is an invitation to wire it back in.
+   */
+  await assert.rejects(
+    readFile(
+      new URL("../src/components/workspace/DatabasePlaceholder.tsx", import.meta.url),
+      "utf8",
+    ),
+    "the placeholder component must be deleted",
   );
 });

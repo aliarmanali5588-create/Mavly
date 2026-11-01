@@ -15,6 +15,8 @@
 import { sanitizeProjectPath } from "@/lib/ai/agent";
 import { VERIFICATION_MAX_FILE_BYTES } from "@/lib/sandbox/policy";
 
+import { classifySql } from "@/lib/integrations/supabase/sql-policy";
+
 import type { AgentRole, ProjectFile } from "./contracts";
 import { AGENT_TOOLS, ROLE_CATALOG, type AgentToolName } from "./roles";
 
@@ -26,7 +28,8 @@ export type ToolRejectionCode =
   | "unknown_path"
   | "too_large"
   | "too_many_files"
-  | "not_executable";
+  | "not_executable"
+  | "statement_blocked";
 
 export interface ToolRejection {
   ok: false;
@@ -201,6 +204,33 @@ export function validateToolRequest(input: {
     }
     case "inspect_preview":
       return { ok: true, tool: name, args: {} };
+    /**
+     * ⚠️ NO CREDENTIAL, NO PROJECT REF, NO HOST. The agent names an intent; the
+     * broker resolves which Supabase project the OWNER connected. A model cannot
+     * point this at a different project, and it cannot supply a token.
+     */
+    case "read_supabase_schema":
+      return { ok: true, tool: name, args: {} };
+    case "run_supabase_sql": {
+      const statement = typeof args.statement === "string" ? args.statement : "";
+      const classification = classifySql(statement);
+      /**
+       * ⚠️ BLOCKED STATEMENTS ARE REFUSED AT VALIDATION, before the broker is even
+       * reached, so a model cannot spend a turn proposing one. Destructive
+       * statements pass validation and are stopped at the approval gate instead.
+       */
+      if (classification.risk === "blocked") {
+        return reject(
+          "statement_blocked",
+          "That statement is not allowed through Mavly. Run it in the Supabase SQL editor instead.",
+        );
+      }
+      return {
+        ok: true,
+        tool: name,
+        args: { statement, requiresApproval: classification.risk === "destructive" },
+      };
+    }
     case "request_deployment_approval": {
       const target = args.target;
       if (target !== "static" && target !== "fullstack") {
@@ -234,6 +264,15 @@ export function toolCannotExecuteHere(tool: AgentToolName): string | null {
       return "Project checks run only inside the configured verification sandbox; this registry never executes a command itself.";
     case "inspect_preview":
       return "A public preview URL is not available; preview delivery stays with the existing workspace runtime.";
+    case "read_supabase_schema":
+    case "run_supabase_sql":
+      /**
+       * ⚠️ THE ORCHESTRATOR DOES NOT EXECUTE THESE. They are performed by the
+       * Supabase broker through the owner's OAuth connection, and only when that
+       * connection exists and the action is authorized. Reporting anything else
+       * would claim a database call that never happened.
+       */
+      return "Supabase actions run only through the Supabase broker against the owner's connected project; this registry never holds a credential or calls the Management API itself."; 
     default:
       return null;
   }

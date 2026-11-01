@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { vcaasApi } from "@/lib/vcaas";
 import { CreditsIndicator } from "@/components/workspace/CreditsIndicator";
-import { DatabasePlaceholder } from "@/components/workspace/DatabasePlaceholder";
+import { BackendCenter } from "@/components/workspace/v2/BackendCenter";
 import { GithubModal } from "@/components/workspace/GithubModal";
 import { silenceMonacoDiagnostics } from "@/lib/monaco-diagnostics";
 import { PremiumAiActivity, type ActivityChecklistStage } from "@/components/workspace/GenerationProgressVisuals";
@@ -935,7 +935,11 @@ export function AndroidWorkspace({ project }: { project: VcaasProject }) {
               </nav>
               <div className="min-h-0 min-w-0 flex-1 overflow-y-auto">
                 {moreSection === "database" ? (
-                  <DatabasePlaceholder />
+                  <BackendCenter
+                    project={project}
+                    onOpenGithub={() => setGithubOpen(true)}
+                    githubConnected={githubConnected}
+                  />
                 ) : (
                   <div className="p-4 sm:p-6">
                     <div className="mx-auto max-w-3xl">

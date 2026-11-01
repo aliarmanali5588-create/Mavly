@@ -220,9 +220,17 @@ The project routes run authentication → path scope → ownership → handler:
 | `GET /api/runtime/{id}` | Authenticated live-preview status and bounded diagnostics; never creates a sandbox. |
 | `POST /api/runtime/{id}` | Fixed `start` / `restart` / `stop` / `build` actions for an owned, cohort-enabled project. |
 
-The customer-owned Supabase OAuth connection is not implemented and no such routes are
-available. Mavly's own Supabase infrastructure remains required for authentication, RLS,
-project storage, runs, snapshots, and worker state.
+The customer-owned Supabase connection is implemented as **Management API OAuth** (migration
+40, `src/lib/integrations/supabase/`). There is no manual credential form: the owner
+authorizes Mavly in Supabase's own consent screen, and the token pair is stored encrypted
+server-side, bound to `(user, project, purpose)`. Routes:
+`POST /api/projects/{id}/supabase/start` (authorization URL, server-generated state + PKCE),
+`GET /auth/supabase/callback` (single-use state, code exchange, project list),
+`GET|POST /api/projects/{id}/supabase` (status, select, refresh, disconnect) and
+`GET|POST /api/projects/{id}/supabase/actions` (the allowlisted broker). The agent never
+receives a token; it reads a bounded schema snapshot and mutating SQL still requires
+explicit approval. Mavly's own Supabase infrastructure remains required for authentication,
+RLS, project storage, runs, snapshots, and worker state.
 
 ### Image generation
 
@@ -560,11 +568,16 @@ with HTTP **503** and `cache-control: private, no-store, max-age=0`.
    service-role RPCs.
 8. Mavly sign-in OAuth still sends no custom `state`, and its callback stays a bare
    `/auth/callback` with the destination in the `mavly_oauth_next` cookie.
-9. Customer-owned Supabase OAuth is retired. Mavly sign-in remains the internal
-   `/auth/callback` OAuth path only.
+9. Customer-owned Supabase uses **Management API OAuth** (`api.supabase.com`), not
+   Supabase Auth's OAuth 2.1 server. Mavly sign-in remains the internal `/auth/callback`
+   OAuth path only. The two are separate flows and must not be merged.
 10. Integration tokens where implemented are AES-256-GCM ciphertext with
     user/purpose associated data. `MAVLY_INTEGRATION_ENCRYPTION_KEY` and the OAuth client
     secret are server-only. Tokens never reach the browser.
+11. A Supabase OAuth token is bound by AAD to `supabase-oauth:<purpose>:<userId>:<projectId>`,
+    so an access token, a refresh token and a PKCE verifier are mutually undecryptable and a
+    ciphertext cannot be moved between users or projects. A `pending_selection` row holds a
+    token but authorizes nothing: the broker refuses it until a project is chosen.
 
 ---
 

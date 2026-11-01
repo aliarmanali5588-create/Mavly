@@ -2,7 +2,6 @@ import type { NextRequest } from "next/server";
 
 import { authorizeProjectRequest } from "@/app/api/vcaas/_shared";
 import {
-  connectSupabaseBackend,
   disconnectSupabaseBackend,
   readBackendCenter,
   switchBackendProvider,
@@ -130,29 +129,21 @@ export async function POST(
   const action = record.action;
 
   if (action === "connect_supabase") {
-    const credentials =
-      record.credentials && typeof record.credentials === "object"
-        ? (record.credentials as Record<string, unknown>)
-        : null;
-    if (!credentials) {
-      return apiError("INVALID_BODY", "Supabase credentials are required.", 400);
-    }
-    const connected = await connectSupabaseBackend({
-      client: auth.supabase,
-      userId: auth.userId,
-      projectId,
-      credentials: {
-        projectUrl:
-          typeof credentials.projectUrl === "string" ? credentials.projectUrl : "",
-        anonKey: typeof credentials.anonKey === "string" ? credentials.anonKey : "",
-        serviceRoleKey:
-          typeof credentials.serviceRoleKey === "string" ? credentials.serviceRoleKey : "",
-      },
-    });
-    if (connected.ok === false) {
-      return apiError(connected.code, connected.message, connected.status);
-    }
-    return apiData({ provider: connected.data.provider });
+    /**
+     * ⚠️ THE MANUAL CREDENTIAL PATH IS CLOSED. This action used to accept a
+     * pasted project URL, anon key and service-role key. That is exactly what the
+     * Management API OAuth flow replaces: a hand-minted, non-expiring,
+     * RLS-bypassing credential that Mavly cannot revoke.
+     *
+     * Leaving the branch in place would keep a second, weaker way to connect a
+     * Supabase project, reachable by anyone who can POST to this route. It is
+     * refused rather than silently ignored, so an old client gets a real answer.
+     */
+    return apiError(
+      "SUPABASE_OAUTH_REQUIRED",
+      "Connect Supabase through the OAuth flow instead. Mavly no longer accepts a pasted service-role key.",
+      410,
+    );
   }
 
   if (action === "switch") {
@@ -188,7 +179,7 @@ export async function POST(
 
   return apiError(
     "INVALID_ACTION",
-    "Supported actions are connect_supabase, switch and disconnect_supabase.",
+    "Supported actions are switch and disconnect_supabase.",
     400,
   );
 }

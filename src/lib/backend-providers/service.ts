@@ -376,7 +376,18 @@ export async function readSupabaseServiceRoleKey(input: {
   });
   if (stored.ok === false) return storeFailure(stored.code, "read");
   if (!stored.data) {
-    return failure("SUPABASE_NOT_CONNECTED", "No Supabase connection is stored.", 404);
+    /**
+     * ⚠️ THIS IS NOT ALWAYS "NOT CONNECTED". A Supabase project connected through
+     * Management API OAuth has no service-role key by design, so the registry row
+     * exists with a null ciphertext. Saying "no connection is stored" would send
+     * the user to reconnect a connection that is working. The honest answer is
+     * that this path has no key to offer, because the OAuth flow never mints one.
+     */
+    return failure(
+      "SUPABASE_SERVICE_ROLE_KEY_UNAVAILABLE",
+      "This Supabase connection has no service-role key. OAuth connections act through the Management API broker instead.",
+      409,
+    );
   }
 
   let serviceRoleKey: string;

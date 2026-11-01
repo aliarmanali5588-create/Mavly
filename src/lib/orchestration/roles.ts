@@ -34,6 +34,13 @@ export const AGENT_TOOLS = [
   "read_execution_logs",
   "inspect_preview",
   "request_deployment_approval",
+  /**
+   * ⚠️ THESE TWO DO NOT CARRY A CREDENTIAL AND DO NOT EXECUTE HERE. They describe
+   * an intent that the Supabase broker in `src/lib/integrations/supabase/broker.ts`
+   * authorizes and performs server-side, against the owner's own OAuth connection.
+   */
+  "read_supabase_schema",
+  "run_supabase_sql",
 ] as const;
 
 export type AgentToolName = (typeof AGENT_TOOLS)[number];
@@ -56,7 +63,14 @@ export const ROLE_CATALOG: Readonly<Record<AgentRole, RoleDefinition>> = {
   coding: {
     role: "coding",
     label: "Coding",
-    tools: ["list_files", "read_files", "apply_file_changes", "inspect_preview"],
+    tools: [
+      "list_files",
+      "read_files",
+      "apply_file_changes",
+      "inspect_preview",
+      "read_supabase_schema",
+      "run_supabase_sql",
+    ],
     writesProjectFiles: true,
     requiresModelCall: true,
   },

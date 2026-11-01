@@ -131,7 +131,13 @@ export async function connectExternalSupabase(input: {
   client: SupabaseClient;
   projectId: string;
   config: Record<string, unknown>;
-  serviceRoleCiphertext: string;
+  /**
+   * ⚠️ NULLABLE. A connection made through Supabase Management API OAuth has no
+   * service-role key at all: that is the point of the flow. Migration 39's
+   * `project_backend_providers_secret_provider_check` permits a null ciphertext,
+   * so an OAuth connection stores metadata only.
+   */
+  serviceRoleCiphertext: string | null;
   anonKeySecretName: string | null;
   verified: boolean;
 }): Promise<BackendProviderStoreResult<ProviderMutationResult>> {

@@ -12,9 +12,8 @@ import {
 } from "lucide-react";
 
 import { ConfirmDialog, StatusPill, type StatusTone } from "@/components/primitives";
+import { SupabaseOAuthCard } from "@/components/workspace/v2/SupabaseOAuthCard";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { toast } from "@/lib/toast";
 import type { VcaasProject } from "@/lib/vcaas-types";
 import {
@@ -217,13 +216,6 @@ export function BackendCenter({ project, onOpenGithub, githubConnected }: Backen
   const [error, setError] = React.useState<string | null>(null);
   const [pending, setPending] = React.useState<string | null>(null);
 
-  // Supabase credential form
-  const [showForm, setShowForm] = React.useState(false);
-  const [projectUrl, setProjectUrl] = React.useState("");
-  const [anonKey, setAnonKey] = React.useState("");
-  const [serviceRoleKey, setServiceRoleKey] = React.useState("");
-  const [formError, setFormError] = React.useState<string | null>(null);
-
   // Switch confirmation
   const [switchTarget, setSwitchTarget] = React.useState<BackendProvider | null>(null);
   const [switchMessage, setSwitchMessage] = React.useState<string | null>(null);
@@ -283,35 +275,6 @@ export function BackendCenter({ project, onOpenGithub, githubConnected }: Backen
     [projectId],
   );
 
-  const connectSupabase = async () => {
-    setFormError(null);
-    setPending("connect");
-    try {
-      const { response, payload } = await post({
-        action: "connect_supabase",
-        credentials: { projectUrl, anonKey, serviceRoleKey },
-      });
-      if (!response.ok || payload.ok === false) {
-        /**
-         * A validation refusal is shown inline next to the fields, because that
-         * is where the user has to act on it.
-         */
-        setFormError(payload.error?.message ?? "The connection could not be verified.");
-        return;
-      }
-      toast.success("Supabase connected and verified.");
-      setShowForm(false);
-      setProjectUrl("");
-      setAnonKey("");
-      setServiceRoleKey("");
-      await load();
-    } catch {
-      setFormError("The connection could not be verified.");
-    } finally {
-      setPending(null);
-    }
-  };
-
   const requestSwitch = async (target: BackendProvider) => {
     setPending(`switch:${target}`);
     try {
@@ -357,23 +320,6 @@ export function BackendCenter({ project, onOpenGithub, githubConnected }: Backen
       await load();
     } catch {
       toast.error("The backend could not be switched.");
-    } finally {
-      setPending(null);
-    }
-  };
-
-  const disconnectSupabase = async () => {
-    setPending("disconnect");
-    try {
-      const { response, payload } = await post({ action: "disconnect_supabase" });
-      if (!response.ok || payload.ok === false) {
-        toast.error(payload.error?.message ?? "The backend could not be disconnected.");
-        return;
-      }
-      toast.success("Supabase disconnected.");
-      await load();
-    } catch {
-      toast.error("The backend could not be disconnected.");
     } finally {
       setPending(null);
     }
@@ -471,175 +417,53 @@ export function BackendCenter({ project, onOpenGithub, githubConnected }: Backen
         ) : null}
       </ClayCard>
 
-      {/* ── 2. Customer-owned Supabase ───────────────────────────────────── */}
-      <ClayCard labelledBy="backend-supabase-heading" interactive={!showForm}>
-        <CardHeading
-          id="backend-supabase-heading"
-          icon={<SupabaseMark />}
-          title="Connect Your Own Backend"
-          description="Point this project at a Supabase project you already own. Mavly stores the service-role key encrypted on the server and never sends it to your app's browser code."
-          status={supabaseRow ? <StatePill state={supabaseRow.status} /> : undefined}
-        />
+      {/* ── 2. Customer-owned Supabase (Management API OAuth) ────────────── */}
+      {/*
+        ⚠️ THE MANUAL CREDENTIAL FORM IS GONE. There is no field for a project URL,
+        an anon key or a service-role key anywhere in this page. Access is granted
+        through Supabase's own consent screen, and the token pair stays encrypted
+        on the server.
+      */}
+      <SupabaseOAuthCard
+        projectId={projectId}
+        onChanged={() => void load()}
+        renderCard={({ headingId, status, children }) => (
+          <ClayCard labelledBy={headingId}>
+            <CardHeading
+              id={headingId}
+              icon={<SupabaseMark />}
+              title="Connect Your Own Backend"
+              description="Authorize Mavly to use a Supabase project you already own. You sign in to Supabase and choose the project; Mavly never asks for a service-role key."
+              status={status}
+            />
+            {children}
+          </ClayCard>
+        )}
+      />
 
-        {supabaseRow && supabaseRow.status !== "not_connected" ? (
-          <dl className="mt-4 grid gap-2 text-sm sm:grid-cols-2">
-            <div>
-              <dt className="text-xs uppercase tracking-wide text-muted-foreground">Project</dt>
-              <dd className="font-medium text-foreground">
-                {typeof supabaseRow.config.host === "string"
-                  ? supabaseRow.config.host
-                  : "Connected"}
-              </dd>
-            </div>
-            <div>
-              <dt className="text-xs uppercase tracking-wide text-muted-foreground">
-                Service-role key
-              </dt>
-              <dd className="font-medium text-foreground">
-                {supabaseRow.hasServiceRoleKey ? "Stored (encrypted)" : "Not stored"}
-              </dd>
-            </div>
-          </dl>
-        ) : null}
-
-        {supabaseRow?.lastError ? (
-          <p className="mt-3 text-sm text-destructive">{supabaseRow.lastError}</p>
-        ) : null}
-
-        {showForm ? (
-          <div className="mt-4 space-y-3">
-            <div className="space-y-1.5">
-              <Label htmlFor="supabase-url">Project URL</Label>
-              <Input
-                id="supabase-url"
-                value={projectUrl}
-                onChange={(event) => setProjectUrl(event.target.value)}
-                placeholder="https://your-project.supabase.co"
-                autoComplete="off"
-                spellCheck={false}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="supabase-anon">Anon key (public)</Label>
-              <Input
-                id="supabase-anon"
-                value={anonKey}
-                onChange={(event) => setAnonKey(event.target.value)}
-                placeholder="eyJhbGciOi…"
-                autoComplete="off"
-                spellCheck={false}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="supabase-service">Service-role key (secret)</Label>
-              <Input
-                id="supabase-service"
-                type="password"
-                value={serviceRoleKey}
-                onChange={(event) => setServiceRoleKey(event.target.value)}
-                placeholder="eyJhbGciOi…"
-                autoComplete="off"
-                spellCheck={false}
-              />
-              <p className="text-xs text-muted-foreground">
-                Stored encrypted on the server. It is never added to your app&apos;s environment
-                or sent to the browser.
-              </p>
-            </div>
-
-            {formError ? (
-              <p role="alert" className="text-sm text-destructive">
-                {formError}
-              </p>
-            ) : null}
-
-            <div className="flex flex-wrap gap-2">
-              <Button
-                size="sm"
-                onClick={() => void connectSupabase()}
-                disabled={pending !== null || !projectUrl || !anonKey || !serviceRoleKey}
-              >
-                {pending === "connect" ? (
-                  <LoaderIcon className="size-4 animate-spin" aria-hidden="true" />
-                ) : null}
-                Verify and connect
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => {
-                  setShowForm(false);
-                  setFormError(null);
-                }}
-                disabled={pending !== null}
-              >
-                Cancel
-              </Button>
-            </div>
-          </div>
-        ) : (
-          <div className="mt-4 flex flex-wrap items-center gap-2">
-            {supabaseActive ? (
-              <StatusPill tone="brand" size="sm">
-                Active backend
-              </StatusPill>
-            ) : null}
-
+      {/* The active-backend control stays with the provider registry, not the
+          OAuth card: switching is a separate decision from connecting. */}
+      {supabaseRow && supabaseRow.status === "ready" ? (
+        <div className="flex flex-wrap items-center gap-2 px-1">
+          {supabaseActive ? (
+            <StatusPill tone="brand" size="sm">
+              Active backend
+            </StatusPill>
+          ) : (
             <Button
               size="sm"
-              variant={supabaseRow && supabaseRow.status === "ready" ? "outline" : "default"}
-              onClick={() => setShowForm(true)}
+              variant="outline"
+              onClick={() => void requestSwitch("external_supabase")}
               disabled={pending !== null}
             >
-              {supabaseRow && supabaseRow.status === "ready"
-                ? "Reconnect Supabase"
-                : "Connect Supabase"}
+              {pending === "switch:external_supabase" ? (
+                <LoaderIcon className="size-4 animate-spin" aria-hidden="true" />
+              ) : null}
+              Use this backend
             </Button>
-
-            {supabaseRow &&
-            supabaseRow.status === "ready" &&
-            !supabaseActive ? (
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => void requestSwitch("external_supabase")}
-                disabled={pending !== null}
-              >
-                {pending === "switch:external_supabase" ? (
-                  <LoaderIcon className="size-4 animate-spin" aria-hidden="true" />
-                ) : null}
-                Use this backend
-              </Button>
-            ) : null}
-
-            {supabaseRow && supabaseRow.status !== "not_connected" ? (
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => void disconnectSupabase()}
-                disabled={pending !== null || supabaseActive}
-                title={
-                  supabaseActive
-                    ? "Switch to another backend before disconnecting this one."
-                    : undefined
-                }
-              >
-                {pending === "disconnect" ? (
-                  <LoaderIcon className="size-4 animate-spin" aria-hidden="true" />
-                ) : null}
-                Disconnect
-              </Button>
-            ) : null}
-          </div>
-        )}
-
-        {supabaseActive ? (
-          <p className="mt-3 text-xs text-muted-foreground">
-            Your app reads and writes this Supabase project. Disconnecting requires switching to
-            another backend first; your Supabase data is never deleted by Mavly.
-          </p>
-        ) : null}
-      </ClayCard>
+          )}
+        </div>
+      ) : null}
 
       {/* ── 3. GitHub — source control, independent of the backend ───────── */}
       <ClayCard labelledBy="backend-github-heading" interactive>

@@ -7,22 +7,23 @@ import type { AdminOverviewPayload } from "@/lib/admin/types";
 import { MOCK_REVENUE_MONTHLY } from "./mockData";
 
 /**
- * The billing page still renders the platform's original demo chart; the live
- * Overview passes `live` and gets a truthful unavailable state instead. There is
- * no Mavly subscription/invoice/credit table in this database, so no monthly
- * revenue, cumulative total or growth rate can be computed.
+ * The demo chart remains available for legacy callers. Live admin surfaces use
+ * the unavailable state because no Mavly platform subscription, invoice or
+ * payment source exists; the operational credit ledger is not revenue data.
  */
 export function RevenueChart({
   live = false,
   data,
   error = false,
+  unavailable = false,
 }: {
   live?: boolean;
   data?: AdminOverviewPayload | null;
   error?: boolean;
+  unavailable?: boolean;
 }) {
   if (!live) return <DemoRevenueChart />;
-  if (error) return <UnavailableRevenueChart />;
+  if (error || unavailable) return <UnavailableRevenueChart />;
   if (!data) return <RevenueSkeleton />;
   return <UnavailableRevenueChart />;
 }
@@ -62,8 +63,9 @@ function UnavailableRevenueChart() {
         <Info className="w-5 h-5 text-muted-foreground" />
         <p className="text-sm font-semibold text-foreground">No Mavly revenue source is configured</p>
         <p className="text-xs text-muted-foreground max-w-md leading-relaxed">
-          This deployment has no subscription, invoice or credit-ledger table. Monthly revenue,
-          cumulative totals and growth are not estimated, and no historical months are fabricated.
+          No Mavly platform subscription, invoice or payment source is available. The operational
+          credit ledger does not represent revenue, and customer-app payments are excluded. Monthly
+          revenue and growth are not estimated, and no historical months are fabricated.
         </p>
       </div>
 

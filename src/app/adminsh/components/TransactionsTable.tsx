@@ -5,11 +5,10 @@ import Link from "next/link";
 import { ArrowRight, CreditCard, Download, Info, Search } from "lucide-react";
 
 /**
- * There is no Mavly subscription, invoice or credit-ledger table in this
- * database (see the audit in docs/ and AGENTS.md), so this section renders an
- * empty, explained state. It does not fall back to demo customers, invoices or
- * amounts, and the search/export controls are disabled rather than pretending to
- * operate on data that does not exist.
+ * There is no Mavly platform subscription, invoice or payment ledger in this
+ * database. The credit ledger is usage accounting, not revenue, and customer
+ * application payments are separate. This section does not fall back to demo
+ * customers, invoices or amounts.
  */
 export function TransactionsTable() {
   return (
@@ -84,9 +83,10 @@ export function TransactionsTable() {
                     No Mavly billing records exist in this deployment
                   </p>
                   <p className="text-xs text-muted-foreground leading-relaxed">
-                    This application has no subscription, invoice or credit-ledger table. Transactions,
-                    customer identities, invoice ids and amounts are not fabricated, and search/export
-                    stay disabled until a real billing source is connected.
+                    No Mavly platform subscription, invoice or payment source is available. The
+                    operational credit ledger is not revenue data. Transactions, customer identities,
+                    invoice ids and amounts are not fabricated, and search/export stay disabled until a
+                    real billing source is connected.
                   </p>
                 </div>
               </td>

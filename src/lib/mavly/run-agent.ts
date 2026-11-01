@@ -147,6 +147,9 @@ import {
 } from "@/lib/project-rules/service";
 import { runStaticVerification } from "@/lib/verification/static";
 import { loadFigmaDesignContext } from "@/lib/integrations/figma/service";
+import { loadSupabaseSchemaContext } from "@/lib/integrations/supabase/agent-context";
+import { supabaseOAuthConfig } from "@/lib/integrations/supabase/config";
+import { readBackendProviders } from "@/lib/backend-providers/store";
 import {
   classifyGenerationFailure,
   hasRecoverableTruncationProgress,
@@ -882,6 +885,64 @@ class RunStoreError extends Error {
 }
 
 /**
+ * Read the owner's connected Supabase schema as bounded, prompt-ready text.
+ *
+ * ⚠️ RETURNS NULL FOR EVERY NON-HAPPY PATH, ON PURPOSE. This is optional
+ * advisory context: a project with no Supabase connection, a deployment without
+ * the OAuth app configured, a revoked token, a missing scope or an upstream
+ * failure all mean "no schema context", never a failed run. The generation
+ * pipeline then behaves exactly as it did before this integration existed.
+ *
+ * ⚠️ THE PROVIDER MUST BE THE ACTIVE ONE. Reading a schema the generated app is
+ * not actually going to use would put the wrong tables in the prompt.
+ */
+async function loadSupabaseSchemaForRun(input: {
+  projectId: string;
+  userId: string;
+  projectType: "website" | "android";
+  client: SupabaseClient | null;
+}): Promise<string | null> {
+  if (input.projectType !== "website" || !input.client) return null;
+
+  const config = supabaseOAuthConfig();
+  if (!config.ok) return null;
+
+  try {
+    const providers = await readBackendProviders({
+      client: input.client,
+      projectId: input.projectId,
+    });
+    if (providers.ok === false) return null;
+
+    const active = providers.data.find(
+      (entry) => entry.provider === "external_supabase" && entry.active,
+    );
+    /**
+     * ⚠️ THE REF COMES FROM THE PROVIDER ROW, NOT FROM THE MODEL. The broker
+     * refuses a ref that is not the connected one, so this is also the value it
+     * will accept.
+     */
+    const projectRef =
+      active && typeof active.config.projectRef === "string" ? active.config.projectRef : null;
+    if (!projectRef) return null;
+
+    return await loadSupabaseSchemaContext({
+      client: input.client,
+      userId: input.userId,
+      projectId: input.projectId,
+      config: config.config,
+      projectRef,
+    });
+  } catch {
+    /**
+     * ⚠️ AN OPTIONAL INTEGRATION NEVER FAILS A RUN. Any throw here is swallowed
+     * and reported as "no schema context".
+     */
+    return null;
+  }
+}
+
+/**
  * Re-read the run before a write and refuse to continue unless THIS invocation
  * still owns it.
  *
@@ -966,6 +1027,29 @@ async function execute(
   if (design.ok === false) {
     return fail(input, guard, { message: design.error });
   }
+
+  /**
+   * ═══ CONNECTED SUPABASE SCHEMA (READ-ONLY, ADVISORY) ══════════════════════
+   *
+   * When the owner has connected their own Supabase project through Management
+   * API OAuth, the agent builds against the REAL schema instead of inventing one.
+   * The read goes through the broker, so the model never sees a token.
+   *
+   * ⚠️ EVERY FAILURE HERE IS SILENT AND NON-FATAL. A missing connection, an
+   * unconfigured deployment, a revoked token or an upstream error must not fail a
+   * generation run — the run simply proceeds without schema context, exactly as
+   * it would for a project that never connected Supabase. Claiming otherwise
+   * would turn an optional integration into a hard dependency.
+   *
+   * ⚠️ WEBSITE ONLY. The Android profile has its own contract and never reads a
+   * customer database.
+   */
+  const supabaseSchema = await loadSupabaseSchemaForRun({
+    projectId: input.projectId,
+    userId: input.userId,
+    projectType,
+    client,
+  });
 
   await assertRunOwned(input, guard);
 
@@ -1972,6 +2056,7 @@ async function execute(
       : {}),
     requestedModel: codingRoleModel?.id ?? input.requestedModel,
     designContext: design.data,
+    supabaseSchemaContext: supabaseSchema,
     /**
      * The planner is asked for a structured image plan only when the feature is
      * enabled for this deployment. The guidance quotes the STANDARD ceiling (the

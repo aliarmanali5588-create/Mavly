@@ -1,272 +1,178 @@
 "use client";
 
-import React, { useState } from "react";
+import { useEffect, useState } from "react";
 import {
-  Users,
-  Search,
-  Filter,
-  Plus,
-  ShieldCheck,
-  UserCheck,
-  UserX,
-  Trash2,
-  Edit,
-  Eye,
   ChevronLeft,
   ChevronRight,
-  Sparkles,
+  Plus,
+  Search,
+  UserCheck,
+  UserX,
   X,
-  CreditCard,
-  FolderGit2,
-  Mail,
-  Calendar,
-  CheckCircle2,
 } from "lucide-react";
-import { toast } from "sonner";
 import { AdminShell } from "../components/AdminShell";
-import { MOCK_USERS_LIST } from "../components/mockData";
-import { UserRecord } from "../components/types";
+import type {
+  AdminUserDirectoryResponse,
+  AdminUserDirectoryRow,
+} from "@/lib/admin/directory";
+
+const USERS_PER_PAGE = 5;
+
+function formatDate(value: string | null, empty = "Not recorded") {
+  if (!value) return empty;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime())
+    ? "Unavailable"
+    : new Intl.DateTimeFormat(undefined, { dateStyle: "medium" }).format(date);
+}
+
+function formatCredits(value: string | null) {
+  if (value === null) return "Not recorded";
+  if (!/^-?\d+$/.test(value)) return "Unavailable";
+  return value.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+}
 
 export default function UsersAdminPage() {
-  const [users, setUsers] = useState<UserRecord[]>(MOCK_USERS_LIST);
+  const [directory, setDirectory] = useState<AdminUserDirectoryResponse | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
-  const [planFilter, setPlanFilter] = useState<string>("All");
-  const [statusFilter, setStatusFilter] = useState<string>("All");
+  const [statusFilter, setStatusFilter] = useState("all");
   const [currentPage, setCurrentPage] = useState(1);
-  const usersPerPage = 5;
+  const [selectedUser, setSelectedUser] = useState<AdminUserDirectoryRow | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
 
-  // Selected User for details dialog
-  const [selectedUser, setSelectedUser] = useState<UserRecord | null>(null);
+  useEffect(() => {
+    const controller = new AbortController();
+    const timer = setTimeout(async () => {
+      setLoading(true);
+      setError(null);
+      const params = new URLSearchParams({
+        search: searchQuery,
+        status: statusFilter,
+        page: String(currentPage),
+        pageSize: String(USERS_PER_PAGE),
+      });
 
-  // Edit Plan Dialog
-  const [editingPlanUser, setEditingPlanUser] = useState<UserRecord | null>(null);
-  const [selectedNewPlan, setSelectedNewPlan] = useState<UserRecord["plan"]>("Pro");
+      try {
+        const response = await fetch(`/api/adminsh/users?${params}`, {
+          cache: "no-store",
+          signal: controller.signal,
+        });
+        const result = await response.json();
+        if (!response.ok || !result.ok || !result.data) {
+          throw new Error(result.error || "The user directory could not be loaded.");
+        }
+        setDirectory(result.data as AdminUserDirectoryResponse);
+      } catch (requestError) {
+        if (controller.signal.aborted) return;
+        setDirectory(null);
+        setError(
+          requestError instanceof Error
+            ? requestError.message
+            : "The user directory could not be loaded."
+        );
+      } finally {
+        if (!controller.signal.aborted) setLoading(false);
+      }
+    }, 200);
 
-  // Confirm Delete Dialog
-  const [deletingUser, setDeletingUser] = useState<UserRecord | null>(null);
-
-  // Invite User Modal
-  const [showInviteModal, setShowInviteModal] = useState(false);
-  const [inviteEmail, setInviteEmail] = useState("");
-  const [inviteName, setInviteName] = useState("");
-  const [invitePlan, setInvitePlan] = useState<UserRecord["plan"]>("Starter");
-
-  // Filtering
-  const filteredUsers = users.filter((u) => {
-    const matchesSearch =
-      u.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      u.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (u.role && u.role.toLowerCase().includes(searchQuery.toLowerCase()));
-
-    const matchesPlan = planFilter === "All" || u.plan === planFilter;
-    const matchesStatus = statusFilter === "All" || u.status === statusFilter;
-
-    return matchesSearch && matchesPlan && matchesStatus;
-  });
-
-  // Pagination
-  const totalPages = Math.ceil(filteredUsers.length / usersPerPage) || 1;
-  const paginatedUsers = filteredUsers.slice(
-    (currentPage - 1) * usersPerPage,
-    currentPage * usersPerPage
-  );
-
-  // Actions
-  const handleToggleStatus = (user: UserRecord) => {
-    const nextStatus = user.status === "Active" ? "Suspended" : "Active";
-    setUsers((prev) =>
-      prev.map((u) => (u.id === user.id ? { ...u, status: nextStatus } : u))
-    );
-    toast.success(`Account status updated for ${user.name}`, {
-      description: `Status changed to ${nextStatus} (Demo state only).`,
-    });
-  };
-
-  const handleUpdatePlan = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!editingPlanUser) return;
-    setUsers((prev) =>
-      prev.map((u) =>
-        u.id === editingPlanUser.id ? { ...u, plan: selectedNewPlan } : u
-      )
-    );
-    toast.success(`Plan updated for ${editingPlanUser.name}`, {
-      description: `Plan switched to ${selectedNewPlan} (Demo only).`,
-    });
-    setEditingPlanUser(null);
-  };
-
-  const handleDeleteUser = () => {
-    if (!deletingUser) return;
-    setUsers((prev) => prev.filter((u) => u.id !== deletingUser.id));
-    toast.success(`User removed: ${deletingUser.name}`, {
-      description: "Record removed from local frontend state.",
-    });
-    setDeletingUser(null);
-  };
-
-  const handleInviteUser = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!inviteEmail.trim() || !inviteName.trim()) {
-      toast.error("Please provide both name and email.");
-      return;
-    }
-    const newUser: UserRecord = {
-      id: `usr-${Date.now().toString().slice(-4)}`,
-      name: inviteName,
-      email: inviteEmail,
-      plan: invitePlan,
-      projectsCount: 0,
-      creditsRemaining: invitePlan === "Agency" ? 5000 : invitePlan === "Pro" ? 2000 : 500,
-      joinedDate: "Today",
-      status: "Active",
-      role: "Invited Member",
-      lastActive: "Just now",
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
     };
-    setUsers([newUser, ...users]);
-    toast.success(`Invitation Sent to ${inviteEmail}`, {
-      description: `New demo account created with ${invitePlan} tier.`,
-    });
-    setInviteEmail("");
-    setInviteName("");
-    setShowInviteModal(false);
-  };
+  }, [searchQuery, statusFilter, currentPage, refreshKey]);
 
-  const getPlanBadge = (plan: UserRecord["plan"]) => {
-    switch (plan) {
-      case "Agency":
-        return (
-          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-[var(--clay-sunken)] text-foreground border border-[var(--clay-line)]">
-            Agency
-          </span>
-        );
-      case "Pro":
-        return (
-          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-black text-white shadow-[var(--clay-elev-ink-1)]">
-            Pro
-          </span>
-        );
-      case "Creator":
-        return (
-          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-[var(--clay-sunken)] text-foreground border border-[var(--clay-line)]">
-            Creator
-          </span>
-        );
-      case "Starter":
-        return (
-          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-[var(--clay-sunken)] text-foreground border border-[var(--clay-line)]">
-            Starter
-          </span>
-        );
-      case "Free":
-        return (
-          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-[var(--clay-sunken)] text-muted-foreground border border-[var(--clay-line)]">
-            Free
-          </span>
-        );
-    }
-  };
+  const users = directory?.rows ?? [];
+  const total = directory?.total ?? 0;
+  const totalPages = Math.max(1, Math.ceil(total / USERS_PER_PAGE));
+  const metrics = directory?.metrics;
+
+  const getPlanBadge = () => (
+    <span
+      className="px-2 py-0.5 rounded text-[10px] font-medium bg-[var(--clay-sunken)] text-muted-foreground border border-[var(--clay-line)]"
+      title="No Mavly subscription plan is recorded"
+    >
+      Not recorded
+    </span>
+  );
 
   return (
     <AdminShell activeNav="Users">
-      {/* ── Summary Counters Strip ── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="p-5 rounded-2xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)]">
-          <p className="text-xs font-semibold text-muted-foreground tracking-wide">Total Users</p>
-          <h3 className="text-2xl sm:text-3xl font-extrabold text-foreground mt-1.5 font-mono">12,480</h3>
-          <span className="text-[11px] text-success font-semibold mt-2 inline-block">
-            +14.2% growth this month
-          </span>
-        </div>
-
-        <div className="p-5 rounded-2xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)]">
-          <p className="text-xs font-semibold text-muted-foreground tracking-wide">Active Tenants</p>
-          <h3 className="text-2xl sm:text-3xl font-extrabold text-foreground mt-1.5 font-mono">9,840</h3>
-          <span className="text-[11px] text-success font-semibold mt-2 inline-block">
-            Active in last 7 days
-          </span>
-        </div>
-
-        <div className="p-5 rounded-2xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)]">
-          <p className="text-xs font-semibold text-muted-foreground tracking-wide">Paid Subscribers</p>
-          <h3 className="text-2xl sm:text-3xl font-extrabold text-foreground mt-1.5 font-mono">2,840</h3>
-          <span className="text-[11px] text-muted-foreground font-medium mt-2 inline-block">
-            22.7% paid conversion
-          </span>
-        </div>
-
-        <div className="p-5 rounded-2xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)]">
-          <p className="text-xs font-semibold text-muted-foreground tracking-wide">Account Health SLA</p>
-          <h3 className="text-2xl sm:text-3xl font-extrabold text-success mt-1.5 font-mono">99.8%</h3>
-          <span className="text-[11px] text-muted-foreground font-medium mt-2 inline-block">
-            16 suspended accounts
-          </span>
-        </div>
+        {[
+          ["Total Users", metrics?.total],
+          ["Created This Month", metrics?.createdThisMonth],
+          ["Created in Last 7 Days", metrics?.createdLast7Days],
+          ["Currently Banned", metrics?.banned],
+        ].map(([label, value]) => (
+          <div
+            key={label}
+            className="p-5 rounded-2xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)]"
+          >
+            <p className="text-xs font-semibold text-muted-foreground tracking-wide">{label}</p>
+            <h3 className="text-2xl sm:text-3xl font-extrabold text-foreground mt-1.5 font-mono">
+              {loading && value === undefined ? "…" : typeof value === "number" ? value.toLocaleString() : "—"}
+            </h3>
+            <span className="text-[11px] text-muted-foreground font-medium mt-2 inline-block">
+              {error ? "Unavailable" : "From Supabase Auth"}
+            </span>
+          </div>
+        ))}
       </div>
 
-      {/* ── Table & Command Bar Container ── */}
       <div className="bg-card rounded-2xl p-5 sm:p-6 border border-[var(--clay-line)] shadow-[var(--clay-elev-1)] space-y-4">
-        {/* Controls Bar */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-4 border-b border-[var(--clay-line)]">
           <div>
             <h2 className="text-base font-bold text-foreground">Customer Directory</h2>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Showing {filteredUsers.length} total matched customer accounts
+              {loading ? "Loading accounts…" : `Showing ${total.toLocaleString()} matching accounts`}
             </p>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            {/* Search */}
             <div className="relative w-full sm:w-60">
               <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
               <input
-                type="text"
-                placeholder="Search user, email, role..."
+                type="search"
+                maxLength={120}
+                placeholder="Search user, email, or ID..."
                 value={searchQuery}
-                onChange={(e) => {
-                  setSearchQuery(e.target.value);
+                onChange={(event) => {
+                  setSearchQuery(event.target.value);
                   setCurrentPage(1);
                 }}
                 className="w-full h-8 pl-8 pr-3 text-xs rounded-xl bg-[var(--clay-sunken)] border border-[var(--clay-line)] text-foreground focus:bg-card focus:outline-none focus:ring-2 focus:ring-black shadow-[var(--clay-well-1)]"
               />
             </div>
 
-            {/* Plan Filter */}
             <select
-              value={planFilter}
-              onChange={(e) => {
-                setPlanFilter(e.target.value);
-                setCurrentPage(1);
-              }}
-              className="h-8 px-2.5 text-xs font-medium bg-[var(--clay-sunken)] border border-[var(--clay-line)] rounded-xl text-foreground focus:outline-none focus:ring-2 focus:ring-black cursor-pointer shadow-[var(--clay-well-1)]"
+              value="unavailable"
+              disabled
+              title="Mavly subscription plans are not stored"
+              className="h-8 px-2.5 text-xs font-medium bg-[var(--clay-sunken)] border border-[var(--clay-line)] rounded-xl text-muted-foreground cursor-not-allowed shadow-[var(--clay-well-1)]"
             >
-              <option value="All">All Plans</option>
-              <option value="Agency">Agency</option>
-              <option value="Pro">Pro</option>
-              <option value="Creator">Creator</option>
-              <option value="Starter">Starter</option>
-              <option value="Free">Free</option>
+              <option value="unavailable">Plans unavailable</option>
             </select>
 
-            {/* Status Filter */}
             <select
               value={statusFilter}
-              onChange={(e) => {
-                setStatusFilter(e.target.value);
+              onChange={(event) => {
+                setStatusFilter(event.target.value);
                 setCurrentPage(1);
               }}
               className="h-8 px-2.5 text-xs font-medium bg-[var(--clay-sunken)] border border-[var(--clay-line)] rounded-xl text-foreground focus:outline-none focus:ring-2 focus:ring-black cursor-pointer shadow-[var(--clay-well-1)]"
             >
-              <option value="All">All Statuses</option>
-              <option value="Active">Active Only</option>
-              <option value="Suspended">Suspended Only</option>
+              <option value="all">All Statuses</option>
+              <option value="not_banned">Not Banned</option>
+              <option value="banned">Banned</option>
             </select>
 
-            {/* Invite Button */}
             <button
               type="button"
-              onClick={() => setShowInviteModal(true)}
-              className="h-8 px-3 rounded-xl bg-primary hover:bg-[var(--clay-brand-hover)] text-white font-bold text-xs flex items-center gap-1.5 shadow-[var(--clay-elev-ink-1)] transition-colors cursor-pointer"
+              disabled
+              title="Invitations are not implemented"
+              className="h-8 px-3 rounded-xl bg-primary text-white/70 font-bold text-xs flex items-center gap-1.5 opacity-60 cursor-not-allowed shadow-[var(--clay-elev-ink-1)]"
             >
               <Plus className="w-3.5 h-3.5" />
               <span>Invite Member</span>
@@ -274,7 +180,21 @@ export default function UsersAdminPage() {
           </div>
         </div>
 
-        {/* ── High-Density Directory Table ── */}
+        {error && (
+          <div className="rounded-xl border border-destructive/25 bg-destructive-subtle px-4 py-3 text-xs text-destructive-subtle-foreground" role="alert">
+            <div className="flex items-center justify-between gap-3">
+              <span>{error}</span>
+              <button
+                type="button"
+                onClick={() => setRefreshKey((value) => value + 1)}
+                className="font-semibold underline underline-offset-2"
+              >
+                Retry
+              </button>
+            </div>
+          </div>
+        )}
+
         <div className="overflow-x-auto rounded-xl border border-[var(--clay-line)] bg-card shadow-[var(--clay-elev-1)]">
           <table className="w-full text-left border-collapse text-xs">
             <thead>
@@ -285,19 +205,19 @@ export default function UsersAdminPage() {
                 <th className="py-2.5 px-4 text-center">Projects</th>
                 <th className="py-2.5 px-4 text-right font-mono">Credits Remaining</th>
                 <th className="py-2.5 px-4">Status</th>
-                <th className="py-2.5 px-4">Last Active</th>
+                <th className="py-2.5 px-4">Last Sign-In</th>
                 <th className="py-2.5 px-4 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[var(--clay-line)]">
-              {paginatedUsers.length === 0 ? (
+              {users.length === 0 ? (
                 <tr>
                   <td colSpan={8} className="py-8 text-center text-muted-foreground">
-                    No users found matching your search or filters.
+                    {loading ? "Loading users…" : error ? "User records are unavailable." : "No users match the selected filters."}
                   </td>
                 </tr>
               ) : (
-                paginatedUsers.map((user) => (
+                users.map((user) => (
                   <tr key={user.id} className="hover:bg-[var(--clay-sunken)] transition-colors">
                     <td className="py-2.5 px-4">
                       <div className="flex items-center gap-2.5">
@@ -306,35 +226,33 @@ export default function UsersAdminPage() {
                         </div>
                         <div>
                           <p className="font-bold text-foreground leading-tight">{user.name}</p>
-                          <p className="text-[11px] text-muted-foreground leading-tight">{user.email}</p>
+                          <p className="text-[11px] text-muted-foreground leading-tight">{user.email ?? "No email recorded"}</p>
                         </div>
                       </div>
                     </td>
-                    <td className="py-2.5 px-4 text-muted-foreground font-medium">
-                      {user.role || "Member"}
-                    </td>
-                    <td className="py-2.5 px-4">{getPlanBadge(user.plan)}</td>
+                    <td className="py-2.5 px-4 text-muted-foreground font-medium">{user.role ?? "Not recorded"}</td>
+                    <td className="py-2.5 px-4">{getPlanBadge()}</td>
                     <td className="py-2.5 px-4 text-center font-mono font-semibold text-foreground">
-                      {user.projectsCount}
+                      {user.projectCount.toLocaleString()}
                     </td>
                     <td className="py-2.5 px-4 text-right font-mono font-bold text-foreground">
-                      {user.creditsRemaining.toLocaleString()}
+                      {formatCredits(user.availableCredits)}
                     </td>
                     <td className="py-2.5 px-4">
-                      {user.status === "Active" ? (
+                      {user.status === "Not Banned" ? (
                         <span className="text-success font-semibold text-xs flex items-center gap-1.5">
                           <span className="w-1.5 h-1.5 rounded-full bg-success" />
-                          Active
+                          Not Banned
                         </span>
                       ) : (
                         <span className="text-destructive font-semibold text-xs flex items-center gap-1.5">
                           <span className="w-1.5 h-1.5 rounded-full bg-destructive" />
-                          Suspended
+                          Banned
                         </span>
                       )}
                     </td>
                     <td className="py-2.5 px-4 text-muted-foreground whitespace-nowrap">
-                      {user.lastActive || "Recently"}
+                      {formatDate(user.lastSignInAt, "No recorded sign-in")}
                     </td>
                     <td className="py-2.5 px-4 text-right">
                       <div className="flex items-center justify-end gap-1.5">
@@ -347,25 +265,19 @@ export default function UsersAdminPage() {
                         </button>
                         <button
                           type="button"
-                          onClick={() => {
-                            setEditingPlanUser(user);
-                            setSelectedNewPlan(user.plan);
-                          }}
-                          className="px-2 py-1 rounded-lg text-[11px] font-semibold text-foreground bg-[var(--clay-sunken)] hover:bg-[var(--clay-sunken-deep)] transition-colors"
+                          disabled
+                          title="Plan changes are not supported"
+                          className="px-2 py-1 rounded-lg text-[11px] font-semibold text-muted-foreground bg-[var(--clay-sunken)] cursor-not-allowed opacity-60"
                         >
                           Plan
                         </button>
                         <button
                           type="button"
-                          onClick={() => handleToggleStatus(user)}
-                          className={`p-1 rounded-lg transition-colors ${
-                            user.status === "Active"
-                              ? "text-warning hover:bg-warning-subtle"
-                              : "text-success hover:bg-success-subtle"
-                          }`}
-                          title={user.status === "Active" ? "Suspend Account" : "Activate Account"}
+                          disabled
+                          title="Account status changes are not supported"
+                          className="p-1 rounded-lg text-muted-foreground cursor-not-allowed opacity-60"
                         >
-                          {user.status === "Active" ? <UserX className="w-3.5 h-3.5" /> : <UserCheck className="w-3.5 h-3.5" />}
+                          {user.status === "Not Banned" ? <UserX className="w-3.5 h-3.5" /> : <UserCheck className="w-3.5 h-3.5" />}
                         </button>
                       </div>
                     </td>
@@ -376,30 +288,25 @@ export default function UsersAdminPage() {
           </table>
         </div>
 
-        {/* Pagination Controls */}
         <div className="flex items-center justify-between pt-3 border-t border-[var(--clay-line)] text-xs text-muted-foreground">
           <div>
-            Showing {(currentPage - 1) * usersPerPage + 1} to{" "}
-            {Math.min(currentPage * usersPerPage, filteredUsers.length)} of{" "}
-            {filteredUsers.length} records
+            Showing {total === 0 ? 0 : (currentPage - 1) * USERS_PER_PAGE + 1} to{" "}
+            {Math.min(currentPage * USERS_PER_PAGE, total)} of {total.toLocaleString()} records
           </div>
-
           <div className="flex items-center gap-1">
             <button
               type="button"
-              disabled={currentPage === 1}
-              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+              disabled={currentPage === 1 || loading}
+              onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
               className="p-1.5 rounded-lg border border-[var(--clay-line)] hover:bg-[var(--clay-sunken)] disabled:opacity-40 disabled:pointer-events-none transition-colors shadow-[var(--clay-well-1)]"
             >
               <ChevronLeft className="w-3.5 h-3.5" />
             </button>
-            <span className="px-2.5 font-semibold text-foreground">
-              {currentPage} / {totalPages}
-            </span>
+            <span className="px-2.5 font-semibold text-foreground">{currentPage} / {totalPages}</span>
             <button
               type="button"
-              disabled={currentPage === totalPages}
-              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+              disabled={currentPage >= totalPages || loading}
+              onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
               className="p-1.5 rounded-lg border border-[var(--clay-line)] hover:bg-[var(--clay-sunken)] disabled:opacity-40 disabled:pointer-events-none transition-colors shadow-[var(--clay-well-1)]"
             >
               <ChevronRight className="w-3.5 h-3.5" />
@@ -408,7 +315,6 @@ export default function UsersAdminPage() {
         </div>
       </div>
 
-      {/* ── User Details Modal ── */}
       {selectedUser && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[var(--clay-scrim)] backdrop-blur-[3px] animate-in fade-in">
           <div className="w-full max-w-md bg-card rounded-2xl border border-[var(--clay-line)] shadow-[var(--clay-float)] p-6 space-y-4">
@@ -425,50 +331,27 @@ export default function UsersAdminPage() {
               <button
                 type="button"
                 onClick={() => setSelectedUser(null)}
+                aria-label="Close user details"
                 className="p-1 text-muted-foreground hover:text-black rounded-lg hover:bg-[var(--clay-sunken)]"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
-
             <div className="space-y-2.5 text-xs bg-[var(--clay-sunken)] p-4 rounded-xl border border-[var(--clay-line)] shadow-[var(--clay-well-1)]">
-              <div className="flex justify-between py-1 border-b border-[var(--clay-line)]">
-                <span className="text-muted-foreground">Email:</span>
-                <span className="font-mono text-foreground">{selectedUser.email}</span>
-              </div>
-              <div className="flex justify-between py-1 border-b border-[var(--clay-line)]">
-                <span className="text-muted-foreground">Role:</span>
-                <span className="font-semibold text-foreground">{selectedUser.role || "Member"}</span>
-              </div>
-              <div className="flex justify-between py-1 border-b border-[var(--clay-line)]">
-                <span className="text-muted-foreground">Current Plan:</span>
-                <span>{getPlanBadge(selectedUser.plan)}</span>
-              </div>
-              <div className="flex justify-between py-1 border-b border-[var(--clay-line)]">
-                <span className="text-muted-foreground">Credits Remaining:</span>
-                <span className="font-mono font-extrabold text-foreground">
-                  {selectedUser.creditsRemaining.toLocaleString()}
-                </span>
-              </div>
-              <div className="flex justify-between py-1 border-b border-[var(--clay-line)]">
-                <span className="text-muted-foreground">Active Projects:</span>
-                <span className="font-mono font-bold text-foreground">{selectedUser.projectsCount}</span>
-              </div>
-              <div className="flex justify-between py-1 border-b border-[var(--clay-line)]">
-                <span className="text-muted-foreground">Account Status:</span>
-                <span className="font-semibold text-success">{selectedUser.status}</span>
-              </div>
-              <div className="flex justify-between pt-1">
-                <span className="text-muted-foreground">Joined Date:</span>
-                <span className="text-foreground">{selectedUser.joinedDate}</span>
-              </div>
+              <div className="flex justify-between gap-4 py-1 border-b border-[var(--clay-line)]"><span className="text-muted-foreground">Email</span><span className="font-mono text-foreground">{selectedUser.email ?? "Not recorded"}</span></div>
+              <div className="flex justify-between gap-4 py-1 border-b border-[var(--clay-line)]"><span className="text-muted-foreground">Auth role</span><span className="font-semibold text-foreground">{selectedUser.role ?? "Not recorded"}</span></div>
+              <div className="flex justify-between gap-4 py-1 border-b border-[var(--clay-line)]"><span className="text-muted-foreground">Subscription plan</span><span className="text-muted-foreground">Unavailable</span></div>
+              <div className="flex justify-between gap-4 py-1 border-b border-[var(--clay-line)]"><span className="text-muted-foreground">Available credits</span><span className="font-mono font-bold text-foreground">{formatCredits(selectedUser.availableCredits)}</span></div>
+              <div className="flex justify-between gap-4 py-1 border-b border-[var(--clay-line)]"><span className="text-muted-foreground">Projects</span><span className="font-mono font-bold text-foreground">{selectedUser.projectCount.toLocaleString()}</span></div>
+              <div className="flex justify-between gap-4 py-1 border-b border-[var(--clay-line)]"><span className="text-muted-foreground">Account status</span><span className="font-semibold text-foreground">{selectedUser.status}{selectedUser.bannedUntil ? ` until ${formatDate(selectedUser.bannedUntil)}` : ""}</span></div>
+              <div className="flex justify-between gap-4 pt-1"><span className="text-muted-foreground">Joined</span><span className="text-foreground">{formatDate(selectedUser.createdAt)}</span></div>
             </div>
-
             <div className="flex items-center justify-between pt-2">
               <button
                 type="button"
-                onClick={() => setDeletingUser(selectedUser)}
-                className="px-3 py-1.5 text-xs font-semibold text-destructive hover:bg-destructive-subtle rounded-xl transition-colors"
+                disabled
+                title="Account deletion is not supported"
+                className="px-3 py-1.5 text-xs font-semibold text-muted-foreground rounded-xl cursor-not-allowed opacity-60"
               >
                 Delete Account
               </button>
@@ -480,121 +363,6 @@ export default function UsersAdminPage() {
                 Close
               </button>
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* ── Edit Plan Modal ── */}
-      {editingPlanUser && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[var(--clay-scrim)] backdrop-blur-[3px] animate-in fade-in">
-          <div className="w-full max-w-sm bg-card rounded-2xl border border-[var(--clay-line)] shadow-[var(--clay-float)] p-6 space-y-4">
-            <h3 className="text-base font-bold text-foreground">
-              Change Plan for {editingPlanUser.name}
-            </h3>
-            <form onSubmit={handleUpdatePlan} className="space-y-4 text-xs">
-              <div>
-                <label className="block text-foreground font-semibold mb-1">Select New Tier</label>
-                <select
-                  value={selectedNewPlan}
-                  onChange={(e) => setSelectedNewPlan(e.target.value as UserRecord["plan"])}
-                  className="w-full h-9 px-3 text-xs rounded-xl border border-[var(--clay-line)] bg-card text-foreground shadow-[var(--clay-elev-1)]"
-                >
-                  <option value="Free">Free Starter (₹0)</option>
-                  <option value="Starter">Starter Tier (₹399/mo)</option>
-                  <option value="Creator">Creator Tier (₹599/mo)</option>
-                  <option value="Pro">Pro Enterprise (₹899/mo)</option>
-                  <option value="Agency">Agency Tier (₹1,999/mo)</option>
-                </select>
-              </div>
-
-              <div className="flex justify-end gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setEditingPlanUser(null)}
-                  className="px-3 py-2 text-xs text-muted-foreground hover:bg-[var(--clay-sunken)] rounded-xl"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 text-xs font-bold text-white bg-primary hover:bg-[var(--clay-brand-hover)] rounded-xl"
-                >
-                  Confirm Change
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* ── Invite Member Modal ── */}
-      {showInviteModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[var(--clay-scrim)] backdrop-blur-[3px] animate-in fade-in">
-          <div className="w-full max-w-md bg-card rounded-2xl border border-[var(--clay-line)] shadow-[var(--clay-float)] p-6 space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-[var(--clay-line)]">
-              <h3 className="text-base font-bold text-foreground">Invite Team Member</h3>
-              <button
-                type="button"
-                onClick={() => setShowInviteModal(false)}
-                className="p-1 text-muted-foreground hover:text-black rounded-lg hover:bg-[var(--clay-sunken)]"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <form onSubmit={handleInviteUser} className="space-y-4 text-xs">
-              <div>
-                <label className="block text-foreground font-semibold mb-1">Full Name</label>
-                <input
-                  type="text"
-                  placeholder="e.g. Vikram Malhotra"
-                  value={inviteName}
-                  onChange={(e) => setInviteName(e.target.value)}
-                  className="w-full h-9 px-3 text-xs rounded-xl border border-[var(--clay-line)] focus:ring-2 focus:ring-black text-foreground"
-                />
-              </div>
-
-              <div>
-                <label className="block text-foreground font-semibold mb-1">Email Address</label>
-                <input
-                  type="email"
-                  placeholder="vikram@enterprise.in"
-                  value={inviteEmail}
-                  onChange={(e) => setInviteEmail(e.target.value)}
-                  className="w-full h-9 px-3 text-xs rounded-xl border border-[var(--clay-line)] focus:ring-2 focus:ring-black text-foreground"
-                />
-              </div>
-
-              <div>
-                <label className="block text-foreground font-semibold mb-1">Assigned Plan Tier</label>
-                <select
-                  value={invitePlan}
-                  onChange={(e) => setInvitePlan(e.target.value as UserRecord["plan"])}
-                  className="w-full h-9 px-3 text-xs rounded-xl border border-[var(--clay-line)] bg-card text-foreground shadow-[var(--clay-elev-1)]"
-                >
-                  <option value="Starter">Starter Tier (₹399/mo)</option>
-                  <option value="Creator">Creator Tier (₹599/mo)</option>
-                  <option value="Pro">Pro Enterprise (₹899/mo)</option>
-                  <option value="Agency">Agency Tier (₹1,999/mo)</option>
-                </select>
-              </div>
-
-              <div className="flex justify-end gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setShowInviteModal(false)}
-                  className="px-3 py-2 text-xs text-muted-foreground hover:bg-[var(--clay-sunken)] rounded-xl"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 text-xs font-bold text-white bg-primary hover:bg-[var(--clay-brand-hover)] rounded-xl shadow-[var(--clay-elev-ink-1)]"
-                >
-                  Send Invitation
-                </button>
-              </div>
-            </form>
           </div>
         </div>
       )}
