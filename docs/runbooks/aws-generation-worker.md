@@ -58,7 +58,9 @@ Do not expose these values to browser code or logs. Keep all secrets server-side
 ## AWS runtime recommendations
 
 - OS: Ubuntu 24.04 LTS
-- Node.js: use a version compatible with the repository's current worker runtime (matching the project's existing worker requirements)
+- Node.js: use Node.js 24.22.2 or newer Node 24.x. The worker's custom resolver returns
+  `module-typescript` for project `.ts` files, allowing Node's native TypeScript type
+  stripping to run while retaining ESM imports without a package-level `"type": "module"`.
 - User: dedicated non-root service account, for example `mavly-worker`
 - Process manager: `systemd`
 - Systemd unit: use a service file that runs `node --import ./workers/register-node-ts-resolver.mjs ./workers/aws-generation-worker.ts`
@@ -110,6 +112,13 @@ To roll back to Render later:
 - Keep the workload limited to background worker execution; do not move frontend, auth, app database or billing into EC2.
 
 ## Compatibility concerns
+
+`workers/register-node-ts-resolver.mjs` registers the resolver before importing the
+TypeScript worker. The resolver preserves the existing `@/` alias, extensionless local
+imports, and `next/server` / `next/headers` `.js` fallback. It assigns
+`module-typescript` only to project-owned `.ts` files; TypeScript packages in
+`node_modules` retain Node's package resolution. Node 24.22.2 is the target runtime for
+this format. A Node 24.22.2 runtime execution has not been performed in this repository.
 
 The worker reuses the repository's existing generation engine, so the main compatibility risk is process/runtime environment rather than application logic. Confirm:
 

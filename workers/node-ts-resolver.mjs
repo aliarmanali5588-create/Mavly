@@ -26,7 +26,7 @@ function useProjectEsmForTypeScript(resolved) {
     return resolved;
   }
 
-  return { ...resolved, format: "module" };
+  return { ...resolved, format: "module-typescript" };
 }
 
 async function resolveWithWorkerFormat(specifier, context, nextResolve) {
