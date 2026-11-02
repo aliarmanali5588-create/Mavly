@@ -1,6 +1,6 @@
 {
   "schemaVersion": "perch-folder-index-v1",
-  "generatedAt": "2026-11-02T06:11:18.528Z",
+  "generatedAt": "2026-11-02T07:28:49.916Z",
   "rootId": "root_1793457532221_ye4hde",
   "rootPath": "/Users/ashadali/Mavly",
   "counts": {
@@ -26,7 +26,7 @@
     "retrieval chunks",
     "embeddings"
   ],
-  "lastIndexedAt": "2026-11-02T06:11:18.528Z",
+  "lastIndexedAt": "2026-11-02T07:28:49.916Z",
   "diagnostics": [
     "Indexed 742/781 file(s) for retrieval.",
     "2685 text/source chunk(s) available for keyword search.",

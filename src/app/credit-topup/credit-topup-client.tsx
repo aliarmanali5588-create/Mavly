@@ -17,7 +17,6 @@ import type { ProfileSummary } from "@/lib/user-profile";
 import { formatINR } from "@/components/home/PricingSection";
 import {
   PROVISIONAL_CREDIT_PACKAGES,
-  type CreditPackage,
 } from "@/lib/credits-config";
 import {
   Dialog,
@@ -51,7 +50,7 @@ export function CreditTopupClient({ profile }: CreditTopupClientProps) {
               href={userEmail ? "/dashboard" : "/"}
               className="flex items-center gap-2.5 group select-none"
             >
-              <div className="w-8 h-8 rounded-xl overflow-hidden bg-card shadow-[var(--clay-elev-1)] p-0.5 border border-[var(--clay-line)] flex items-center justify-center transition-transform duration-200 clay-press">
+              <div className="w-8 h-8 rounded-xl overflow-hidden bg-card shadow-[var(--clay-elev-1)] p-0.5 border border-[var(--clay-line)] flex items-center justify-center clay-press">
                 <Image
                   src="/logo/Mavly.png"
                   alt="Mavly Logo"
@@ -103,7 +102,7 @@ export function CreditTopupClient({ profile }: CreditTopupClientProps) {
           {/* User Account / Credit Status Banner */}
           <div className="mt-8 grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-2xl mx-auto text-left">
             {/* Account Status / Actual Balance Notice */}
-            <div className="p-4 rounded-2xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)]">
+            <div className="p-4 rounded-2xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-1)]">
               <div className="flex items-center gap-2 mb-1.5">
                 <Coins className="w-4 h-4 text-muted-foreground" />
                 <span className="text-xs font-bold text-foreground uppercase tracking-wide">
@@ -127,7 +126,7 @@ export function CreditTopupClient({ profile }: CreditTopupClientProps) {
             </div>
 
             {/* Provisional Pricing Disclosure */}
-            <div className="p-4 rounded-2xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)]">
+            <div className="p-4 rounded-2xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-1)]">
               <div className="flex items-center gap-2 mb-1.5">
                 <Info className="w-4 h-4 text-muted-foreground" />
                 <span className="text-xs font-bold text-foreground uppercase tracking-wide">
@@ -155,7 +154,11 @@ export function CreditTopupClient({ profile }: CreditTopupClientProps) {
             </span>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+          <div
+            role="radiogroup"
+            aria-label="Credit packages"
+            className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 sm:gap-5 items-stretch"
+          >
             {PROVISIONAL_CREDIT_PACKAGES.map((pkg) => {
               const isSelected = pkg.id === selectedPackageId;
 
@@ -172,11 +175,11 @@ export function CreditTopupClient({ profile }: CreditTopupClientProps) {
                   role="radio"
                   aria-checked={isSelected}
                   tabIndex={0}
-                  className={`p-5 rounded-2xl bg-card flex flex-col justify-between transition-all duration-200 cursor-pointer select-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black relative ${
+                  className={`clay-card-interactive p-5 rounded-3xl bg-card flex flex-col justify-between cursor-pointer select-none outline-none transition-[box-shadow,border-color] duration-200 ease-[cubic-bezier(0.22,0.61,0.36,1)] ${
                     isSelected
-                      ? "border-2 border-black shadow-[var(--clay-elev-2)]"
-                      : "border border-[var(--clay-line)] shadow-[var(--clay-elev-1)] hover:border-[var(--clay-line-strong)]"
-                  }`}
+                      ? "border border-[var(--clay-line-strong)] shadow-[var(--clay-elev-4)] focus-visible:shadow-[var(--clay-elev-4),var(--clay-focus)]"
+                      : "border border-[var(--clay-line)] shadow-[var(--clay-elev-2)] hover:border-[var(--clay-line-strong)] focus-visible:shadow-[var(--clay-elev-2),var(--clay-focus)]"
+                  } active:shadow-[var(--clay-well-2)]`}
                 >
                   {/* Top: Package Identifier & Selected Indicator */}
                   <div>
@@ -185,7 +188,7 @@ export function CreditTopupClient({ profile }: CreditTopupClientProps) {
                         {pkg.name}
                       </span>
                       {isSelected ? (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-black text-white text-[10px] font-bold uppercase tracking-wider shadow-[var(--clay-elev-ink-1)]">
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-primary text-primary-foreground text-[10px] font-bold uppercase tracking-wider shadow-[var(--clay-elev-ink-1)]">
                           <Check className="w-2.5 h-2.5" />
                           <span>Selected</span>
                         </span>
@@ -229,10 +232,8 @@ export function CreditTopupClient({ profile }: CreditTopupClientProps) {
                         e.stopPropagation();
                         setSelectedPackageId(pkg.id);
                       }}
-                      className={`w-full py-2 px-3 rounded-full text-xs font-semibold transition-all ${
-                        isSelected
-                          ? "bg-black text-white shadow-[var(--clay-elev-1)]"
-                          : "bg-[var(--clay-sunken)] text-foreground hover:bg-[var(--clay-sunken-deep)]"
+                      className={`w-full py-2.5 px-3 text-xs font-semibold ${
+                        isSelected ? "mavly-btn-primary" : "mavly-btn-secondary"
                       }`}
                     >
                       {isSelected ? "Selected" : "Select package"}
@@ -245,7 +246,7 @@ export function CreditTopupClient({ profile }: CreditTopupClientProps) {
         </div>
 
         {/* Selected Package Review & Checkout Action Card */}
-        <div className="max-w-3xl mx-auto rounded-3xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)] p-6 sm:p-8">
+        <div className="max-w-3xl mx-auto rounded-3xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-3)] p-6 sm:p-8">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6 pb-6 border-b border-[var(--clay-line)]">
             <div>
               <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground block mb-1">
@@ -278,7 +279,7 @@ export function CreditTopupClient({ profile }: CreditTopupClientProps) {
 
           {/* Checkout Status Notice */}
           <div className="mt-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-            <div className="flex items-start gap-2.5 max-w-lg">
+            <div className="clay-subpanel flex items-start gap-2.5 max-w-lg p-3.5">
               <Info className="w-4 h-4 text-muted-foreground shrink-0 mt-0.5" />
               <p className="text-xs text-muted-foreground leading-relaxed">
                 <strong className="text-foreground">Checkout status:</strong> Automated payment gateway integration (Razorpay / Stripe) is currently in development. You will not be charged.
@@ -318,7 +319,7 @@ export function CreditTopupClient({ profile }: CreditTopupClientProps) {
       >
         <DialogContent className="max-w-md bg-card p-6 sm:p-8 rounded-3xl border border-[var(--clay-line)] shadow-[var(--clay-float)]">
           <DialogHeader>
-            <div className="w-10 h-10 rounded-2xl bg-warning-subtle border border-warning/25 flex items-center justify-center text-warning-subtle-foreground mb-2">
+            <div className="w-10 h-10 rounded-2xl bg-warning-subtle border border-warning/25 shadow-[var(--clay-elev-1)] flex items-center justify-center text-warning-subtle-foreground mb-2">
               <ShieldAlert className="w-5 h-5" />
             </div>
             <DialogTitle className="text-xl font-bold tracking-tight text-foreground">
@@ -330,7 +331,7 @@ export function CreditTopupClient({ profile }: CreditTopupClientProps) {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="my-4 p-3.5 rounded-xl bg-[var(--clay-base)] border border-[var(--clay-line)] text-xs text-foreground space-y-1.5">
+          <div className="clay-inset-panel my-4 p-3.5 text-xs text-foreground space-y-1.5">
             <div className="flex justify-between font-medium">
               <span>Selected Package:</span>
               <span className="font-bold text-foreground">{selectedPackage.name}</span>
@@ -349,15 +350,14 @@ export function CreditTopupClient({ profile }: CreditTopupClientProps) {
           </div>
 
           <div className="flex flex-col-reverse sm:flex-row items-center justify-end gap-2.5 pt-2">
-            <Button
+            <button
               type="button"
-              variant="outline"
               onClick={() => setShowCheckoutModal(false)}
-              className="w-full sm:w-auto text-xs rounded-full py-2 px-4"
+              className="mavly-btn-secondary w-full sm:w-auto text-xs py-2.5 px-5"
             >
               Close
-            </Button>
-            <Button asChild className="w-full sm:w-auto mavly-btn-primary text-xs py-2 px-4">
+            </button>
+            <Button asChild className="w-full sm:w-auto mavly-btn-primary text-xs py-2.5 px-5">
               <a
                 href={`mailto:billing@mavly.xyz?subject=Mavly%20Credit%20Top-up%20Inquiry%20-%20${encodeURIComponent(selectedPackage.name)}`}
               >
