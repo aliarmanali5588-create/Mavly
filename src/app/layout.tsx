@@ -1,6 +1,6 @@
 // src/app/layout.tsx
 import React from "react";
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { DM_Sans, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { GlobalErrorCatcher } from "@/components/GlobalErrorCatcher";
@@ -34,6 +34,18 @@ export const metadata: Metadata = {
 // SUPER IMPORTANT: NOT EDIT THE FOLLOWING 2 LINES TO FORCE NEXT.JS TO RENDER DYNAMICALLY
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
+
+/**
+ * `viewportFit: "cover"` is what makes `env(safe-area-inset-*)` resolve to a
+ * real value on a notched phone. Without it those insets are always 0 and the
+ * workspace's safe-area padding silently does nothing.
+ */
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  themeColor: "#000000",
+};
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (

@@ -1,19 +1,19 @@
 {
   "schemaVersion": "perch-folder-index-v1",
-  "generatedAt": "2026-11-02T07:28:49.916Z",
+  "generatedAt": "2026-11-02T07:49:05.719Z",
   "rootId": "root_1793457532221_ye4hde",
   "rootPath": "/Users/ashadali/Mavly",
   "counts": {
-    "totalFiles": 781,
-    "registeredSources": 743,
-    "indexedFiles": 742,
+    "totalFiles": 782,
+    "registeredSources": 744,
+    "indexedFiles": 743,
     "skippedFiles": 29,
     "failedFiles": 10,
-    "staleFiles": 23,
-    "sourceChunkCount": 2685,
-    "sourceChunkFiles": 742,
-    "retrievalChunkCount": 2685,
-    "retrievalReadyFiles": 742,
+    "staleFiles": 22,
+    "sourceChunkCount": 2689,
+    "sourceChunkFiles": 743,
+    "retrievalChunkCount": 2689,
+    "retrievalReadyFiles": 743,
     "embeddedChunkCount": 342,
     "vectorReadyFiles": 57,
     "filesNeedingOcr": 0
@@ -26,16 +26,29 @@
     "retrieval chunks",
     "embeddings"
   ],
-  "lastIndexedAt": "2026-11-02T07:28:49.916Z",
+  "lastIndexedAt": "2026-11-02T07:49:05.719Z",
   "diagnostics": [
-    "Indexed 742/781 file(s) for retrieval.",
-    "2685 text/source chunk(s) available for keyword search.",
-    "2685 retrieval chunk(s) available.",
+    "Indexed 743/782 file(s) for retrieval.",
+    "2689 text/source chunk(s) available for keyword search.",
+    "2689 retrieval chunk(s) available.",
     "342 embedded retrieval chunk(s) available for vector search.",
     "29 file(s) were skipped.",
     "10 file(s) failed indexing."
   ],
   "files": [
+    {
+      "relativePath": "next-env.d.ts",
+      "fileName": "next-env.d.ts",
+      "modifiedAt": "2026-11-02T07:47:11.598Z",
+      "status": "indexed",
+      "retrievalReady": true,
+      "vectorReady": false,
+      "sourceChunkCount": 1,
+      "retrievalChunkCount": 1,
+      "embeddedChunkCount": 0,
+      "supabaseSourceId": "5c902f4a-eef6-4bcd-afcb-87751db1fa55",
+      "contentHash": "d3ed3cb4f2c4fcbecf2451137d10e723edc92d0acd0f1e525d2242161c302631"
+    },
     {
       "relativePath": "tsconfig.tsbuildinfo",
       "fileName": "tsconfig.tsbuildinfo",
@@ -128,19 +141,6 @@
       "embeddedChunkCount": 0,
       "supabaseSourceId": "595e3042-009b-4995-a447-20bf17824b01",
       "contentHash": "8c0e3f958f2a9b4cc1f020a291b3e5609112c33fd39119a4efef7fb2b0ef0633"
-    },
-    {
-      "relativePath": "next-env.d.ts",
-      "fileName": "next-env.d.ts",
-      "modifiedAt": "2026-11-01T05:25:39.454Z",
-      "status": "indexed",
-      "retrievalReady": true,
-      "vectorReady": false,
-      "sourceChunkCount": 1,
-      "retrievalChunkCount": 1,
-      "embeddedChunkCount": 0,
-      "supabaseSourceId": "5c902f4a-eef6-4bcd-afcb-87751db1fa55",
-      "contentHash": "c2bac4e021dc47dbddf67fc85815b00cd75be332af4cdb0e13284c247c0a426f"
     },
     {
       "relativePath": "CLAYMORPHISM_COVERAGE.md",
@@ -1340,6 +1340,58 @@
       "contentHash": "da5436a739db53c182ddcc525524cb5167101c5b825d35ad6ea879a001ec5246"
     },
     {
+      "relativePath": "src/app/layout.tsx",
+      "fileName": "layout.tsx",
+      "modifiedAt": "2026-11-02T07:41:42.464Z",
+      "status": "indexed",
+      "retrievalReady": true,
+      "vectorReady": false,
+      "sourceChunkCount": 1,
+      "retrievalChunkCount": 1,
+      "embeddedChunkCount": 0,
+      "supabaseSourceId": "557d8495-bc33-4eda-8edd-c6e2d6d0b1f1",
+      "contentHash": "ed9f5493ed0e026b0063ddca82dd35bee842abc60f4407dcbb93a78c0abe5ae0"
+    },
+    {
+      "relativePath": "src/app/globals.css",
+      "fileName": "globals.css",
+      "modifiedAt": "2026-11-02T07:34:26.626Z",
+      "status": "indexed",
+      "retrievalReady": true,
+      "vectorReady": false,
+      "sourceChunkCount": 9,
+      "retrievalChunkCount": 9,
+      "embeddedChunkCount": 0,
+      "supabaseSourceId": "567a2af5-710a-497e-888b-e8cc6eb1147c",
+      "contentHash": "a13703afb93a1fc3a296a7de1b2398e9d6f033c376b349bd1eb0344867faa979"
+    },
+    {
+      "relativePath": "src/app/error.tsx",
+      "fileName": "error.tsx",
+      "modifiedAt": "2026-11-02T07:32:54.651Z",
+      "status": "indexed",
+      "retrievalReady": true,
+      "vectorReady": false,
+      "sourceChunkCount": 2,
+      "retrievalChunkCount": 2,
+      "embeddedChunkCount": 0,
+      "supabaseSourceId": "f31bacc2-cccf-4c7d-b602-5166786ef988",
+      "contentHash": "0859af93d92e927ab8a6ed82675d198dbcc80db0cf47f1d7faa79da1451c190a"
+    },
+    {
+      "relativePath": "src/app/global-error.tsx",
+      "fileName": "global-error.tsx",
+      "modifiedAt": "2026-11-02T07:32:54.640Z",
+      "status": "indexed",
+      "retrievalReady": true,
+      "vectorReady": false,
+      "sourceChunkCount": 1,
+      "retrievalChunkCount": 1,
+      "embeddedChunkCount": 0,
+      "supabaseSourceId": "f40f0364-5e4d-4e99-ba12-83529232cf09",
+      "contentHash": "64dc6bfd5f4c6e7449f11bda1a9397e1340588177fcb12078cf59a4333f160a4"
+    },
+    {
       "relativePath": "src/app/clay.css",
       "fileName": "clay.css",
       "modifiedAt": "2026-11-01T05:23:43.883Z",
@@ -1351,19 +1403,6 @@
       "embeddedChunkCount": 0,
       "supabaseSourceId": "3bbf419e-c021-4c42-8c77-859d6b894a2d",
       "contentHash": "d56c5cdbc31deda47b652d0dab3fc9e35d8436a177a4939a1c5f758b7af2a018"
-    },
-    {
-      "relativePath": "src/app/error.tsx",
-      "fileName": "error.tsx",
-      "modifiedAt": "2026-11-01T05:16:39.806Z",
-      "status": "indexed",
-      "retrievalReady": true,
-      "vectorReady": false,
-      "sourceChunkCount": 2,
-      "retrievalChunkCount": 2,
-      "embeddedChunkCount": 0,
-      "supabaseSourceId": "f31bacc2-cccf-4c7d-b602-5166786ef988",
-      "contentHash": "6b724122dd85ff08ea1b7c658fecc663d1ecef432df63cb0d600a2d3c7f176e3"
     },
     {
       "relativePath": "src/app/not-found.tsx",
@@ -1379,32 +1418,6 @@
       "contentHash": "048c02119ba58be6be5a67531ae9fb68181b3546e7ea9684aa5d803cea022036"
     },
     {
-      "relativePath": "src/app/globals.css",
-      "fileName": "globals.css",
-      "modifiedAt": "2026-11-01T05:08:15.104Z",
-      "status": "indexed",
-      "retrievalReady": true,
-      "vectorReady": false,
-      "sourceChunkCount": 9,
-      "retrievalChunkCount": 9,
-      "embeddedChunkCount": 0,
-      "supabaseSourceId": "567a2af5-710a-497e-888b-e8cc6eb1147c",
-      "contentHash": "57c69cbeb1e1451171ba7b02d2149f6b94aa7b1cd520dadf4f612a6013a17998"
-    },
-    {
-      "relativePath": "src/app/global-error.tsx",
-      "fileName": "global-error.tsx",
-      "modifiedAt": "2026-10-31T16:38:16.011Z",
-      "status": "indexed",
-      "retrievalReady": true,
-      "vectorReady": false,
-      "sourceChunkCount": 1,
-      "retrievalChunkCount": 1,
-      "embeddedChunkCount": 0,
-      "supabaseSourceId": "f40f0364-5e4d-4e99-ba12-83529232cf09",
-      "contentHash": "07625607f4f7432f948d263defa3dd5ccca37876ef027c9205e58c18ee811447"
-    },
-    {
       "relativePath": "src/app/page.tsx",
       "fileName": "page.tsx",
       "modifiedAt": "2026-10-29T07:14:41.951Z",
@@ -1416,19 +1429,6 @@
       "embeddedChunkCount": 0,
       "supabaseSourceId": "9a11c3ff-648b-4f11-a116-80822630ef76",
       "contentHash": "1021010c5a24d9a1ddac221203cf017515fdaab3cee1ef8cee2960d50f2b18d5"
-    },
-    {
-      "relativePath": "src/app/layout.tsx",
-      "fileName": "layout.tsx",
-      "modifiedAt": "2026-10-29T07:14:41.893Z",
-      "status": "indexed",
-      "retrievalReady": true,
-      "vectorReady": false,
-      "sourceChunkCount": 1,
-      "retrievalChunkCount": 1,
-      "embeddedChunkCount": 0,
-      "supabaseSourceId": "557d8495-bc33-4eda-8edd-c6e2d6d0b1f1",
-      "contentHash": "0204cf85c01806add93680b087e54db5641bdad1b2f3d57c7e67fb6bcd2d01c1"
     },
     {
       "relativePath": "src/app/favicon.ico",
@@ -1937,6 +1937,19 @@
       "contentHash": "53401e367fbc90b405bb4fc048d25930e2ebaba2fbfe7ac89dc9e0f38908b26f"
     },
     {
+      "relativePath": "src/app/adminsh/projects/page.tsx",
+      "fileName": "page.tsx",
+      "modifiedAt": "2026-11-02T07:33:44.521Z",
+      "status": "indexed",
+      "retrievalReady": true,
+      "vectorReady": false,
+      "sourceChunkCount": 7,
+      "retrievalChunkCount": 7,
+      "embeddedChunkCount": 0,
+      "supabaseSourceId": "e907f518-d279-43bf-a0fa-d6537a242e09",
+      "contentHash": "61b1dcb635e3ed2c0d6b399e2a45ee63d1cca5586fb86d2e0d90e1b8c874484f"
+    },
+    {
       "relativePath": "src/app/adminsh/projects/loading.tsx",
       "fileName": "loading.tsx",
       "modifiedAt": "2026-11-01T17:27:41.300Z",
@@ -1948,20 +1961,6 @@
       "embeddedChunkCount": 0,
       "supabaseSourceId": "48b2c32b-ed20-4a62-9ff1-4f2230ebb538",
       "contentHash": "d841e24b8a0e3eb02518e81d2b92fcbd94e25d5734dfd7db7bf38878509a7933",
-      "message": "Changed since last indexing pass."
-    },
-    {
-      "relativePath": "src/app/adminsh/projects/page.tsx",
-      "fileName": "page.tsx",
-      "modifiedAt": "2026-11-01T17:27:41.277Z",
-      "status": "indexed",
-      "retrievalReady": true,
-      "vectorReady": false,
-      "sourceChunkCount": 7,
-      "retrievalChunkCount": 7,
-      "embeddedChunkCount": 0,
-      "supabaseSourceId": "e907f518-d279-43bf-a0fa-d6537a242e09",
-      "contentHash": "30c0dc260abdc447c8787bbf7f58f34717cc7d29b6601c56fb5835f1c1a27d2b",
       "message": "Changed since last indexing pass."
     },
     {
@@ -2465,7 +2464,7 @@
     {
       "relativePath": "src/app/careers/page.tsx",
       "fileName": "page.tsx",
-      "modifiedAt": "2026-11-01T05:16:39.814Z",
+      "modifiedAt": "2026-11-02T07:33:44.502Z",
       "status": "indexed",
       "retrievalReady": true,
       "vectorReady": false,
@@ -2473,7 +2472,7 @@
       "retrievalChunkCount": 3,
       "embeddedChunkCount": 0,
       "supabaseSourceId": "345c35f7-bb9f-431a-add4-0d127353578f",
-      "contentHash": "7fef5b20a1fc04263ed756783e99af80ca1c92b05a4a5bb09b2eb65ead9c2bfc"
+      "contentHash": "fd00564503b92e5ee4bf4593b6b4e467da88ecd03904e27956973b140a379807"
     },
     {
       "relativePath": "src/app/changelog/page.tsx",
@@ -2491,7 +2490,7 @@
     {
       "relativePath": "src/app/contact/page.tsx",
       "fileName": "page.tsx",
-      "modifiedAt": "2026-11-01T05:16:39.807Z",
+      "modifiedAt": "2026-11-02T07:33:44.495Z",
       "status": "indexed",
       "retrievalReady": true,
       "vectorReady": false,
@@ -2499,12 +2498,12 @@
       "retrievalChunkCount": 2,
       "embeddedChunkCount": 0,
       "supabaseSourceId": "7e6febc2-662d-4f38-a36a-b29dc1b34de6",
-      "contentHash": "e94db6c77ac5fc389cc4b5625ba8bf21a5c8a55886637c8cf698b1f847cac815"
+      "contentHash": "23588ee5cd021a7d3b963248c5bb1185119c21a013fe90ef8fd8bf42cd78e3fe"
     },
     {
       "relativePath": "src/app/credit-topup/credit-topup-client.tsx",
       "fileName": "credit-topup-client.tsx",
-      "modifiedAt": "2026-11-01T05:16:27.764Z",
+      "modifiedAt": "2026-11-02T07:30:48.490Z",
       "status": "indexed",
       "retrievalReady": true,
       "vectorReady": false,
@@ -2512,7 +2511,7 @@
       "retrievalChunkCount": 5,
       "embeddedChunkCount": 0,
       "supabaseSourceId": "6be8e711-15d8-47ac-84b7-97a87ac2bc77",
-      "contentHash": "b04a8e6262f1727141d8591394183b4dd127576a208ddde21652a4ba1fb4e52d"
+      "contentHash": "af951e7d9a747d8c98d349c8ea02209cf593515f7b56702afc71ff8a7f7530b3"
     },
     {
       "relativePath": "src/app/credit-topup/page.tsx",
@@ -2647,15 +2646,28 @@
     {
       "relativePath": "src/app/project/[projectId]/page.tsx",
       "fileName": "page.tsx",
-      "modifiedAt": "2026-11-01T12:49:39.438Z",
+      "modifiedAt": "2026-11-02T07:41:20.973Z",
       "status": "indexed",
       "retrievalReady": true,
       "vectorReady": false,
-      "sourceChunkCount": 35,
-      "retrievalChunkCount": 35,
+      "sourceChunkCount": 36,
+      "retrievalChunkCount": 36,
       "embeddedChunkCount": 0,
       "supabaseSourceId": "07565f29-900c-4ee5-b588-ccb981f31dc5",
-      "contentHash": "adfedf5256fb18b558a4090f72832e74104b374065ee2a54cb1e3fb7f430d0a3"
+      "contentHash": "5898a2bb5127fa7f6efed5d645ba00634efa952468ff55b3b287c0a7abf899ae"
+    },
+    {
+      "relativePath": "src/app/support/support-client.tsx",
+      "fileName": "support-client.tsx",
+      "modifiedAt": "2026-11-02T07:33:44.511Z",
+      "status": "indexed",
+      "retrievalReady": true,
+      "vectorReady": false,
+      "sourceChunkCount": 4,
+      "retrievalChunkCount": 4,
+      "embeddedChunkCount": 0,
+      "supabaseSourceId": "ed3d1634-9dee-42fb-8815-14a31be017da",
+      "contentHash": "1ff2aa736137ce26989ee1d60bddac6d3a20d366bf7015a39b65a1560f737be8"
     },
     {
       "relativePath": "src/app/support/loading.tsx",
@@ -2669,19 +2681,6 @@
       "embeddedChunkCount": 0,
       "supabaseSourceId": "626ae10e-57a4-486f-a54b-c974fa0f30b3",
       "contentHash": "00893d74ec88b50d0ff659fc1eb5ec4d755a80f369610b139eb72d34e75ae064"
-    },
-    {
-      "relativePath": "src/app/support/support-client.tsx",
-      "fileName": "support-client.tsx",
-      "modifiedAt": "2026-11-01T05:16:07.709Z",
-      "status": "indexed",
-      "retrievalReady": true,
-      "vectorReady": false,
-      "sourceChunkCount": 4,
-      "retrievalChunkCount": 4,
-      "embeddedChunkCount": 0,
-      "supabaseSourceId": "ed3d1634-9dee-42fb-8815-14a31be017da",
-      "contentHash": "49148ca416e2b11d60b3b6faa5fa3d848958856d7fa2b3c16b78a209169c5274"
     },
     {
       "relativePath": "src/app/support/page.tsx",
@@ -3698,22 +3697,35 @@
       "contentHash": "dd6e4c8dcaabdabfe42a5f175b82db39dec3d27f5bbe7c7b0386f74c74144213"
     },
     {
-      "relativePath": "src/components/workspace/AndroidWorkspace.tsx",
-      "fileName": "AndroidWorkspace.tsx",
-      "modifiedAt": "2026-11-01T14:30:10.473Z",
+      "relativePath": "src/components/workspace/MobileWorkspaceMenu.tsx",
+      "fileName": "MobileWorkspaceMenu.tsx",
+      "modifiedAt": "2026-11-02T07:42:01.206Z",
       "status": "indexed",
       "retrievalReady": true,
       "vectorReady": false,
-      "sourceChunkCount": 16,
-      "retrievalChunkCount": 16,
+      "sourceChunkCount": 2,
+      "retrievalChunkCount": 2,
       "embeddedChunkCount": 0,
-      "supabaseSourceId": "e50a7b2f-5541-4736-bdaa-cfaa87d595b2",
-      "contentHash": "5053e846083a6d1e8bfdb33dc2df6f41cd120c679a45e46ab71f8f6cd5c4b380"
+      "supabaseSourceId": "2d10b4b8-1059-4ecb-9587-3b49dcac44bb",
+      "contentHash": "dd9efa9dab02f45ba9275f509dcc78b0cd19d7c89247a27433b2ef0d512b6241"
+    },
+    {
+      "relativePath": "src/components/workspace/ChatPanel.tsx",
+      "fileName": "ChatPanel.tsx",
+      "modifiedAt": "2026-11-02T07:41:37.560Z",
+      "status": "indexed",
+      "retrievalReady": true,
+      "vectorReady": false,
+      "sourceChunkCount": 14,
+      "retrievalChunkCount": 14,
+      "embeddedChunkCount": 0,
+      "supabaseSourceId": "d81a1683-c770-4205-b849-2441a9907a1e",
+      "contentHash": "b98ea89f02321b95978c6b286c4209373b3238f9ebcc2602fa98ed914b486ea4"
     },
     {
       "relativePath": "src/components/workspace/CodePanel.tsx",
       "fileName": "CodePanel.tsx",
-      "modifiedAt": "2026-11-01T05:16:39.823Z",
+      "modifiedAt": "2026-11-02T07:40:45.524Z",
       "status": "indexed",
       "retrievalReady": true,
       "vectorReady": false,
@@ -3721,7 +3733,59 @@
       "retrievalChunkCount": 13,
       "embeddedChunkCount": 0,
       "supabaseSourceId": "165cff13-36fc-4500-90fc-32925931c0e8",
-      "contentHash": "0f371e135f0f7c5b6f1c5b84b26ac6a9851640793c754de30fb071d3d7394c77"
+      "contentHash": "47fd9bbebc3c2dda8641221dd89ff2427c9739afe561c0cad4806d3366461734"
+    },
+    {
+      "relativePath": "src/components/workspace/PublishedModal.tsx",
+      "fileName": "PublishedModal.tsx",
+      "modifiedAt": "2026-11-02T07:33:44.475Z",
+      "status": "indexed",
+      "retrievalReady": true,
+      "vectorReady": false,
+      "sourceChunkCount": 2,
+      "retrievalChunkCount": 2,
+      "embeddedChunkCount": 0,
+      "supabaseSourceId": "374485e6-efd4-4658-9e80-072565c6ddc9",
+      "contentHash": "12e9cd01b7fd559fe4e9ed2a0373f2829aea53510f44860828926ce790ca88b3"
+    },
+    {
+      "relativePath": "src/components/workspace/DeployControl.tsx",
+      "fileName": "DeployControl.tsx",
+      "modifiedAt": "2026-11-02T07:33:44.463Z",
+      "status": "indexed",
+      "retrievalReady": true,
+      "vectorReady": false,
+      "sourceChunkCount": 6,
+      "retrievalChunkCount": 6,
+      "embeddedChunkCount": 0,
+      "supabaseSourceId": "39cd9fbe-b4bf-4197-a7bb-3290640f1dbe",
+      "contentHash": "744dcc461ff1cb079a13e6fad84be9110a63bd76fb7aea1dcb803bc8913004c6"
+    },
+    {
+      "relativePath": "src/components/workspace/AndroidWorkspace.tsx",
+      "fileName": "AndroidWorkspace.tsx",
+      "modifiedAt": "2026-11-02T07:33:04.714Z",
+      "status": "indexed",
+      "retrievalReady": true,
+      "vectorReady": false,
+      "sourceChunkCount": 16,
+      "retrievalChunkCount": 16,
+      "embeddedChunkCount": 0,
+      "supabaseSourceId": "e50a7b2f-5541-4736-bdaa-cfaa87d595b2",
+      "contentHash": "2c7ce6796fc81c4cac2eb14dcbfb0d73944f97e5da5f06946c7f4f264680949a"
+    },
+    {
+      "relativePath": "src/components/workspace/DiffViewer.tsx",
+      "fileName": "DiffViewer.tsx",
+      "modifiedAt": "2026-11-02T07:33:04.701Z",
+      "status": "indexed",
+      "retrievalReady": true,
+      "vectorReady": false,
+      "sourceChunkCount": 7,
+      "retrievalChunkCount": 7,
+      "embeddedChunkCount": 0,
+      "supabaseSourceId": "64633037-68af-4d8a-8900-34ae85e446eb",
+      "contentHash": "6e342ac93a836421d48b41e8373adb21019fc1c1a0e6a49c829215a4e1406016"
     },
     {
       "relativePath": "src/components/workspace/LiveRuntimePreview.tsx",
@@ -3748,19 +3812,6 @@
       "embeddedChunkCount": 0,
       "supabaseSourceId": "18de9b64-337d-495d-b67b-32fb95c2e49c",
       "contentHash": "2dae6cfc4754954c362d862a05ddf028536793525929c069532ac9d6aaf20fb9"
-    },
-    {
-      "relativePath": "src/components/workspace/ChatPanel.tsx",
-      "fileName": "ChatPanel.tsx",
-      "modifiedAt": "2026-11-01T05:16:27.773Z",
-      "status": "indexed",
-      "retrievalReady": true,
-      "vectorReady": false,
-      "sourceChunkCount": 14,
-      "retrievalChunkCount": 14,
-      "embeddedChunkCount": 0,
-      "supabaseSourceId": "d81a1683-c770-4205-b849-2441a9907a1e",
-      "contentHash": "594902abb4d00f05e09c415c15384d1378c98e595721ff7a7f753f59924d0212"
     },
     {
       "relativePath": "src/components/workspace/CreditsIndicator.tsx",
@@ -3815,19 +3866,6 @@
       "contentHash": "a96e37003fb7eb0605bb250c64e3630872816fc4bca7519e71bddbcbe6bb3bbf"
     },
     {
-      "relativePath": "src/components/workspace/DiffViewer.tsx",
-      "fileName": "DiffViewer.tsx",
-      "modifiedAt": "2026-11-01T05:15:53.541Z",
-      "status": "indexed",
-      "retrievalReady": true,
-      "vectorReady": false,
-      "sourceChunkCount": 7,
-      "retrievalChunkCount": 7,
-      "embeddedChunkCount": 0,
-      "supabaseSourceId": "64633037-68af-4d8a-8900-34ae85e446eb",
-      "contentHash": "668bea257b7a0915b8d00bb5e9b722b74e67f2c73ab2fc49dc28bd53b095248a"
-    },
-    {
       "relativePath": "src/components/workspace/AttachmentPreview.tsx",
       "fileName": "AttachmentPreview.tsx",
       "modifiedAt": "2026-11-01T05:15:53.541Z",
@@ -3878,19 +3916,6 @@
       "embeddedChunkCount": 0,
       "supabaseSourceId": "09d0c9dd-74b1-484a-a547-815697bec73f",
       "contentHash": "06c210130b9e762d85f182034bd3857aba8d3bbfc9dec4120e44edf63e9bead7"
-    },
-    {
-      "relativePath": "src/components/workspace/DeployControl.tsx",
-      "fileName": "DeployControl.tsx",
-      "modifiedAt": "2026-11-01T05:14:38.810Z",
-      "status": "indexed",
-      "retrievalReady": true,
-      "vectorReady": false,
-      "sourceChunkCount": 6,
-      "retrievalChunkCount": 6,
-      "embeddedChunkCount": 0,
-      "supabaseSourceId": "39cd9fbe-b4bf-4197-a7bb-3290640f1dbe",
-      "contentHash": "58c82b800c12d4280c67e46aae493b050c327e1ce73bf93a4e22722a2c2bf3ef"
     },
     {
       "relativePath": "src/components/workspace/DomainBuyPanel.tsx",
@@ -3995,19 +4020,6 @@
       "embeddedChunkCount": 0,
       "supabaseSourceId": "2259d4f7-7580-49f6-a917-68e8c55cbfb5",
       "contentHash": "0e418438a1669275427cd735aca269534f2895ce8b33801440e85452412eddf0"
-    },
-    {
-      "relativePath": "src/components/workspace/PublishedModal.tsx",
-      "fileName": "PublishedModal.tsx",
-      "modifiedAt": "2026-11-01T05:06:31.086Z",
-      "status": "indexed",
-      "retrievalReady": true,
-      "vectorReady": false,
-      "sourceChunkCount": 2,
-      "retrievalChunkCount": 2,
-      "embeddedChunkCount": 0,
-      "supabaseSourceId": "374485e6-efd4-4658-9e80-072565c6ddc9",
-      "contentHash": "37bc6f9df85fb5b6a112066be8d2f36409e43e64544d1562262a5385e0ee9e3e"
     },
     {
       "relativePath": "src/components/workspace/useAgentCompletionSounds.ts",
@@ -4322,6 +4334,19 @@
       "contentHash": "9f7949d7d80e2bf01bed8a8795d8e8746eec2306365ad1311aff408754fe35d1"
     },
     {
+      "relativePath": "src/components/workspace/v2/PaymentsModal.tsx",
+      "fileName": "PaymentsModal.tsx",
+      "modifiedAt": "2026-11-02T07:33:44.486Z",
+      "status": "indexed",
+      "retrievalReady": true,
+      "vectorReady": false,
+      "sourceChunkCount": 5,
+      "retrievalChunkCount": 5,
+      "embeddedChunkCount": 0,
+      "supabaseSourceId": "25f362c0-c79d-461e-bbc8-73d91424c583",
+      "contentHash": "fd92ebe24c27dbe6496e232f2e910fb8ba79d44d8d28b8556bd0b52b33f9aeef"
+    },
+    {
       "relativePath": "src/components/workspace/v2/BackendCenter.tsx",
       "fileName": "BackendCenter.tsx",
       "modifiedAt": "2026-11-02T05:51:16.424Z",
@@ -4359,19 +4384,6 @@
       "embeddedChunkCount": 0,
       "supabaseSourceId": "322d383c-0312-43ab-8325-0a89469b44de",
       "contentHash": "6ce4e19ae5f2dd080131d2c794699daedd902a946253d2b676a7e7566b02c7e0"
-    },
-    {
-      "relativePath": "src/components/workspace/v2/PaymentsModal.tsx",
-      "fileName": "PaymentsModal.tsx",
-      "modifiedAt": "2026-11-01T05:14:20.581Z",
-      "status": "indexed",
-      "retrievalReady": true,
-      "vectorReady": false,
-      "sourceChunkCount": 5,
-      "retrievalChunkCount": 5,
-      "embeddedChunkCount": 0,
-      "supabaseSourceId": "25f362c0-c79d-461e-bbc8-73d91424c583",
-      "contentHash": "ba1f01387f8446b3a9be1e98038d47d3a5881a5c5d92089753be0d9d5f322358"
     },
     {
       "relativePath": "src/components/workspace/v2/DeployErrorCard.tsx",
@@ -8346,6 +8358,19 @@
       "contentHash": "72af70590e04ae12d8c31e3d4538ae4d2d17a4566efbfa3922f1c6d951c70425"
     },
     {
+      "relativePath": "src/lib/supabase/worker.ts",
+      "fileName": "worker.ts",
+      "modifiedAt": "2026-11-02T07:43:25.555Z",
+      "status": "indexed",
+      "retrievalReady": true,
+      "vectorReady": false,
+      "sourceChunkCount": 2,
+      "retrievalChunkCount": 2,
+      "embeddedChunkCount": 0,
+      "supabaseSourceId": "a60a61e5-ec43-4422-abf8-004688a6062b",
+      "contentHash": "fc49d3bcee916d81d65ad7d92a166a21b77eb3f66fa58548c6a57a262b0eaf85"
+    },
+    {
       "relativePath": "src/lib/supabase/proxy.ts",
       "fileName": "proxy.ts",
       "modifiedAt": "2026-11-01T16:30:14.814Z",
@@ -8357,19 +8382,6 @@
       "embeddedChunkCount": 0,
       "supabaseSourceId": "daf2f719-d2bf-460a-9221-975152e0ec5f",
       "contentHash": "19c027790e16305f1a3795b04e0cd86cabbf5fce727156e00916c3d3d70b102c"
-    },
-    {
-      "relativePath": "src/lib/supabase/worker.ts",
-      "fileName": "worker.ts",
-      "modifiedAt": "2026-11-01T16:29:03.718Z",
-      "status": "indexed",
-      "retrievalReady": true,
-      "vectorReady": false,
-      "sourceChunkCount": 1,
-      "retrievalChunkCount": 1,
-      "embeddedChunkCount": 0,
-      "supabaseSourceId": "a60a61e5-ec43-4422-abf8-004688a6062b",
-      "contentHash": "3bd1b5fddf72bc3d77c9e933ecd45f762c0c6b588914c9a57b4f1a1674f1905d"
     },
     {
       "relativePath": "src/lib/supabase/server.ts",
@@ -9065,7 +9077,7 @@
     {
       "relativePath": "tests/account-admin-diagnostics.test.ts",
       "fileName": "account-admin-diagnostics.test.ts",
-      "modifiedAt": "2026-11-02T06:08:55.986Z",
+      "modifiedAt": "2026-11-02T07:47:07.106Z",
       "status": "indexed",
       "retrievalReady": true,
       "vectorReady": false,
@@ -9073,7 +9085,7 @@
       "retrievalChunkCount": 3,
       "embeddedChunkCount": 0,
       "supabaseSourceId": "9b698929-2d86-494a-8d1e-1a0f56d0f318",
-      "contentHash": "882423f8149d8cd36f6f9f7f848b41351af6b153ae2d8cd1298a13cead082561"
+      "contentHash": "588ba4a8f6f2be06942e7fa50063286faac6f12cd7f8c0a65868d301ceec3aad"
     },
     {
       "relativePath": "tests/backend-selection-authority.test.ts",

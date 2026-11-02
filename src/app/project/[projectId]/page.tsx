@@ -9,7 +9,7 @@ import {
   Rocket, Loader2, Eye, LayoutGrid, Key, Globe,
   RefreshCw, Server, PanelLeftClose, PanelLeft, Monitor, Smartphone,
   ExternalLink, Sparkles, ChevronDown, FolderOpen, Plus,
-  Clock, Github, Code2, ArrowLeft, Figma, Copy,
+  Clock, Github, Code2, ArrowLeft, Figma, Copy, MoreVertical, MessageSquare,
 } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
@@ -45,6 +45,7 @@ import { useAgentCompletionSounds } from "@/components/workspace/useAgentComplet
 import { ServerWakeNotice } from "@/components/workspace/ServerWakeNotice";
 import { ServerBlockedDialog, useServerBlocked } from "@/components/workspace/ServerBlockedDialog";
 import { FigmaModal } from "@/components/workspace/FigmaModal";
+import { MobileWorkspaceMenu } from "@/components/workspace/MobileWorkspaceMenu";
 import { OperationBanner } from "@/components/workspace/OperationBanner";
 import { useProjectOperation } from "@/components/workspace/use-project-operation";
 import { OPERATION_COPY, OPERATION_PROFILES } from "@/lib/project-operation";
@@ -465,6 +466,8 @@ export default function WorkspacePage() {
   const [iframePath, setIframePath] = useState("/");
   const [darkMode, setDarkMode] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  /** The mobile three-dot sheet. Desktop never opens it. */
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [diffSource, setDiffSource] = useState<DiffSource | null>(null);
   /**
    * ⭐ THE RUN PROGRESS BAR'S INPUTS, from `agent/status` — see `RunProgress`.
@@ -2096,20 +2099,55 @@ export default function WorkspacePage() {
 
       {/* ═══ MOBILE LAYOUT: header → content → fixed switch → fixed textarea ═══ */}
       <div className="flex sm:hidden flex-col h-full min-h-0">
-        {/* Mobile header */}
-        <header data-workspace-header className="flex items-center gap-1.5 px-2 shrink-0 z-10 border-b border-[var(--clay-line)] bg-card" style={{ height: 44, backgroundImage: "var(--clay-sheen)", boxShadow: "var(--clay-elev-1)" }}>
-          <button type="button" onClick={() => { setLeaveWorkspaceHref("/"); setLeaveWorkspaceOpen(true); }} title="Back to Mavly" aria-label="Back to Mavly" className="h-7 px-1.5 flex items-center gap-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-[var(--clay-sunken)] transition-[box-shadow,background-color,color] duration-200 shrink-0">
-            <ArrowLeft className="w-4 h-4" />
-            <Image src="/logo/Mavly.png" alt="" width={18} height={18} className="w-4.5 h-4.5 rounded object-contain shrink-0" priority referrerPolicy="no-referrer" />
+        {/* Mobile header — three-dot on the LEFT, project identity, back on the right. */}
+        <header
+          data-workspace-header
+          className="flex items-center gap-1 px-2 shrink-0 z-10 border-b border-[var(--clay-line)] bg-card"
+          style={{
+            minHeight: 48,
+            paddingTop: "env(safe-area-inset-top)",
+            backgroundImage: "var(--clay-sheen)",
+            boxShadow: "var(--clay-elev-1)",
+          }}
+        >
+          {/* LEFT: the overflow menu. 44px touch target. */}
+          <button
+            type="button"
+            onClick={() => setMobileMenuOpen(true)}
+            aria-label="Workspace menu"
+            aria-haspopup="dialog"
+            className="h-10 w-10 -ml-1 flex items-center justify-center rounded-xl text-foreground active:shadow-[var(--clay-well-2)] transition-[box-shadow,background-color] duration-200 shrink-0"
+          >
+            <MoreVertical className="w-[18px] h-[18px]" />
           </button>
-          <div className="relative" ref={menuRef}>
-            <button onClick={() => setMenuOpen(!menuOpen)} className="flex items-center gap-1.5 px-1.5 py-1 rounded-lg hover:bg-[var(--clay-sunken)] dark:hover:bg-card/10 transition-colors">
-              <Image src="/logo/Mavly.png" alt="Mavly" width={20} height={20} className="w-5 h-5 rounded object-contain shrink-0" priority referrerPolicy="no-referrer" />
-              <span className="text-sm font-medium text-foreground truncate max-w-[160px]">{project.label || projectId}</span>
-              <ChevronDown className="w-3 h-3 text-muted-foreground shrink-0" />
-            </button>
-            {popupMenu}
+
+          {/* CENTER: identity. `min-w-0` + `truncate` is what keeps the name from
+              ever pushing the controls off the edge. */}
+          <div className="flex items-center gap-2 min-w-0 flex-1">
+            <Image
+              src="/logo/Mavly.png"
+              alt=""
+              width={20}
+              height={20}
+              className="w-5 h-5 rounded object-contain shrink-0"
+              priority
+              referrerPolicy="no-referrer"
+            />
+            <span className="text-sm font-semibold text-foreground truncate">
+              {project.label || projectId}
+            </span>
           </div>
+
+          {/* RIGHT: leave the workspace. */}
+          <button
+            type="button"
+            onClick={() => { setLeaveWorkspaceHref("/"); setLeaveWorkspaceOpen(true); }}
+            title="Back to Mavly"
+            aria-label="Back to Mavly"
+            className="h-10 w-10 -mr-1 flex items-center justify-center rounded-xl text-muted-foreground active:shadow-[var(--clay-well-2)] transition-[box-shadow,color] duration-200 shrink-0"
+          >
+            <ArrowLeft className="w-[18px] h-[18px]" />
+          </button>
         </header>
 
         {/*
@@ -2155,14 +2193,59 @@ export default function WorkspacePage() {
           )}
         </div>
 
-        {/* Fixed switch: Preview / Chat */}
-        <div className="shrink-0 flex items-center justify-center py-2 px-4" style={{ background: pageBg }}>
-          <div className="flex rounded-full border border-[var(--clay-line)] bg-[var(--clay-sunken)] p-1 w-full max-w-xs shadow-[var(--clay-well-2)]">
-            <button onClick={() => setMobileTab("panel")} className={`w-1/2 py-2 rounded-full text-sm font-medium text-center transition-[box-shadow,color] duration-200 ${mobileTab === "panel" ? "bg-card text-foreground shadow-[var(--clay-elev-1)]" : "text-muted-foreground"}`}>{"Preview"}</button>
-            <button onClick={() => setMobileTab("chat")} className={`w-1/2 py-2 rounded-full text-sm font-medium text-center transition-[box-shadow,color] duration-200 ${mobileTab === "chat" ? "bg-card text-foreground shadow-[var(--clay-elev-1)]" : "text-muted-foreground"}`}>{"Chat"}</button>
+        {/* Fixed switch: Preview / Chat. Sits above the home indicator. */}
+        <div
+          className="shrink-0 px-4 pt-2"
+          style={{ background: pageBg, paddingBottom: "calc(0.5rem + env(safe-area-inset-bottom))" }}
+        >
+          <div className="flex rounded-full border border-[var(--clay-line)] bg-[var(--clay-sunken)] p-1 w-full max-w-xs mx-auto shadow-[var(--clay-well-2)]">
+            <button
+              type="button"
+              onClick={() => setMobileTab("panel")}
+              aria-pressed={mobileTab === "panel"}
+              className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-full text-sm font-semibold transition-[box-shadow,color] duration-200 ${
+                mobileTab === "panel"
+                  ? "bg-card text-foreground shadow-[var(--clay-elev-1)]"
+                  : "text-muted-foreground"
+              }`}
+            >
+              <Eye className="w-4 h-4 shrink-0" />
+              <span>Preview</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setMobileTab("chat")}
+              aria-pressed={mobileTab === "chat"}
+              className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-full text-sm font-semibold transition-[box-shadow,color] duration-200 ${
+                mobileTab === "chat"
+                  ? "bg-card text-foreground shadow-[var(--clay-elev-1)]"
+                  : "text-muted-foreground"
+              }`}
+            >
+              <MessageSquare className="w-4 h-4 shrink-0" />
+              <span>Chat</span>
+            </button>
           </div>
         </div>
       </div>
+
+      {/* The mobile overflow sheet. Every action it lists is the page's own. */}
+      <MobileWorkspaceMenu
+        open={mobileMenuOpen}
+        onOpenChange={setMobileMenuOpen}
+        projectName={project.label || projectId}
+        activeTab={activeTab}
+        onSelectTab={(id) => { setActiveTab(id); setMobileTab("panel"); }}
+        onOpenVersions={() => openEntry("versions")}
+        onDuplicate={() => void openClone()}
+        onRestartServer={() => void handleRestartServer()}
+        onRefreshPreview={() => { void fetchProject(); setPreviewKey((k) => k + 1); }}
+        onOpenGithub={() => openEntry("github")}
+        onOpenFigma={() => openEntry("figma")}
+        onNavigate={(href) => router.push(href)}
+        githubConnected={githubConnected}
+        figmaConnected={figmaConnected}
+      />
 
       {/*
         ⭐ MOUNTED ONCE FOR THE WHOLE WORKSPACE. It listens for the wake's own event, so a

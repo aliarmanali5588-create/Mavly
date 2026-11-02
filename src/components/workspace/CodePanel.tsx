@@ -913,10 +913,10 @@ export function CodePanel({ projectId, darkMode, onAskAiEdit, wake, sourceRevisi
         </div>
       </div>
 
-      {/* Body: tree + viewer */}
+      {/* Body: tree + viewer. On a phone these are two views, not two columns. */}
       <div className="flex-1 flex min-h-0">
-        {/* Tree sidebar */}
-        <div className="w-64 shrink-0 border-r border-[var(--clay-line)] flex flex-col bg-[var(--clay-sunken)] ">
+        {/* Tree sidebar — the whole view on mobile until a file is picked. */}
+        <div className={`${selected ? "hidden md:flex" : "flex"} w-full md:w-64 shrink-0 md:border-r border-[var(--clay-line)] flex-col bg-[var(--clay-sunken)]`}>
           {/* Search by file name or content */}
           <div className="p-2 border-b border-[var(--clay-line)] shrink-0">
             <div className="relative">
@@ -957,8 +957,8 @@ export function CodePanel({ projectId, darkMode, onAskAiEdit, wake, sourceRevisi
           </div>
         </div>
 
-        {/* Viewer */}
-        <div className="flex-1 min-w-0 flex flex-col">
+        {/* Viewer — hidden on mobile until a file is selected. */}
+        <div className={`${selected ? "flex" : "hidden md:flex"} flex-1 min-w-0 flex-col`}>
           {!selected ? (
             <div className="flex-1 flex flex-col items-center justify-center text-center gap-3 px-6">
               <div className="w-14 h-14 rounded-2xl bg-[var(--clay-sunken)] border border-dashed border-[var(--clay-line)] flex items-center justify-center shadow-[var(--clay-well-1)]">
@@ -970,6 +970,15 @@ export function CodePanel({ projectId, darkMode, onAskAiEdit, wake, sourceRevisi
             <>
               {/* Breadcrumb + the save control */}
               <div className="px-3 py-1.5 border-b border-[var(--clay-line)] flex items-center gap-2 shrink-0">
+                {/* On a phone the file list is a previous screen, so it needs a way back. */}
+                <button
+                  type="button"
+                  onClick={() => setSelected(null)}
+                  aria-label="Back to file list"
+                  className="md:hidden shrink-0 -ml-1 h-7 w-7 inline-flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground active:shadow-[var(--clay-well-1)] transition-[box-shadow,color] duration-200"
+                >
+                  <ChevronRight className="w-4 h-4 rotate-180" />
+                </button>
                 <code className="text-xs font-mono text-muted-foreground truncate">{selected}</code>
                 {/* ⭐ The dot is the whole "unsaved" signal — see the `drafts` note. */}
                 {isDirty(selected) && (

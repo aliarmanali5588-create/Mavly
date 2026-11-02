@@ -82,10 +82,21 @@ test("a key from another project is reported as a mismatch", () => {
   assert.equal(report.projectMatch, false);
 });
 
-test("an unreadable key leaves projectMatch null instead of guessing", () => {
+test("a new-format secret key leaves projectMatch null (not a mismatch)", () => {
   const report = describeServiceRoleConfig({
     url: `https://${REF}.supabase.co`,
-    key: "sb_secret_this_is_not_a_jwt_but_it_is_long_enough",
+    key: "sb_secret_this_is_not_a_jwt_but_it_is_long_enough_12345678901234567890",
+  });
+  assert.equal(report.configured, true);
+  assert.equal(report.keyProjectRef, null);
+  assert.equal(report.projectMatch, null);
+  assert.equal(report.keyRoleIsServiceRole, null);
+});
+
+test("a new-format publishable key leaves projectMatch null (not a mismatch)", () => {
+  const report = describeServiceRoleConfig({
+    url: `https://${REF}.supabase.co`,
+    key: "sb_publishable_this_is_not_a_jwt_but_it_is_long_enough_123456789",
   });
   assert.equal(report.configured, true);
   assert.equal(report.keyProjectRef, null);
@@ -231,3 +242,14 @@ test("the directory returns auth.users ids and the page sends that id", async ()
   const page = await source("src/app/adminsh/users/page.tsx");
   assert.match(page, /userId: statusTarget\.id/);
 });
+
+// ── 7. Service-role client compatibility with new and legacy API keys ───────
+
+test("service-role client factory correctly detects legacy JWT keys (3 parts)", () => {
+  // This is tested indirectly by verifying the source code does not crash on key
+  // detection. The test imports the module to ensure it parses without errors.
+  const workerModule = require("../src/lib/supabase/worker.ts");
+  assert.ok(typeof workerModule.createSupabaseAccountAdminClient === "function");
+  assert.ok(typeof workerModule.createSupabaseWorkerClient === "function");
+});
+

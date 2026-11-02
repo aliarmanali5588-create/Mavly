@@ -24,6 +24,49 @@ import { SUPABASE_URL, isValidSupabaseUrl } from "./config";
 const SERVICE_ROLE_ENV = "SUPABASE_SERVICE_ROLE_KEY";
 
 /**
+ * Determines whether a key is in the legacy JWT format (3 dot-separated parts).
+ * Legacy keys: `eyJ...` (3-part JWT)
+ * New opaque keys: `sb_secret_...` or `sb_publishable_...` (no dots, or not 3 parts)
+ */
+function isLegacyJwtKey(key: string): boolean {
+  const trimmed = key.trim();
+  const parts = trimmed.split(".");
+  return parts.length === 3;
+}
+
+/**
+ * Create a fetch wrapper that handles new-format API keys correctly.
+ *
+ * @supabase/supabase-js@2.118.0 sends all keys as `Authorization: Bearer <key>`.
+ * For legacy JWT keys, this is correct; GoTrue validates them as JWTs.
+ * For new opaque keys (sb_secret_..., sb_publishable_...), GoTrue rejects them
+ * as malformed JWTs. These keys should only be sent in the `apikey` header.
+ *
+ * This wrapper strips `Authorization: Bearer <opaque_key>` for new-format keys,
+ * leaving `apikey` intact so the Supabase API Gateway can route them correctly.
+ */
+function createAuthCompatibleFetch(key: string): typeof fetch {
+  const trimmedKey = key.trim();
+  const isLegacy = isLegacyJwtKey(trimmedKey);
+
+  return async (input, init) => {
+    const headers = new Headers(init?.headers);
+
+    // For new-format keys, strip the Bearer Authorization header.
+    // GoTrue cannot validate opaque keys as JWTs; the API Gateway handles them.
+    if (!isLegacy) {
+      const auth = headers.get("authorization");
+      if (auth === `Bearer ${trimmedKey}`) {
+        headers.delete("authorization");
+      }
+    }
+
+    return fetch(input, { ...init, headers });
+  };
+}
+
+
+/**
  * The key is read here and nowhere else. A truthy result says only that a key
  * exists — it is never the key itself.
  */
@@ -38,13 +81,18 @@ function isServiceRoleConfigured(): boolean {
 /**
  * A non-persistent client. There is no session to refresh and no cookie jar:
  * every call carries the service-role authorization header.
+ *
+ * Uses an auth-compatible fetch wrapper that corrects header handling for
+ * new-format API keys (sb_secret_..., sb_publishable_...).
  */
 function createServiceRoleClient(
   actor: "generation-worker" | "credit-accounting" | "account-administration"
 ): SupabaseClient | null {
   if (!isServiceRoleConfigured()) return null;
 
-  return createClient(SUPABASE_URL, process.env[SERVICE_ROLE_ENV]!.trim(), {
+  const serviceRoleKey = process.env[SERVICE_ROLE_ENV]!.trim();
+
+  return createClient(SUPABASE_URL, serviceRoleKey, {
     auth: {
       persistSession: false,
       autoRefreshToken: false,
@@ -52,6 +100,7 @@ function createServiceRoleClient(
     },
     global: {
       headers: { "x-mavly-actor": actor },
+      fetch: createAuthCompatibleFetch(serviceRoleKey),
     },
   });
 }

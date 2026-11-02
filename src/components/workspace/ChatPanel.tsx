@@ -837,7 +837,7 @@ export function ChatPanel({
             <div className="flex items-center gap-0.5">
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <label className="cursor-pointer size-8 inline-flex items-center justify-center rounded-lg hover:bg-[var(--clay-sunken)] transition-[box-shadow,background-color] duration-200">
+                  <label className="cursor-pointer size-10 sm:size-8 inline-flex items-center justify-center rounded-lg hover:bg-[var(--clay-sunken)] active:shadow-[var(--clay-well-1)] transition-[box-shadow,background-color] duration-200">
                     <input type="file" multiple className="hidden" onChange={handleFileUpload} accept="image/*,.pdf,.svg" disabled={isBuilding} />
                     {uploading ? <Loader2 className="w-4 h-4 text-muted-foreground animate-spin" /> : <Paperclip className="w-4 h-4 text-muted-foreground" />}
                     <span className="sr-only">{t("prompt.attachments.attach")}</span>
@@ -888,10 +888,10 @@ export function ChatPanel({
               )}
             </div>
             {isBuilding ? (
-              <button onClick={() => setConfirmingStop(true)} aria-label={t("workspace.chat.stop")} className="w-8 h-8 rounded-full bg-destructive hover:bg-destructive flex items-center justify-center transition-colors"><Square className="w-3 h-3 text-white" /></button>
+              <button onClick={() => setConfirmingStop(true)} aria-label={t("workspace.chat.stop")} className="size-10 sm:size-8 rounded-full bg-destructive hover:bg-destructive flex items-center justify-center transition-colors"><Square className="w-3 h-3 text-white" /></button>
             ) : (
               <button onClick={handleSend} disabled={(!prompt.trim() && attachedFiles.length === 0) || sending}
-                className="w-8 h-8 rounded-full bg-primary text-primary-foreground shadow-[var(--clay-elev-2)] active:shadow-[var(--clay-well-2)] disabled:opacity-40 disabled:pointer-events-none flex items-center justify-center transition-[box-shadow] duration-200">
+                className="size-10 sm:size-8 rounded-full bg-primary text-primary-foreground shadow-[var(--clay-elev-2)] active:shadow-[var(--clay-well-2)] disabled:opacity-40 disabled:pointer-events-none flex items-center justify-center transition-[box-shadow] duration-200">
                 {sending ? <Loader2 className="w-3.5 h-3.5 animate-spin text-current" /> : <Send className="w-3.5 h-3.5 text-current" />}
               </button>
             )}
