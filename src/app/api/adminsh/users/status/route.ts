@@ -1,6 +1,12 @@
 import type { NextRequest } from "next/server";
 
+import {
+  accountAdminFailureResponse,
+  classifyAuthAdminError,
+  describeServiceRoleConfig,
+} from "@/lib/admin/account-diagnostics";
 import { adminError, adminJson, requireAdmin } from "@/lib/admin/http";
+import { SUPABASE_URL } from "@/lib/supabase/config";
 import { createSupabaseAccountAdminClient } from "@/lib/supabase/worker";
 
 export const dynamic = "force-dynamic";
@@ -90,17 +96,55 @@ export async function POST(request: NextRequest) {
   // The service-role client is required for a Supabase Auth admin operation.
   const admin = createSupabaseAccountAdminClient();
   if (!admin) {
-    return adminError(
-      503,
-      "ACCOUNT_ADMIN_UNAVAILABLE",
-      "Account administration is not configured on this deployment (the server-side service-role key is missing)."
-    );
+    /**
+     * ⚠️ THIS IS A CONFIGURATION FAILURE, NOT A MISSING USER. It is reported with
+     * the diagnostic that says exactly which part of the configuration is wrong,
+     * so the operator does not go hunting for an account that is probably fine.
+     */
+    const report = describeServiceRoleConfig({
+      url: SUPABASE_URL,
+      key: process.env.SUPABASE_SERVICE_ROLE_KEY,
+    });
+    console.error("[adminsh] account admin client unavailable", {
+      keyLength: report.keyLength,
+      urlProjectRef: report.urlProjectRef,
+      keyProjectRef: report.keyProjectRef,
+      projectMatch: report.projectMatch,
+      keyRoleIsServiceRole: report.keyRoleIsServiceRole,
+    });
+    const response = accountAdminFailureResponse("not_configured");
+    return adminError(response.status, response.code, response.error);
   }
 
   // 3. Read the current enforced state.
   const { data: target, error: readError } = await admin.auth.admin.getUserById(userId);
   if (readError || !target?.user) {
-    return adminError(404, "USER_NOT_FOUND", "That account does not exist.");
+    /**
+     * ⚠️ THE ORIGINAL ERROR IS CLASSIFIED, NOT DISCARDED. Converting every lookup
+     * failure into USER_NOT_FOUND told the operator an account was missing when
+     * the real fault was a bad key, a wrong project, or a network failure.
+     *
+     * ⚠️ THE LOG CARRIES THE CLASSIFICATION, NEVER THE KEY OR THE RAW MESSAGE. A
+     * Supabase AuthError message can echo the request, so only the derived
+     * category and the HTTP status are recorded.
+     */
+    const failure = readError ? classifyAuthAdminError(readError) : "user_not_found";
+    console.error("[adminsh] account status read failed", {
+      action,
+      failure,
+      status:
+        readError && typeof (readError as { status?: unknown }).status === "number"
+          ? (readError as { status: number }).status
+          : null,
+      code:
+        readError && typeof (readError as { code?: unknown }).code === "string"
+          ? (readError as { code: string }).code
+          : null,
+      /** A user object was returned but empty: treat as absent, not as upstream. */
+      emptyUser: !readError && !target?.user,
+    });
+    const response = accountAdminFailureResponse(failure);
+    return adminError(response.status, response.code, response.error);
   }
 
   const previousBannedUntil = target.user.banned_until ?? null;

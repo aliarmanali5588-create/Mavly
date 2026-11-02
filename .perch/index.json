@@ -1,19 +1,19 @@
 {
   "schemaVersion": "perch-folder-index-v1",
-  "generatedAt": "2026-11-02T06:01:14.511Z",
+  "generatedAt": "2026-11-02T06:11:18.528Z",
   "rootId": "root_1793457532221_ye4hde",
   "rootPath": "/Users/ashadali/Mavly",
   "counts": {
-    "totalFiles": 779,
-    "registeredSources": 741,
-    "indexedFiles": 740,
+    "totalFiles": 781,
+    "registeredSources": 743,
+    "indexedFiles": 742,
     "skippedFiles": 29,
     "failedFiles": 10,
     "staleFiles": 23,
-    "sourceChunkCount": 2677,
-    "sourceChunkFiles": 740,
-    "retrievalChunkCount": 2677,
-    "retrievalReadyFiles": 740,
+    "sourceChunkCount": 2685,
+    "sourceChunkFiles": 742,
+    "retrievalChunkCount": 2685,
+    "retrievalReadyFiles": 742,
     "embeddedChunkCount": 342,
     "vectorReadyFiles": 57,
     "filesNeedingOcr": 0
@@ -26,11 +26,11 @@
     "retrieval chunks",
     "embeddings"
   ],
-  "lastIndexedAt": "2026-11-02T06:01:14.510Z",
+  "lastIndexedAt": "2026-11-02T06:11:18.528Z",
   "diagnostics": [
-    "Indexed 740/779 file(s) for retrieval.",
-    "2677 text/source chunk(s) available for keyword search.",
-    "2677 retrieval chunk(s) available.",
+    "Indexed 742/781 file(s) for retrieval.",
+    "2685 text/source chunk(s) available for keyword search.",
+    "2685 retrieval chunk(s) available.",
     "342 embedded retrieval chunk(s) available for vector search.",
     "29 file(s) were skipped.",
     "10 file(s) failed indexing."
@@ -2140,15 +2140,15 @@
     {
       "relativePath": "src/app/api/adminsh/users/status/route.ts",
       "fileName": "route.ts",
-      "modifiedAt": "2026-11-01T16:29:17.215Z",
+      "modifiedAt": "2026-11-02T06:08:31.990Z",
       "status": "indexed",
       "retrievalReady": true,
       "vectorReady": false,
-      "sourceChunkCount": 2,
-      "retrievalChunkCount": 2,
+      "sourceChunkCount": 3,
+      "retrievalChunkCount": 3,
       "embeddedChunkCount": 0,
       "supabaseSourceId": "9287dd1e-cc03-4211-b35f-e14139eb73c3",
-      "contentHash": "3baa780108b3894595931eb12333c3e3121ae5333eb39fa20f23f3d02d172fbc"
+      "contentHash": "478f639234d6108a1b9f2f5a4e98517da339a2f60eadb6f8dae2d59410f23f61"
     },
     {
       "relativePath": "src/app/api/app/v1/_shared.ts",
@@ -5583,6 +5583,19 @@
       "contentHash": "1370a6247fb74c5106e9e6e3f3278d64ad9cc398846b3f24f8eadfcb3b605ff6"
     },
     {
+      "relativePath": "src/lib/admin/account-diagnostics.ts",
+      "fileName": "account-diagnostics.ts",
+      "modifiedAt": "2026-11-02T06:08:23.905Z",
+      "status": "indexed",
+      "retrievalReady": true,
+      "vectorReady": false,
+      "sourceChunkCount": 3,
+      "retrievalChunkCount": 3,
+      "embeddedChunkCount": 0,
+      "supabaseSourceId": "4b8a0d16-d25c-4f21-99b3-4cfd2ff7a376",
+      "contentHash": "06f877cc196b0bf2894d7eebcd2bf3cd21093d209b50560b4cd3e7e66fa2b2d4"
+    },
+    {
       "relativePath": "src/lib/admin/directory.ts",
       "fileName": "directory.ts",
       "modifiedAt": "2026-11-01T17:27:41.277Z",
@@ -8544,15 +8557,15 @@
     {
       "relativePath": "supabase/migrations/48_backend_selection_authority.sql",
       "fileName": "48_backend_selection_authority.sql",
-      "modifiedAt": "2026-11-01T18:03:42.791Z",
+      "modifiedAt": "2026-11-02T06:04:07.650Z",
       "status": "indexed",
       "retrievalReady": true,
       "vectorReady": false,
-      "sourceChunkCount": 6,
-      "retrievalChunkCount": 6,
+      "sourceChunkCount": 7,
+      "retrievalChunkCount": 7,
       "embeddedChunkCount": 0,
       "supabaseSourceId": "9c7bbeb3-ca7c-4bbf-adf0-766420868e47",
-      "contentHash": "65b8aa02c2f6bc0301d4095804ca16cdf6fb0d03cd5e231052fe92bfa925e5ad"
+      "contentHash": "7efe76fa24bf3ddfbd34f8a09ea70f715930fd86b468528392e3f32962d7d9eb"
     },
     {
       "relativePath": "supabase/migrations/47_supabase_oauth_state_project_column.sql",
@@ -9050,9 +9063,22 @@
       "contentHash": "687a76f29e5804f99aa69b9cd463f2a260ee925ebdaa901ba6642ab4f2ff5979"
     },
     {
+      "relativePath": "tests/account-admin-diagnostics.test.ts",
+      "fileName": "account-admin-diagnostics.test.ts",
+      "modifiedAt": "2026-11-02T06:08:55.986Z",
+      "status": "indexed",
+      "retrievalReady": true,
+      "vectorReady": false,
+      "sourceChunkCount": 3,
+      "retrievalChunkCount": 3,
+      "embeddedChunkCount": 0,
+      "supabaseSourceId": "9b698929-2d86-494a-8d1e-1a0f56d0f318",
+      "contentHash": "882423f8149d8cd36f6f9f7f848b41351af6b153ae2d8cd1298a13cead082561"
+    },
+    {
       "relativePath": "tests/backend-selection-authority.test.ts",
       "fileName": "backend-selection-authority.test.ts",
-      "modifiedAt": "2026-11-02T05:52:01.138Z",
+      "modifiedAt": "2026-11-02T06:04:25.935Z",
       "status": "indexed",
       "retrievalReady": true,
       "vectorReady": false,
@@ -9060,7 +9086,7 @@
       "retrievalChunkCount": 5,
       "embeddedChunkCount": 0,
       "supabaseSourceId": "081e83a2-155b-407b-99ce-0ed571585a19",
-      "contentHash": "989657bedf79b9957f75191af7e60ef3a9e1c42c3c2fdc0615b7122136bc7e9b"
+      "contentHash": "102f5fbf66264ce42d20f3f9d5a87dc4df74360607d8b5127b57869b5b16933e"
     },
     {
       "relativePath": "tests/admin-directory-optional-publication.test.ts",
