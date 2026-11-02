@@ -1959,6 +1959,23 @@ export default function WorkspacePage() {
                 {previewUrl && <a href={previewUrl} target="_blank" rel="noopener noreferrer" className="p-1 rounded text-muted-foreground hover:text-muted-foreground dark:hover:text-muted-foreground shrink-0"><ExternalLink className="w-3.5 h-3.5" /></a>}
               </div>
             </div>
+            {/*
+              ⭐ PUBLISH — A PLACEHOLDER, AND DELIBERATELY AN INERT ONE. The header had
+              no publish affordance at all. This button is the slot for it: it is styled
+              as the header's one ink surface (the same `bg-primary` + `clay-elev-ink-1`
+              treatment as the composer's send button) and it has NO handler, no request
+              and no state. Wiring it to `vcaasApi.deployments.deploy` is a separate
+              change; until then pressing it must do nothing rather than pretend.
+            */}
+            <button
+              type="button"
+              title={translate("workspace.deploy.publish")}
+              aria-label={translate("workspace.deploy.publish")}
+              className="h-7 px-2.5 flex items-center gap-1.5 rounded-lg bg-primary text-primary-foreground shadow-[var(--clay-elev-ink-1)] hover:bg-[var(--clay-brand-hover)] active:shadow-[var(--clay-press-ink)] transition-[box-shadow,background-color] duration-200 shrink-0 text-xs font-semibold"
+            >
+              <Rocket className="w-3.5 h-3.5" />
+              <span className="hidden lg:inline">{translate("workspace.deploy.publish")}</span>
+            </button>
             <CreditsIndicator refreshKey={isBuilding ? "running" : "idle"} />
           </div>
         </header>
@@ -2138,7 +2155,17 @@ export default function WorkspacePage() {
             </span>
           </div>
 
-          {/* RIGHT: leave the workspace. */}
+          {/* RIGHT: publish, then leave the workspace. Publish is the same inert
+              placeholder as the desktop header's — no handler, no request. */}
+          <button
+            type="button"
+            title={translate("workspace.deploy.publish")}
+            aria-label={translate("workspace.deploy.publish")}
+            className="h-8 px-2.5 mr-1 flex items-center gap-1 rounded-lg bg-primary text-primary-foreground shadow-[var(--clay-elev-ink-1)] active:shadow-[var(--clay-press-ink)] transition-[box-shadow,background-color] duration-200 shrink-0 text-xs font-semibold"
+          >
+            <Rocket className="w-3.5 h-3.5" />
+            <span>{translate("workspace.deploy.publish")}</span>
+          </button>
           <button
             type="button"
             onClick={() => { setLeaveWorkspaceHref("/"); setLeaveWorkspaceOpen(true); }}

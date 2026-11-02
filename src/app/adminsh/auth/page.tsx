@@ -1,19 +1,15 @@
 "use client";
 
-import React, { useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { useRouter } from "next/navigation";
 import { ArrowLeft, ShieldCheck, Loader2, Lock } from "lucide-react";
 import { toast } from "sonner";
 import { startOAuth } from "@/lib/auth/oauth";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 export default function AdminAuthPage({ initialError = null }: { initialError?: string | null }) {
-  const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(() => {
     const code = initialError;
     if (code === "session_expired" || code === "admin_session_required") {
