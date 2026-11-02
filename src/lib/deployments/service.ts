@@ -1,5 +1,5 @@
 /**
- * Publish and unpublish orchestration for Mavly-managed Vercel deployments.
+ * Publish and unpublish orchestration for Mavly-managed static and full-stack hosting.
  *
  * The route has already authenticated the caller and proved ownership of
  * `projectId`. This module repeats the project read through the caller's
@@ -29,6 +29,18 @@ import {
   isSharedHostingRuntimeEnabled,
   sharedDeploymentName,
 } from "@/lib/hosting/config";
+import {
+  isAwsFrontendHostingProject,
+  readAwsFrontendHostingConfig,
+} from "@/lib/aws/config";
+import {
+  enqueueAwsFrontendPublication,
+  enqueueAwsFrontendUnpublish,
+  readAwsFrontendSchemaVersion,
+} from "@/lib/aws/publication-store";
+import {
+  verifyAwsPublicTenantRoute,
+} from "@/lib/aws/tenant-mapping";
 import { logHostingEvent } from "@/lib/hosting/events";
 import type { HostingEvent } from "@/lib/hosting/events";
 import { isFullstackHostingRequested } from "@/lib/hosting/fullstack-config";
@@ -222,6 +234,8 @@ export function wireDeploymentStatus(row: DeploymentRow): WireDeploymentStatus {
     hasMavlyHostname &&
     row.mavly_domain_status === "error" &&
     (deploymentState === "success" || domainErrorCode.startsWith("domain"));
+  const providerName =
+    row.provider === "aws" ? "AWS" : row.provider === "shared" ? "Mavly" : "Vercel";
   const status =
     deploymentState === "success"
       ? domainFailed
@@ -259,12 +273,12 @@ export function wireDeploymentStatus(row: DeploymentRow): WireDeploymentStatus {
                 message:
                   row.mavly_domain_error ||
                   row.error_message ||
-                  "Vercel could not verify this Mavly address.",
+                  `${providerName} could not verify this Mavly address.`,
               }
             : {
                 stage: "build",
                 title: "Publish failed",
-                message: row.error_message || "Vercel could not finish the deployment.",
+                message: row.error_message || `${providerName} could not finish the deployment.`,
               },
         }
       : {}),
@@ -662,6 +676,101 @@ export async function publishSharedVersion(
   return { ok: true, data: wireDeploymentStatus(saved.data) };
 }
 
+async function enqueueAwsPublication(input: {
+  projectId: string;
+  hostname: string;
+  site: StaticSite;
+  publishFiles: readonly StaticPublishFile[];
+}): Promise<DeploymentServiceResult<WireDeploymentStatus>> {
+  const { projectId, hostname, site, publishFiles } = input;
+  const schema = await readAwsFrontendSchemaVersion();
+  if (schema.ok === false) {
+    return fail(
+      schema.code === "MIGRATION_REQUIRED" ? 503 : 500,
+      schema.code === "MIGRATION_REQUIRED" ? "BACKEND_NOT_CONFIGURED" : "UNKNOWN",
+      schema.error,
+    );
+  }
+  if (schema.data < 51) {
+    return fail(
+      503,
+      "BACKEND_NOT_CONFIGURED",
+      "AWS frontend hosting is not installed. Apply migration 51_aws_frontend_deployment.sql.",
+    );
+  }
+
+  const prepared = preparePublishedFiles(publishFiles, contentTypeForPath);
+  if (isHostingStoreFailure(prepared)) {
+    return fail(400, "VALIDATION", prepared.error);
+  }
+
+  const began = await beginDeployment(
+    projectId,
+    "",
+    "aws",
+    { preserveLastPublishedAt: true },
+  );
+  if (isDeploymentStoreFailure(began)) {
+    const migration = migrationFailure(began.code, began.error);
+    if (migration) return migration;
+    return began.code === "CONFLICT"
+      ? fail(409, "VALIDATION", began.error)
+      : fail(500, "UNKNOWN", "Could not start the AWS publish.");
+  }
+
+  const version = await createPublishedVersion({
+    projectId,
+    prepared: prepared.data,
+    entryPath: "index.html",
+    spaFallback: site.generated,
+  });
+  if (isHostingStoreFailure(version)) {
+    await updateDeploymentRow(projectId, {
+      status: "error",
+      error_code: "aws_version_store_failed",
+      error_message: "Mavly could not store the published website.",
+    });
+    const migration = migrationFailure(version.code, version.error);
+    if (migration) return migration;
+    return fail(500, "UNKNOWN", "Mavly could not store the published website.");
+  }
+
+  const queued = await enqueueAwsFrontendPublication({
+    projectId,
+    versionId: version.data.id,
+  });
+  if (queued.ok === false) {
+    await markPublishedVersionFailed(version.data.id);
+    await updateDeploymentRow(projectId, {
+      status: "error",
+      error_code: "aws_queue_failed",
+      error_message: "Mavly could not queue the AWS publication.",
+    });
+    return fail(
+      queued.code === "MIGRATION_REQUIRED" ? 503 : 500,
+      queued.code === "MIGRATION_REQUIRED" ? "BACKEND_NOT_CONFIGURED" : "UNKNOWN",
+      queued.error,
+    );
+  }
+
+  const recorded = await updateDeploymentRow(projectId, {
+    mavly_hostname: hostname,
+    mavly_domain_status: "pending",
+    mavly_domain_error: null,
+    mavly_domain_checked_at: null,
+    error_code: null,
+    error_message: null,
+  });
+  if (isDeploymentStoreFailure(recorded)) {
+    return fail(
+      500,
+      "UNKNOWN",
+      "The AWS publication was queued, but Mavly could not refresh its status.",
+    );
+  }
+  return { ok: true, data: wireDeploymentStatus(recorded.data) };
+}
+
 /**
  * Re-prove a pending shared publication. A transient lookup/read failure keeps
  * the row `pending` (and therefore non-successful) instead of inventing either a
@@ -740,6 +849,32 @@ async function unpublishSharedProject(
   }
 }
 
+async function unpublishAwsProject(
+  projectId: string,
+  lease: string,
+  previousStatus: StoredDeploymentStatus,
+  unpublishingRow: DeploymentRow,
+): Promise<DeploymentServiceResult<WireDeploymentStatus>> {
+  const queued = await enqueueAwsFrontendUnpublish({
+    projectId,
+    leaseUpdatedAt: lease,
+  });
+  if (queued.ok === false) {
+    const restoredStatus =
+      previousStatus === "unpublishing" ? "error" : previousStatus;
+    await releaseUnpublish(projectId, lease, restoredStatus, {
+      code: queued.code,
+      message: "Mavly could not queue the AWS route removal.",
+    });
+    return fail(
+      queued.code === "MIGRATION_REQUIRED" ? 503 : 500,
+      queued.code === "MIGRATION_REQUIRED" ? "BACKEND_NOT_CONFIGURED" : "UNKNOWN",
+      queued.error,
+    );
+  }
+  return { ok: true, data: wireDeploymentStatus(unpublishingRow) };
+}
+
 /**
  * Status for a shared row never consults Vercel: there is no Vercel project.
  * Terminal states are authoritative; a pending probe is retried at most once a
@@ -764,6 +899,47 @@ async function sharedDeploymentStatus(
     return {
       ok: true,
       data: wireDeploymentStatus(isDeploymentStoreFailure(finished) ? current : finished.data),
+    };
+  }
+
+  async function awsDeploymentStatus(
+    projectId: string,
+    row: DeploymentRow,
+  ): Promise<DeploymentServiceResult<WireDeploymentStatus>> {
+    if (row.status === "unpublishing") {
+      return { ok: true, data: wireDeploymentStatus(row) };
+    }
+
+    if (
+      row.status !== "ready" ||
+      !row.mavly_hostname ||
+      row.mavly_domain_status === "verified" ||
+      row.mavly_domain_status === "error" ||
+      !row.active_version_id ||
+      !domainCheckDue(row)
+    ) {
+      return { ok: true, data: wireDeploymentStatus(row) };
+    }
+
+    let verified = false;
+    try {
+      verified = await verifyAwsPublicTenantRoute({
+        projectId,
+        versionId: row.active_version_id,
+        hostname: row.mavly_hostname,
+      });
+    } catch {
+      return { ok: true, data: wireDeploymentStatus(row) };
+    }
+
+    const patched = await updateDeploymentRow(projectId, {
+      mavly_domain_status: verified ? "verified" : "pending",
+      mavly_domain_error: null,
+      mavly_domain_checked_at: new Date().toISOString(),
+    });
+    return {
+      ok: true,
+      data: wireDeploymentStatus(isDeploymentStoreFailure(patched) ? row : patched.data),
     };
   }
 
@@ -858,11 +1034,59 @@ export async function publishProject(
     return publishFullstackProject(userId, projectId, options);
   }
 
+  const existing = await getDeploymentRow(projectId);
+  if (isDeploymentStoreFailure(existing)) {
+    const migration = migrationFailure(existing.code, existing.error);
+    if (migration) return migration;
+    return fail(500, "UNKNOWN", "Could not load the deployment status.");
+  }
+
+  const awsConfig = readAwsFrontendHostingConfig();
+  if (awsConfig.enabled && awsConfig.problem !== null) {
+    return fail(
+      503,
+      "BACKEND_NOT_CONFIGURED",
+      `AWS frontend hosting is enabled but not fully configured (${awsConfig.problem}).`,
+    );
+  }
+  const awsCohort = isAwsFrontendHostingProject(projectId);
+  const existingAwsDeployment = existing.data?.provider === "aws";
+  if (existingAwsDeployment && !awsCohort) {
+    return fail(
+      503,
+      "BACKEND_NOT_CONFIGURED",
+      "This project already uses AWS hosting, but its AWS hosting configuration or cohort is no longer enabled.",
+    );
+  }
+  const aws = existingAwsDeployment || awsCohort;
+
+  if (aws && existing.data?.provider === "vercel") {
+    return fail(
+      409,
+      "HOSTING_MIGRATION_REQUIRED",
+      "This project has an existing Vercel deployment. It must be migrated and verified before AWS hosting can replace it.",
+    );
+  }
+  if (aws && existing.data?.provider === "shared") {
+    return fail(
+      409,
+      "HOSTING_MIGRATION_REQUIRED",
+      "This project has an existing shared-hosting publication. It must be migrated and verified before AWS hosting can replace it.",
+    );
+  }
+
   /**
-   * Which hosting path this project uses. Both the mode and the cohort are
-   * server-side configuration; the DEFAULT is the existing Vercel path.
+   * Which hosting path this project uses. Existing AWS mappings remain on AWS;
+   * a new AWS cohort does not silently replace a Vercel deployment.
    */
   const shared = isSharedHostingProject(projectId);
+  if (aws && shared) {
+    return fail(
+      409,
+      "HOSTING_PROVIDER_CONFLICT",
+      "This project is configured for both AWS and shared hosting. Select exactly one hosting provider.",
+    );
+  }
 
   /**
    * Vercel credentials are required only for the legacy path. A shared publish
@@ -870,7 +1094,7 @@ export async function publishProject(
    * whole point.
    */
   let config: VercelDeploymentConfigResult | null = null;
-  if (!shared) {
+  if (!shared && !aws) {
     config = readVercelDeploymentConfig();
     if (isVercelDeploymentConfigFailure(config)) {
     /**
@@ -964,6 +1188,15 @@ export async function publishProject(
 
   if (shared) {
     return publishSharedVersion({
+      projectId,
+      hostname,
+      site: resolved.site,
+      publishFiles,
+    });
+  }
+
+  if (aws) {
+    return enqueueAwsPublication({
       projectId,
       hostname,
       site: resolved.site,
@@ -1307,9 +1540,10 @@ export async function unpublishProject(
    * Vercel configuration at all.
    */
   const sharedRow = row.provider === "shared";
+  const awsRow = row.provider === "aws";
 
   let config: VercelDeploymentConfigResult | null = null;
-  if (!sharedRow) {
+  if (!sharedRow && !awsRow) {
     config = readVercelDeploymentConfig();
     if (isVercelDeploymentConfigFailure(config)) {
       return fail(
@@ -1355,6 +1589,9 @@ export async function unpublishProject(
    */
   if (sharedRow) {
     return unpublishSharedProject(projectId, lease, row);
+  }
+  if (awsRow) {
+    return unpublishAwsProject(projectId, lease, row.status, claimed.data);
   }
 
   if (!config || isVercelDeploymentConfigFailure(config)) {
@@ -1579,6 +1816,9 @@ export async function getProjectDeploymentStatus(
   if (row.data.provider === "shared") {
     return sharedDeploymentStatus(projectId, row.data);
   }
+  if (row.data.provider === "aws") {
+    return awsDeploymentStatus(projectId, row.data);
+  }
 
   /**
    * An unpublish is a short server operation, but a killed process can leave the
@@ -1695,7 +1935,7 @@ export async function discardVercelProject(row: DeploymentRow): Promise<void> {
    * application because one tenant was removed would take every other tenant
    * down. Shared cleanup is the database cascade of this project's rows only.
    */
-  if (row.provider === "shared") return;
+  if (row.provider !== "vercel") return;
 
   const config = readVercelDeploymentConfig();
   if (isVercelDeploymentConfigFailure(config)) return;

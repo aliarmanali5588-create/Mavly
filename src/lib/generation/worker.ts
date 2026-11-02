@@ -44,6 +44,7 @@ import {
   runAndroidBuildTick,
   type AndroidBuildTickSummary,
 } from "@/lib/android/build-worker";
+import type { AwsPublicationTickSummary } from "@/lib/aws/publication-worker";
 import { androidBuildConfig } from "@/lib/android/build-config";
 import {
   LEASE_RENEW_INTERVAL_MS,
@@ -84,6 +85,8 @@ export interface WorkerTickResult {
   credits?: CreditReconciliation;
   /** Present only when this tick advanced the Android build queue instead. */
   androidBuild?: AndroidBuildTickSummary;
+  /** Present only when this tick advanced the AWS static-publication queue. */
+  awsPublication?: AwsPublicationTickSummary;
 }
 
 export interface WorkerVerificationSummary {
@@ -195,12 +198,20 @@ export async function runGenerationWorkerOnce(
     const androidBuild = verificationAdvanced
       ? null
       : await runAndroidBuildSafely(client, config.workerId);
+    const androidAdvanced =
+      androidBuild !== null &&
+      androidBuild.status !== "empty" &&
+      androidBuild.status !== "unavailable";
+    const awsPublication = verificationAdvanced || androidAdvanced
+      ? null
+      : await runAwsPublicationSafely(client);
     return {
       status: "empty",
       recovered,
       ...(credits ? { credits } : {}),
       ...(verification ? { verification } : {}),
       ...(androidBuild ? { androidBuild } : {}),
+      ...(awsPublication ? { awsPublication } : {}),
     };
   }
   if (parsed.status === "dead_letter") {
@@ -370,6 +381,28 @@ async function runAndroidBuildSafely(
     emitGenerationEvent("generation.worker_error", {
       workerId,
       reason: "android_build_tick_failed",
+    });
+    return { status: "error", reason: "unhandled" };
+  }
+}
+
+async function runAwsPublicationSafely(
+  client: SupabaseClient,
+): Promise<AwsPublicationTickSummary | null> {
+  try {
+    const { runAwsFrontendPublicationTick } = await import("@/lib/aws/publication-worker");
+    const tick = await runAwsFrontendPublicationTick({ client });
+    if (tick.status === "unavailable" && tick.reason === "disabled") return null;
+    if (tick.status === "empty") return null;
+    if (tick.status === "error") {
+      emitGenerationEvent("generation.worker_error", {
+        reason: "aws_publication_tick_failed",
+      });
+    }
+    return tick;
+  } catch {
+    emitGenerationEvent("generation.worker_error", {
+      reason: "aws_publication_tick_failed",
     });
     return { status: "error", reason: "unhandled" };
   }

@@ -1,5 +1,5 @@
 /**
- * Persistence for Mavly-managed Vercel deployments.
+ * Persistence for Mavly-managed deployments.
  *
  * Every read and write uses the caller's own Supabase session client. RLS on
  * public.projects is the access boundary, exactly as for project files and
@@ -20,9 +20,10 @@ export type MavlyDomainStatus = "pending" | "verified" | "error";
 
 /**
  * `vercel` — one per-project Vercel deployment (legacy, still supported);
- * `shared` — an immutable published version served by Mavly's tenant runtime.
+ * `shared` — an immutable published version served by Mavly's tenant runtime;
+ * `aws` — an immutable version published to private S3 and routed by CloudFront.
  */
-export type DeploymentProvider = "vercel" | "shared";
+export type DeploymentProvider = "vercel" | "shared" | "aws";
 
 export interface DeploymentRow {
   project_id: string;

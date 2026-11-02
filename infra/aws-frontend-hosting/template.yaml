@@ -1,0 +1,234 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Private S3 and CloudFront edge routing for Mavly static tenant sites.
+
+Parameters:
+  ViewerCertificateArn:
+    Type: String
+    Description: Validated ACM certificate in us-east-1 covering *.mavly.xyz.
+    AllowedPattern: "^arn:aws:acm:us-east-1:[0-9]{12}:certificate/[0-9a-fA-F-]+$"
+  ExistingWorkerRoleName:
+    Type: String
+    Description: Existing EC2 worker role name. No EC2 instance or instance profile is created.
+    AllowedPattern: "^[A-Za-z0-9+=,.@_-]{1,64}$"
+
+Resources:
+  FrontendBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      VersioningConfiguration:
+        Status: Enabled
+
+  TenantRouteStore:
+    Type: AWS::CloudFront::KeyValueStore
+    Properties:
+      Name: mavly-tenant-routes
+      Comment: Immutable project-to-publication mappings used by the viewer-request function.
+
+  TenantRouter:
+    Type: AWS::CloudFront::Function
+    Properties:
+      Name: mavly-tenant-router
+      AutoPublish: true
+      FunctionConfig:
+        Comment: Routes tenant hosts to immutable S3 publication keys.
+        Runtime: cloudfront-js-2.0
+        KeyValueStoreAssociations:
+          - KeyValueStoreARN: !GetAtt TenantRouteStore.Arn
+      FunctionCode: |
+        import cf from 'cloudfront';
+        const routes = cf.kvs();
+        const notFound = { statusCode: 404, statusDescription: 'Not Found' };
+        const unavailable = { statusCode: 503, statusDescription: 'Service Unavailable' };
+        const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+        function safePath(path) {
+          if (typeof path !== 'string' || path.length > 2048 || path.indexOf('\\') !== -1) return null;
+          if (path === '/' || path === '') return '';
+          const parts = path.split('/');
+          const output = [];
+          for (let i = 0; i < parts.length; i++) {
+            if (i === 0 && parts[i] === '') continue;
+            if (parts[i] === '') return null;
+            let segment;
+            try { segment = decodeURIComponent(parts[i]); } catch (_) { return null; }
+            if (!segment || segment === '.' || segment === '..' || /[%\\?#\u0000-\u001f\u007f/]/.test(segment)) return null;
+            output.push(encodeURIComponent(segment));
+          }
+          return output.join('/');
+        }
+
+        async function handler(event) {
+          const request = event.request;
+          const hostHeader = request.headers.host;
+          const host = hostHeader && hostHeader.value ? hostHeader.value.toLowerCase() : '';
+          const match = /^([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)\.mavly\.xyz$/.exec(host);
+          if (!match) return notFound;
+          const projectId = match[1];
+
+          let route;
+          try {
+            if (!await routes.exists(projectId)) return notFound;
+            route = await routes.get(projectId, { format: 'json' });
+          } catch (_) {
+            return unavailable;
+          }
+          if (!route || route.projectId !== projectId ||
+              !Number.isSafeInteger(route.generation) || route.generation < 1) {
+            return notFound;
+          }
+          if (route.disabled === true) return notFound;
+          if (!UUID.test(route.versionId) ||
+              typeof route.entryPath !== 'string' || typeof route.spaFallback !== 'boolean') {
+            return notFound;
+          }
+
+          const entry = safePath(route.entryPath);
+          if (!entry) return notFound;
+          const rawUri = request.uri;
+          const trailingSlash = rawUri.length > 1 && rawUri.endsWith('/');
+          let requested = safePath(
+            trailingSlash ? rawUri.slice(0, -1) : rawUri,
+          );
+          if (requested === null) return notFound;
+
+          const last = requested.slice(requested.lastIndexOf('/') + 1);
+          const hasExtension = last.indexOf('.') !== -1;
+          if (requested === '') {
+            requested = entry;
+          } else if (route.spaFallback && !hasExtension) {
+            requested = entry;
+          } else if (trailingSlash) {
+            requested += '/index.html';
+          }
+
+          request.uri = '/' + projectId + '/' + route.versionId + '/' + requested;
+          return request;
+        }
+  OriginAccessControl:
+    Type: AWS::CloudFront::OriginAccessControl
+    Properties:
+      OriginAccessControlConfig:
+        Name: !Sub "${AWS::StackName}-s3-oac"
+        Description: CloudFront-only access to the private Mavly publication bucket.
+        OriginAccessControlOriginType: s3
+        SigningBehavior: always
+        SigningProtocol: sigv4
+
+  TenantCachePolicy:
+    Type: AWS::CloudFront::CachePolicy
+    Properties:
+      CachePolicyConfig:
+        Name: !Sub "${AWS::StackName}-immutable-tenant-assets"
+        Comment: Publication version is in the rewritten URI, so objects are immutable cache keys.
+        MinTTL: 0
+        DefaultTTL: 86400
+        MaxTTL: 31536000
+        ParametersInCacheKeyAndForwardedToOrigin:
+          EnableAcceptEncodingGzip: true
+          EnableAcceptEncodingBrotli: true
+          CookiesConfig:
+            CookieBehavior: none
+          HeadersConfig:
+            HeaderBehavior: none
+          QueryStringsConfig:
+            QueryStringBehavior: none
+
+  TenantDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        Comment: Mavly static tenant hosting.
+        HttpVersion: http2and3
+        Aliases:
+          - "*.mavly.xyz"
+        Origins:
+          - Id: PrivateS3Origin
+            DomainName: !GetAtt FrontendBucket.RegionalDomainName
+            OriginAccessControlId: !GetAtt OriginAccessControl.Id
+            S3OriginConfig:
+              OriginAccessIdentity: ""
+        DefaultCacheBehavior:
+          TargetOriginId: PrivateS3Origin
+          ViewerProtocolPolicy: redirect-to-https
+          AllowedMethods: [GET, HEAD]
+          CachedMethods: [GET, HEAD]
+          Compress: true
+          CachePolicyId: !Ref TenantCachePolicy
+          FunctionAssociations:
+            - EventType: viewer-request
+              FunctionARN: !GetAtt TenantRouter.FunctionARN
+        CustomErrorResponses:
+          - ErrorCode: 403
+            ResponseCode: 404
+            ErrorCachingMinTTL: 5
+        PriceClass: PriceClass_100
+        Restrictions:
+          GeoRestriction:
+            RestrictionType: none
+        ViewerCertificate:
+          AcmCertificateArn: !Ref ViewerCertificateArn
+          SslSupportMethod: sni-only
+          MinimumProtocolVersion: TLSv1.2_2021
+
+  FrontendBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref FrontendBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: AllowCloudFrontReadOnly
+            Effect: Allow
+            Principal:
+              Service: cloudfront.amazonaws.com
+            Action: s3:GetObject
+            Resource: !Sub "${FrontendBucket.Arn}/*"
+            Condition:
+              StringEquals:
+                AWS:SourceArn: !Sub "arn:${AWS::Partition}:cloudfront::${AWS::AccountId}:distribution/${TenantDistribution}"
+
+  ExistingWorkerHostingPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: !Sub "${AWS::StackName}-frontend-publisher"
+      Roles:
+        - !Ref ExistingWorkerRoleName
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: ReadAndWriteVersionedObjects
+            Effect: Allow
+            Action:
+              - s3:GetObject
+              - s3:PutObject
+            Resource: !Sub "${FrontendBucket.Arn}/*"
+          - Sid: UpdateTenantRouteMappings
+            Effect: Allow
+            Action:
+              - cloudfront-keyvaluestore:DescribeKeyValueStore
+              - cloudfront-keyvaluestore:GetKey
+              - cloudfront-keyvaluestore:UpdateKeys
+            Resource: !GetAtt TenantRouteStore.Arn
+
+Outputs:
+  FrontendBucketName:
+    Value: !Ref FrontendBucket
+  CloudFrontDistributionId:
+    Value: !Ref TenantDistribution
+  CloudFrontDomainName:
+    Value: !GetAtt TenantDistribution.DomainName
+  TenantRouteStoreArn:
+    Value: !GetAtt TenantRouteStore.Arn

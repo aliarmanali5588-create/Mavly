@@ -152,8 +152,16 @@ import {
 } from "@/lib/deployments/store";
 import {
   deploymentHost,
+  getProjectDeploymentStatus,
+  isDeploymentServiceFailure,
+  publishProject,
+  unpublishProject,
   wireDeploymentStatus,
 } from "@/lib/deployments/service";
+import {
+  isAwsFrontendHostingProject,
+  readAwsFrontendHostingConfig,
+} from "@/lib/aws/config";
 import {
   disableFullstackProject,
   fullstackDeployableSnapshots,
@@ -1290,21 +1298,70 @@ async function updateProjectResponse(userId: string, projectId: string, body: un
 }
 
 async function deleteProjectResponse(userId: string, projectId: string): Promise<NextResponse> {
+  const deployment = await getDeploymentRow(projectId);
+  if (isDeploymentStoreFailure(deployment)) {
+    return fail(500, "UNKNOWN", "Could not check the project's hosting state before deletion.");
+  }
+  if (deployment.data?.provider === "aws") {
+    if (deployment.data.status !== "unpublished") {
+      const unpublished = await unpublishProject(userId, projectId);
+      if (isDeploymentServiceFailure(unpublished)) {
+        return fail(unpublished.status, unpublished.code, unpublished.error);
+      }
+      if (unpublished.data.status !== "unpublished") {
+        return fail(
+          409,
+          "VALIDATION",
+          "The AWS site is still being unpublished. Wait for that operation to finish before deleting the project.",
+        );
+      }
+    }
+  }
+
   const deleted = await deleteProject(userId, projectId);
   if (isStoreFailure(deleted)) return fail(500, "UNKNOWN", "Could not delete this project.");
   return ok({ deleted: true });
 }
 
 async function deployResponse(
-  _userId: string,
-  _projectId: string,
-  _body: unknown,
+  userId: string,
+  projectId: string,
+  body: unknown,
 ): Promise<NextResponse> {
-  return fail(
-    503,
-    "BACKEND_NOT_CONFIGURED",
-    "Customer-app publishing is unavailable. No deployment provider is configured; this action has not changed or deployed the project.",
-  );
+  const deployment = await getDeploymentRow(projectId);
+  if (isDeploymentStoreFailure(deployment)) {
+    return fail(500, "UNKNOWN", "Could not load the deployment status.");
+  }
+  const awsConfig = readAwsFrontendHostingConfig();
+  const awsRouteAllowed =
+    deployment.data?.provider === "aws" ||
+    (awsConfig.enabled &&
+      awsConfig.problem === null &&
+      isAwsFrontendHostingProject(projectId));
+  if (!awsRouteAllowed) {
+    return fail(
+      503,
+      "BACKEND_NOT_CONFIGURED",
+      "Customer-app publishing is unavailable for this project. No deployment provider is configured.",
+    );
+  }
+
+  const record = recordOf(body);
+  const result = await publishProject(userId, projectId, {
+    snapshotId: stringOf(record.snapshotId),
+    approvalId: stringOf(record.approvalId),
+  });
+  if (isDeploymentServiceFailure(result)) {
+    return fail(
+      result.status,
+      result.code,
+      result.error,
+      result.retryAfterSeconds
+        ? { "retry-after": String(result.retryAfterSeconds) }
+        : undefined,
+    );
+  }
+  return ok(result.data);
 }
 
 async function rejectAndroidWebsiteDeployment(
@@ -1692,20 +1749,49 @@ async function androidBuildActionResponse(
   return fail(404, "NOT_FOUND", "Not found");
 }
 
-async function unpublishResponse(_userId: string, _projectId: string): Promise<NextResponse> {
-  return fail(
-    503,
-    "BACKEND_NOT_CONFIGURED",
-    "Customer-app publishing is unavailable, so an existing provider deployment cannot be taken down by Mavly here.",
-  );
+async function unpublishResponse(userId: string, projectId: string): Promise<NextResponse> {
+  const deployment = await getDeploymentRow(projectId);
+  if (isDeploymentStoreFailure(deployment)) {
+    return fail(500, "UNKNOWN", "Could not load the deployment status.");
+  }
+  if (deployment.data?.provider !== "aws") {
+    return fail(
+      503,
+      "BACKEND_NOT_CONFIGURED",
+      "Mavly does not manage unpublishing for this deployment provider.",
+    );
+  }
+  const result = await unpublishProject(userId, projectId);
+  if (isDeploymentServiceFailure(result)) {
+    return fail(result.status, result.code, result.error);
+  }
+  return ok(result.data);
 }
 
-async function deploymentStatusResponse(_userId: string, _projectId: string): Promise<NextResponse> {
-  return fail(
-    503,
-    "BACKEND_NOT_CONFIGURED",
-    "Customer-app deployment status is unavailable. No deployment provider is configured.",
-  );
+async function deploymentStatusResponse(userId: string, projectId: string): Promise<NextResponse> {
+  const deployment = await getDeploymentRow(projectId);
+  if (isDeploymentStoreFailure(deployment)) {
+    return fail(500, "UNKNOWN", "Could not load the deployment status.");
+  }
+  const awsConfig = readAwsFrontendHostingConfig();
+  const awsRouteAllowed =
+    deployment.data?.provider === "aws" ||
+    (awsConfig.enabled &&
+      awsConfig.problem === null &&
+      isAwsFrontendHostingProject(projectId));
+  if (!awsRouteAllowed) {
+    return fail(
+      503,
+      "BACKEND_NOT_CONFIGURED",
+      "Customer-app deployment status is unavailable for this project.",
+    );
+  }
+
+  const result = await getProjectDeploymentStatus(userId, projectId);
+  if (isDeploymentServiceFailure(result)) {
+    return fail(result.status, result.code, result.error);
+  }
+  return ok(result.data);
 }
 
 function workflowStoreFailureResponse(failure: {
