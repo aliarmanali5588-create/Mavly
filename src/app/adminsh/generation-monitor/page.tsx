@@ -2,427 +2,647 @@
 
 import React, { useState } from "react";
 import {
-  Sparkles,
-  Search,
-  Filter,
-  RotateCcw,
-  StopCircle,
-  Eye,
+  Activity,
+  AlertTriangle,
+  Ban,
   CheckCircle2,
   Clock,
-  AlertCircle,
-  X,
-  FileCode,
-  Terminal,
-  Cpu,
-  Layers,
   Copy,
-  ExternalLink,
-  ChevronRight,
-  Activity,
+  Layers,
+  RefreshCw,
+  RotateCcw,
+  Timer,
+  XCircle,
 } from "lucide-react";
 import { toast } from "sonner";
+
+import {
+  canCancelRun,
+  canRetryRun,
+  formatAge,
+  formatSeconds,
+  type AdminGenerationDetail,
+  type AdminGenerationFilter,
+} from "@/lib/admin/console";
 import { AdminShell } from "../components/AdminShell";
-import { MOCK_GENERATIONS } from "../components/mockData";
-import { GenerationRecord } from "../components/types";
+import {
+  useAdminMutation,
+  useDebouncedValue,
+  useGenerationDetail,
+  useGenerationMonitor,
+} from "../components/useAdminConsoleData";
+import {
+  Badge,
+  DetailRow,
+  EmptyBlock,
+  ErrorBlock,
+  LoadingBlock,
+  Modal,
+  Pagination,
+  PrimaryButton,
+  SearchField,
+  SecondaryButton,
+  SectionCard,
+  SegmentedFilter,
+  StatCard,
+  UnavailableNote,
+  formatTimestamp,
+} from "../components/console-ui";
 
-export default function GenerationMonitorAdminPage() {
-  const [generations, setGenerations] = useState<GenerationRecord[]>(MOCK_GENERATIONS);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState("All");
-  const [selectedJob, setSelectedJob] = useState<GenerationRecord | null>(null);
-  const [inspectorTab, setInspectorTab] = useState<"overview" | "prompt" | "logs">("overview");
+/**
+ * ═══ GENERATION MONITOR ═════════════════════════════════════════════════════
+ *
+ * The table is `project_runs` — the same rows the durable worker claims, leases
+ * and finishes. The counters are the database's own aggregates over those rows,
+ * so the cards and the table describe one backlog, not two.
+ *
+ * ⚠️ THE TWO BUTTONS DO THE THING.
+ *   Retry  → `admin_retry_generation_run`: the same reset the owner-initiated
+ *            resume performs, under the same advisory lock. It refuses a
+ *            credit-enforced project, because resuming one holds credits from
+ *            the owner's balance and that is not an administrator's call.
+ *   Cancel → the same terminal transition `agent/stop` performs, releasing the
+ *            credit hold atomically for a worker run. It refuses a run that
+ *            already finished or already has a cancellation pending.
+ *
+ * ⚠️ A CANCELLATION IS A REQUEST THE WORKER OBSERVES. A provider call already in
+ * flight cannot be recalled. The confirmation says so instead of implying the
+ * work stopped the instant the button was pressed.
+ *
+ * ⚠️ THE OLD PAGE MUTATED LOCAL STATE. It flipped a row's status in React and
+ * showed a success toast, which meant the table could disagree with the database
+ * indefinitely. Nothing here changes a row locally: every action re-reads.
+ */
 
-  const filtered = generations.filter((g) => {
-    const matchesSearch =
-      g.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      g.project.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      g.owner.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      g.model.toLowerCase().includes(searchQuery.toLowerCase());
+const PAGE_SIZE = 10;
 
-    const matchesStatus = statusFilter === "All" || g.status === statusFilter;
-    return matchesSearch && matchesStatus;
+const STATUS_TONE: Record<string, "positive" | "warning" | "neutral" | "danger"> = {
+  completed: "positive",
+  running: "warning",
+  queued: "neutral",
+  failed: "danger",
+  cancelled: "neutral",
+  interrupted: "danger",
+};
+
+const STATUS_ICON: Record<string, React.ReactNode> = {
+  completed: <CheckCircle2 className="w-3 h-3" />,
+  running: <Activity className="w-3 h-3" />,
+  queued: <Clock className="w-3 h-3" />,
+  failed: <XCircle className="w-3 h-3" />,
+  cancelled: <Ban className="w-3 h-3" />,
+  interrupted: <AlertTriangle className="w-3 h-3" />,
+};
+
+export default function GenerationMonitorPage() {
+  const [status, setStatus] = useState<AdminGenerationFilter>("all");
+  const [search, setSearch] = useState("");
+  const [page, setPage] = useState(0);
+  const debouncedSearch = useDebouncedValue(search, 300);
+
+  const { data, loading, error, refresh } = useGenerationMonitor({
+    status,
+    search: debouncedSearch,
+    page,
+    pageSize: PAGE_SIZE,
   });
 
-  const handleRetryJob = (job: GenerationRecord) => {
-    setGenerations((prev) =>
-      prev.map((g) =>
-        g.id === job.id ? { ...g, status: "Running", duration: "1.2s", errorLog: undefined } : g
-      )
+  const [detailId, setDetailId] = useState<string | null>(null);
+
+  const summary = data?.summary ?? null;
+  const rows = data?.page.rows ?? [];
+
+  const filterOptions = [
+    { id: "all" as const, label: "All" },
+    { id: "running" as const, label: "Running" },
+    { id: "queued" as const, label: "Queued" },
+    { id: "completed" as const, label: "Completed" },
+    { id: "failed" as const, label: "Failed" },
+    { id: "cancelled" as const, label: "Cancelled" },
+  ];
+
+  return (
+    <AdminShell activeNav="Generation Monitor" live>
+      {/* ── Queue counters ────────────────────────────────────────────────── */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
+        <StatCard
+          label="Queued"
+          value={summary ? summary.queued.toLocaleString() : null}
+          hint={
+            summary
+              ? summary.oldestQueuedAt
+                ? `Oldest enqueued ${formatAge(summary.oldestQueuedAt)}`
+                : "Nothing waiting"
+              : undefined
+          }
+          icon={<Clock className="w-3.5 h-3.5 text-muted-foreground" />}
+          unavailable={!summary}
+        />
+        <StatCard
+          label="Running"
+          value={summary ? summary.running.toLocaleString() : null}
+          hint={
+            summary
+              ? `${summary.retryWait} waiting to retry · ${summary.staleLeases} stale lease(s)`
+              : undefined
+          }
+          icon={<Activity className="w-3.5 h-3.5 text-warning" />}
+          tone={summary && summary.staleLeases > 0 ? "warning" : "neutral"}
+          unavailable={!summary}
+        />
+        <StatCard
+          label="Completed"
+          value={summary ? summary.completed.toLocaleString() : null}
+          hint={
+            summary
+              ? summary.lastCompletedAt
+                ? `Last finished ${formatAge(summary.lastCompletedAt)}`
+                : "None finished yet"
+              : undefined
+          }
+          icon={<CheckCircle2 className="w-3.5 h-3.5 text-success" />}
+          tone="positive"
+          unavailable={!summary}
+        />
+        <StatCard
+          label="Failed"
+          value={summary ? (summary.failed + summary.interrupted).toLocaleString() : null}
+          hint={
+            summary
+              ? `${summary.failed} failed · ${summary.interrupted} interrupted · ${summary.deadLettered} dead-lettered`
+              : undefined
+          }
+          icon={<XCircle className="w-3.5 h-3.5 text-muted-foreground" />}
+          unavailable={!summary}
+        />
+      </div>
+
+      {!data?.summaryAvailable && data && (
+        <UnavailableNote>
+          The queue counters could not be read, so the cards above show no value. They are not
+          zero: a zero would claim an empty queue, which is a different statement.
+        </UnavailableNote>
+      )}
+
+      {summary && summary.staleLeases > 0 && (
+        <UnavailableNote>
+          {summary.staleLeases} run(s) hold a lease that has already expired. The worker recovers
+          expired leases on its own schedule; a lease expiring is not proof the worker is down.
+        </UnavailableNote>
+      )}
+
+      {/* ── Runs ──────────────────────────────────────────────────────────── */}
+      <SectionCard
+        title="Generation runs"
+        description="Live rows from the durable generation pipeline. Refreshes every 30 seconds while this tab is visible."
+        actions={
+          <SecondaryButton
+            icon={<RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />}
+            onClick={refresh}
+            disabled={loading}
+          >
+            Refresh
+          </SecondaryButton>
+        }
+      >
+        <div className="space-y-4">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+            <SegmentedFilter
+              options={filterOptions}
+              value={status}
+              onChange={(next) => {
+                setStatus(next);
+                setPage(0);
+              }}
+            />
+            <SearchField
+              value={search}
+              onChange={(value) => {
+                setSearch(value);
+                setPage(0);
+              }}
+              placeholder="Search project, owner, model, run id…"
+            />
+          </div>
+
+          {loading && !data ? (
+            <LoadingBlock label="Reading the generation queue" />
+          ) : error && !data ? (
+            <ErrorBlock message={error} onRetry={refresh} />
+          ) : rows.length === 0 ? (
+            <EmptyBlock
+              title="No runs match this view"
+              detail={
+                status === "all" && debouncedSearch === ""
+                  ? "No generation has been started on this deployment yet."
+                  : "Try a different status filter or clear the search."
+              }
+            />
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className="border-b border-[var(--clay-line)] text-muted-foreground font-semibold uppercase text-[10px]">
+                    <th className="pb-3">Run</th>
+                    <th className="pb-3">Project</th>
+                    <th className="pb-3">Owner</th>
+                    <th className="pb-3 text-center">Status</th>
+                    <th className="pb-3">Model</th>
+                    <th className="pb-3 text-right">Tokens</th>
+                    <th className="pb-3 text-right">Attempts</th>
+                    <th className="pb-3 text-right">Started</th>
+                    <th className="pb-3 text-right">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[var(--clay-line)]">
+                  {rows.map((row) => (
+                    <tr key={row.id} className="hover:bg-[var(--clay-sunken)] transition-colors">
+                      <td className="py-3 font-mono font-semibold text-foreground">
+                        {row.id.slice(0, 8)}
+                      </td>
+                      <td className="py-3">
+                        <p className="font-semibold text-foreground truncate max-w-[160px]">
+                          {row.projectLabel ?? row.projectId}
+                        </p>
+                        <p className="text-[11px] text-muted-foreground font-mono truncate max-w-[160px]">
+                          {row.projectId}
+                        </p>
+                      </td>
+                      <td className="py-3">
+                        <p className="text-foreground truncate max-w-[150px]">{row.ownerName}</p>
+                        <p className="text-[11px] text-muted-foreground truncate max-w-[150px]">
+                          {row.ownerEmail ?? "no email"}
+                        </p>
+                      </td>
+                      <td className="py-3 text-center">
+                        <Badge
+                          tone={STATUS_TONE[row.status] ?? "neutral"}
+                          icon={STATUS_ICON[row.status]}
+                        >
+                          {row.status}
+                        </Badge>
+                      </td>
+                      <td className="py-3 font-mono text-muted-foreground truncate max-w-[140px]">
+                        {row.model}
+                      </td>
+                      <td className="py-3 text-right font-mono text-muted-foreground">
+                        {row.tokens === null ? "—" : row.tokens.toLocaleString()}
+                      </td>
+                      <td className="py-3 text-right font-mono text-muted-foreground">
+                        {row.attempts ?? "—"}
+                      </td>
+                      <td className="py-3 text-right text-muted-foreground whitespace-nowrap">
+                        {formatTimestamp(row.startedAt)}
+                      </td>
+                      <td className="py-3 text-right">
+                        <button
+                          type="button"
+                          onClick={() => setDetailId(row.id)}
+                          className="px-2.5 py-1 text-[11px] font-medium text-foreground bg-[var(--clay-sunken)] hover:bg-[var(--clay-sunken-deep)] rounded-md transition-colors"
+                        >
+                          Open
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {data && (
+            <Pagination
+              page={page}
+              pageSize={PAGE_SIZE}
+              total={data.page.total}
+              onPageChange={setPage}
+              loading={loading}
+            />
+          )}
+
+          {error && data && (
+            <p className="text-[11px] text-warning-subtle-foreground">
+              Showing the last successful read. The newest refresh failed: {error}
+            </p>
+          )}
+        </div>
+      </SectionCard>
+
+      {detailId && (
+        <RunDetailDrawer
+          runId={detailId}
+          onClose={() => setDetailId(null)}
+          onChanged={() => refresh()}
+        />
+      )}
+    </AdminShell>
+  );
+}
+
+// ───────────────────────────── run detail ───────────────────────────────────
+
+function RunDetailDrawer({
+  runId,
+  onClose,
+  onChanged,
+}: {
+  runId: string;
+  onClose: () => void;
+  onChanged: () => void;
+}) {
+  const { data, loading, error, refresh } = useGenerationDetail(runId);
+  const mutation = useAdminMutation();
+  const [confirmCancel, setConfirmCancel] = useState(false);
+  const [cancelReason, setCancelReason] = useState("");
+
+  const handleAction = async (action: "retry" | "cancel") => {
+    const result = await mutation.run<{ message: string }>(
+      "/api/adminsh/generation-monitor/actions",
+      { runId, action, reason: cancelReason.trim() }
     );
-    toast.success(`Job ${job.id} re-queued`, {
-      description: `Re-running generation pipeline for "${job.project}".`,
-    });
-  };
 
-  const handleCancelJob = (job: GenerationRecord) => {
-    setGenerations((prev) =>
-      prev.map((g) =>
-        g.id === job.id
-          ? { ...g, status: "Failed", errorLog: "Execution aborted by administrator" }
-          : g
-      )
-    );
-    toast.info(`Job ${job.id} cancelled`, {
-      description: "Process halted.",
-    });
-  };
-
-  const handleCopyId = (id: string) => {
-    navigator.clipboard?.writeText(id);
-    toast.success(`Copied Job ID: ${id}`);
-  };
-
-  const getStatusBadge = (status: GenerationRecord["status"]) => {
-    switch (status) {
-      case "Completed":
-        return (
-          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-medium bg-success-subtle text-success-subtle-foreground border border-success/25 font-mono">
-            <span className="w-1.5 h-1.5 rounded-full bg-success" />
-            Completed
-          </span>
-        );
-      case "Running":
-        return (
-          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-medium bg-[var(--clay-sunken)] text-foreground border border-[var(--clay-line)] font-mono">
-            <span className="w-1.5 h-1.5 rounded-full bg-warning animate-pulse" />
-            Running
-          </span>
-        );
-      case "Failed":
-        return (
-          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-medium bg-destructive-subtle text-destructive-subtle-foreground border border-destructive/25 font-mono">
-            <span className="w-1.5 h-1.5 rounded-full bg-destructive" />
-            Failed
-          </span>
-        );
-      case "Queued":
-        return (
-          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-medium bg-warning-subtle text-warning-subtle-foreground border border-warning/25 font-mono">
-            <span className="w-1.5 h-1.5 rounded-full bg-warning" />
-            Queued
-          </span>
-        );
+    if ("error" in result) {
+      toast.error(result.error);
+      return;
     }
+
+    toast.success(result.data.message);
+    setConfirmCancel(false);
+    setCancelReason("");
+    refresh();
+    onChanged();
+  };
+
+  const copy = (value: string, label: string) => {
+    void navigator.clipboard?.writeText(value);
+    toast.success(`${label} copied`);
   };
 
   return (
-    <AdminShell activeNav="Generation Monitor">
-      {/* 1. Worker Telemetry & Pipeline Status */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-5 rounded-2xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)]">
-        <div className="flex items-start sm:items-center gap-3.5">
-          <div className="w-10 h-10 rounded-xl bg-black text-white flex items-center justify-center shrink-0 shadow-[var(--clay-elev-ink-1)]">
-            <Terminal className="w-5 h-5" />
-          </div>
-          <div>
-            <div className="flex flex-wrap items-center gap-2">
-              <h2 className="text-sm font-semibold tracking-tight text-foreground">
-                AI Generation & Build Queue Engine
-              </h2>
-              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-medium bg-success-subtle text-success-subtle-foreground border border-success/25 font-mono">
-                <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
-                Worker Pool: 4/4 Available
-              </span>
-            </div>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              Live AST file synthesis, code generation stream, and static preview bundling
+    <Modal
+      title="Run detail"
+      icon={<Layers className="w-4 h-4 text-foreground" />}
+      onClose={onClose}
+      maxWidth="max-w-2xl"
+    >
+      {loading && !data ? (
+        <LoadingBlock label="Reading the run" />
+      ) : error && !data ? (
+        <ErrorBlock message={error} onRetry={refresh} />
+      ) : !data ? (
+        <EmptyBlock title="That run could not be read" />
+      ) : (
+        <RunDetailBody
+          detail={data}
+          onCopy={copy}
+          onRetry={() => handleAction("retry")}
+          onRequestCancel={() => setConfirmCancel(true)}
+          pending={mutation.pending}
+          confirmCancel={confirmCancel}
+          cancelReason={cancelReason}
+          onCancelReasonChange={setCancelReason}
+          onConfirmCancel={() => handleAction("cancel")}
+          onDismissCancel={() => {
+            setConfirmCancel(false);
+            setCancelReason("");
+          }}
+          actionError={mutation.error}
+        />
+      )}
+    </Modal>
+  );
+}
+
+function RunDetailBody({
+  detail,
+  onCopy,
+  onRetry,
+  onRequestCancel,
+  pending,
+  confirmCancel,
+  cancelReason,
+  onCancelReasonChange,
+  onConfirmCancel,
+  onDismissCancel,
+  actionError,
+}: {
+  detail: AdminGenerationDetail;
+  onCopy: (value: string, label: string) => void;
+  onRetry: () => void;
+  onRequestCancel: () => void;
+  pending: boolean;
+  confirmCancel: boolean;
+  cancelReason: string;
+  onCancelReasonChange: (value: string) => void;
+  onConfirmCancel: () => void;
+  onDismissCancel: () => void;
+  actionError: string | null;
+}) {
+  const showCancel = canCancelRun(detail);
+  const showRetry = canRetryRun(detail);
+
+  return (
+    <div className="space-y-4">
+      {/* Status strip */}
+      <div className="flex flex-wrap items-center gap-2">
+        <Badge tone={STATUS_TONE[detail.stage] ?? "neutral"} icon={STATUS_ICON[detail.stage]}>
+          {detail.stage}
+        </Badge>
+        <Badge tone="neutral">{detail.dispatchMode}</Badge>
+        {detail.cancellationRequestedAt && (
+          <Badge tone="warning" icon={<Ban className="w-3 h-3" />}>
+            cancellation requested
+          </Badge>
+        )}
+        {detail.deadLetteredAt && (
+          <Badge tone="danger" icon={<AlertTriangle className="w-3 h-3" />}>
+            dead-lettered
+          </Badge>
+        )}
+      </div>
+
+      {/* Identity */}
+      <div className="space-y-2 bg-[var(--clay-sunken)] p-4 rounded-xl border border-[var(--clay-line)] text-xs shadow-[var(--clay-well-1)]">
+        <DetailRow
+          label="Run ID"
+          value={
+            <button
+              type="button"
+              onClick={() => onCopy(detail.id, "Run ID")}
+              className="font-mono underline decoration-dotted"
+            >
+              {detail.id}
+            </button>
+          }
+          wrap
+        />
+        <DetailRow label="Project" value={detail.projectLabel ?? detail.projectId} />
+        <DetailRow label="Project ID" value={detail.projectId} mono wrap />
+        <DetailRow label="Owner" value={`${detail.ownerName} (${detail.ownerEmail ?? "no email"})`} />
+        <DetailRow label="Model" value={detail.model} mono />
+        {detail.requestedModel && detail.requestedModel !== detail.model && (
+          <DetailRow label="Requested model" value={detail.requestedModel} mono />
+        )}
+      </div>
+
+      {/* Timing */}
+      <div className="space-y-2 bg-[var(--clay-sunken)] p-4 rounded-xl border border-[var(--clay-line)] text-xs shadow-[var(--clay-well-1)]">
+        <DetailRow label="Started" value={formatTimestamp(detail.startedAt)} />
+        <DetailRow label="Finished" value={formatTimestamp(detail.finishedAt)} />
+        <DetailRow
+          label="Duration"
+          value={detail.durationSeconds === null ? "still running" : formatSeconds(detail.durationSeconds)}
+        />
+        <DetailRow label="Enqueued" value={formatTimestamp(detail.enqueuedAt)} />
+        <DetailRow label="Dispatched" value={formatTimestamp(detail.dispatchedAt)} />
+        <DetailRow label="Last heartbeat" value={formatAge(detail.heartbeatAt)} />
+        <DetailRow label="Last progress" value={formatAge(detail.lastProgressAt)} />
+        <DetailRow label="Next attempt" value={formatTimestamp(detail.nextAttemptAt)} />
+        <DetailRow label="Lease expires" value={formatTimestamp(detail.leaseExpiresAt)} />
+        <DetailRow label="Worker" value={detail.workerId} mono wrap />
+      </div>
+
+      {/* Progress */}
+      <div className="space-y-2 bg-[var(--clay-sunken)] p-4 rounded-xl border border-[var(--clay-line)] text-xs shadow-[var(--clay-well-1)]">
+        <DetailRow
+          label="Job attempt"
+          value={
+            detail.jobAttempt === null
+              ? null
+              : `${detail.jobAttempt} / ${detail.maxJobAttempts ?? "?"}`
+          }
+        />
+        <DetailRow label="Provider attempts" value={detail.attemptCount} />
+        <DetailRow label="Checkpoints" value={detail.checkpointCount} />
+        <DetailRow label="Batches" value={detail.batchCount} />
+        <DetailRow label="Files written" value={detail.filesWritten} />
+        <DetailRow label="Finish reason" value={detail.finishReason} />
+      </div>
+
+      {/* Tokens and cost */}
+      <div className="space-y-2 bg-[var(--clay-sunken)] p-4 rounded-xl border border-[var(--clay-line)] text-xs shadow-[var(--clay-well-1)]">
+        <DetailRow label="Prompt tokens" value={detail.promptTokens?.toLocaleString() ?? null} mono />
+        <DetailRow
+          label="Completion tokens"
+          value={detail.completionTokens?.toLocaleString() ?? null}
+          mono
+        />
+        <DetailRow label="Total tokens" value={detail.totalTokens?.toLocaleString() ?? null} mono />
+        <DetailRow
+          label="Reasoning tokens"
+          value={detail.reasoningTokens?.toLocaleString() ?? null}
+          mono
+        />
+        <DetailRow
+          label="Reported cost"
+          value={
+            detail.costKnown && detail.reportedCostUsd !== null
+              ? `$${detail.reportedCostUsd.toFixed(6)}`
+              : "Cost unavailable"
+          }
+          mono
+        />
+      </div>
+
+      {/* Failure */}
+      {(detail.errorCode || detail.errorMessage || detail.lastErrorSummary) && (
+        <div className="space-y-1.5 p-4 rounded-xl border border-warning/30 bg-[var(--clay-sunken)]">
+          <p className="text-[11px] font-semibold text-foreground flex items-center gap-1.5">
+            <AlertTriangle className="w-3.5 h-3.5 text-warning" />
+            Failure
+          </p>
+          <p className="text-[11px] text-muted-foreground font-mono">{detail.errorCode ?? "—"}</p>
+          <p className="text-[11px] text-muted-foreground leading-relaxed whitespace-pre-wrap">
+            {detail.errorMessage ?? detail.lastErrorSummary ?? "No message was recorded."}
+          </p>
+          {detail.lastErrorClass && (
+            <p className="text-[10px] text-muted-foreground font-mono">
+              class: {detail.lastErrorClass}
             </p>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-3 text-xs text-muted-foreground font-mono self-start md:self-auto">
-          <div>
-            <span className="text-muted-foreground block text-[10px] uppercase font-semibold">Active Jobs</span>
-            <span className="font-bold text-foreground">6 Running</span>
-          </div>
-          <div className="h-6 w-px bg-[var(--clay-line)]" />
-          <div>
-            <span className="text-muted-foreground block text-[10px] uppercase font-semibold">Queue Depth</span>
-            <span className="font-bold text-warning-subtle-foreground">14 in Buffer</span>
-          </div>
-          <div className="h-6 w-px bg-[var(--clay-line)]" />
-          <div>
-            <span className="text-muted-foreground block text-[10px] uppercase font-semibold">Avg Latency</span>
-            <span className="font-bold text-success">12.4s</span>
-          </div>
-        </div>
-      </div>
-
-      {/* 2. Real-Time Generation Queue & Jobs Table */}
-      <div className="bg-card rounded-2xl p-5 sm:p-6 border border-[var(--clay-line)] shadow-[var(--clay-elev-1)] space-y-4">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pb-3 border-b border-[var(--clay-line)]">
-          {/* Segmented Filter Buttons */}
-          <div className="flex flex-wrap items-center gap-1 bg-[var(--clay-sunken)] p-0.5 rounded-lg border border-[var(--clay-line)] text-xs shadow-[var(--clay-well-1)]">
-            {["All", "Running", "Queued", "Completed", "Failed"].map((st) => (
-              <button
-                key={st}
-                type="button"
-                onClick={() => setStatusFilter(st)}
-                className={`px-3 py-1 rounded-md text-xs transition-all ${
-                  statusFilter === st
-                    ? "bg-card text-foreground shadow-[var(--clay-elev-1)] font-semibold"
-                    : "text-muted-foreground hover:text-foreground font-medium"
-                }`}
-              >
-                {st}
-              </button>
-            ))}
-          </div>
-
-          {/* Search Box */}
-          <div className="relative w-full lg:w-72">
-            <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-            <input
-              type="text"
-              placeholder="Filter by Job ID, project, user..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full h-8 pl-8 pr-3 text-xs rounded-lg bg-[var(--clay-sunken)] border border-[var(--clay-line)] text-foreground placeholder:text-muted-foreground focus:bg-card focus:outline-none focus:ring-1 focus:ring-black shadow-[var(--clay-well-1)]"
-            />
-          </div>
-        </div>
-
-        {/* Table */}
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
-            <thead>
-              <tr className="border-b border-[var(--clay-line)] text-muted-foreground font-semibold uppercase text-[10px]">
-                <th className="pb-3">Job Identifier</th>
-                <th className="pb-3">Target Project</th>
-                <th className="pb-3">Initiator / User</th>
-                <th className="pb-3">AI Model Engine</th>
-                <th className="pb-3 text-center">Status</th>
-                <th className="pb-3 text-right">Duration</th>
-                <th className="pb-3 text-right">Created</th>
-                <th className="pb-3 text-right">Job Controls</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[var(--clay-line)]">
-              {filtered.length > 0 ? (
-                filtered.map((job) => (
-                  <tr key={job.id} className="hover:bg-[var(--clay-sunken)] transition-colors">
-                    <td className="py-3.5">
-                      <div className="flex items-center gap-1.5 font-mono">
-                        <span className="font-semibold text-foreground">{job.id}</span>
-                        <button
-                          type="button"
-                          onClick={() => handleCopyId(job.id)}
-                          className="p-1 text-muted-foreground hover:text-black transition-colors"
-                          title="Copy Job ID"
-                        >
-                          <Copy className="w-3 h-3" />
-                        </button>
-                      </div>
-                    </td>
-                    <td className="py-3.5 max-w-[220px]">
-                      <p className="font-semibold text-foreground truncate">{job.project}</p>
-                      {job.promptSnippet && (
-                        <p className="text-[11px] text-muted-foreground truncate italic">
-                          &ldquo;{job.promptSnippet}&rdquo;
-                        </p>
-                      )}
-                    </td>
-                    <td className="py-3.5 font-mono text-[11px] text-muted-foreground">
-                      {job.owner}
-                    </td>
-                    <td className="py-3.5">
-                      <span className="font-mono text-[11px] text-foreground bg-[var(--clay-sunken)] px-2 py-0.5 rounded border border-[var(--clay-line)]">
-                        {job.model}
-                      </span>
-                    </td>
-                    <td className="py-3.5 text-center">{getStatusBadge(job.status)}</td>
-                    <td className="py-3.5 text-right font-mono text-muted-foreground">
-                      {job.duration}
-                    </td>
-                    <td className="py-3.5 text-right text-muted-foreground whitespace-nowrap">
-                      {job.createdAt}
-                    </td>
-                    <td className="py-3.5 text-right">
-                      <div className="flex items-center justify-end gap-1.5">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setSelectedJob(job);
-                            setInspectorTab("overview");
-                          }}
-                          className="px-2.5 py-1 text-[11px] font-medium text-foreground bg-[var(--clay-sunken)] hover:bg-[var(--clay-sunken-deep)] rounded-md transition-colors"
-                        >
-                          Inspect
-                        </button>
-                        {job.status === "Running" ? (
-                          <button
-                            type="button"
-                            onClick={() => handleCancelJob(job)}
-                            className="px-2 py-1 text-[11px] font-medium text-destructive-subtle-foreground bg-destructive-subtle hover:bg-destructive-subtle border border-destructive/25 rounded-md transition-colors"
-                          >
-                            Cancel
-                          </button>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => handleRetryJob(job)}
-                            className="p-1 text-muted-foreground hover:text-black transition-colors"
-                            title="Re-run Job"
-                          >
-                            <RotateCcw className="w-3.5 h-3.5" />
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan={8} className="py-8 text-center text-muted-foreground text-xs">
-                    No generation jobs found matching your filters.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {/* Enterprise Job Inspector Drawer */}
-      {selectedJob && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[var(--clay-scrim)] backdrop-blur-[3px] animate-in fade-in">
-          <div className="w-full max-w-xl bg-card rounded-2xl border border-[var(--clay-line)] shadow-[var(--clay-float)] p-6 space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-[var(--clay-line)]">
-              <div className="flex items-center gap-2">
-                <Terminal className="w-4 h-4 text-foreground" />
-                <div>
-                  <h3 className="text-sm font-bold text-foreground">Generation Execution Inspector</h3>
-                  <p className="text-[11px] font-mono text-muted-foreground">{selectedJob.id} · {selectedJob.project}</p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setSelectedJob(null)}
-                className="p-1 text-muted-foreground hover:text-black rounded-lg"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            {/* Segmented Inspector Tabs */}
-            <div className="flex items-center gap-1 bg-[var(--clay-sunken)] p-0.5 rounded-lg border border-[var(--clay-line)] text-xs shadow-[var(--clay-well-1)]">
-              <button
-                type="button"
-                onClick={() => setInspectorTab("overview")}
-                className={`flex-1 py-1 text-center rounded-md font-medium transition-all ${
-                  inspectorTab === "overview" ? "bg-card text-foreground shadow-[var(--clay-elev-1)] font-semibold" : "text-muted-foreground"
-                }`}
-              >
-                Job Metadata
-              </button>
-              <button
-                type="button"
-                onClick={() => setInspectorTab("prompt")}
-                className={`flex-1 py-1 text-center rounded-md font-medium transition-all ${
-                  inspectorTab === "prompt" ? "bg-card text-foreground shadow-[var(--clay-elev-1)] font-semibold" : "text-muted-foreground"
-                }`}
-              >
-                User Prompt Input
-              </button>
-              <button
-                type="button"
-                onClick={() => setInspectorTab("logs")}
-                className={`flex-1 py-1 text-center rounded-md font-medium transition-all ${
-                  inspectorTab === "logs" ? "bg-card text-foreground shadow-[var(--clay-elev-1)] font-semibold" : "text-muted-foreground"
-                }`}
-              >
-                Console & Errors
-              </button>
-            </div>
-
-            {/* Tab Contents */}
-            {inspectorTab === "overview" && (
-              <div className="space-y-2.5 text-xs">
-                <div className="grid grid-cols-2 gap-2 bg-[var(--clay-sunken)] p-3 rounded-xl border border-[var(--clay-line)] shadow-[var(--clay-well-1)]">
-                  <div>
-                    <span className="text-muted-foreground block text-[10px] uppercase font-bold">Project Name</span>
-                    <span className="font-semibold text-foreground">{selectedJob.project}</span>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground block text-[10px] uppercase font-bold">Execution Status</span>
-                    <span>{getStatusBadge(selectedJob.status)}</span>
-                  </div>
-                  <div className="mt-1">
-                    <span className="text-muted-foreground block text-[10px] uppercase font-bold">Model Engine</span>
-                    <span className="font-mono text-foreground">{selectedJob.model}</span>
-                  </div>
-                  <div className="mt-1">
-                    <span className="text-muted-foreground block text-[10px] uppercase font-bold">Execution Duration</span>
-                    <span className="font-mono text-foreground">{selectedJob.duration}</span>
-                  </div>
-                  <div className="mt-1">
-                    <span className="text-muted-foreground block text-[10px] uppercase font-bold">Tokens Consumed</span>
-                    <span className="font-mono text-foreground">{selectedJob.tokensUsed || "7,420 tokens"}</span>
-                  </div>
-                  <div className="mt-1">
-                    <span className="text-muted-foreground block text-[10px] uppercase font-bold">Created At</span>
-                    <span className="text-foreground">{selectedJob.createdAt}</span>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {inspectorTab === "prompt" && (
-              <div className="space-y-2 text-xs">
-                <span className="text-muted-foreground text-[10px] uppercase font-bold block">
-                  Natural Language Prompt Context
-                </span>
-                <div className="p-3 bg-black text-white/80 font-mono text-[11px] rounded-xl overflow-x-auto leading-relaxed border border-[var(--clay-line-strong)] shadow-[var(--clay-elev-ink-1)]">
-                  {selectedJob.promptSnippet || "Create modern landing page with pricing calculator and dark mode toggle."}
-                </div>
-              </div>
-            )}
-
-            {inspectorTab === "logs" && (
-              <div className="space-y-2 text-xs">
-                <span className="text-muted-foreground text-[10px] uppercase font-bold block">
-                  Diagnostic Log Stream
-                </span>
-                {selectedJob.errorLog ? (
-                  <div className="p-3 bg-destructive-subtle border border-destructive/40 text-destructive-subtle-foreground font-mono text-[11px] rounded-xl space-y-1 shadow-[var(--clay-well-1)]">
-                    <p className="font-bold flex items-center gap-1">
-                      <AlertCircle className="w-3.5 h-3.5" /> Error Log Output:
-                    </p>
-                    <p className="break-all">{selectedJob.errorLog}</p>
-                  </div>
-                ) : (
-                  <div className="p-3 bg-[var(--clay-sunken-deep)] text-success font-mono text-[11px] rounded-xl space-y-1 border border-[var(--clay-line)] shadow-[var(--clay-well-1)]">
-                    <p>&gt; [AST Engine] Parsed 14 React components successfully.</p>
-                    <p>&gt; [Bundler] Static preview.html compiled (184 KB).</p>
-                    <p>&gt; [Status] Pipeline exit code 0 — Completed.</p>
-                  </div>
-                )}
-              </div>
-            )}
-
-            <div className="flex items-center justify-between pt-2 border-t border-[var(--clay-line)]">
-              {selectedJob.status === "Failed" ? (
-                <button
-                  type="button"
-                  onClick={() => handleRetryJob(selectedJob)}
-                  className="px-3 py-1.5 bg-black text-white text-xs font-semibold rounded-lg flex items-center gap-1.5 shadow-[var(--clay-elev-ink-1)]"
-                >
-                  <RotateCcw className="w-3 h-3" />
-                  <span>Re-run Job</span>
-                </button>
-              ) : <div />}
-
-              <button
-                type="button"
-                onClick={() => setSelectedJob(null)}
-                className="px-4 py-1.5 bg-[var(--clay-sunken)] hover:bg-[var(--clay-sunken-deep)] text-foreground text-xs font-semibold rounded-lg"
-              >
-                Close
-              </button>
-            </div>
-          </div>
+          )}
         </div>
       )}
-    </AdminShell>
+
+      {/* Prompt */}
+      <div className="space-y-1.5">
+        <p className="text-[11px] font-semibold text-foreground">Prompt</p>
+        <pre className="text-[11px] text-muted-foreground leading-relaxed whitespace-pre-wrap max-h-40 overflow-y-auto bg-[var(--clay-sunken)] p-3 rounded-xl border border-[var(--clay-line)]">
+          {detail.prompt || "No prompt was recorded for this run."}
+        </pre>
+      </div>
+
+      {actionError && (
+        <div className="flex items-start gap-2 px-3 py-2 rounded-lg bg-[var(--clay-sunken)] border border-warning/30 text-[11px] text-warning-subtle-foreground leading-relaxed">
+          <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+          <span>{actionError}</span>
+        </div>
+      )}
+
+      {/* Actions */}
+      <div className="pt-3 border-t border-[var(--clay-line)] space-y-3">
+        {confirmCancel ? (
+          <div className="space-y-2">
+            <p className="text-[11px] font-semibold text-foreground">
+              Cancel this run?
+            </p>
+            <p className="text-[11px] text-muted-foreground leading-relaxed">
+              The run is marked cancelled and its credit hold is released. A provider request
+              already in flight cannot be recalled, and the run keeps none of its output.
+            </p>
+            <input
+              type="text"
+              value={cancelReason}
+              onChange={(event) => onCancelReasonChange(event.target.value)}
+              maxLength={500}
+              placeholder="Reason (optional, recorded in the audit log)"
+              className="w-full px-3 py-2 text-xs bg-[var(--clay-sunken)] border border-[var(--clay-line)] rounded-xl focus:outline-none focus:bg-card shadow-[var(--clay-well-1)]"
+            />
+            <div className="flex items-center justify-end gap-2">
+              <SecondaryButton onClick={onDismissCancel} disabled={pending}>
+                Keep running
+              </SecondaryButton>
+              <PrimaryButton onClick={onConfirmCancel} disabled={pending}>
+                {pending ? "Cancelling…" : "Confirm cancel"}
+              </PrimaryButton>
+            </div>
+          </div>
+        ) : (
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            {showRetry && (
+              <SecondaryButton
+                icon={<RotateCcw className="w-3.5 h-3.5" />}
+                onClick={onRetry}
+                disabled={pending}
+              >
+                {pending ? "Re-queueing…" : "Retry run"}
+              </SecondaryButton>
+            )}
+            {showCancel && (
+              <SecondaryButton
+                icon={<Ban className="w-3.5 h-3.5" />}
+                onClick={onRequestCancel}
+                disabled={pending}
+              >
+                Cancel run
+              </SecondaryButton>
+            )}
+            {!showRetry && !showCancel && (
+              <p className="text-[11px] text-muted-foreground flex items-center gap-1.5">
+                <Timer className="w-3.5 h-3.5" />
+                This run is terminal and has no available action.
+              </p>
+            )}
+          </div>
+        )}
+
+        {showRetry && (
+          <p className="text-[10px] text-muted-foreground leading-relaxed">
+            Retry re-queues the run for the durable worker. It does not start immediately, and a
+            credit-enforced project cannot be retried from here — the owner must resume it so the
+            credit hold comes from their own balance.
+          </p>
+        )}
+      </div>
+    </div>
   );
 }

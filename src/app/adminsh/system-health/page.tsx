@@ -1,321 +1,260 @@
 "use client";
 
-import React, { useState } from "react";
+import React from "react";
 import {
   Activity,
-  CheckCircle2,
   AlertTriangle,
+  CheckCircle2,
   Clock,
-  Server,
-  Database,
-  Cpu,
-  Globe,
-  HardDrive,
+  HelpCircle,
   RefreshCw,
-  Sparkles,
-  ShieldCheck,
-  Zap,
-  Info,
-  X,
-  Radio,
+  ShieldQuestion,
+  Slash,
+  XCircle,
 } from "lucide-react";
-import { toast } from "sonner";
+
+import {
+  formatAge,
+  overallServiceState,
+  serviceStateLabel,
+  type AdminHealthPayload,
+  type AdminServiceCheck,
+  type AdminServiceState,
+} from "@/lib/admin/console";
 import { AdminShell } from "../components/AdminShell";
-import { MOCK_SYSTEM_HEALTH, MOCK_INCIDENTS_LIST } from "../components/mockData";
-import { SystemServiceStatus, IncidentRecord } from "../components/types";
+import { useSystemHealth } from "../components/useAdminConsoleData";
+import {
+  Badge,
+  ErrorBlock,
+  LoadingBlock,
+  SecondaryButton,
+  SectionCard,
+  ServiceStateBadge,
+  StatCard,
+  UnavailableNote,
+  formatTimestamp,
+} from "../components/console-ui";
 
-export default function SystemHealthAdminPage() {
-  const [services, setServices] = useState<SystemServiceStatus[]>(MOCK_SYSTEM_HEALTH);
-  const [incidents] = useState<IncidentRecord[]>(MOCK_INCIDENTS_LIST);
-  const [selectedIncident, setSelectedIncident] = useState<IncidentRecord | null>(null);
+/**
+ * ═══ SYSTEM HEALTH ══════════════════════════════════════════════════════════
+ *
+ * Every row is one of three things and says which:
+ *
+ *   measured      a real call was made this request (database round-trip, queue
+ *                 read, worker credential resolution)
+ *   configured    the dependency exists but has no safe probe, so its state is
+ *                 `unknown` — never `operational`
+ *   not configured the dependency is absent
+ *
+ * ⚠️ THE OLD PAGE SHOWED INVENTED UPTIME. "99.98%", "p99 142ms" and a list of
+ * past incidents were all fabricated. Mavly records no availability samples and
+ * no incident history, so there is nothing to show: the uptime card says "not
+ * recorded" and the incident panel is gone rather than emptied, because an empty
+ * incident list would itself imply "no incidents happened".
+ *
+ * ⚠️ A HEALTHY DATABASE DOES NOT MAKE THE PLATFORM HEALTHY. The AI provider, the
+ * worker process, DNS and payments are separate dependencies; none of them
+ * inherits the database's state.
+ */
 
-  const handlePingAll = () => {
-    /**
-     * ⚠️ THIS NO LONGER FABRICATES A RESULT.
-     *
-     * It used to `setTimeout` 600 ms and then claim "All 6 core services
-     * responded with HTTP 200 OK within 38ms" — a measurement that was never
-     * taken. Nothing here contacts a service.
-     *
-     * The real, measured health checks live on the Overview page, which reads
-     * `public.admin_overview` and reports actual database latency. This page's
-     * service list is static reference data, so the button says that plainly.
-     */
-    toast.info("No live health probe is implemented on this page", {
-      description:
-        "No service was contacted, so no latency is reported. Measured checks are on the Overview page.",
-    });
-  };
+const STATE_ICON: Record<AdminServiceState, React.ReactNode> = {
+  operational: <CheckCircle2 className="w-3.5 h-3.5 text-success" />,
+  degraded: <AlertTriangle className="w-3.5 h-3.5 text-warning" />,
+  down: <XCircle className="w-3.5 h-3.5 text-foreground" />,
+  unknown: <HelpCircle className="w-3.5 h-3.5 text-muted-foreground" />,
+  not_configured: <Slash className="w-3.5 h-3.5 text-muted-foreground" />,
+};
 
-  const getServiceIcon = (name: string) => {
-    if (name.includes("Application")) return <Server className="w-4 h-4 text-foreground" />;
-    if (name.includes("Database")) return <Database className="w-4 h-4 text-foreground" />;
-    if (name.includes("Worker")) return <Cpu className="w-4 h-4 text-foreground" />;
-    if (name.includes("Model") || name.includes("OpenRouter"))
-      return <Zap className="w-4 h-4 text-warning" />;
-    if (name.includes("Domain") || name.includes("DNS"))
-      return <Globe className="w-4 h-4 text-muted-foreground" />;
-    return <HardDrive className="w-4 h-4 text-muted-foreground" />;
-  };
+export default function SystemHealthPage() {
+  const { data, loading, error, refresh } = useSystemHealth();
 
-  const getStatusBadge = (status: SystemServiceStatus["status"]) => {
-    switch (status) {
-      case "Operational":
-        return (
-          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-medium bg-success-subtle text-success-subtle-foreground border border-success/25 font-mono">
-            <span className="w-1.5 h-1.5 rounded-full bg-success" />
-            Operational
-          </span>
-        );
-      case "Degraded":
-        return (
-          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-medium bg-warning-subtle text-warning-subtle-foreground border border-warning/25 font-mono">
-            <AlertTriangle className="w-3 h-3 text-warning" />
-            Degraded
-          </span>
-        );
-      case "Maintenance":
-        return (
-          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-medium bg-[var(--clay-sunken)] text-foreground border border-[var(--clay-line)] font-mono">
-            <Clock className="w-3 h-3 text-foreground" />
-            Maintenance
-          </span>
-        );
-    }
-  };
+  const services = data?.services ?? [];
+  const overall = overallServiceState(services);
+  const snapshot = data?.snapshot ?? null;
 
   return (
-    <AdminShell activeNav="System Health">
-      {/* 1. Global Platform Uptime Banner */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-5 rounded-2xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)]">
-        <div className="flex items-start sm:items-center gap-3.5">
-          <div className="w-10 h-10 rounded-xl bg-success-subtle text-success border border-success/25 flex items-center justify-center shrink-0">
-            <ShieldCheck className="w-5 h-5" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h2 className="text-sm font-semibold tracking-tight text-foreground">
-                All Core Services Fully Operational
-              </h2>
-              <span className="w-2 h-2 rounded-full bg-success animate-pulse" />
-            </div>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              99.98% composite availability recorded across the last 90 calendar days
+    <AdminShell activeNav="System Health" live>
+      {/* ── Overall banner ────────────────────────────────────────────────── */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-4 py-3 rounded-xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)]">
+        <div className="flex items-center gap-2.5 min-w-0">
+          {STATE_ICON[overall]}
+          <div className="min-w-0">
+            <p className="text-sm font-bold text-foreground tracking-tight">
+              {data ? serviceStateLabel(overall) : "Reading service state"}
+            </p>
+            <p className="text-[11px] text-muted-foreground truncate">
+              {data
+                ? `Measured ${formatTimestamp(data.measuredAt)} · ${data.environment}${
+                    data.version ? ` · release ${data.version}` : ""
+                  }`
+                : "Contacting this deployment's services"}
             </p>
           </div>
         </div>
-
-        <button
-          onClick={handlePingAll}
-          className="self-start md:self-auto flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-foreground bg-[var(--clay-sunken)] hover:bg-[var(--clay-sunken)] border border-[var(--clay-line)] rounded-lg transition-colors shrink-0 shadow-[var(--clay-well-1)]"
+        <SecondaryButton
+          icon={<RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />}
+          onClick={refresh}
+          disabled={loading}
         >
-          <RefreshCw className="w-3.5 h-3.5" />
-          <span>Probe All Services</span>
-        </button>
+          Re-check now
+        </SecondaryButton>
       </div>
 
-      {/* 2. Key Diagnostic Metrics */}
-      <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
-        <div className="p-4 rounded-xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)]">
-          <div className="flex items-center justify-between text-xs text-muted-foreground font-medium">
-            <span>Avg Global Latency</span>
-            <Activity className="w-3.5 h-3.5 text-muted-foreground" />
-          </div>
-          <h3 className="text-xl font-bold tracking-tight text-foreground font-mono mt-1">24ms</h3>
-          <p className="text-[11px] text-success font-medium mt-1">Edge routed via Cloudflare</p>
-        </div>
+      {error && !data && <ErrorBlock message={error} onRetry={refresh} />}
 
-        <div className="p-4 rounded-xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)]">
-          <div className="flex items-center justify-between text-xs text-muted-foreground font-medium">
-            <span>Worker Pool</span>
-            <Cpu className="w-3.5 h-3.5 text-muted-foreground" />
-          </div>
-          <h3 className="text-xl font-bold tracking-tight text-foreground font-mono mt-1">4 / 4 Online</h3>
-          <p className="text-[11px] text-muted-foreground mt-1">Background agent concurrency</p>
-        </div>
-
-        <div className="p-4 rounded-xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)]">
-          <div className="flex items-center justify-between text-xs text-muted-foreground font-medium">
-            <span>DB Connection Pool</span>
-            <Database className="w-3.5 h-3.5 text-muted-foreground" />
-          </div>
-          <h3 className="text-xl font-bold tracking-tight text-foreground font-mono mt-1">42 / 200</h3>
-          <p className="text-[11px] text-muted-foreground mt-1">79% headroom buffer</p>
-        </div>
-
-        <div className="p-4 rounded-xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)]">
-          <div className="flex items-center justify-between text-xs text-muted-foreground font-medium">
-            <span>Static Cache Ratio</span>
-            <Sparkles className="w-3.5 h-3.5 text-success" />
-          </div>
-          <h3 className="text-xl font-bold tracking-tight text-success font-mono mt-1">98.4%</h3>
-          <p className="text-[11px] text-muted-foreground mt-1">Vercel edge preview hits</p>
-        </div>
+      {/* ── Measured counters ─────────────────────────────────────────────── */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
+        <StatCard
+          label="Queue backlog"
+          value={snapshot ? snapshot.queued.toLocaleString() : null}
+          hint={
+            snapshot
+              ? snapshot.oldestQueuedAt
+                ? `Oldest enqueued ${formatAge(snapshot.oldestQueuedAt)}`
+                : "Nothing waiting"
+              : "Database snapshot unavailable"
+          }
+          icon={<Clock className="w-3.5 h-3.5 text-muted-foreground" />}
+          unavailable={!snapshot}
+        />
+        <StatCard
+          label="Running now"
+          value={snapshot ? snapshot.running.toLocaleString() : null}
+          hint={snapshot ? `${snapshot.staleLeases} stale lease(s)` : "Database snapshot unavailable"}
+          icon={<Activity className="w-3.5 h-3.5 text-muted-foreground" />}
+          tone={snapshot && snapshot.staleLeases > 0 ? "warning" : "neutral"}
+          unavailable={!snapshot}
+        />
+        <StatCard
+          label="Runs (24h)"
+          value={snapshot ? snapshot.runsLast24h.toLocaleString() : null}
+          hint={
+            snapshot
+              ? `${snapshot.failuresLast24h} failed or interrupted`
+              : "Database snapshot unavailable"
+          }
+          icon={<Activity className="w-3.5 h-3.5 text-muted-foreground" />}
+          unavailable={!snapshot}
+        />
+        <StatCard
+          label="Historical uptime"
+          value={null}
+          hint="Not recorded. Mavly stores no availability samples, so no percentage exists."
+          icon={<ShieldQuestion className="w-3.5 h-3.5 text-muted-foreground" />}
+          unavailable
+        />
       </div>
 
-      {/* 3. Detailed Services Status Grid */}
-      <div className="space-y-3">
-        <div className="flex items-center justify-between text-xs">
-          <h3 className="text-sm font-semibold tracking-tight text-foreground">Service Infrastructure Topology</h3>
-          <span className="text-muted-foreground font-mono">6 of 6 Healthy</span>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
-          {services.map((svc) => (
-            <div
-              key={svc.name}
-              className="p-5 rounded-2xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)] hover:border-[var(--clay-line-strong)] transition-all flex flex-col justify-between space-y-4"
-            >
-              <div>
-                <div className="flex items-start justify-between gap-2">
-                  <div className="p-2 rounded-lg bg-[var(--clay-sunken)] border border-[var(--clay-line)] shadow-[var(--clay-well-1)]">
-                    {getServiceIcon(svc.name)}
-                  </div>
-                  {getStatusBadge(svc.status)}
-                </div>
-
-                <h4 className="text-sm font-semibold text-foreground mt-3">{svc.name}</h4>
-                <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
-                  {svc.description}
-                </p>
-              </div>
-
-              <div className="pt-3 border-t border-[var(--clay-line)] flex items-center justify-between text-xs">
-                <div>
-                  <span className="text-muted-foreground block text-[10px] uppercase font-semibold">
-                    Uptime
-                  </span>
-                  <span className="font-mono font-bold text-foreground">{svc.uptime}</span>
-                </div>
-
-                <div>
-                  <span className="text-muted-foreground block text-[10px] uppercase font-semibold">
-                    Response
-                  </span>
-                  <span className="font-mono font-bold text-success">{svc.latency}</span>
-                </div>
-
-                <button
-                  onClick={() => {
-                    toast.info(`Pinged ${svc.name}`, {
-                      description: `Response time: ${svc.latency} (HTTP 200)`,
-                    });
-                  }}
-                  className="px-2.5 py-1 text-[11px] font-medium text-foreground bg-[var(--clay-sunken)] hover:bg-[var(--clay-sunken-deep)] rounded-md transition-colors"
-                >
-                  Ping
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* 4. Recent Incident History */}
-      <div className="rounded-2xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)] overflow-hidden">
-        <div className="p-4 border-b border-[var(--clay-line)] flex items-center justify-between">
-          <div>
-            <h4 className="text-sm font-semibold tracking-tight text-foreground">Past Postmortems & Incident History</h4>
-            <p className="text-xs text-muted-foreground">Zero active alerts or degradations currently ongoing</p>
+      {/* ── Service checks ────────────────────────────────────────────────── */}
+      <SectionCard
+        title="Service checks"
+        description="What this deployment could actually observe. A row marked 'configuration only' was not probed."
+      >
+        {loading && !data ? (
+          <LoadingBlock label="Checking services" />
+        ) : services.length === 0 ? (
+          <ErrorBlock
+            message="No service checks were returned."
+            onRetry={refresh}
+            title="Nothing to report"
+          />
+        ) : (
+          <div className="space-y-2">
+            {services.map((service) => (
+              <ServiceRow key={service.id} service={service} />
+            ))}
           </div>
-          <span className="text-[11px] font-mono text-success bg-success-subtle border border-success/25 px-2 py-0.5 rounded">
-            All Resolved
-          </span>
-        </div>
+        )}
+      </SectionCard>
 
-        <div className="divide-y divide-[var(--clay-line)]">
-          {incidents.map((inc) => (
-            <div
-              key={inc.id}
-              className="p-4 hover:bg-[var(--clay-sunken)] transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs"
-            >
-              <div className="space-y-1">
-                <div className="flex items-center gap-2">
-                  <span className="font-mono text-muted-foreground text-[11px]">{inc.id}</span>
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-success-subtle text-success-subtle-foreground border border-success/25 font-mono">
-                    <CheckCircle2 className="w-3 h-3 text-success" />
-                    {inc.status}
-                  </span>
-                  <span className="font-semibold text-foreground">{inc.title}</span>
-                </div>
-                <p className="text-muted-foreground text-[11px]">
-                  Impact: <strong className="text-foreground">{inc.impact}</strong> · Duration:{" "}
-                  {inc.duration} · Component: {inc.service}
-                </p>
-              </div>
-
-              <div className="flex items-center gap-3 self-end sm:self-center shrink-0">
-                <span className="text-muted-foreground text-[11px] whitespace-nowrap">{inc.timestamp}</span>
-                <button
-                  onClick={() => setSelectedIncident(inc)}
-                  className="px-2.5 py-1 text-[11px] font-medium text-foreground bg-[var(--clay-sunken)] hover:bg-[var(--clay-sunken-deep)] rounded-md transition-colors"
-                >
-                  Postmortem
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Incident Detail Modal */}
-      {selectedIncident && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[var(--clay-scrim)] backdrop-blur-[3px] animate-in fade-in">
-          <div className="bg-card rounded-2xl max-w-lg w-full border border-[var(--clay-line)] shadow-[var(--clay-float)] p-6 relative space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-[var(--clay-line)]">
-              <div className="flex items-center gap-2">
-                <Info className="w-4 h-4 text-foreground" />
-                <h3 className="text-sm font-bold text-foreground">Incident Postmortem {selectedIncident.id}</h3>
-              </div>
-              <button
-                onClick={() => setSelectedIncident(null)}
-                className="p-1 rounded-lg text-muted-foreground hover:text-black"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="space-y-3 bg-[var(--clay-sunken)] p-4 rounded-xl border border-[var(--clay-line)] text-xs shadow-[var(--clay-well-1)]">
-              <div>
-                <span className="text-muted-foreground block text-[10px] uppercase font-bold">Event Summary</span>
-                <p className="font-bold text-foreground mt-0.5">{selectedIncident.title}</p>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2 pt-2 border-t border-[var(--clay-line)]">
-                <div>
-                  <span className="text-muted-foreground block text-[10px] uppercase font-bold">Incident Time</span>
-                  <span className="text-foreground">{selectedIncident.timestamp}</span>
-                </div>
-                <div>
-                  <span className="text-muted-foreground block text-[10px] uppercase font-bold">Duration</span>
-                  <span className="text-foreground">{selectedIncident.duration}</span>
-                </div>
-              </div>
-
-              <div className="pt-2 border-t border-[var(--clay-line)]">
-                <span className="text-muted-foreground block text-[10px] uppercase font-bold">Customer Impact</span>
-                <p className="text-foreground mt-0.5">{selectedIncident.impact}</p>
-              </div>
-
-              <div className="pt-2 border-t border-[var(--clay-line)]">
-                <span className="text-muted-foreground block text-[10px] uppercase font-bold">Technical Root Cause & Fix</span>
-                <p className="text-foreground bg-card p-2.5 rounded-lg border border-[var(--clay-line)] mt-1 leading-relaxed shadow-[var(--clay-elev-1)]">
-                  {selectedIncident.details}
-                </p>
-              </div>
-            </div>
-
-            <div className="flex justify-end pt-2 border-t border-[var(--clay-line)]">
-              <button
-                onClick={() => setSelectedIncident(null)}
-                className="px-4 py-1.5 text-xs font-semibold text-foreground bg-[var(--clay-sunken)] hover:bg-[var(--clay-sunken-deep)] rounded-lg"
-              >
-                Close Report
-              </button>
-            </div>
+      {/* ── Worker timing ─────────────────────────────────────────────────── */}
+      {snapshot && (
+        <SectionCard
+          title="Worker timing"
+          description="Timestamps the database recorded. These describe work, not process liveness."
+        >
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+            <TimingCell
+              label="Last worker heartbeat"
+              value={snapshot.lastHeartbeatAt}
+              note="A worker writes a heartbeat while it holds a run. No heartbeat means no run has been claimed recently, not that the worker is down."
+            />
+            <TimingCell
+              label="Last completed run"
+              value={snapshot.lastCompletedAt}
+              note="The newest run that reached a completed stage."
+            />
+            <TimingCell
+              label="Last failure"
+              value={snapshot.lastFailureAt}
+              note="The newest run that ended failed or interrupted."
+            />
           </div>
-        </div>
+        </SectionCard>
+      )}
+
+      {/* ── Honest limits ─────────────────────────────────────────────────── */}
+      <UnavailableNote>
+        This page reports what the platform can observe from inside itself. It does not monitor the
+        worker process, DNS, TLS or the payment gateway, and it keeps no history — so it cannot tell
+        you whether a service was healthy an hour ago, and it will not claim an uptime percentage it
+        has no samples for. Provider and payment rows are configuration checks, not live probes: a
+        paid generation request is not a health check.
+      </UnavailableNote>
+
+      {error && data && (
+        <p className="text-[11px] text-warning-subtle-foreground">
+          Showing the last successful check. The newest refresh failed: {error}
+        </p>
       )}
     </AdminShell>
+  );
+}
+
+function ServiceRow({ service }: { service: AdminServiceCheck }) {
+  return (
+    <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2 px-3 py-2.5 rounded-lg bg-[var(--clay-sunken)] border border-[var(--clay-line)]">
+      <div className="flex items-start gap-2.5 min-w-0">
+        <span className="mt-0.5 shrink-0">{STATE_ICON[service.state]}</span>
+        <div className="min-w-0">
+          <p className="text-xs font-semibold text-foreground">{service.label}</p>
+          <p className="text-[11px] text-muted-foreground leading-relaxed">{service.description}</p>
+          {service.detail && (
+            <p className="text-[11px] text-muted-foreground leading-relaxed mt-1 font-mono break-words">
+              {service.detail}
+            </p>
+          )}
+        </div>
+      </div>
+      <div className="flex items-center gap-2 shrink-0 sm:flex-col sm:items-end">
+        <ServiceStateBadge state={service.state} label={serviceStateLabel(service.state)} />
+        <Badge tone={service.measured ? "neutral" : "warning"}>
+          {service.measured ? "measured" : "configuration only"}
+        </Badge>
+        {service.latencyMs !== null && (
+          <span className="text-[10px] font-mono text-muted-foreground">
+            {service.latencyMs}ms
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function TimingCell({
+  label,
+  value,
+  note,
+}: {
+  label: string;
+  value: string | null;
+  note: string;
+}) {
+  return (
+    <div className="p-3 rounded-lg bg-[var(--clay-sunken)] border border-[var(--clay-line)]">
+      <p className="text-[11px] font-semibold text-foreground">{label}</p>
+      <p className="font-mono text-xs text-foreground mt-1">{formatAge(value)}</p>
+      <p className="text-[10px] text-muted-foreground mt-1 leading-relaxed">{note}</p>
+    </div>
   );
 }

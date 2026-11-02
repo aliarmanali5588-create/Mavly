@@ -2,505 +2,666 @@
 
 import React, { useState } from "react";
 import {
-  Megaphone,
-  PlusCircle,
-  Search,
-  Filter,
-  Info,
+  Archive,
+  Bell,
   CheckCircle2,
-  AlertTriangle,
-  Wrench,
-  Calendar,
   Eye,
-  Trash2,
-  Edit3,
-  X,
-  Sparkles,
+  Megaphone,
+  Pencil,
+  PlusCircle,
+  RefreshCw,
   Send,
-  Users,
-  Clock,
-  Radio,
+  Trash2,
+  TriangleAlert,
+  Wrench,
 } from "lucide-react";
 import { toast } from "sonner";
+
+import {
+  ANNOUNCEMENT_KINDS,
+  announcementKindLabel,
+  announcementStatusLabel,
+  isAnnouncementLive,
+  type AdminAnnouncementRow,
+  type AnnouncementKind,
+  type AnnouncementStatus,
+} from "@/lib/admin/console";
 import { AdminShell } from "../components/AdminShell";
-import { MOCK_ANNOUNCEMENTS_LIST } from "../components/mockData";
-import { AnnouncementRecord } from "../components/types";
+import {
+  useAdminMutation,
+  useAnnouncements,
+  useDebouncedValue,
+} from "../components/useAdminConsoleData";
+import {
+  Badge,
+  DetailRow,
+  EmptyBlock,
+  ErrorBlock,
+  LoadingBlock,
+  Modal,
+  Pagination,
+  PrimaryButton,
+  SearchField,
+  SecondaryButton,
+  SectionCard,
+  SegmentedFilter,
+  StatCard,
+  UnavailableNote,
+  formatTimestamp,
+} from "../components/console-ui";
 
-export default function AnnouncementsAdminPage() {
-  const [announcements, setAnnouncements] = useState<AnnouncementRecord[]>(
-    MOCK_ANNOUNCEMENTS_LIST
-  );
-  const [searchQuery, setSearchQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState("All");
-  const [typeFilter, setTypeFilter] = useState("All");
+/**
+ * ═══ ANNOUNCEMENTS ══════════════════════════════════════════════════════════
+ *
+ * Every announcement here is a row in `public.admin_announcements`, written
+ * through `admin_announcement_save`. The previous page rendered a hardcoded
+ * array and its create form pushed into local state, so nothing it "published"
+ * existed anywhere.
+ *
+ * ⚠️ PUBLISHED IS NOT DELIVERED. Publishing makes a row eligible for
+ * `active_announcements()`. Mavly has no push, email or in-app banner consumer
+ * wired to that feed, so the page reports publication state and says plainly
+ * that no delivery channel exists. "Live" here means "published and inside its
+ * visibility window", which is a statement about the row, not about a user
+ * having seen it.
+ *
+ * ⚠️ DELETE IS REFUSED FOR A PUBLISHED ROW. It must be unpublished or archived
+ * first, so removing something users can currently see is always two deliberate
+ * steps with their own audit entries.
+ */
 
-  // Create Modal
-  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
-  const [newTitle, setNewTitle] = useState("");
-  const [newContent, setNewContent] = useState("");
-  const [newType, setNewType] = useState<AnnouncementRecord["type"]>("Information");
-  const [newTargetPlan, setNewTargetPlan] = useState("All Plans");
-  const [newDismissible, setNewDismissible] = useState(true);
+const PAGE_SIZE = 20;
 
-  // Preview target
-  const [previewItem, setPreviewItem] = useState<AnnouncementRecord | null>(
-    MOCK_ANNOUNCEMENTS_LIST[0] || null
-  );
+const KIND_ICON: Record<AnnouncementKind, React.ReactNode> = {
+  information: <Bell className="w-3 h-3" />,
+  success: <CheckCircle2 className="w-3 h-3" />,
+  warning: <TriangleAlert className="w-3 h-3" />,
+  maintenance: <Wrench className="w-3 h-3" />,
+};
 
-  const filtered = announcements.filter((item) => {
-    const matchesSearch =
-      item.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.content.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.targetPlan.toLowerCase().includes(searchQuery.toLowerCase());
+const KIND_TONE: Record<AnnouncementKind, "neutral" | "positive" | "warning" | "danger"> = {
+  information: "neutral",
+  success: "positive",
+  warning: "warning",
+  maintenance: "neutral",
+};
 
-    const matchesStatus = statusFilter === "All" || item.status === statusFilter;
-    const matchesType = typeFilter === "All" || item.type === typeFilter;
+const STATUS_TONE: Record<AnnouncementStatus, "positive" | "neutral" | "warning"> = {
+  draft: "neutral",
+  published: "positive",
+  archived: "warning",
+};
 
-    return matchesSearch && matchesStatus && matchesType;
+export default function AnnouncementsPage() {
+  const [status, setStatus] = useState("all");
+  const [kind, setKind] = useState("all");
+  const [search, setSearch] = useState("");
+  const [page, setPage] = useState(0);
+  const debouncedSearch = useDebouncedValue(search, 300);
+
+  const { data, loading, error, refresh } = useAnnouncements({
+    status,
+    kind,
+    search: debouncedSearch,
+    page,
+    pageSize: PAGE_SIZE,
   });
 
-  const handleCreateAnnouncement = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newTitle.trim() || !newContent.trim()) {
-      toast.error("Please enter both title and announcement content.");
-      return;
-    }
+  const [editing, setEditing] = useState<AdminAnnouncementRow | null>(null);
+  const [creating, setCreating] = useState(false);
+  const [previewing, setPreviewing] = useState<AdminAnnouncementRow | null>(null);
 
-    const created: AnnouncementRecord = {
-      id: `ANN-${Math.floor(200 + Math.random() * 800)}`,
-      title: newTitle,
-      content: newContent,
-      type: newType,
-      status: "Published",
-      targetPlan: newTargetPlan,
-      startDate: "Today",
-      expiryDate: "In 14 days",
-      dismissible: newDismissible,
-    };
-
-    setAnnouncements((prev) => [created, ...prev]);
-    setPreviewItem(created);
-    setIsCreateModalOpen(false);
-    setNewTitle("");
-    setNewContent("");
-
-    toast.success(`Announcement broadcast published!`, {
-      description: `"${created.title}" is now active for users.`,
-    });
-  };
-
-  const handleDelete = (id: string, title: string) => {
-    setAnnouncements((prev) => prev.filter((a) => a.id !== id));
-    if (previewItem?.id === id) {
-      setPreviewItem(null);
-    }
-    toast.success(`Deleted broadcast: "${title}"`);
-  };
-
-  const handleToggleStatus = (id: string) => {
-    setAnnouncements((prev) =>
-      prev.map((a) => {
-        if (a.id === id) {
-          const nextStatus = a.status === "Published" ? "Draft" : "Published";
-          toast.info(`Updated status to ${nextStatus}`, {
-            description: `"${a.title}" is now ${nextStatus}.`,
-          });
-          return { ...a, status: nextStatus };
-        }
-        return a;
-      })
-    );
-  };
-
-  const getTypeBadge = (type: AnnouncementRecord["type"]) => {
-    switch (type) {
-      case "Information":
-        return (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-[var(--clay-sunken)] text-foreground border border-[var(--clay-line)] font-mono">
-            <Info className="w-3 h-3 text-foreground" />
-            Information
-          </span>
-        );
-      case "Success":
-        return (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-success-subtle text-success-subtle-foreground border border-success/25 font-mono">
-            <CheckCircle2 className="w-3 h-3 text-success" />
-            Success
-          </span>
-        );
-      case "Warning":
-        return (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-warning-subtle text-warning-subtle-foreground border border-warning/25 font-mono">
-            <AlertTriangle className="w-3 h-3 text-warning" />
-            Warning
-          </span>
-        );
-      case "Maintenance":
-        return (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-[var(--clay-sunken)] text-foreground border border-[var(--clay-line)] font-mono">
-            <Wrench className="w-3 h-3 text-foreground" />
-            Maintenance
-          </span>
-        );
-    }
-  };
-
-  const getStatusBadge = (status: AnnouncementRecord["status"]) => {
-    switch (status) {
-      case "Published":
-        return (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-success-subtle text-success-subtle-foreground border border-success/25 font-mono">
-            <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
-            Published
-          </span>
-        );
-      case "Scheduled":
-        return (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-[var(--clay-sunken)] text-foreground border border-[var(--clay-line)] font-mono">
-            <Clock className="w-3 h-3" />
-            Scheduled
-          </span>
-        );
-      case "Draft":
-        return (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-[var(--clay-sunken)] text-foreground border border-[var(--clay-line)] font-mono">
-            Draft
-          </span>
-        );
-      case "Expired":
-        return (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-destructive-subtle text-destructive-subtle-foreground border border-destructive/25 font-mono">
-            Expired
-          </span>
-        );
-    }
-  };
+  const rows = data?.rows ?? [];
+  const counts = data?.counts ?? null;
 
   return (
-    <AdminShell activeNav="Announcements">
-      {/* 1. Header Metrics */}
-      <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
-        <div className="p-4 rounded-xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)]">
-          <div className="flex items-center justify-between text-xs text-muted-foreground font-medium">
-            <span>Total Broadcasts</span>
-            <Megaphone className="w-3.5 h-3.5 text-muted-foreground" />
-          </div>
-          <h3 className="text-xl font-bold tracking-tight text-foreground font-mono mt-1">{announcements.length}</h3>
-          <p className="text-[11px] text-muted-foreground mt-1">Managed across all channels</p>
-        </div>
-
-        <div className="p-4 rounded-xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)]">
-          <div className="flex items-center justify-between text-xs text-muted-foreground font-medium">
-            <span>Live in Workspaces</span>
-            <Radio className="w-3.5 h-3.5 text-success" />
-          </div>
-          <h3 className="text-xl font-bold tracking-tight text-success font-mono mt-1">
-            {announcements.filter((a) => a.status === "Published").length}
-          </h3>
-          <p className="text-[11px] text-muted-foreground mt-1">Active customer banners</p>
-        </div>
-
-        <div className="p-4 rounded-xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)]">
-          <div className="flex items-center justify-between text-xs text-muted-foreground font-medium">
-            <span>Scheduled</span>
-            <Clock className="w-3.5 h-3.5 text-muted-foreground" />
-          </div>
-          <h3 className="text-xl font-bold tracking-tight text-foreground font-mono mt-1">
-            {announcements.filter((a) => a.status === "Scheduled").length}
-          </h3>
-          <p className="text-[11px] text-muted-foreground mt-1">Upcoming maintenance windows</p>
-        </div>
-
-        <div className="p-4 rounded-xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)]">
-          <div className="flex items-center justify-between text-xs text-muted-foreground font-medium">
-            <span>Drafts</span>
-            <Edit3 className="w-3.5 h-3.5 text-muted-foreground" />
-          </div>
-          <h3 className="text-xl font-bold tracking-tight text-foreground font-mono mt-1">
-            {announcements.filter((a) => a.status === "Draft").length}
-          </h3>
-          <p className="text-[11px] text-muted-foreground mt-1">Pending copy review</p>
-        </div>
+    <AdminShell activeNav="Announcements" live>
+      {/* ── Counts ────────────────────────────────────────────────────────── */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
+        <StatCard
+          label="Live now"
+          value={counts ? counts.live.toLocaleString() : null}
+          hint="Published and inside its visibility window"
+          icon={<Megaphone className="w-3.5 h-3.5 text-success" />}
+          tone="positive"
+          unavailable={!counts}
+        />
+        <StatCard
+          label="Published"
+          value={counts ? counts.published.toLocaleString() : null}
+          hint="Eligible for the app feed"
+          icon={<Send className="w-3.5 h-3.5 text-muted-foreground" />}
+          unavailable={!counts}
+        />
+        <StatCard
+          label="Drafts"
+          value={counts ? counts.draft.toLocaleString() : null}
+          hint="Not visible to anyone"
+          icon={<Pencil className="w-3.5 h-3.5 text-muted-foreground" />}
+          unavailable={!counts}
+        />
+        <StatCard
+          label="Archived"
+          value={counts ? counts.archived.toLocaleString() : null}
+          hint="Retained, never served"
+          icon={<Archive className="w-3.5 h-3.5 text-muted-foreground" />}
+          unavailable={!counts}
+        />
       </div>
 
-      {/* 2. End-User Workspace Live Banner Simulator */}
-      {previewItem && (
-        <div className="p-5 rounded-2xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)] space-y-3">
-          <div className="flex items-center justify-between text-xs">
-            <div className="flex items-center gap-2">
-              <Eye className="w-4 h-4 text-muted-foreground" />
-              <h4 className="font-semibold text-foreground uppercase tracking-wider text-[11px]">
-                End-User Workspace Banner Simulator
-              </h4>
-            </div>
-            <span className="font-mono text-[11px] text-muted-foreground">
-              Target Audience: {previewItem.targetPlan}
-            </span>
-          </div>
+      <UnavailableNote>
+        Publishing makes an announcement eligible for the app feed, but Mavly has no push, email or
+        in-app banner consumer wired to that feed yet. A published announcement is available to
+        whatever reads the feed; it is not delivered to anyone by this action.
+      </UnavailableNote>
 
-          <div
-            className={`p-3.5 rounded-xl border flex items-start justify-between gap-3 text-xs ${
-              previewItem.type === "Information"
-                ? "bg-[var(--clay-sunken)] border-[var(--clay-line)] text-foreground"
-                : previewItem.type === "Success"
-                ? "bg-success-subtle border-success/25 text-success-subtle-foreground"
-                : previewItem.type === "Warning"
-                ? "bg-warning-subtle border-warning/25 text-warning-subtle-foreground"
-                : "bg-[var(--clay-sunken)] border-[var(--clay-line)] text-foreground"
-            }`}
-          >
-            <div className="flex items-start gap-2.5">
-              <div className="mt-0.5">
-                {previewItem.type === "Information" && <Info className="w-4 h-4 text-foreground" />}
-                {previewItem.type === "Success" && <CheckCircle2 className="w-4 h-4 text-success" />}
-                {previewItem.type === "Warning" && <AlertTriangle className="w-4 h-4 text-warning" />}
-                {previewItem.type === "Maintenance" && <Wrench className="w-4 h-4 text-foreground" />}
-              </div>
-              <div>
-                <p className="font-semibold text-foreground">{previewItem.title}</p>
-                <p className="text-foreground mt-0.5 leading-relaxed">{previewItem.content}</p>
-              </div>
-            </div>
-
-            {previewItem.dismissible && (
-              <span className="p-1 text-muted-foreground hover:text-black cursor-pointer font-bold">
-                ✕
-              </span>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* 3. Search, Filter & Action Bar */}
-      <div className="bg-card rounded-2xl p-5 sm:p-6 border border-[var(--clay-line)] shadow-[var(--clay-elev-1)] space-y-4">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pb-3 border-b border-[var(--clay-line)]">
-          {/* Segmented Filter */}
-          <div className="flex flex-wrap items-center gap-1 bg-[var(--clay-sunken)] p-0.5 rounded-lg border border-[var(--clay-line)] text-xs shadow-[var(--clay-well-1)]">
-            {["All", "Published", "Scheduled", "Draft", "Expired"].map((st) => (
-              <button
-                key={st}
-                type="button"
-                onClick={() => setStatusFilter(st)}
-                className={`px-3 py-1 rounded-md text-xs transition-all ${
-                  statusFilter === st
-                    ? "bg-card text-foreground shadow-[var(--clay-elev-1)] font-semibold"
-                    : "text-muted-foreground hover:text-foreground font-medium"
-                }`}
-              >
-                {st}
-              </button>
-            ))}
-          </div>
-
-          <div className="flex items-center gap-2">
-            <div className="relative w-full sm:w-60">
-              <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-              <input
-                type="text"
-                placeholder="Search announcements..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full h-8 pl-8 pr-3 text-xs rounded-lg bg-[var(--clay-sunken)] border border-[var(--clay-line)] text-foreground placeholder:text-muted-foreground focus:bg-card focus:outline-none focus:ring-1 focus:ring-black shadow-[var(--clay-well-1)]"
-              />
-            </div>
-
-            <button
-              onClick={() => setIsCreateModalOpen(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-primary hover:bg-[var(--clay-brand-hover)] rounded-lg transition-colors shadow-[var(--clay-elev-ink-1)]"
+      {/* ── List ──────────────────────────────────────────────────────────── */}
+      <SectionCard
+        title="Announcements"
+        description="Operator-authored broadcasts, stored in the database."
+        actions={
+          <>
+            <SecondaryButton
+              icon={<RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />}
+              onClick={refresh}
+              disabled={loading}
             >
-              <PlusCircle className="w-3.5 h-3.5" />
-              <span>New Announcement</span>
-            </button>
-          </div>
-        </div>
-
-        {/* 4. Announcements Grid */}
-        <div className="space-y-3">
-          {filtered.length === 0 ? (
-            <div className="py-8 text-center text-muted-foreground text-xs">
-              No announcements match your search criteria.
-            </div>
-          ) : (
-            filtered.map((item) => (
-              <div
-                key={item.id}
-                className="p-4 rounded-xl border border-[var(--clay-line)] bg-card shadow-[var(--clay-elev-1)] hover:border-[var(--clay-line-strong)] transition-[box-shadow,border-color] flex flex-col md:flex-row md:items-center justify-between gap-4"
+              Refresh
+            </SecondaryButton>
+            <PrimaryButton
+              icon={<PlusCircle className="w-3.5 h-3.5" />}
+              onClick={() => setCreating(true)}
+            >
+              New announcement
+            </PrimaryButton>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <SegmentedFilter
+                options={[
+                  { id: "all", label: "All" },
+                  { id: "draft", label: "Draft" },
+                  { id: "published", label: "Published" },
+                  { id: "archived", label: "Archived" },
+                ]}
+                value={status}
+                onChange={(next) => {
+                  setStatus(next);
+                  setPage(0);
+                }}
+              />
+              <select
+                value={kind}
+                onChange={(event) => {
+                  setKind(event.target.value);
+                  setPage(0);
+                }}
+                className="h-8 px-2.5 text-xs rounded-lg bg-[var(--clay-sunken)] border border-[var(--clay-line)] text-foreground focus:bg-card focus:outline-none focus:ring-1 focus:ring-black shadow-[var(--clay-well-1)]"
               >
-                <div className="space-y-1.5 flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-mono text-[11px] font-semibold text-muted-foreground">
-                      {item.id}
-                    </span>
-                    {getStatusBadge(item.status)}
-                    {getTypeBadge(item.type)}
-                    <span className="text-[11px] text-muted-foreground font-medium flex items-center gap-1 font-mono">
-                      <Users className="w-3 h-3 text-muted-foreground" />
-                      {item.targetPlan}
-                    </span>
-                  </div>
+                <option value="all">All types</option>
+                {ANNOUNCEMENT_KINDS.map((entry) => (
+                  <option key={entry} value={entry}>
+                    {announcementKindLabel(entry)}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <SearchField
+              value={search}
+              onChange={(value) => {
+                setSearch(value);
+                setPage(0);
+              }}
+              placeholder="Search title, body, audience…"
+            />
+          </div>
 
-                  <h3 className="text-sm font-semibold text-foreground">{item.title}</h3>
-                  <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed">
-                    {item.content}
-                  </p>
+          {loading && !data ? (
+            <LoadingBlock label="Reading announcements" />
+          ) : error && !data ? (
+            <ErrorBlock message={error} onRetry={refresh} />
+          ) : rows.length === 0 ? (
+            <EmptyBlock
+              title="No announcements match this view"
+              detail={
+                status === "all" && kind === "all" && debouncedSearch === ""
+                  ? "Nothing has been written yet. Create one to publish it to the app feed."
+                  : "Try a different filter or clear the search."
+              }
+            />
+          ) : (
+            <div className="space-y-2">
+              {rows.map((row) => (
+                <AnnouncementCard
+                  key={row.id}
+                  row={row}
+                  onPreview={() => setPreviewing(row)}
+                  onEdit={() => setEditing(row)}
+                  onChanged={refresh}
+                />
+              ))}
+            </div>
+          )}
 
-                  <div className="flex items-center gap-3 text-[11px] text-muted-foreground pt-0.5">
-                    <span className="flex items-center gap-1">
-                      <Calendar className="w-3 h-3" />
-                      Active: {item.startDate} – {item.expiryDate}
-                    </span>
-                    <span>·</span>
-                    <span>{item.dismissible ? "User Dismissible" : "Sticky Header"}</span>
-                  </div>
-                </div>
+          {data && (
+            <Pagination
+              page={page}
+              pageSize={PAGE_SIZE}
+              total={data.total}
+              onPageChange={setPage}
+              loading={loading}
+            />
+          )}
 
-                {/* Actions */}
-                <div className="flex items-center gap-2 self-end md:self-center shrink-0">
-                  <button
-                    onClick={() => setPreviewItem(item)}
-                    className="px-2.5 py-1 text-[11px] font-medium text-foreground bg-[var(--clay-sunken)] hover:bg-[var(--clay-sunken-deep)] rounded-md transition-colors"
-                  >
-                    Simulate
-                  </button>
-
-                  <button
-                    onClick={() => handleToggleStatus(item.id)}
-                    className={`px-2.5 py-1 text-[11px] font-medium rounded-md transition-colors ${
-                      item.status === "Published"
-                        ? "text-warning-subtle-foreground bg-warning-subtle hover:bg-warning-subtle border border-warning/25"
-                        : "text-success-subtle-foreground bg-success-subtle hover:bg-success-subtle border border-success/25"
-                    }`}
-                  >
-                    {item.status === "Published" ? "Unpublish" : "Publish"}
-                  </button>
-
-                  <button
-                    onClick={() => handleDelete(item.id, item.title)}
-                    className="p-1.5 text-muted-foreground hover:text-destructive transition-colors"
-                    title="Delete"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              </div>
-            ))
+          {error && data && (
+            <p className="text-[11px] text-warning-subtle-foreground">
+              Showing the last successful read. The newest refresh failed: {error}
+            </p>
           )}
         </div>
-      </div>
+      </SectionCard>
 
-      {/* Create Announcement Modal */}
-      {isCreateModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[var(--clay-scrim)] backdrop-blur-[3px] animate-in fade-in">
-          <div className="bg-card rounded-2xl max-w-lg w-full border border-[var(--clay-line)] shadow-[var(--clay-float)] p-6 relative space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-[var(--clay-line)]">
-              <div className="flex items-center gap-2">
-                <Megaphone className="w-4 h-4 text-foreground" />
-                <h3 className="text-sm font-bold text-foreground">Broadcast Announcement</h3>
-              </div>
-              <button
-                onClick={() => setIsCreateModalOpen(false)}
-                className="p-1 rounded-lg text-muted-foreground hover:text-black"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
+      {(creating || editing) && (
+        <AnnouncementForm
+          row={editing}
+          onClose={() => {
+            setCreating(false);
+            setEditing(null);
+          }}
+          onSaved={() => {
+            setCreating(false);
+            setEditing(null);
+            refresh();
+          }}
+        />
+      )}
 
-            <form onSubmit={handleCreateAnnouncement} className="space-y-3.5 text-xs">
-              <div>
-                <label className="block font-semibold text-foreground mb-1">
-                  Announcement Title
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. Major Platform Upgrade: DeepSeek V4.1 Ready"
-                  value={newTitle}
-                  onChange={(e) => setNewTitle(e.target.value)}
-                  className="w-full px-3 py-2 bg-[var(--clay-sunken)] border border-[var(--clay-line)] rounded-xl focus:outline-none focus:bg-card shadow-[var(--clay-well-1)]"
-                />
-              </div>
-
-              <div>
-                <label className="block font-semibold text-foreground mb-1">
-                  Content Message
-                </label>
-                <textarea
-                  rows={3}
-                  placeholder="Describe the upgrade, maintenance schedule, or notice..."
-                  value={newContent}
-                  onChange={(e) => setNewContent(e.target.value)}
-                  className="w-full px-3 py-2 bg-[var(--clay-sunken)] border border-[var(--clay-line)] rounded-xl focus:outline-none focus:bg-card leading-relaxed shadow-[var(--clay-well-1)]"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-semibold text-foreground mb-1">
-                    Banner Style
-                  </label>
-                  <select
-                    value={newType}
-                    onChange={(e) =>
-                      setNewType(e.target.value as AnnouncementRecord["type"])
-                    }
-                    className="w-full px-3 py-2 bg-[var(--clay-sunken)] border border-[var(--clay-line)] rounded-xl focus:outline-none focus:bg-card shadow-[var(--clay-well-1)]"
-                  >
-                    <option value="Information">Information (Blue)</option>
-                    <option value="Success">Success (Green)</option>
-                    <option value="Warning">Warning (Amber)</option>
-                    <option value="Maintenance">Maintenance (Purple)</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block font-semibold text-foreground mb-1">
-                    Target User Plan
-                  </label>
-                  <select
-                    value={newTargetPlan}
-                    onChange={(e) => setNewTargetPlan(e.target.value)}
-                    className="w-full px-3 py-2 bg-[var(--clay-sunken)] border border-[var(--clay-line)] rounded-xl focus:outline-none focus:bg-card shadow-[var(--clay-well-1)]"
-                  >
-                    <option value="All Plans">All Plans (Global)</option>
-                    <option value="Free Tier">Free Tier Only</option>
-                    <option value="Pro & Agency">Pro & Agency Only</option>
-                    <option value="Agency Tier">Agency Tier</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2 pt-1">
-                <input
-                  type="checkbox"
-                  id="dismissibleCheck"
-                  checked={newDismissible}
-                  onChange={(e) => setNewDismissible(e.target.checked)}
-                  className="rounded border-[var(--clay-line-strong)] text-black focus:ring-black"
-                />
-                <label htmlFor="dismissibleCheck" className="text-foreground font-medium">
-                  Allow users to dismiss banner with close icon
-                </label>
-              </div>
-
-              <div className="pt-2 flex items-center justify-end gap-2 border-t border-[var(--clay-line)]">
-                <button
-                  type="button"
-                  onClick={() => setIsCreateModalOpen(false)}
-                  className="px-3.5 py-1.5 text-xs font-medium text-foreground bg-[var(--clay-sunken)] hover:bg-[var(--clay-sunken-deep)] rounded-lg transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-1.5 text-xs font-semibold text-white bg-primary hover:bg-[var(--clay-brand-hover)] rounded-lg transition-colors flex items-center gap-1.5"
-                >
-                  <Send className="w-3.5 h-3.5" />
-                  <span>Publish Broadcast</span>
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+      {previewing && (
+        <AnnouncementPreview row={previewing} onClose={() => setPreviewing(null)} />
       )}
     </AdminShell>
   );
+}
+
+// ─────────────────────────────── card ───────────────────────────────────────
+
+function AnnouncementCard({
+  row,
+  onPreview,
+  onEdit,
+  onChanged,
+}: {
+  row: AdminAnnouncementRow;
+  onPreview: () => void;
+  onEdit: () => void;
+  onChanged: () => void;
+}) {
+  const mutation = useAdminMutation();
+  const live = isAnnouncementLive(row);
+
+  const save = async (nextStatus: AnnouncementStatus, message: string) => {
+    const result = await mutation.run<{ message: string }>("/api/adminsh/announcements/save", {
+      id: row.id,
+      title: row.title,
+      body: row.body,
+      kind: row.kind,
+      status: nextStatus,
+      targetPlan: row.targetPlan,
+      dismissible: row.dismissible,
+      startsAt: row.startsAt,
+      expiresAt: row.expiresAt,
+    });
+    if ("error" in result) {
+      toast.error(result.error);
+      return;
+    }
+    toast.success(message);
+    onChanged();
+  };
+
+  const remove = async () => {
+    const result = await mutation.run<{ status: string }>("/api/adminsh/announcements/save", {
+      id: row.id,
+      status: "__delete__",
+    });
+    if ("error" in result) {
+      toast.error(result.error);
+      return;
+    }
+    toast.success("Announcement deleted.");
+    onChanged();
+  };
+
+  return (
+    <div className="px-3 py-3 rounded-lg bg-[var(--clay-sunken)] border border-[var(--clay-line)] space-y-2">
+      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <Badge tone={KIND_TONE[row.kind]} icon={KIND_ICON[row.kind]}>
+              {announcementKindLabel(row.kind)}
+            </Badge>
+            <Badge tone={STATUS_TONE[row.status]}>{announcementStatusLabel(row.status)}</Badge>
+            {live && <Badge tone="positive">live now</Badge>}
+            {row.status === "published" && !live && <Badge tone="warning">outside window</Badge>}
+            <Badge tone="neutral">{row.targetPlan}</Badge>
+          </div>
+          <p className="text-xs font-semibold text-foreground mt-1.5">{row.title}</p>
+          <p className="text-[11px] text-muted-foreground leading-relaxed line-clamp-2 mt-0.5">
+            {row.body}
+          </p>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-1.5 shrink-0">
+          <SecondaryButton icon={<Eye className="w-3 h-3" />} onClick={onPreview}>
+            Preview
+          </SecondaryButton>
+          <SecondaryButton icon={<Pencil className="w-3 h-3" />} onClick={onEdit}>
+            Edit
+          </SecondaryButton>
+          {row.status !== "published" ? (
+            <SecondaryButton
+              icon={<Send className="w-3 h-3" />}
+              onClick={() => save("published", "Published. It is now eligible for the app feed.")}
+              disabled={mutation.pending}
+            >
+              Publish
+            </SecondaryButton>
+          ) : (
+            <SecondaryButton
+              icon={<Pencil className="w-3 h-3" />}
+              onClick={() => save("draft", "Unpublished. It is no longer served.")}
+              disabled={mutation.pending}
+            >
+              Unpublish
+            </SecondaryButton>
+          )}
+          {row.status !== "archived" && (
+            <SecondaryButton
+              icon={<Archive className="w-3 h-3" />}
+              onClick={() => save("archived", "Archived. It is retained but never served.")}
+              disabled={mutation.pending}
+            >
+              Archive
+            </SecondaryButton>
+          )}
+          <SecondaryButton
+            icon={<Trash2 className="w-3 h-3" />}
+            onClick={remove}
+            disabled={mutation.pending || row.status === "published"}
+            title={
+              row.status === "published"
+                ? "Unpublish or archive before deleting"
+                : "Delete this announcement"
+            }
+          >
+            Delete
+          </SecondaryButton>
+        </div>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] text-muted-foreground font-mono">
+        <span>created {formatTimestamp(row.createdAt)}</span>
+        <span>updated {formatTimestamp(row.updatedAt)}</span>
+        {row.publishedAt && <span>published {formatTimestamp(row.publishedAt)}</span>}
+        {row.startsAt && <span>starts {formatTimestamp(row.startsAt)}</span>}
+        {row.expiresAt && <span>expires {formatTimestamp(row.expiresAt)}</span>}
+        <span>by {row.createdByEmail ?? "unknown"}</span>
+      </div>
+
+      {mutation.error && (
+        <p className="text-[11px] text-warning-subtle-foreground">{mutation.error}</p>
+      )}
+    </div>
+  );
+}
+
+// ─────────────────────────────── form ───────────────────────────────────────
+
+function AnnouncementForm({
+  row,
+  onClose,
+  onSaved,
+}: {
+  row: AdminAnnouncementRow | null;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [title, setTitle] = useState(row?.title ?? "");
+  const [body, setBody] = useState(row?.body ?? "");
+  const [kind, setKind] = useState<AnnouncementKind>(row?.kind ?? "information");
+  const [status, setStatus] = useState<AnnouncementStatus>(row?.status ?? "draft");
+  const [targetPlan, setTargetPlan] = useState(row?.targetPlan ?? "All Plans");
+  const [dismissible, setDismissible] = useState(row?.dismissible ?? true);
+  const [startsAt, setStartsAt] = useState(toLocalInput(row?.startsAt ?? null));
+  const [expiresAt, setExpiresAt] = useState(toLocalInput(row?.expiresAt ?? null));
+
+  const mutation = useAdminMutation();
+
+  const submit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    const result = await mutation.run<{ message: string }>("/api/adminsh/announcements/save", {
+      id: row?.id ?? null,
+      title,
+      body,
+      kind,
+      status,
+      targetPlan,
+      dismissible,
+      startsAt: fromLocalInput(startsAt),
+      expiresAt: fromLocalInput(expiresAt),
+    });
+    if ("error" in result) {
+      toast.error(result.error);
+      return;
+    }
+    toast.success(result.data.message);
+    onSaved();
+  };
+
+  return (
+    <Modal
+      title={row ? "Edit announcement" : "New announcement"}
+      icon={<Megaphone className="w-4 h-4 text-foreground" />}
+      onClose={onClose}
+      maxWidth="max-w-lg"
+    >
+      <form onSubmit={submit} className="space-y-3.5 text-xs">
+        <div>
+          <label className="block font-semibold text-foreground mb-1">Title</label>
+          <input
+            type="text"
+            value={title}
+            onChange={(event) => setTitle(event.target.value)}
+            maxLength={160}
+            required
+            className="w-full px-3 py-2 bg-[var(--clay-sunken)] border border-[var(--clay-line)] rounded-xl focus:outline-none focus:bg-card shadow-[var(--clay-well-1)]"
+            placeholder="Scheduled maintenance on Saturday"
+          />
+        </div>
+
+        <div>
+          <label className="block font-semibold text-foreground mb-1">Body</label>
+          <textarea
+            rows={4}
+            value={body}
+            onChange={(event) => setBody(event.target.value)}
+            maxLength={4000}
+            required
+            className="w-full px-3 py-2 bg-[var(--clay-sunken)] border border-[var(--clay-line)] rounded-xl focus:outline-none focus:bg-card shadow-[var(--clay-well-1)]"
+            placeholder="What is changing, when, and what the reader should do."
+          />
+          <p className="text-[10px] text-muted-foreground mt-1">{body.length} / 4000</p>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block font-semibold text-foreground mb-1">Type</label>
+            <select
+              value={kind}
+              onChange={(event) => setKind(event.target.value as AnnouncementKind)}
+              className="w-full px-3 py-2 bg-[var(--clay-sunken)] border border-[var(--clay-line)] rounded-xl focus:outline-none focus:bg-card shadow-[var(--clay-well-1)]"
+            >
+              {ANNOUNCEMENT_KINDS.map((entry) => (
+                <option key={entry} value={entry}>
+                  {announcementKindLabel(entry)}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block font-semibold text-foreground mb-1">Status</label>
+            <select
+              value={status}
+              onChange={(event) => setStatus(event.target.value as AnnouncementStatus)}
+              className="w-full px-3 py-2 bg-[var(--clay-sunken)] border border-[var(--clay-line)] rounded-xl focus:outline-none focus:bg-card shadow-[var(--clay-well-1)]"
+            >
+              <option value="draft">Draft</option>
+              <option value="published">Published</option>
+              <option value="archived">Archived</option>
+            </select>
+          </div>
+        </div>
+
+        <div>
+          <label className="block font-semibold text-foreground mb-1">Audience label</label>
+          <input
+            type="text"
+            value={targetPlan}
+            onChange={(event) => setTargetPlan(event.target.value)}
+            maxLength={80}
+            className="w-full px-3 py-2 bg-[var(--clay-sunken)] border border-[var(--clay-line)] rounded-xl focus:outline-none focus:bg-card shadow-[var(--clay-well-1)]"
+            placeholder="All Plans"
+          />
+          <p className="text-[10px] text-muted-foreground mt-1">
+            A label for readers. It does not filter who receives the announcement.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block font-semibold text-foreground mb-1">Starts (optional)</label>
+            <input
+              type="datetime-local"
+              value={startsAt}
+              onChange={(event) => setStartsAt(event.target.value)}
+              className="w-full px-3 py-2 bg-[var(--clay-sunken)] border border-[var(--clay-line)] rounded-xl focus:outline-none focus:bg-card shadow-[var(--clay-well-1)]"
+            />
+          </div>
+          <div>
+            <label className="block font-semibold text-foreground mb-1">Expires (optional)</label>
+            <input
+              type="datetime-local"
+              value={expiresAt}
+              onChange={(event) => setExpiresAt(event.target.value)}
+              className="w-full px-3 py-2 bg-[var(--clay-sunken)] border border-[var(--clay-line)] rounded-xl focus:outline-none focus:bg-card shadow-[var(--clay-well-1)]"
+            />
+          </div>
+        </div>
+
+        <label className="flex items-center gap-2 text-[11px] text-foreground">
+          <input
+            type="checkbox"
+            checked={dismissible}
+            onChange={(event) => setDismissible(event.target.checked)}
+            className="rounded border-[var(--clay-line)]"
+          />
+          Readers may dismiss this announcement
+        </label>
+
+        {mutation.error && (
+          <p className="text-[11px] text-warning-subtle-foreground">{mutation.error}</p>
+        )}
+
+        <div className="pt-2 flex items-center justify-end gap-2 border-t border-[var(--clay-line)]">
+          <SecondaryButton onClick={onClose} disabled={mutation.pending}>
+            Cancel
+          </SecondaryButton>
+          <PrimaryButton type="submit" disabled={mutation.pending}>
+            {mutation.pending ? "Saving…" : row ? "Save changes" : "Create announcement"}
+          </PrimaryButton>
+        </div>
+
+        {status === "published" && (
+          <p className="text-[10px] text-muted-foreground leading-relaxed">
+            Publishing makes this eligible for the app feed immediately (or at the start time).
+            No delivery channel is wired to the feed, so this does not notify anyone.
+          </p>
+        )}
+      </form>
+    </Modal>
+  );
+}
+
+// ────────────────────────────── preview ─────────────────────────────────────
+
+function AnnouncementPreview({
+  row,
+  onClose,
+}: {
+  row: AdminAnnouncementRow;
+  onClose: () => void;
+}) {
+  return (
+    <Modal
+      title="Preview"
+      icon={<Eye className="w-4 h-4 text-foreground" />}
+      onClose={onClose}
+    >
+      <div className="space-y-3">
+        <div className="rounded-xl border border-[var(--clay-line)] bg-[var(--clay-sunken)] p-4">
+          <div className="flex items-start gap-2.5">
+            <span className="mt-0.5">{KIND_ICON[row.kind]}</span>
+            <div className="min-w-0">
+              <p className="text-xs font-bold text-foreground">{row.title}</p>
+              <p className="text-[11px] text-muted-foreground leading-relaxed mt-1 whitespace-pre-wrap">
+                {row.body}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="space-y-2 bg-[var(--clay-sunken)] p-4 rounded-xl border border-[var(--clay-line)] text-xs">
+          <DetailRow label="Status" value={announcementStatusLabel(row.status)} />
+          <DetailRow label="Live now" value={isAnnouncementLive(row) ? "yes" : "no"} />
+          <DetailRow label="Type" value={announcementKindLabel(row.kind)} />
+          <DetailRow label="Audience" value={row.targetPlan} />
+          <DetailRow label="Dismissible" value={row.dismissible ? "yes" : "no"} />
+          <DetailRow label="Starts" value={formatTimestamp(row.startsAt)} />
+          <DetailRow label="Expires" value={formatTimestamp(row.expiresAt)} />
+          <DetailRow label="Created by" value={row.createdByEmail} />
+          <DetailRow label="Created" value={formatTimestamp(row.createdAt)} />
+          <DetailRow label="Updated" value={formatTimestamp(row.updatedAt)} />
+        </div>
+
+        <div className="pt-2 flex justify-end border-t border-[var(--clay-line)]">
+          <SecondaryButton onClick={onClose}>Close</SecondaryButton>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+// ─────────────────────────── datetime helpers ───────────────────────────────
+
+/** ISO → the value a `datetime-local` input expects, in local time. */
+function toLocalInput(iso: string | null): string {
+  if (!iso) return "";
+  const parsed = Date.parse(iso);
+  if (!Number.isFinite(parsed)) return "";
+  const date = new Date(parsed);
+  const pad = (value: number) => String(value).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(
+    date.getHours()
+  )}:${pad(date.getMinutes())}`;
+}
+
+/** `datetime-local` value → ISO, or null when the field is empty. */
+function fromLocalInput(value: string): string | null {
+  if (value.trim() === "") return null;
+  const parsed = Date.parse(value);
+  if (!Number.isFinite(parsed)) return null;
+  return new Date(parsed).toISOString();
 }

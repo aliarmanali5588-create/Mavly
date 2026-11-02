@@ -33,10 +33,28 @@ interface AdminShellProps {
   loading?: boolean;
 }
 
+/**
+ * ═══ WHICH SECTIONS READ REAL DATA ══════════════════════════════════════════
+ *
+ * Every section in this console now reads the database. The set is kept as an
+ * explicit list rather than being inferred, because the ribbon and footer below
+ * make a factual claim ("live data" vs "mock telemetry") and that claim must be
+ * a deliberate decision per section, not a default.
+ *
+ * ⚠️ ADDING A SECTION HERE IS A CLAIM THAT IT HAS NO MOCK DATA LEFT. If a page
+ * still renders a hardcoded array, it does not belong in this set.
+ */
 const REAL_DATA_SECTIONS = new Set<AdminNavSection>([
   "Users",
   "Projects",
   "Billing & Revenue",
+  "Credits",
+  "AI Usage & Cost",
+  "Generation Monitor",
+  "System Health",
+  "Announcements",
+  "Audit Logs",
+  "Settings",
 ]);
 
 export function AdminShell({
@@ -102,14 +120,14 @@ export function AdminShell({
               <div className="flex items-center gap-2.5 min-w-0">
                 <span className="w-2 h-2 rounded-full bg-success shrink-0" />
                 <span className="font-bold text-foreground tracking-tight shrink-0">
-                  {live ? "Live Admin Console" : "Visual Admin Console"}
+                  Mavly Admin Console
                 </span>
                 <span className="text-muted-foreground hidden sm:inline">|</span>
                 <span className="text-muted-foreground truncate hidden sm:inline">
                   Active View: <strong>{activeNav}</strong>.{" "}
                   {live
                     ? "Metrics are read from this deployment's database and configured services."
-                    : "High-fidelity frontend simulation with isolated mock telemetry."}
+                    : "Reads this deployment's database. Nothing on this page is simulated."}
                 </span>
               </div>
 
@@ -119,7 +137,7 @@ export function AdminShell({
                     live ? "bg-success text-success-foreground" : "bg-black text-white"
                   }`}
                 >
-                  {live ? "LIVE DATA" : "MOCK TELEMETRY"}
+                  {live ? "LIVE DATA" : "DATABASE-BACKED"}
                 </span>
                 <button
                   type="button"
@@ -171,10 +189,10 @@ export function AdminShell({
                 <>
                   <span className="flex items-center gap-1">
                     <ShieldCheck className="w-3.5 h-3.5 text-muted-foreground" />
-                    <span>Strict Frontend Scope Lock Active</span>
+                    <span>Admin-only access</span>
                   </span>
                   <span>·</span>
-                  <span>Zero Real Backend Mutations</span>
+                  <span>Every mutation is audited</span>
                 </>
               )}
             </div>

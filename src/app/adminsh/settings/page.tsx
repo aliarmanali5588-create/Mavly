@@ -2,437 +2,369 @@
 
 import React, { useState } from "react";
 import {
-  Settings,
-  Shield,
+  AlertTriangle,
   Bell,
-  Cpu,
-  Globe,
-  DollarSign,
-  User,
-  Key,
-  Save,
-  RotateCcw,
-  Sparkles,
   CheckCircle2,
+  Coins,
+  Cpu,
+  Database,
+  Globe,
   Lock,
-  Layers,
-  Terminal,
-  Radio,
+  Mail,
+  RefreshCw,
+  Save,
+  ShieldCheck,
+  Sliders,
 } from "lucide-react";
 import { toast } from "sonner";
+
+import {
+  settingValueAsString,
+  type AdminSettingRow,
+  type AdminSettingsPayload,
+} from "@/lib/admin/console";
 import { AdminShell } from "../components/AdminShell";
+import { useAdminMutation, useAdminSettings } from "../components/useAdminConsoleData";
+import {
+  Badge,
+  DetailRow,
+  ErrorBlock,
+  LoadingBlock,
+  PrimaryButton,
+  SecondaryButton,
+  SectionCard,
+  UnavailableNote,
+  formatTimestamp,
+} from "../components/console-ui";
 
-export default function SettingsAdminPage() {
-  // General & Brand
-  const [platformName, setPlatformName] = useState("Mavly AI App Builder");
-  const [adminConsoleTitle, setAdminConsoleTitle] = useState("Mavly Admin Control Center");
-  const [supportEmail, setSupportEmail] = useState("support@mavly.xyz");
+/**
+ * ═══ SETTINGS ═══════════════════════════════════════════════════════════════
+ *
+ * Two panels, and the split is the point:
+ *
+ *   Runtime settings  stored in `admin_settings`, written through
+ *                     `admin_settings_write`, validated on the server. Only keys
+ *                     in the database registry can appear, so there is no toggle
+ *                     on this page that persists nothing.
+ *   Deployment        model default, worker readiness, provider/payment presence,
+ *                     hosting mode. These come from the environment. They are
+ *                     read-only here because changing them needs a redeploy, and
+ *                     a "Save" button that silently did nothing would be worse
+ *                     than no button at all.
+ *
+ * ⚠️ THE OLD PAGE SAVED TO REACT STATE. Its "Save configuration" button showed a
+ * success toast and changed nothing, and its support email was a hardcoded
+ * string. Every field here reads and writes a real row.
+ *
+ * ⚠️ NO SECRET IS DISPLAYED. Provider and payment credentials are reported as
+ * present or absent; the value never leaves the server.
+ */
 
-  // AI Defaults
-  const [defaultModel, setDefaultModel] = useState("deepseek/deepseek-v4.1-flash");
-  const [fallbackModel, setFallbackModel] = useState("anthropic/claude-3.5-sonnet");
-  const [maxTokens, setMaxTokens] = useState("8192");
-  const [temperature, setTemperature] = useState("0.2");
+export default function SettingsPage() {
+  const { data, loading, error, refresh } = useAdminSettings();
 
-  // Regional & Currency
-  const [currency, setCurrency] = useState("INR");
-  const [gateway, setGateway] = useState("Razorpay");
-  const [invoicePrefix, setInvoicePrefix] = useState("INV-MAV-");
+  return (
+    <AdminShell activeNav="Settings" live>
+      {loading && !data ? (
+        <LoadingBlock label="Reading settings" />
+      ) : error && !data ? (
+        <ErrorBlock message={error} onRetry={refresh} />
+      ) : !data ? (
+        <ErrorBlock message="Settings returned no data." onRetry={refresh} />
+      ) : (
+        <>
+          <RuntimeSettings payload={data} onChanged={refresh} />
+          <DeploymentPanel payload={data} onRefresh={refresh} loading={loading} />
+        </>
+      )}
+    </AdminShell>
+  );
+}
 
-  // Security Toggles
-  const [require2FA, setRequire2FA] = useState(true);
-  const [sessionTimeout, setSessionTimeout] = useState("30");
-  const [highFidelityAudit, setHighFidelityAudit] = useState(true);
+// ───────────────────────── runtime settings ─────────────────────────────────
 
-  // Notifications
-  const [emailAlertsOnFailure, setEmailAlertsOnFailure] = useState(true);
-  const [dailyRevenueDigest, setDailyRevenueDigest] = useState(true);
-  const [slackWebhook, setSlackWebhook] = useState("https://hooks.slack.com/services/T00/B00/XXXXXX");
+function RuntimeSettings({
+  payload,
+  onChanged,
+}: {
+  payload: AdminSettingsPayload;
+  onChanged: () => void;
+}) {
+  const groups = groupSettings(payload.settings);
 
-  const handleSaveSettings = (e: React.FormEvent) => {
-    e.preventDefault();
-    toast.success("Preferences updated successfully!", {
-      description: "Frontend configuration saved locally for this administrative session.",
+  return (
+    <>
+      <UnavailableNote>
+        These settings are stored in the database and take effect on the next request that reads
+        them — nothing is cached. Every change is recorded in the audit log with its previous and new
+        value.
+      </UnavailableNote>
+
+      {groups.map((group) => (
+        <SectionCard
+          key={group.id}
+          title={group.title}
+          description={group.description}
+          actions={<Badge tone="neutral">{group.rows.length} setting(s)</Badge>}
+        >
+          <div className="space-y-3">
+            {group.rows.map((row) => (
+              <SettingField key={row.key} row={row} onSaved={onChanged} />
+            ))}
+          </div>
+        </SectionCard>
+      ))}
+    </>
+  );
+}
+
+const GROUP_META: Record<string, { title: string; description: string; icon: React.ReactNode }> = {
+  announcements: {
+    title: "Announcements",
+    description: "Whether the published announcement feed is served.",
+    icon: <Bell className="w-3.5 h-3.5 text-muted-foreground" />,
+  },
+  credits: {
+    title: "Credits",
+    description: "Limits applied to administrator credit adjustments.",
+    icon: <Coins className="w-3.5 h-3.5 text-warning" />,
+  },
+  audit: {
+    title: "Audit",
+    description: "How far back the audit log page reads.",
+    icon: <ShieldCheck className="w-3.5 h-3.5 text-muted-foreground" />,
+  },
+  console: {
+    title: "Console",
+    description: "Presentation values used by the admin console.",
+    icon: <Sliders className="w-3.5 h-3.5 text-muted-foreground" />,
+  },
+};
+
+function groupSettings(rows: AdminSettingRow[]) {
+  const buckets = new Map<string, AdminSettingRow[]>();
+  for (const row of rows) {
+    const prefix = row.key.split(".")[0] ?? "general";
+    const bucket = buckets.get(prefix) ?? [];
+    bucket.push(row);
+    buckets.set(prefix, bucket);
+  }
+  return Array.from(buckets.entries()).map(([id, bucketRows]) => ({
+    id,
+    title: GROUP_META[id]?.title ?? id,
+    description: GROUP_META[id]?.description ?? "",
+    icon: GROUP_META[id]?.icon,
+    rows: bucketRows,
+  }));
+}
+
+function SettingField({ row, onSaved }: { row: AdminSettingRow; onSaved: () => void }) {
+  const [draft, setDraft] = useState(settingValueAsString(row));
+  const mutation = useAdminMutation();
+
+  const dirty = draft !== settingValueAsString(row);
+
+  const save = async () => {
+    let value: unknown = draft;
+    if (row.kind === "boolean") value = draft === "true";
+    else if (row.kind === "integer") {
+      const parsed = Number.parseInt(draft, 10);
+      if (!Number.isFinite(parsed)) {
+        toast.error("That value must be a whole number.");
+        return;
+      }
+      value = parsed;
+    }
+
+    const result = await mutation.run<{ message: string }>("/api/adminsh/settings/write", {
+      key: row.key,
+      value,
     });
-  };
 
-  const handleResetDefaults = () => {
-    setPlatformName("Mavly AI App Builder");
-    setAdminConsoleTitle("Mavly Admin Control Center");
-    setSupportEmail("support@mavly.xyz");
-    setDefaultModel("deepseek/deepseek-v4.1-flash");
-    setFallbackModel("anthropic/claude-3.5-sonnet");
-    setMaxTokens("8192");
-    setTemperature("0.2");
-    setCurrency("INR");
-    setGateway("Razorpay");
-    setInvoicePrefix("INV-MAV-");
-    setRequire2FA(true);
-    setSessionTimeout("30");
-    setHighFidelityAudit(true);
-    setEmailAlertsOnFailure(true);
-    setDailyRevenueDigest(true);
-
-    toast.info("Settings restored to system baseline parameters.");
+    if ("error" in result) {
+      toast.error(result.error);
+      return;
+    }
+    toast.success(result.data.message);
+    onSaved();
   };
 
   return (
-    <AdminShell activeNav="Settings">
-      <form onSubmit={handleSaveSettings} className="space-y-4">
-        {/* Top Header with Save Action */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-5 rounded-2xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)]">
-          <div>
-            <h3 className="text-sm font-semibold tracking-tight text-foreground">
-              System Configuration & Environmental Variables
-            </h3>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              Customize AI orchestration, regional currency, compliance rules, and operational dispatch
-            </p>
+    <div className="px-3 py-3 rounded-lg bg-[var(--clay-sunken)] border border-[var(--clay-line)] space-y-2">
+      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2">
+        <div className="min-w-0">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <p className="text-xs font-semibold text-foreground font-mono">{row.key}</p>
+            <Badge tone={row.isDefault ? "neutral" : "positive"}>
+              {row.isDefault ? "default" : "custom"}
+            </Badge>
           </div>
+          <p className="text-[11px] text-muted-foreground leading-relaxed mt-0.5">
+            {row.description}
+          </p>
+        </div>
 
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={handleResetDefaults}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-muted-foreground bg-[var(--clay-sunken)] hover:bg-[var(--clay-sunken-deep)] rounded-lg transition-colors"
+        <div className="flex items-center gap-2 shrink-0">
+          {row.kind === "boolean" ? (
+            <select
+              value={draft}
+              onChange={(event) => setDraft(event.target.value)}
+              className="h-8 px-2.5 text-xs rounded-lg bg-card border border-[var(--clay-line)] text-foreground focus:outline-none focus:ring-1 focus:ring-black"
             >
-              <RotateCcw className="w-3.5 h-3.5" />
-              <span>Reset</span>
-            </button>
-
-            <button
-              type="submit"
-              className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-white bg-primary hover:bg-[var(--clay-brand-hover)] rounded-lg transition-colors shadow-[var(--clay-elev-ink-1)]"
-            >
-              <Save className="w-3.5 h-3.5" />
-              <span>Save Changes</span>
-            </button>
-          </div>
+              <option value="true">Enabled</option>
+              <option value="false">Disabled</option>
+            </select>
+          ) : (
+            <input
+              type={row.kind === "integer" ? "number" : "text"}
+              value={draft}
+              onChange={(event) => setDraft(event.target.value)}
+              className="h-8 w-40 px-2.5 text-xs rounded-lg bg-card border border-[var(--clay-line)] text-foreground font-mono focus:outline-none focus:ring-1 focus:ring-black"
+            />
+          )}
+          <PrimaryButton onClick={save} disabled={!dirty || mutation.pending} icon={<Save className="w-3 h-3" />}>
+            {mutation.pending ? "Saving…" : "Save"}
+          </PrimaryButton>
         </div>
+      </div>
 
-        {/* 1. General Branding & Profile */}
-        <div className="p-5 sm:p-6 rounded-2xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)] space-y-4">
-          <div className="flex items-center gap-2 pb-2 border-b border-[var(--clay-line)]">
-            <Globe className="w-4 h-4 text-foreground" />
-            <h4 className="text-xs font-bold text-foreground uppercase tracking-wider">
-              Organization & Application Profile
-            </h4>
-          </div>
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] text-muted-foreground font-mono">
+        <span>default: {settingValueAsString({ ...row, value: row.defaultValue })}</span>
+        {row.updatedAt ? (
+          <span>
+            updated {formatTimestamp(row.updatedAt)}
+            {row.updatedByEmail ? ` by ${row.updatedByEmail}` : ""}
+          </span>
+        ) : (
+          <span>never changed</span>
+        )}
+      </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
-            <div>
-              <label className="block font-semibold text-foreground mb-1">
-                Platform Name
-              </label>
-              <input
-                type="text"
-                value={platformName}
-                onChange={(e) => setPlatformName(e.target.value)}
-                className="w-full h-8 px-3 bg-[var(--clay-sunken)] border border-[var(--clay-line)] rounded-lg shadow-[var(--clay-well-1)] outline-none focus-visible:shadow-[var(--clay-well-1),var(--clay-focus)] text-foreground"
-              />
-            </div>
+      {mutation.error && (
+        <p className="text-[11px] text-warning-subtle-foreground">{mutation.error}</p>
+      )}
+    </div>
+  );
+}
 
-            <div>
-              <label className="block font-semibold text-foreground mb-1">
-                Admin Console Header
-              </label>
-              <input
-                type="text"
-                value={adminConsoleTitle}
-                onChange={(e) => setAdminConsoleTitle(e.target.value)}
-                className="w-full h-8 px-3 bg-[var(--clay-sunken)] border border-[var(--clay-line)] rounded-lg shadow-[var(--clay-well-1)] outline-none focus-visible:shadow-[var(--clay-well-1),var(--clay-focus)] text-foreground"
-              />
-            </div>
+// ───────────────────────────── deployment ───────────────────────────────────
 
-            <div>
-              <label className="block font-semibold text-foreground mb-1">
-                Support Routing Email
-              </label>
-              <input
-                type="email"
-                value={supportEmail}
-                onChange={(e) => setSupportEmail(e.target.value)}
-                className="w-full h-8 px-3 bg-[var(--clay-sunken)] border border-[var(--clay-line)] rounded-lg shadow-[var(--clay-well-1)] outline-none focus-visible:shadow-[var(--clay-well-1),var(--clay-focus)] text-foreground"
-              />
-            </div>
-          </div>
-        </div>
+function DeploymentPanel({
+  payload,
+  onRefresh,
+  loading,
+}: {
+  payload: AdminSettingsPayload;
+  onRefresh: () => void;
+  loading: boolean;
+}) {
+  const deployment = payload.deployment;
 
-        {/* 2. AI Model & Generation Defaults */}
-        <div className="p-5 sm:p-6 rounded-2xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)] space-y-4">
-          <div className="flex items-center gap-2 pb-2 border-b border-[var(--clay-line)]">
-            <Cpu className="w-4 h-4 text-foreground" />
-            <h4 className="text-xs font-bold text-foreground uppercase tracking-wider">
-              AI Orchestration & Generation Parameters
-            </h4>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-            <div>
-              <label className="block font-semibold text-foreground mb-1">
-                Default Primary Gateway Model
-              </label>
-              <select
-                value={defaultModel}
-                onChange={(e) => setDefaultModel(e.target.value)}
-                className="w-full h-8 px-2.5 bg-[var(--clay-sunken)] border border-[var(--clay-line)] rounded-lg focus:outline-none focus:bg-card font-medium text-foreground shadow-[var(--clay-well-1)]"
-              >
-                <option value="deepseek/deepseek-v4.1-flash">
-                  DeepSeek V4.1 Flash (Fast, Built-in Default)
-                </option>
-                <option value="anthropic/claude-3.5-sonnet">
-                  Anthropic Claude 3.5 Sonnet (High Accuracy)
-                </option>
-                <option value="google/gemini-2.0-flash">
-                  Google Gemini 2.0 Flash (Fast Reasoning)
-                </option>
-                <option value="openai/gpt-4o">OpenAI GPT-4o</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block font-semibold text-foreground mb-1">
-                Automatic Circuit Failover Model
-              </label>
-              <select
-                value={fallbackModel}
-                onChange={(e) => setFallbackModel(e.target.value)}
-                className="w-full h-8 px-2.5 bg-[var(--clay-sunken)] border border-[var(--clay-line)] rounded-lg focus:outline-none focus:bg-card font-medium text-foreground shadow-[var(--clay-well-1)]"
-              >
-                <option value="anthropic/claude-3.5-sonnet">
-                  Anthropic Claude 3.5 Sonnet
-                </option>
-                <option value="deepseek/deepseek-v4.1-flash">
-                  DeepSeek V4.1 Flash
-                </option>
-                <option value="google/gemini-1.5-pro">Google Gemini 1.5 Pro</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block font-semibold text-foreground mb-1">
-                Max Output Tokens Per Run
-              </label>
-              <input
-                type="text"
-                value={maxTokens}
-                onChange={(e) => setMaxTokens(e.target.value)}
-                className="w-full h-8 px-3 bg-[var(--clay-sunken)] border border-[var(--clay-line)] rounded-lg focus:outline-none focus:bg-card font-mono text-foreground shadow-[var(--clay-well-1)]"
-              />
-              <span className="text-[11px] text-muted-foreground mt-1 block">
-                Standard output cap for generated Next.js AST files
+  return (
+    <SectionCard
+      title="Deployment configuration"
+      description="Read from this deployment's environment. Changing any of these requires a redeploy."
+      actions={
+        <SecondaryButton
+          icon={<RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />}
+          onClick={onRefresh}
+          disabled={loading}
+        >
+          Re-read
+        </SecondaryButton>
+      }
+    >
+      <div className="space-y-2 bg-[var(--clay-sunken)] p-4 rounded-xl border border-[var(--clay-line)] text-xs shadow-[var(--clay-well-1)]">
+        <DetailRow label="Environment" value={deployment.environment} />
+        <DetailRow label="Release" value={deployment.version} mono />
+        <DetailRow
+          label="Default model"
+          value={
+            <span className="inline-flex items-center gap-1.5">
+              <Cpu className="w-3 h-3 text-muted-foreground" />
+              <span className="font-mono">{deployment.defaultModel}</span>
+            </span>
+          }
+        />
+        <DetailRow
+          label="Model catalog"
+          value={`${deployment.modelCatalog.length} configured`}
+        />
+        <DetailRow
+          label="Generation worker"
+          value={
+            <span className="inline-flex items-center gap-1.5">
+              {deployment.workerConfigured ? (
+                <CheckCircle2 className="w-3 h-3 text-success" />
+              ) : (
+                <AlertTriangle className="w-3 h-3 text-warning" />
+              )}
+              {deployment.workerConfigured ? "credentials present" : "not configured"}
+            </span>
+          }
+        />
+        <DetailRow
+          label="AI provider"
+          value={
+            <span className="inline-flex items-center gap-1.5">
+              {deployment.providerConfigured ? (
+                <Lock className="w-3 h-3 text-success" />
+              ) : (
+                <AlertTriangle className="w-3 h-3 text-warning" />
+              )}
+              {deployment.providerConfigured ? "key present (not shown)" : "not configured"}
+            </span>
+          }
+        />
+        <DetailRow
+          label="Payment gateway"
+          value={
+            deployment.paymentGateway ? (
+              <span className="inline-flex items-center gap-1.5">
+                <Lock className="w-3 h-3 text-success" />
+                {deployment.paymentGateway} (keys present, not shown)
               </span>
-            </div>
+            ) : (
+              "not configured"
+            )
+          }
+        />
+        <DetailRow
+          label="Artifact storage"
+          value={
+            <span className="inline-flex items-center gap-1.5">
+              <Database className="w-3 h-3 text-muted-foreground" />
+              {deployment.storageConfigured ? "configured" : "not configured"}
+            </span>
+          }
+        />
+        <DetailRow
+          label="Hosting mode"
+          value={
+            <span className="inline-flex items-center gap-1.5">
+              <Globe className="w-3 h-3 text-muted-foreground" />
+              {deployment.hostingMode ?? "none enabled"}
+            </span>
+          }
+        />
+      </div>
 
-            <div>
-              <label className="block font-semibold text-foreground mb-1">
-                Sampling Temperature
-              </label>
-              <input
-                type="text"
-                value={temperature}
-                onChange={(e) => setTemperature(e.target.value)}
-                className="w-full h-8 px-3 bg-[var(--clay-sunken)] border border-[var(--clay-line)] rounded-lg focus:outline-none focus:bg-card font-mono text-foreground shadow-[var(--clay-well-1)]"
-              />
-              <span className="text-[11px] text-muted-foreground mt-1 block">
-                0.2 ensures code determinism and syntax stability
-              </span>
-            </div>
-          </div>
-        </div>
+      <div className="mt-3">
+        <UnavailableNote>
+          These values are read-only here on purpose. They live in the deployment's environment, so a
+          form on this page could not change them — it could only pretend to. Provider and payment
+          credentials are reported as present or absent and are never displayed.
+        </UnavailableNote>
+      </div>
 
-        {/* 3. Regional Billing & Payment Processing */}
-        <div className="p-5 sm:p-6 rounded-2xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)] space-y-4">
-          <div className="flex items-center gap-2 pb-2 border-b border-[var(--clay-line)]">
-            <DollarSign className="w-4 h-4 text-success" />
-            <h4 className="text-xs font-bold text-foreground uppercase tracking-wider">
-              Regional Billing & Payment Gateway
-            </h4>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
-            <div>
-              <label className="block font-semibold text-foreground mb-1">
-                Primary Currency
-              </label>
-              <select
-                value={currency}
-                onChange={(e) => setCurrency(e.target.value)}
-                className="w-full h-8 px-2.5 bg-[var(--clay-sunken)] border border-[var(--clay-line)] rounded-lg focus:outline-none focus:bg-card font-medium text-foreground shadow-[var(--clay-well-1)]"
-              >
-                <option value="INR">INR (₹) Indian Rupee</option>
-                <option value="USD">USD ($) United States Dollar</option>
-                <option value="EUR">EUR (€) Euro</option>
-                <option value="GBP">GBP (£) British Pound</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block font-semibold text-foreground mb-1">
-                Active Payment Gateway
-              </label>
-              <select
-                value={gateway}
-                onChange={(e) => setGateway(e.target.value)}
-                className="w-full h-8 px-2.5 bg-[var(--clay-sunken)] border border-[var(--clay-line)] rounded-lg focus:outline-none focus:bg-card font-medium text-foreground shadow-[var(--clay-well-1)]"
-              >
-                <option value="Razorpay">Razorpay (Cards, UPI, NetBanking)</option>
-                <option value="Stripe">Stripe (International Credit Cards)</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block font-semibold text-foreground mb-1">
-                Invoice ID Prefix
-              </label>
-              <input
-                type="text"
-                value={invoicePrefix}
-                onChange={(e) => setInvoicePrefix(e.target.value)}
-                className="w-full h-8 px-3 bg-[var(--clay-sunken)] border border-[var(--clay-line)] rounded-lg focus:outline-none focus:bg-card font-mono text-foreground shadow-[var(--clay-well-1)]"
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* 4. Security & Audit Policies */}
-        <div className="p-5 sm:p-6 rounded-2xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)] space-y-4">
-          <div className="flex items-center gap-2 pb-2 border-b border-[var(--clay-line)]">
-            <Shield className="w-4 h-4 text-foreground" />
-            <h4 className="text-xs font-bold text-foreground uppercase tracking-wider">
-              Admin Security Governance & Access Control
-            </h4>
-          </div>
-
-          <div className="space-y-2.5 text-xs">
-            <div className="flex items-center justify-between p-3 rounded-xl bg-[var(--clay-sunken)] border border-[var(--clay-line)] shadow-[var(--clay-well-1)]">
-              <div>
-                <p className="font-semibold text-foreground">Enforce Multi-Factor Authentication</p>
-                <p className="text-muted-foreground text-[11px]">
-                  Require hardware security key or TOTP token on administrative logins
-                </p>
-              </div>
-              <input
-                type="checkbox"
-                checked={require2FA}
-                onChange={(e) => setRequire2FA(e.target.checked)}
-                className="rounded border-[var(--clay-line-strong)] text-black focus:ring-black h-4 w-4"
-              />
-            </div>
-
-            <div className="flex items-center justify-between p-3 rounded-xl bg-[var(--clay-sunken)] border border-[var(--clay-line)] shadow-[var(--clay-well-1)]">
-              <div>
-                <p className="font-semibold text-foreground">High-Fidelity Event Journaling</p>
-                <p className="text-muted-foreground text-[11px]">
-                  Capture complete JSON mutation payloads for security and compliance audits
-                </p>
-              </div>
-              <input
-                type="checkbox"
-                checked={highFidelityAudit}
-                onChange={(e) => setHighFidelityAudit(e.target.checked)}
-                className="rounded border-[var(--clay-line-strong)] text-black focus:ring-black h-4 w-4"
-              />
-            </div>
-
-            <div className="flex items-center justify-between p-3 rounded-xl bg-[var(--clay-sunken)] border border-[var(--clay-line)] shadow-[var(--clay-well-1)]">
-              <div>
-                <p className="font-semibold text-foreground">Session Inactivity Timeout</p>
-                <p className="text-muted-foreground text-[11px]">
-                  Automatically invalidate idle administrative credentials
-                </p>
-              </div>
-              <select
-                value={sessionTimeout}
-                onChange={(e) => setSessionTimeout(e.target.value)}
-                className="h-8 px-2.5 text-xs bg-card border border-[var(--clay-line)] rounded-lg shadow-[var(--clay-elev-1)]"
-              >
-                <option value="15">15 Minutes</option>
-                <option value="30">30 Minutes</option>
-                <option value="60">1 Hour</option>
-                <option value="120">2 Hours</option>
-              </select>
-            </div>
-          </div>
-        </div>
-
-        {/* 5. Notification Webhooks & Alerts */}
-        <div className="p-5 sm:p-6 rounded-2xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)] space-y-4">
-          <div className="flex items-center gap-2 pb-2 border-b border-[var(--clay-line)]">
-            <Bell className="w-4 h-4 text-warning" />
-            <h4 className="text-xs font-bold text-foreground uppercase tracking-wider">
-              Alerts & Operational Dispatch
-            </h4>
-          </div>
-
-          <div className="space-y-2.5 text-xs">
-            <div className="flex items-center justify-between p-3 rounded-xl bg-[var(--clay-sunken)] border border-[var(--clay-line)] shadow-[var(--clay-well-1)]">
-              <div>
-                <p className="font-semibold text-foreground">Critical Error & Spike Alerts</p>
-                <p className="text-muted-foreground text-[11px]">
-                  Send emergency email alert if AI failure rate exceeds 2.5%
-                </p>
-              </div>
-              <input
-                type="checkbox"
-                checked={emailAlertsOnFailure}
-                onChange={(e) => setEmailAlertsOnFailure(e.target.checked)}
-                className="rounded border-[var(--clay-line-strong)] text-black focus:ring-black h-4 w-4"
-              />
-            </div>
-
-            <div className="flex items-center justify-between p-3 rounded-xl bg-[var(--clay-sunken)] border border-[var(--clay-line)] shadow-[var(--clay-well-1)]">
-              <div>
-                <p className="font-semibold text-foreground">Daily MRR & Revenue Digest</p>
-                <p className="text-muted-foreground text-[11px]">
-                  Send summary recap every morning at 09:00 IST
-                </p>
-              </div>
-              <input
-                type="checkbox"
-                checked={dailyRevenueDigest}
-                onChange={(e) => setDailyRevenueDigest(e.target.checked)}
-                className="rounded border-[var(--clay-line-strong)] text-black focus:ring-black h-4 w-4"
-              />
-            </div>
-
-            <div>
-              <label className="block font-semibold text-foreground mb-1">
-                Slack Incident Webhook URL
-              </label>
-              <input
-                type="text"
-                value={slackWebhook}
-                onChange={(e) => setSlackWebhook(e.target.value)}
-                className="w-full h-8 px-3 bg-[var(--clay-sunken)] border border-[var(--clay-line)] rounded-lg focus:outline-none focus:bg-card font-mono text-[11px] text-foreground"
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* 6. Admin Account Information */}
-        <div className="p-5 sm:p-6 rounded-2xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)] flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-full bg-black text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-[var(--clay-elev-ink-1)]">
-              SA
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h4 className="text-xs font-bold text-foreground">Mavly Super Admin</h4>
-                <span className="font-mono text-[10px] font-semibold px-1.5 py-0.5 rounded bg-[var(--clay-sunken)] text-foreground border border-[var(--clay-line)]">
-                  Organization Owner
-                </span>
-              </div>
-              <p className="text-xs text-muted-foreground font-mono">aitoolkitguide@gmail.com</p>
-            </div>
-          </div>
-
-          <div className="text-xs text-muted-foreground sm:text-right font-mono text-[11px]">
-            <p>Signed in via Visual Admin Prototype</p>
-            <p>Session IP: 103.21.244.12</p>
-          </div>
-        </div>
-      </form>
-    </AdminShell>
+      <div className="mt-3 flex items-start gap-2 px-3 py-2 rounded-lg bg-[var(--clay-sunken)] border border-[var(--clay-line)] text-[11px] text-muted-foreground leading-relaxed">
+        <Mail className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+        <span>
+          The support address shown in this console is the{" "}
+          <span className="font-mono">console.support_email</span> setting above. It is a console
+          presentation value; it does not change the address printed on public marketing pages.
+        </span>
+      </div>
+    </SectionCard>
   );
 }

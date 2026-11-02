@@ -1,447 +1,446 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import {
-  Cpu,
-  Zap,
-  CheckCircle2,
-  AlertTriangle,
-  Coins,
-  TrendingUp,
-  BarChart3,
-  Calendar,
-  Layers,
-  Sparkles,
-  ArrowUpRight,
-  ExternalLink,
   Activity,
-  Play,
-  X,
+  AlertTriangle,
+  ArrowDownLeft,
+  ArrowUpRight,
+  BarChart3,
+  CheckCircle2,
   Clock,
-  Terminal,
+  Cpu,
+  DollarSign,
+  Gauge,
+  RefreshCw,
+  Search,
+  XCircle,
 } from "lucide-react";
-import { toast } from "sonner";
+
+import {
+  ADMIN_CONSOLE_PERIODS,
+  costDisplay,
+  formatCompactNumber,
+  formatSeconds,
+  terminalSuccessRate,
+  type AdminAiUsageAttemptRow,
+  type AdminConsolePeriod,
+} from "@/lib/admin/console";
 import { AdminShell } from "../components/AdminShell";
-import { MOCK_AI_MODEL_USAGE } from "../components/mockData";
+import {
+  useAiUsage,
+  useDebouncedValue,
+} from "../components/useAdminConsoleData";
+import {
+  Badge,
+  EmptyBlock,
+  ErrorBlock,
+  LoadingBlock,
+  Pagination,
+  SearchField,
+  SectionCard,
+  SegmentedFilter,
+  StatCard,
+  UnavailableNote,
+  formatTimestamp,
+} from "../components/console-ui";
+
+/**
+ * ═══ AI USAGE & COST ════════════════════════════════════════════════════════
+ *
+ * Two datasets, kept visually distinct because they answer different questions:
+ *
+ *   Runs     `project_runs` — one row per generation, with the tokens it used and
+ *            the cost the provider reported for it. This is the only cost source.
+ *   Attempts `ai_usage_attempts` — per-attempt metering written by the credit
+ *            engine. Absent on a deployment that never enabled it, in which case
+ *            the table says so instead of showing an empty result as "no usage".
+ *
+ * ⚠️ COST IS NEVER DERIVED FROM A PRICE LIST. The old page multiplied invented
+ * token counts by invented per-million rates to produce a confident dollar
+ * figure. Here a cost exists only where `reported_cost_usd` was recorded, and a
+ * run with no recorded cost is counted as unknown — shown as "Cost unavailable",
+ * never as $0.00, because zero spend and unknown spend are different facts.
+ *
+ * ⚠️ LATENCY IS RUN DURATION. The database records when a run started and
+ * finished; it does not record per-request provider latency. The column is
+ * labelled "run duration" so nobody reads it as something it is not.
+ */
+
+const ATTEMPT_PAGE_SIZE = 25;
 
 export default function AiUsageAdminPage() {
-  const [timeRange, setTimeRange] = useState("30D");
-  const [selectedModel, setSelectedModel] = useState<string>("DeepSeek V4.1 Flash");
-  const [isTestPingOpen, setIsTestPingOpen] = useState(false);
-  const [pingStatus, setPingStatus] = useState<"idle" | "running" | "done" | "unavailable">("idle");
-  const [pingResult, setPingResult] = useState<{ latency: number; provider: string; ok: boolean } | null>(null);
+  const [period, setPeriod] = useState<AdminConsolePeriod>("30d");
+  const [modelFilter, setModelFilter] = useState("");
+  const [attemptSearch, setAttemptSearch] = useState("");
+  const [attemptPage, setAttemptPage] = useState(0);
+  const debouncedAttemptSearch = useDebouncedValue(attemptSearch, 300);
 
-  const modelTableData = [
-    {
-      provider: "OpenRouter",
-      model: "DeepSeek V4.1 Flash",
-      gateway: "openrouter.ai/v1",
-      requests: "64,200",
-      successful: "63,050",
-      failed: "1,150",
-      promptTokens: "28.4M",
-      completionTokens: "14.4M",
-      tokens: "42.8M",
-      cost: "₹38,400",
-      p50: "1.1s",
-      p95: "1.9s",
-      successRate: 98.2,
-      tier: "Default Primary",
-    },
-    {
-      provider: "Anthropic",
-      model: "Claude 3.5 Sonnet",
-      gateway: "api.anthropic.com/v1",
-      requests: "40,300",
-      successful: "39,250",
-      failed: "1,050",
-      promptTokens: "20.8M",
-      completionTokens: "10.4M",
-      tokens: "31.2M",
-      cost: "₹42,100",
-      p50: "1.8s",
-      p95: "2.7s",
-      successRate: 97.4,
-      tier: "High Accuracy Failover",
-    },
-    {
-      provider: "Google AI Studio",
-      model: "Gemini 1.5 Pro",
-      gateway: "generativelanguage.googleapis.com",
-      requests: "25,800",
-      successful: "25,540",
-      failed: "260",
-      promptTokens: "12.3M",
-      completionTokens: "6.2M",
-      tokens: "18.5M",
-      cost: "₹15,200",
-      p50: "0.9s",
-      p95: "1.6s",
-      successRate: 99.0,
-      tier: "Reasoning & Analysis",
-    },
-    {
-      provider: "OpenAI",
-      model: "GPT-4o",
-      gateway: "api.openai.com/v1",
-      requests: "12,200",
-      successful: "11,770",
-      failed: "430",
-      promptTokens: "6.9M",
-      completionTokens: "3.4M",
-      tokens: "10.3M",
-      cost: "₹7,100",
-      p50: "1.4s",
-      p95: "2.3s",
-      successRate: 96.5,
-      tier: "Secondary Fallback",
-    },
-  ];
+  const { data, loading, error, refresh } = useAiUsage({ period, model: modelFilter });
 
-  const handleRunPingTest = (modelName: string) => {
-    /**
-     * ⚠️ THIS NO LONGER FABRICATES A RESULT.
-     *
-     * It used to `setTimeout` 650 ms and then report a latency of
-     * `38 + Math.random() * 24` ms and "Verified HTTP 200 via OpenRouter
-     * gateway (simulated)" — a made-up measurement presented as a health probe.
-     * An operator reading that would believe a provider had been checked when
-     * nothing was contacted.
-     *
-     * No live provider probe is implemented in this build, so the panel says so
-     * instead of inventing a number.
-     */
-    setIsTestPingOpen(true);
-    setPingStatus("unavailable");
-    setPingResult(null);
-  };
+  const summary = data?.summary ?? null;
+  const models = data?.models ?? [];
+  const attempts = data?.attempts ?? [];
+
+  const cost = summary
+    ? costDisplay({
+        costUsd: summary.costUsd,
+        costKnownRuns: summary.costKnownRuns,
+        costUnknownRuns: summary.costUnknownRuns,
+      })
+    : null;
+
+  const successRate = summary
+    ? terminalSuccessRate({
+        completed: summary.completed,
+        failed: summary.failed,
+        cancelled: summary.cancelled,
+      })
+    : null;
+
+  /**
+   * The attempt search filters the page the server already returned. Attempt
+   * rows are a bounded window, so this is a view filter over that window — the
+   * UI says "in this page" rather than implying a global search.
+   */
+  const visibleAttempts = useMemo(() => {
+    const needle = debouncedAttemptSearch.trim().toLowerCase();
+    if (needle === "") return attempts;
+    return attempts.filter((row) =>
+      [row.model, row.provider, row.role ?? "", row.taskKey ?? ""]
+        .join(" ")
+        .toLowerCase()
+        .includes(needle)
+    );
+  }, [attempts, debouncedAttemptSearch]);
+
+  const attemptPageCount = Math.max(1, Math.ceil(visibleAttempts.length / ATTEMPT_PAGE_SIZE));
+  const attemptSlice = visibleAttempts.slice(
+    attemptPage * ATTEMPT_PAGE_SIZE,
+    (attemptPage + 1) * ATTEMPT_PAGE_SIZE
+  );
+
+  const modelOptions = useMemo(
+    () => [
+      { id: "", label: "All models" },
+      ...models.map((entry) => ({ id: entry.model, label: entry.model })),
+    ],
+    [models]
+  );
 
   return (
-    <AdminShell activeNav="AI Usage & Cost">
-      {/* 1. Gateway Status & Period Bar */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-5 rounded-2xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)]">
-        <div className="flex items-start sm:items-center gap-3.5">
-          <div className="w-10 h-10 rounded-xl bg-black text-white flex items-center justify-center shrink-0 shadow-[var(--clay-elev-ink-1)]">
-            <Cpu className="w-5 h-5" />
-          </div>
-          <div>
-            <div className="flex flex-wrap items-center gap-2">
-              <h2 className="text-sm font-semibold tracking-tight text-foreground">
-                AI Orchestration & Compute Telemetry
-              </h2>
-              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-medium bg-success-subtle text-success-subtle-foreground border border-success/25 font-mono">
-                <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
-                Active Gateway: OpenRouter (DeepSeek V4.1)
-              </span>
-            </div>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              Token throughput, latency percentiles, and multi-provider cost tracking
-            </p>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2.5 self-start md:self-auto">
-          {/* Segmented Timeframe Switcher */}
-          <div className="flex items-center bg-[var(--clay-sunken)] p-0.5 rounded-lg border border-[var(--clay-line)] shadow-[var(--clay-well-1)]">
-            {["7D", "30D", "3M", "YTD"].map((t) => (
-              <button
-                key={t}
-                type="button"
-                onClick={() => {
-                  setTimeRange(t);
-                  toast.info(`Switched view to ${t}`);
-                }}
-                className={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${
-                  timeRange === t
-                    ? "bg-card text-foreground shadow-[var(--clay-elev-1)] font-semibold"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                {t}
-              </button>
+    <AdminShell activeNav="AI Usage & Cost" live>
+      {/* ── Period + model filters ────────────────────────────────────────── */}
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+        <SegmentedFilter
+          options={ADMIN_CONSOLE_PERIODS.map((entry) => ({
+            id: entry.id,
+            label: entry.label,
+          }))}
+          value={period}
+          onChange={(next) => setPeriod(next)}
+        />
+        <div className="flex items-center gap-2">
+          <select
+            value={modelFilter}
+            onChange={(event) => setModelFilter(event.target.value)}
+            className="h-8 px-2.5 text-xs rounded-lg bg-[var(--clay-sunken)] border border-[var(--clay-line)] text-foreground focus:bg-card focus:outline-none focus:ring-1 focus:ring-black shadow-[var(--clay-well-1)] max-w-[240px]"
+          >
+            {modelOptions.map((option) => (
+              <option key={option.id || "all"} value={option.id}>
+                {option.label}
+              </option>
             ))}
-          </div>
-
+          </select>
           <button
             type="button"
-            onClick={() => handleRunPingTest("DeepSeek V4.1 Flash")}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-foreground bg-[var(--clay-sunken)] hover:bg-[var(--clay-sunken)] border border-[var(--clay-line)] rounded-lg transition-colors shadow-[var(--clay-well-1)]"
+            onClick={refresh}
+            disabled={loading}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-foreground bg-[var(--clay-sunken)] hover:bg-[var(--clay-sunken-deep)] border border-[var(--clay-line)] rounded-lg transition-colors disabled:opacity-50"
           >
-            <Activity className="w-3.5 h-3.5 text-muted-foreground" />
-            <span>Probe Gateway</span>
+            <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />
+            Refresh
           </button>
         </div>
       </div>
 
-      {/* 2. Precision Enterprise KPI Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5">
-        <div className="p-4 rounded-xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)]">
-          <div className="flex items-center justify-between text-xs text-muted-foreground font-medium">
-            <span>Total Requests</span>
-            <Zap className="w-3.5 h-3.5 text-warning" />
-          </div>
-          <h3 className="text-xl font-bold tracking-tight text-foreground font-mono mt-1">1,42,500</h3>
-          <div className="flex items-center gap-1 mt-1 text-[11px] text-success font-medium">
-            <ArrowUpRight className="w-3 h-3" />
-            <span>+24.2% vs last {timeRange}</span>
-          </div>
-        </div>
+      {data && (
+        <p className="text-[11px] text-muted-foreground">
+          Window: {formatTimestamp(data.window.start)} → {formatTimestamp(data.window.end)}.
+          {modelFilter !== "" && ` Filtered to ${modelFilter}.`}
+        </p>
+      )}
 
-        <div className="p-4 rounded-xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)]">
-          <div className="flex items-center justify-between text-xs text-muted-foreground font-medium">
-            <span>Success Rate</span>
-            <CheckCircle2 className="w-3.5 h-3.5 text-success" />
-          </div>
-          <h3 className="text-xl font-bold tracking-tight text-foreground font-mono mt-1">96.84%</h3>
-          <p className="text-[11px] text-muted-foreground mt-1">1,38,000 successful runs</p>
-        </div>
+      {error && !data && <ErrorBlock message={error} onRetry={refresh} />}
 
-        <div className="p-4 rounded-xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)]">
-          <div className="flex items-center justify-between text-xs text-muted-foreground font-medium">
-            <span>Error Rate</span>
-            <AlertTriangle className="w-3.5 h-3.5 text-destructive" />
-          </div>
-          <h3 className="text-xl font-bold tracking-tight text-destructive font-mono mt-1">3.16%</h3>
-          <p className="text-[11px] text-muted-foreground mt-1">4,500 timeouts / rate caps</p>
-        </div>
-
-        <div className="p-4 rounded-xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)]">
-          <div className="flex items-center justify-between text-xs text-muted-foreground font-medium">
-            <span>Tokens Consumed</span>
-            <Coins className="w-3.5 h-3.5 text-muted-foreground" />
-          </div>
-          <h3 className="text-xl font-bold tracking-tight text-foreground font-mono mt-1">102.8M</h3>
-          <p className="text-[11px] text-muted-foreground mt-1">68.4M prompt · 34.4M compl</p>
-        </div>
-
-        <div className="p-4 rounded-xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)] col-span-2 sm:col-span-1">
-          <div className="flex items-center justify-between text-xs text-muted-foreground font-medium">
-            <span>Est. Upstream Cost</span>
-            <TrendingUp className="w-3.5 h-3.5 text-foreground" />
-          </div>
-          <h3 className="text-xl font-bold tracking-tight text-foreground font-mono mt-1">₹1,02,800</h3>
-          <p className="text-[11px] text-muted-foreground mt-1">~₹0.72 per build run</p>
-        </div>
+      {/* ── Summary cards ─────────────────────────────────────────────────── */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
+        <StatCard
+          label="Generation runs"
+          value={summary ? summary.requests.toLocaleString() : null}
+          hint={
+            summary
+              ? `${summary.active} active · ${summary.cancelled} cancelled`
+              : undefined
+          }
+          icon={<Activity className="w-3.5 h-3.5 text-muted-foreground" />}
+          unavailable={!summary}
+        />
+        <StatCard
+          label="Tokens"
+          value={summary ? formatCompactNumber(summary.tokens) : null}
+          hint={
+            summary
+              ? `${formatCompactNumber(summary.promptTokens)} in · ${formatCompactNumber(
+                  summary.completionTokens
+                )} out`
+              : undefined
+          }
+          icon={<Cpu className="w-3.5 h-3.5 text-muted-foreground" />}
+          unavailable={!summary}
+        />
+        <StatCard
+          label="Provider-reported cost"
+          value={cost ? cost.text : null}
+          hint={
+            summary
+              ? summary.costKnownRuns > 0
+                ? `${summary.costKnownRuns} run(s) with a recorded cost · ${summary.costUnknownRuns} without`
+                : "No run in this window recorded a cost"
+              : undefined
+          }
+          icon={<DollarSign className="w-3.5 h-3.5 text-muted-foreground" />}
+          tone={cost?.available ? "neutral" : "warning"}
+          unavailable={!cost || !cost.available}
+        />
+        <StatCard
+          label="Success rate"
+          value={successRate === null ? null : `${successRate}%`}
+          hint={
+            summary
+              ? `${summary.completed} completed · ${summary.failed} failed`
+              : undefined
+          }
+          icon={<CheckCircle2 className="w-3.5 h-3.5 text-success" />}
+          tone="positive"
+          unavailable={successRate === null}
+        />
       </div>
 
-      {/* 3. Provider Share Visual Distribution */}
-      <div className="bg-card rounded-2xl p-5 sm:p-6 border border-[var(--clay-line)] shadow-[var(--clay-elev-1)] space-y-5">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-[var(--clay-line)]">
-          <div>
-            <h3 className="text-sm font-semibold tracking-tight text-foreground">
-              Provider Workload Distribution & Unit Economics
-            </h3>
-            <p className="text-xs text-muted-foreground">
-              Breakdown of generation volume, latency benchmarks, and billable compute
-            </p>
-          </div>
-          <div className="flex items-center gap-2 text-xs text-muted-foreground font-mono">
-            <span>Total Requests: <strong>1,42,500</strong></span>
-            <span>·</span>
-            <span>Active Tier: <strong>Standard Production</strong></span>
-          </div>
-        </div>
+      {/* ── Cost honesty note ─────────────────────────────────────────────── */}
+      {summary && summary.costUnknownRuns > 0 && (
+        <UnavailableNote>
+          {summary.costUnknownRuns.toLocaleString()} run(s) in this window have no recorded
+          provider cost. They are counted as unknown, not as $0.00. Mavly records a cost only when
+          the provider reports one, and it never estimates a cost from a price list.
+        </UnavailableNote>
+      )}
 
-        {/* Multi-segment Progress Bar */}
-        <div className="space-y-2">
-          <div className="h-3 w-full bg-[var(--clay-sunken)] rounded-full overflow-hidden flex">
-            <div className="bg-black h-full w-[45%]" title="DeepSeek V4.1: 45%" />
-            <div className="bg-foreground h-full w-[28%]" title="Claude 3.5 Sonnet: 28%" />
-            <div className="bg-foreground h-full w-[18%]" title="Gemini 1.5 Pro: 18%" />
-            <div className="bg-success h-full w-[9%]" title="GPT-4o: 9%" />
-          </div>
-          <div className="flex flex-wrap items-center gap-4 text-xs pt-1 text-muted-foreground font-medium">
-            <div className="flex items-center gap-1.5">
-              <span className="w-2.5 h-2.5 rounded-full bg-black" />
-              <span>DeepSeek V4.1 (45%)</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className="w-2.5 h-2.5 rounded-full bg-foreground" />
-              <span>Claude 3.5 (28%)</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className="w-2.5 h-2.5 rounded-full bg-foreground" />
-              <span>Gemini 1.5 Pro (18%)</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className="w-2.5 h-2.5 rounded-full bg-success" />
-              <span>GPT-4o (9%)</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Detailed Model Progress Rows */}
-        <div className="space-y-3.5 pt-2">
-          {MOCK_AI_MODEL_USAGE.map((m) => (
-            <div
-              key={m.name}
-              className={`p-3 rounded-xl border transition-all ${
-                selectedModel === m.name
-                  ? "bg-[var(--clay-sunken)] border-[var(--clay-line-strong)]"
-                  : "bg-card border-[var(--clay-line)] hover:border-[var(--clay-line-strong)]"
-              }`}
-              onClick={() => setSelectedModel(m.name)}
-            >
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
-                <div className="flex items-center gap-2">
-                  <span className="font-semibold text-foreground">{m.name}</span>
-                  <span className="text-[11px] text-muted-foreground font-mono">({m.requests} calls)</span>
-                </div>
-                <div className="flex items-center gap-4 text-xs font-mono text-muted-foreground">
-                  <span>Tokens: <strong className="text-foreground">{m.tokens}</strong></span>
-                  <span>Avg Latency: <strong className="text-foreground">{m.avgLatency}</strong></span>
-                  <span>Success: <strong className="text-success">{m.successRate}</strong></span>
-                  <span className="font-bold text-foreground">{m.cost}</span>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* 4. Model Comparison & Gateway Matrix */}
-      <div className="bg-card rounded-2xl p-5 sm:p-6 border border-[var(--clay-line)] shadow-[var(--clay-elev-1)] space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-[var(--clay-line)]">
-          <div>
-            <h3 className="text-sm font-semibold tracking-tight text-foreground">
-              Upstream Gateway & Model Audit Matrix
-            </h3>
-            <p className="text-xs text-muted-foreground">
-              Real-time latency percentiles (p50 / p95) and token split ratio
-            </p>
-          </div>
-          <span className="text-xs font-mono text-muted-foreground bg-[var(--clay-sunken)] px-2.5 py-1 rounded-md border border-[var(--clay-line)] shadow-[var(--clay-well-1)]">
-            Server-side OpenRouter Proxy
-          </span>
-        </div>
-
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
-            <thead>
-              <tr className="border-b border-[var(--clay-line)] text-muted-foreground font-semibold uppercase text-[10px]">
-                <th className="pb-3">Model & Provider</th>
-                <th className="pb-3">Gateway Endpoint</th>
-                <th className="pb-3 text-right">Requests</th>
-                <th className="pb-3 text-right">Prompt / Compl</th>
-                <th className="pb-3 text-right">Total Tokens</th>
-                <th className="pb-3 text-center">p50 / p95</th>
-                <th className="pb-3 text-center">Success Rate</th>
-                <th className="pb-3 text-right">Est. Cost</th>
-                <th className="pb-3 text-right">Action</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[var(--clay-line)]">
-              {modelTableData.map((row) => (
-                <tr key={row.model} className="hover:bg-[var(--clay-sunken)] transition-colors">
-                  <td className="py-3.5">
-                    <p className="font-semibold text-foreground">{row.model}</p>
-                    <p className="text-[11px] text-muted-foreground">{row.provider} · {row.tier}</p>
-                  </td>
-                  <td className="py-3.5 font-mono text-[11px] text-muted-foreground">
-                    {row.gateway}
-                  </td>
-                  <td className="py-3.5 text-right font-mono font-medium text-foreground">
-                    {row.requests}
-                  </td>
-                  <td className="py-3.5 text-right font-mono text-[11px] text-muted-foreground">
-                    {row.promptTokens} / {row.completionTokens}
-                  </td>
-                  <td className="py-3.5 text-right font-mono font-medium text-foreground">
-                    {row.tokens}
-                  </td>
-                  <td className="py-3.5 text-center font-mono text-muted-foreground">
-                    {row.p50} / {row.p95}
-                  </td>
-                  <td className="py-3.5 text-center">
-                    <span className="inline-flex items-center gap-1 font-mono font-semibold text-success">
-                      {row.successRate}%
-                    </span>
-                  </td>
-                  <td className="py-3.5 text-right font-mono font-bold text-foreground">
-                    {row.cost}
-                  </td>
-                  <td className="py-3.5 text-right">
-                    <button
-                      type="button"
-                      onClick={() => handleRunPingTest(row.model)}
-                      className="px-2.5 py-1 text-[11px] font-medium text-foreground bg-[var(--clay-sunken)] hover:bg-[var(--clay-sunken-deep)] rounded-md transition-colors"
-                    >
-                      Probe
-                    </button>
-                  </td>
+      {/* ── Per-model breakdown ───────────────────────────────────────────── */}
+      <SectionCard
+        title="Usage by model"
+        description="Every row is a model that actually ran generations in this window."
+      >
+        {loading && !data ? (
+          <LoadingBlock label="Reading usage" />
+        ) : models.length === 0 ? (
+          <EmptyBlock
+            title="No generation runs in this window"
+            detail="No model has run a generation in the selected period. That is an empty window, not an error."
+          />
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead>
+                <tr className="border-b border-[var(--clay-line)] text-muted-foreground font-semibold uppercase text-[10px]">
+                  <th className="pb-3">Model</th>
+                  <th className="pb-3 text-right">Runs</th>
+                  <th className="pb-3 text-right">Completed</th>
+                  <th className="pb-3 text-right">Failed</th>
+                  <th className="pb-3 text-right">Tokens</th>
+                  <th className="pb-3 text-right">Cost</th>
+                  <th className="pb-3 text-right">Run duration p50</th>
+                  <th className="pb-3 text-right">p95</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {/* Upstream Health Probe Modal */}
-      {isTestPingOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[var(--clay-scrim)] backdrop-blur-[3px] animate-in fade-in">
-          <div className="w-full max-w-md bg-card rounded-2xl border border-[var(--clay-line)] shadow-[var(--clay-float)] p-6 space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-[var(--clay-line)]">
-              <div className="flex items-center gap-2">
-                <Terminal className="w-4 h-4 text-foreground" />
-                <h3 className="text-sm font-bold text-foreground">Gateway Health Probe</h3>
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsTestPingOpen(false)}
-                className="p-1 text-muted-foreground hover:text-black rounded-lg"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="p-4 rounded-xl bg-black text-white/80 font-mono text-xs space-y-2 shadow-[var(--clay-elev-ink-1)]">
-              <p className="text-muted-foreground">
-                &gt; Pinging OpenRouter endpoint: <span className="text-white">https://openrouter.ai/api/v1</span>
-              </p>
-              {pingStatus === "running" ? (
-                <div className="flex items-center gap-2 text-warning py-2">
-                  <Activity className="w-4 h-4 animate-spin" />
-                  <span>Measuring SSL handshake and token stream TTL...</span>
-                </div>
-              ) : pingStatus === "unavailable" ? (
-                <div className="space-y-1.5 py-1 text-white/70">
-                  <p className="text-warning">No live provider probe is implemented in this build.</p>
-                  <p className="text-muted-foreground">
-                    Nothing was contacted, so no latency is reported. Provider reachability is
-                    not measured here; check the generation worker logs for real provider
-                    outcomes.
-                  </p>
-                </div>
-              ) : pingResult ? (
-                <div className="space-y-1.5 text-success py-1">
-                  <p>✔ HTTP 200 OK — Ready</p>
-                  <p className="text-muted-foreground">Model: {pingResult.provider}</p>
-                  <p className="text-muted-foreground">Round-trip Latency: {pingResult.latency}ms</p>
-                  <p className="text-muted-foreground">Auth Header: Bearer [REDACTED]</p>
-                </div>
-              ) : null}
-            </div>
-
-            <div className="flex items-center justify-end gap-2 pt-2">
-              <button
-                type="button"
-                onClick={() => handleRunPingTest("DeepSeek V4.1 Flash")}
-                disabled={pingStatus === "running"}
-                className="px-3 py-1.5 text-xs font-medium text-foreground bg-[var(--clay-sunken)] hover:bg-[var(--clay-sunken-deep)] rounded-lg transition-colors"
-              >
-                Re-test
-              </button>
-              <button
-                type="button"
-                onClick={() => setIsTestPingOpen(false)}
-                className="px-3.5 py-1.5 text-xs font-semibold text-white bg-primary hover:bg-[var(--clay-brand-hover)] rounded-lg"
-              >
-                Done
-              </button>
-            </div>
+              </thead>
+              <tbody className="divide-y divide-[var(--clay-line)]">
+                {models.map((row) => {
+                  const rowCost = costDisplay({
+                    costUsd: row.costUsd,
+                    costKnownRuns: row.costKnownRuns,
+                    costUnknownRuns: row.costUnknownRuns,
+                  });
+                  return (
+                    <tr key={row.model} className="hover:bg-[var(--clay-sunken)] transition-colors">
+                      <td className="py-3 font-mono font-semibold text-foreground">{row.model}</td>
+                      <td className="py-3 text-right font-mono">{row.requests.toLocaleString()}</td>
+                      <td className="py-3 text-right font-mono text-success">
+                        {row.completed.toLocaleString()}
+                      </td>
+                      <td className="py-3 text-right font-mono">
+                        {row.failed > 0 ? (
+                          <span className="text-warning-subtle-foreground">
+                            {row.failed.toLocaleString()}
+                          </span>
+                        ) : (
+                          "0"
+                        )}
+                      </td>
+                      <td className="py-3 text-right font-mono text-muted-foreground">
+                        {formatCompactNumber(row.tokens)}
+                      </td>
+                      <td
+                        className={`py-3 text-right font-mono ${
+                          rowCost.available ? "text-foreground" : "text-muted-foreground"
+                        }`}
+                      >
+                        {rowCost.text}
+                      </td>
+                      <td className="py-3 text-right font-mono text-muted-foreground">
+                        {formatSeconds(row.durationP50)}
+                      </td>
+                      <td className="py-3 text-right font-mono text-muted-foreground">
+                        {formatSeconds(row.durationP95)}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
-        </div>
+        )}
+      </SectionCard>
+
+      {/* ── Per-attempt metering ──────────────────────────────────────────── */}
+      <SectionCard
+        title="Provider attempts"
+        description="Per-attempt token and cost metering written by the credit engine."
+        actions={
+          <SearchField
+            value={attemptSearch}
+            onChange={(value) => {
+              setAttemptSearch(value);
+              setAttemptPage(0);
+            }}
+            placeholder="Filter this page by model, provider, role…"
+            className="w-full sm:w-64"
+          />
+        }
+      >
+        {!data ? (
+          <LoadingBlock label="Reading attempts" />
+        ) : !data.attemptsAvailable ? (
+          <EmptyBlock
+            title="Per-attempt metering is not installed"
+            detail="The ai_usage_attempts table does not exist on this deployment, so there is no attempt-level data to show. The run-level figures above are unaffected."
+          />
+        ) : attempts.length === 0 ? (
+          <EmptyBlock
+            title="No attempt rows in this window"
+            detail="The metering table exists but recorded no attempt in the selected period."
+          />
+        ) : (
+          <div className="space-y-3">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className="border-b border-[var(--clay-line)] text-muted-foreground font-semibold uppercase text-[10px]">
+                    <th className="pb-3">Recorded</th>
+                    <th className="pb-3">Model</th>
+                    <th className="pb-3">Role</th>
+                    <th className="pb-3 text-right">Attempt</th>
+                    <th className="pb-3 text-right">Tokens in</th>
+                    <th className="pb-3 text-right">Tokens out</th>
+                    <th className="pb-3 text-right">Cost</th>
+                    <th className="pb-3 text-center">Cost source</th>
+                    <th className="pb-3 text-center">Usage</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[var(--clay-line)]">
+                  {attemptSlice.map((row) => (
+                    <AttemptRow key={row.id} row={row} />
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <Pagination
+              page={attemptPage}
+              pageSize={ATTEMPT_PAGE_SIZE}
+              total={visibleAttempts.length}
+              onPageChange={setAttemptPage}
+            />
+            <p className="text-[11px] text-muted-foreground">
+              Showing the most recent {attempts.length} attempt rows returned for this window.
+            </p>
+          </div>
+        )}
+      </SectionCard>
+
+      {error && data && (
+        <p className="text-[11px] text-warning-subtle-foreground">
+          Showing the last successful read. The newest refresh failed: {error}
+        </p>
       )}
     </AdminShell>
+  );
+}
+
+function AttemptRow({ row }: { row: AdminAiUsageAttemptRow }) {
+  /**
+   * ⚠️ THREE DISTINCT COST STATES, NOT TWO. A provider-reported cost, a
+   * rate-card estimate, and no cost at all are different claims; collapsing the
+   * last two into "$0.00" is exactly the error this page exists to avoid.
+   */
+  const costText =
+    row.costSource === "provider_reported" && row.actualCostUsd !== null
+      ? `$${row.actualCostUsd.toFixed(6)}`
+      : row.costSource === "rate_card" && row.estimatedCostUsd !== null
+        ? `~$${row.estimatedCostUsd.toFixed(6)}`
+        : "unavailable";
+
+  return (
+    <tr className="hover:bg-[var(--clay-sunken)] transition-colors">
+      <td className="py-3 text-muted-foreground whitespace-nowrap">
+        {formatTimestamp(row.createdAt)}
+      </td>
+      <td className="py-3 font-mono font-semibold text-foreground">{row.model}</td>
+      <td className="py-3 text-muted-foreground">{row.role ?? "—"}</td>
+      <td className="py-3 text-right font-mono">{row.attemptIndex}</td>
+      <td className="py-3 text-right font-mono text-muted-foreground">
+        {row.promptTokens === null ? "—" : row.promptTokens.toLocaleString()}
+      </td>
+      <td className="py-3 text-right font-mono text-muted-foreground">
+        {row.completionTokens === null ? "—" : row.completionTokens.toLocaleString()}
+      </td>
+      <td
+        className={`py-3 text-right font-mono ${
+          row.costSource === "unavailable" ? "text-muted-foreground" : "text-foreground"
+        }`}
+      >
+        {costText}
+      </td>
+      <td className="py-3 text-center">
+        <Badge
+          tone={
+            row.costSource === "provider_reported"
+              ? "positive"
+              : row.costSource === "rate_card"
+                ? "warning"
+                : "neutral"
+          }
+        >
+          {row.costSource === "provider_reported"
+            ? "provider"
+            : row.costSource === "rate_card"
+              ? "rate card"
+              : "none"}
+        </Badge>
+      </td>
+      <td className="py-3 text-center">
+        <Badge tone={row.usageSource === "provider" ? "positive" : "neutral"}>
+          {row.usageSource === "provider" ? "measured" : "unavailable"}
+        </Badge>
+      </td>
+    </tr>
   );
 }
