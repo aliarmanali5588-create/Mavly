@@ -13,6 +13,7 @@ import {
   ExternalLink,
 } from "lucide-react";
 import { AuthNav } from "@/components/auth/AuthNav";
+import { AnnouncementBanner } from "@/components/common/AnnouncementBanner";
 import type { ProfileSummary } from "@/lib/user-profile";
 import { formatINR } from "@/components/home/PricingSection";
 import {
@@ -44,6 +45,7 @@ export function CreditTopupClient({ profile }: CreditTopupClientProps) {
     <div className="min-h-screen bg-[var(--clay-base)] text-foreground flex flex-col mavly-page-enter">
       {/* Top Header */}
       <header className="sticky top-0 z-50 bg-[color-mix(in_srgb,var(--clay-base)_86%,transparent)] backdrop-blur-md border-b border-[var(--clay-line)]">
+        <AnnouncementBanner />
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <div className="flex items-center gap-6">
             <Link

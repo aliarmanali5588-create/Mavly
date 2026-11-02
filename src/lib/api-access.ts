@@ -24,14 +24,16 @@
  * listed separately below; each route under them authenticates itself.
  *
  * `/api/config` answers one boolean with no key, env value, or other secret in
- * the payload (`src/app/api/config/route.ts`). The dashboard no longer calls it,
- * but the public compatibility contract is retained.
+ * the payload (`src/app/api/config/route.ts`). The public announcement route
+ * exposes only the currently enabled plain-text banner message and is safe for
+ * signed-out visitors (`src/app/api/public/announcement/route.ts`).
  *
  * The generation worker is invoked directly by its Cloudflare Cron handler and
  * does not have a public application route.
  */
 export const PUBLIC_API_PATHS: readonly string[] = [
   "/api/config",
+  "/api/public/announcement",
 ];
 
 /**

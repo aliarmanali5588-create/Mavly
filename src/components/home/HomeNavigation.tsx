@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { ArrowRight } from "lucide-react";
+import { AnnouncementBanner } from "@/components/common/AnnouncementBanner";
 
 export function HomeNavigation() {
   const [scrolled, setScrolled] = useState(false);
@@ -31,6 +32,7 @@ export function HomeNavigation() {
           : "bg-transparent border-b border-transparent"
       }`}
     >
+      <AnnouncementBanner />
       <div className="max-w-7xl mx-auto px-4 sm:px-8 h-16 sm:h-20 flex items-center justify-between">
         {/* Brand Logo */}
         <Link href="/" className="flex items-center gap-2.5 group select-none">

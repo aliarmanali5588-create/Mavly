@@ -176,6 +176,11 @@ the trusted signup notification trigger, read/unread RPCs, optional Realtime
 publication, retention cleanup, and the Asia/Kolkata reporting-window authority
 used by the admin Overview and AI-usage aggregates. It does not add Mavly billing
 or treat customer-app Razorpay payments as platform revenue.
+Apply `53_live_announcement_banner.sql` after 52 before enabling the public
+announcement banner: it extends the existing `admin_settings` registry with the
+plain-text `announcements.message`, adds an atomic admin-only enabled/message write
+RPC with audit logging, and adds the anonymous read-only banner RPC. It creates no
+new announcement table and fails closed on invalid or empty enabled messages.
 Project-secret encryption also
 requires the server-only `MAVLY_PROJECT_SECRETS_ENCRYPTION_KEY` (32 random bytes,
 base64-encoded); without it create/update fail closed. `npm test` covers the pure

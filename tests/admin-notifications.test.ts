@@ -13,6 +13,8 @@ const read = (path: string) => readFileSync(new URL(`../${path}`, import.meta.ur
 const migration = read("supabase/migrations/52_admin_notifications_and_reporting.sql");
 const route = read("src/app/api/adminsh/notifications/route.ts");
 const hook = read("src/app/adminsh/components/useAdminNotifications.ts");
+const realtime = read("src/lib/admin/notification-realtime.ts");
+const audio = read("src/lib/admin/notification-audio.ts");
 
 test("notification payloads are normalized and desktop copy is privacy-safe", () => {
   const row = normalizeAdminNotification({
@@ -51,9 +53,13 @@ test("notification API and client use the existing admin boundary and one realti
   assert.match(route, /admin_notifications_mark_read/);
   assert.match(route, /admin_notifications_mark_all_read/);
   assert.doesNotMatch(route, /SERVICE_ROLE|service_role|createClient\(/);
-  assert.match(hook, /postgres_changes/);
-  assert.match(hook, /mavly-admin-notifications/);
-  assert.match(hook, /removeChannel/);
-  assert.match(hook, /\/sound\/adminpanelnotification\.mp3/);
+  assert.match(hook, /subscribeToAdminNotificationRealtime/);
+  assert.match(realtime, /postgres_changes/);
+  assert.match(realtime, /mavly-admin-notifications/);
+  assert.match(realtime, /SUBSCRIBED/);
+  assert.match(realtime, /removeChannel/);
+  assert.match(audio, /\/sound\/adminpanelnotification\.mp3/);
+  assert.match(audio, /unlockFromGesture/);
+  assert.match(audio, /playback was rejected/);
   assert.match(hook, /Notification\.requestPermission/);
 });

@@ -64,6 +64,12 @@ export async function POST(request: NextRequest) {
     if (error.message?.includes("INVALID_SETTING_VALUE")) {
       return adminError(400, "INVALID_SETTING_VALUE", "That value is not valid for this setting.");
     }
+    if (error.message?.includes("ANNOUNCEMENT_MESSAGE_REQUIRED")) {
+      return adminError(400, "ANNOUNCEMENT_MESSAGE_REQUIRED", "Enter a message before enabling the announcement.");
+    }
+    if (error.message?.includes("ANNOUNCEMENT_MESSAGE_TOO_LONG")) {
+      return adminError(400, "ANNOUNCEMENT_MESSAGE_TOO_LONG", "The announcement must be 500 characters or fewer.");
+    }
     const missing = error.code === "PGRST202" || error.code === "42883";
     return adminError(
       503,

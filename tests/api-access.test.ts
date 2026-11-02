@@ -15,11 +15,13 @@ import {
 
 // ── The public exceptions are exact paths ───────────────────────────────────
 
-test("only the config probe is an exact public API path", () => {
+test("public exact API paths stay narrowly allowlisted", () => {
   assert.deepEqual([...PUBLIC_API_PATHS], [
     "/api/config",
+    "/api/public/announcement",
   ]);
   assert.equal(isPublicApiPath("/api/config"), true);
+  assert.equal(isPublicApiPath("/api/public/announcement"), true);
 });
 
 test("the exceptions are exact matches, not prefixes", () => {
@@ -27,6 +29,8 @@ test("the exceptions are exact matches, not prefixes", () => {
   assert.equal(isPublicApiPath("/api/configx"), false);
   assert.equal(isPublicApiPath("/api/config/"), false);
   assert.equal(isPublicApiPath("/api/config/nested"), false);
+  assert.equal(isPublicApiPath("/api/public/announcement/"), false);
+  assert.equal(isPublicApiPath("/api/public/announcementx"), false);
   assert.equal(isPublicApiPath("/API/config"), false);
   assert.equal(isPublicApiPath("/apiconfig"), false);
   assert.equal(isPublicApiPath(""), false);
@@ -75,8 +79,10 @@ test("a verified session lets every API path through", () => {
   }
 });
 
-test("/api/config is allowed even without a session", () => {
+test("public read-only compatibility and announcement APIs are allowed without a session", () => {
   assert.equal(apiSessionDecision("/api/config", false), "allow");
+  assert.equal(apiSessionDecision("/api/public/announcement", false), "allow");
+  assert.equal(apiSessionDecision("/api/public/announcement/other", false), "unauthenticated");
 });
 
 test("generation worker invocation is not exposed as a public route", () => {

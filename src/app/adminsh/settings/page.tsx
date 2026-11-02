@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   AlertTriangle,
   Bell,
@@ -101,18 +101,23 @@ function RuntimeSettings({
       </UnavailableNote>
 
       {groups.map((group) => (
-        <SectionCard
-          key={group.id}
-          title={group.title}
-          description={group.description}
-          actions={<Badge tone="neutral">{group.rows.length} setting(s)</Badge>}
-        >
-          <div className="space-y-3">
-            {group.rows.map((row) => (
-              <SettingField key={row.key} row={row} onSaved={onChanged} />
-            ))}
-          </div>
-        </SectionCard>
+        group.id === "announcements" &&
+        group.rows.some((row) => row.key === "announcements.message") ? (
+          <AnnouncementSettingsCard key={group.id} rows={group.rows} onSaved={onChanged} />
+        ) : (
+          <SectionCard
+            key={group.id}
+            title={group.title}
+            description={group.description}
+            actions={<Badge tone="neutral">{group.rows.length} setting(s)</Badge>}
+          >
+            <div className="space-y-3">
+              {group.rows.map((row) => (
+                <SettingField key={row.key} row={row} onSaved={onChanged} />
+              ))}
+            </div>
+          </SectionCard>
+        )
       ))}
     </>
   );
@@ -121,7 +126,7 @@ function RuntimeSettings({
 const GROUP_META: Record<string, { title: string; description: string; icon: React.ReactNode }> = {
   announcements: {
     title: "Announcements",
-    description: "Whether the published announcement feed is served.",
+    description: "Control the live announcement shown above the public website navigation.",
     icon: <Bell className="w-3.5 h-3.5 text-muted-foreground" />,
   },
   credits: {
@@ -156,6 +161,131 @@ function groupSettings(rows: AdminSettingRow[]) {
     icon: GROUP_META[id]?.icon,
     rows: bucketRows,
   }));
+}
+
+const ANNOUNCEMENT_MESSAGE_MAX_LENGTH = 500;
+
+function AnnouncementSettingsCard({
+  rows,
+  onSaved,
+}: {
+  rows: AdminSettingRow[];
+  onSaved: () => void;
+}) {
+  const enabledRow = rows.find((row) => row.key === "announcements.enabled");
+  const messageRow = rows.find((row) => row.key === "announcements.message");
+  const savedEnabled = enabledRow ? settingValueAsString(enabledRow) === "true" : false;
+  const savedMessage = messageRow ? settingValueAsString(messageRow) : "";
+  const [enabled, setEnabled] = useState(savedEnabled);
+  const [message, setMessage] = useState(savedMessage);
+  const mutation = useAdminMutation();
+
+  useEffect(() => {
+    setEnabled(savedEnabled);
+    setMessage(savedMessage);
+  }, [savedEnabled, savedMessage]);
+
+  const dirty = enabled !== savedEnabled || message !== savedMessage;
+
+  const save = async () => {
+    const trimmedMessage = message.trim();
+    if (enabled && trimmedMessage.length === 0) {
+      toast.error("Enter a message before enabling the announcement.");
+      return;
+    }
+    if (trimmedMessage.length > ANNOUNCEMENT_MESSAGE_MAX_LENGTH) {
+      toast.error("The announcement must be 500 characters or fewer.");
+      return;
+    }
+
+    const result = await mutation.run<{ message: string }>("/api/adminsh/settings/announcement", {
+      enabled,
+      message: trimmedMessage,
+    });
+
+    if ("error" in result) {
+      toast.error(result.error);
+      return;
+    }
+
+    setMessage(trimmedMessage);
+    toast.success(result.data.message);
+    onSaved();
+  };
+
+  return (
+    <SectionCard
+      title={GROUP_META.announcements.title}
+      description={GROUP_META.announcements.description}
+      actions={<Badge tone="neutral">2 settings</Badge>}
+    >
+      <div className="space-y-4">
+        <div className="px-3 py-3 rounded-lg bg-[var(--clay-sunken)] border border-[var(--clay-line)] space-y-2">
+          <div className="flex flex-col gap-1">
+            <label htmlFor="announcement-message" className="text-xs font-semibold text-foreground">
+              Announcement message
+            </label>
+            <p className="text-[11px] text-muted-foreground leading-relaxed">
+              Plain text shown above the public Mavly website navigation. Line breaks and emojis are supported.
+            </p>
+          </div>
+          <textarea
+            id="announcement-message"
+            value={message}
+            maxLength={ANNOUNCEMENT_MESSAGE_MAX_LENGTH}
+            onChange={(event) => setMessage(event.target.value)}
+            placeholder="Type your announcement message here..."
+            rows={4}
+            className="w-full resize-y min-h-24 px-3 py-2.5 text-sm rounded-lg bg-card border border-[var(--clay-line)] text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-black"
+          />
+          <div className="flex justify-between gap-3 text-[10px] text-muted-foreground font-mono">
+            <span>Leading and trailing whitespace is trimmed when saved.</span>
+            <span>{message.length}/{ANNOUNCEMENT_MESSAGE_MAX_LENGTH}</span>
+          </div>
+        </div>
+
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-3 py-3 rounded-lg bg-[var(--clay-sunken)] border border-[var(--clay-line)]">
+          <div>
+            <p className="text-xs font-semibold text-foreground">Public banner</p>
+            <p className="text-[11px] text-muted-foreground leading-relaxed mt-0.5">
+              Disabled announcements keep their saved message for later reuse.
+            </p>
+          </div>
+          <select
+            value={enabled ? "true" : "false"}
+            onChange={(event) => setEnabled(event.target.value === "true")}
+            className="h-8 px-2.5 text-xs rounded-lg bg-card border border-[var(--clay-line)] text-foreground focus:outline-none focus:ring-1 focus:ring-black"
+            aria-label="Public announcement status"
+          >
+            <option value="true">Enabled</option>
+            <option value="false">Disabled</option>
+          </select>
+        </div>
+
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] text-muted-foreground font-mono">
+            {enabledRow?.updatedAt || messageRow?.updatedAt ? (
+              <span>
+                updated {formatTimestamp(enabledRow?.updatedAt ?? messageRow?.updatedAt)}
+                {(enabledRow?.updatedByEmail ?? messageRow?.updatedByEmail)
+                  ? ` by ${enabledRow?.updatedByEmail ?? messageRow?.updatedByEmail}`
+                  : ""}
+              </span>
+            ) : (
+              <span>never changed</span>
+            )}
+          </div>
+          <PrimaryButton onClick={save} disabled={!dirty || mutation.pending} icon={<Save className="w-3 h-3" />}>
+            {mutation.pending ? "Saving…" : "Save"}
+          </PrimaryButton>
+        </div>
+
+        {mutation.error && (
+          <p className="text-[11px] text-warning-subtle-foreground">{mutation.error}</p>
+        )}
+      </div>
+    </SectionCard>
+  );
 }
 
 function SettingField({ row, onSaved }: { row: AdminSettingRow; onSaved: () => void }) {

@@ -283,6 +283,7 @@ export function AdminHeader({
                 <button
                   type="button"
                   onClick={() => notifications.setSoundPreference(!notifications.soundOn)}
+                  aria-pressed={notifications.soundOn}
                   className="inline-flex items-center gap-1 text-muted-foreground hover:text-foreground"
                   title={notifications.soundOn ? "Disable notification sound" : "Enable notification sound"}
                 >

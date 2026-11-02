@@ -10,6 +10,7 @@ import { startOAuth } from "@/lib/auth/oauth";
 import { isOAuthProvider, type OAuthProvider } from "@/lib/auth/oauth-url";
 import { signInErrorMessage } from "@/lib/auth/error-copy";
 import { supabaseConfigProblem } from "@/lib/supabase/config";
+import { AnnouncementBanner } from "@/components/common/AnnouncementBanner";
 
 type LoginScreenProps = {
   /** Validated internal destination the user came from. */
@@ -71,6 +72,7 @@ export default function LoginScreen({
 
       {/* ── Top Navigation Row ── */}
       <header className="w-full border-b border-[var(--clay-line)] bg-card/70 backdrop-blur-md sticky top-0 z-20">
+        <AnnouncementBanner />
         <div className="max-w-6xl mx-auto px-4 sm:px-8 h-16 sm:h-20 flex items-center justify-between">
           {/* Left Side: Back to Mavly */}
           <Link

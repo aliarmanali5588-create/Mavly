@@ -9,6 +9,7 @@ import {
   type PricingPlan,
 } from "@/components/home/PricingSection";
 import { AuthNav } from "@/components/auth/AuthNav";
+import { AnnouncementBanner } from "@/components/common/AnnouncementBanner";
 import type { ProfileSummary } from "@/lib/user-profile";
 import {
   Dialog,
@@ -35,6 +36,7 @@ export function UpgradeClient({ profile }: UpgradeClientProps) {
     <div className="min-h-screen bg-[var(--clay-base)] text-foreground flex flex-col mavly-page-enter">
       {/* Top Navigation Bar */}
       <header className="sticky top-0 z-50 bg-[color-mix(in_srgb,var(--clay-base)_86%,transparent)] backdrop-blur-md border-b border-[var(--clay-line)]">
+        <AnnouncementBanner />
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <div className="flex items-center gap-6">
             <Link
