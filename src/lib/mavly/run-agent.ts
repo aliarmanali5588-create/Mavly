@@ -191,6 +191,14 @@ import {
   ensureEnrollment,
   recheckAuthorization,
 } from "@/lib/managed-backend/enrollment-service";
+import {
+  resolveBackendContext,
+  verifyBackendContextUnchanged,
+} from "@/lib/backend-providers/context-server";
+import type {
+  BackendAgentContext,
+  BackendContextProvider,
+} from "@/lib/backend-providers/context";
 import { enrollmentReasonLabel } from "@/lib/managed-backend/enrollment";
 import {
   managedBackendLifecycle,
@@ -1147,6 +1155,49 @@ async function execute(
         }
       : undefined;
 
+  /**
+   * ═══ THE AUTHORITATIVE BACKEND SELECTION, RESOLVED ONCE ════════════════════
+   *
+   * ⚠️ RESOLVED BEFORE ANY AGENT RUNS, FROM THE DATABASE, WITH A SERVICE-ROLE
+   * CLIENT. Never from UI state, local storage, conversation history or a
+   * client-supplied provider name. The same object is handed to the orchestration
+   * handle (all six specialists) and to the coding engine, so no two agents can
+   * disagree about which backend this project uses.
+   *
+   * ⚠️ A FAILURE IS NOT "NO BACKEND". If the context cannot be read, the run is
+   * stopped with the reason. Continuing would let the coding engine fall back to
+   * its own managed-backend guess, which is precisely the silent provider
+   * assumption this work removes.
+   */
+  let backendContext: BackendAgentContext | null = null;
+  let backendContextEpoch = 0;
+  let backendContextProvider: BackendContextProvider = "none";
+  if (guard.client) {
+    const resolved = await resolveBackendContext({
+      client: guard.client,
+      projectId: input.projectId,
+    });
+    if (resolved.ok === false) {
+      /**
+       * ⚠️ A MISSING MIGRATION IS A DEPLOYMENT FACT, NOT A RUN FAILURE. Before
+       * migration 48 is applied the RPC does not exist, and failing every run
+       * would make the feature unshippable. The run proceeds with an explicitly
+       * unresolved context, which the prompts state as unresolved rather than
+       * guessing a provider.
+       */
+      if (resolved.code !== "migration_required") {
+        throw new Error(`Backend selection could not be read: ${resolved.message}`);
+      }
+      console.warn(
+        `[mavly] run ${runId}: backend context unavailable (migration 48 not applied); agents will be told the selection is unresolved.`,
+      );
+    } else {
+      backendContext = resolved.context;
+      backendContextEpoch = resolved.row.selection_epoch;
+      backendContextProvider = resolved.row.backend_provider;
+    }
+  }
+
   let orchestration: OrchestrationHandle | null = null;
   try {
     orchestration = input.worker
@@ -1164,6 +1215,7 @@ async function execute(
           trackProviderUsage: guard.trackProviderUsage,
           runtimeEvidence: runtimeEvidenceProvider,
           projectRules,
+          backendAgentContext: backendContext,
         })
       : null;
   } catch (error) {
@@ -1584,6 +1636,52 @@ async function execute(
       projectId: input.projectId,
       model,
     });
+
+    /**
+     * ═══ REGISTER THE MANAGED PROVIDER ROW ═══════════════════════════════════
+     *
+     * ⚠️ WITHOUT THIS, MIGRATION 39's ONE-ACTIVE-PROVIDER INDEX CANNOT SEE NEON.
+     * Only `external_supabase` ever got a provider row, so a project with a ready
+     * managed database could also activate Supabase and end up with two live
+     * backends. The row is created here, from the trusted lifecycle, and its
+     * status is derived server-side — the caller cannot ask for `ready`.
+     *
+     * ⚠️ THIS DOES NOT ACTIVATE. Activating is the user's explicit choice from
+     * the Database page. A freshly provisioned backend is a verified candidate,
+     * not the authoritative one.
+     *
+     * A failure here is logged, not fatal: the database is genuinely ready and
+     * failing the run over a registry write would discard the user's work. The
+     * next read repairs it, and migration 48's backfill covers history.
+     */
+    if (guard.client) {
+      const registered = await guard.client.rpc("register_managed_backend_provider", {
+        p_project_id: input.projectId,
+        p_user_id: input.userId,
+      });
+      if (registered.error) {
+        console.warn(
+          `[mavly] run ${runId}: managed provider registration failed (${registered.error.code ?? "unknown"}).`,
+        );
+      } else {
+        /**
+         * Re-read the context so the rest of THIS run sees the provider it just
+         * created. Without this the coding batches would be told the backend
+         * selection is unresolved on the very run that made it ready.
+         */
+        const refreshed = await resolveBackendContext({
+          client: guard.client,
+          projectId: input.projectId,
+        });
+        if (refreshed.ok) {
+          backendContext = refreshed.context;
+          backendContextEpoch = refreshed.row.selection_epoch;
+          backendContextProvider = refreshed.row.backend_provider;
+          if (generationInput) generationInput.backendAgentContext = backendContext;
+        }
+      }
+    }
+
     syncContext();
     managedBackendSummary = managedBackendReadySummary({
       model,
@@ -1818,6 +1916,30 @@ async function execute(
   const onBatch = async (batch: AgentBatchCheckpoint): Promise<void> => {
     await assertRunOwned(input, guard);
 
+    /**
+     * ═══ THE BACKEND MUST NOT CHANGE MID-RUN ═════════════════════════════════
+     *
+     * ⚠️ CHECKED AT EVERY BATCH, NOT ONCE AT THE START. A switch during an active
+     * generation is the case the brief calls out: the first batches were written
+     * against one provider and the later ones would be written against another,
+     * producing a project that mixes two backends and works with neither.
+     *
+     * ⚠️ THIS THROWS RATHER THAN RESTARTING. Silently restarting would spend the
+     * user's credits on work they did not ask for, and the run's own recovery
+     * path already preserves every verified checkpoint.
+     */
+    if (guard.client && backendContext) {
+      const unchanged = await verifyBackendContextUnchanged({
+        client: guard.client,
+        projectId: input.projectId,
+        startedEpoch: backendContextEpoch,
+        startedProvider: backendContextProvider,
+      });
+      if (unchanged.ok === false && unchanged.code === "stale") {
+        throw new AgentGenerationSetupError(unchanged.message);
+      }
+    }
+
     for (const file of batch.files) writtenPaths.add(file.path);
 
     /**
@@ -2047,6 +2169,7 @@ async function execute(
     priorAttemptCount: guard.priorUsage.attempts,
     managedBackendContext,
     ...(backendContract ? { backendContract } : {}),
+    ...(backendContext ? { backendAgentContext: backendContext } : {}),
     ...(memory.used
       ? {
           contextFiles: memory.contextFiles,

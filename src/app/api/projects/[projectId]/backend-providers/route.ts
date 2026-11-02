@@ -1,6 +1,7 @@
 import type { NextRequest } from "next/server";
 
 import { authorizeProjectRequest } from "@/app/api/vcaas/_shared";
+import { enableManagedBackend } from "@/lib/backend-providers/enable-managed";
 import {
   disconnectSupabaseBackend,
   readBackendCenter,
@@ -146,6 +147,29 @@ export async function POST(
     );
   }
 
+  if (action === "enable_managed") {
+    /**
+     * ⚠️ `Enable Backend` IS NOT A SWITCH AND NOT A PROVISIONING CALL. It
+     * activates an already-ready managed backend, or reports the truthful next
+     * step. A Supabase-active project is refused with its current selection so
+     * the UI can show the lock instead of an error.
+     */
+    const enabled = await enableManagedBackend({
+      client: auth.supabase,
+      userId: auth.userId,
+      projectId,
+    });
+    if (enabled.ok === false) {
+      return apiError(enabled.code, enabled.message, enabled.status);
+    }
+    return apiData({
+      outcome: enabled.data.outcome,
+      activeProvider: enabled.data.activeProvider,
+      center: enabled.data.view,
+      message: enabled.data.message,
+    });
+  }
+
   if (action === "switch") {
     const target = record.provider;
     if (!isBackendProvider(target)) {
@@ -179,7 +203,7 @@ export async function POST(
 
   return apiError(
     "INVALID_ACTION",
-    "Supported actions are switch and disconnect_supabase.",
+    "Supported actions are enable_managed, switch and disconnect_supabase.",
     400,
   );
 }

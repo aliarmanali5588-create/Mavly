@@ -7,6 +7,7 @@ import {
   ExternalLinkIcon,
   GithubIcon,
   LoaderIcon,
+  LockIcon,
   RefreshCwIcon,
   TriangleAlertIcon,
 } from "lucide-react";
@@ -301,6 +302,34 @@ export function BackendCenter({ project, onOpenGithub, githubConnected }: Backen
     }
   };
 
+  const enableBackend = async () => {
+    setPending("enable_managed");
+    try {
+      const { response, payload } = await post({ action: "enable_managed" });
+      if (!response.ok || payload.ok === false) {
+        toast.error(payload.error?.message ?? "The backend could not be enabled.");
+        return;
+      }
+      /**
+       * ⚠️ THE SERVER'S OWN MESSAGE IS SHOWN, NOT A GUESSED ONE. The outcome
+       * distinguishes "activated" from "approved but not provisioned yet", and
+       * inventing a friendlier sentence here would tell the user a database
+       * exists when it does not.
+       */
+      const data = (payload as { data?: { message?: string; outcome?: string } }).data;
+      if (data?.outcome === "blocked") {
+        toast.error(data.message ?? "The backend could not be enabled.");
+      } else if (data?.message) {
+        toast.success(data.message);
+      }
+      await load();
+    } catch {
+      toast.error("The backend could not be enabled.");
+    } finally {
+      setPending(null);
+    }
+  };
+
   const confirmSwitch = async () => {
     if (!switchTarget) return;
     const target = switchTarget;
@@ -373,6 +402,27 @@ export function BackendCenter({ project, onOpenGithub, githubConnected }: Backen
             </StatusPill>
           ) : null}
 
+          {/**
+           * ⚠️ THE PRIMARY ACTION. It is disabled — not hidden — when Supabase is
+           * active, so the card stays visible and explains itself instead of
+           * looking broken.
+           */}
+          {!managedActive && managedState !== "ready" ? (
+            <Button
+              size="sm"
+              onClick={() => void enableBackend()}
+              disabled={pending !== null || supabaseActive}
+              aria-describedby={supabaseActive ? "backend-mavly-locked" : undefined}
+            >
+              {pending === "enable_managed" ? (
+                <LoaderIcon className="size-4 animate-spin" aria-hidden="true" />
+              ) : supabaseActive ? (
+                <LockIcon className="size-4" aria-hidden="true" />
+              ) : null}
+              Enable Backend
+            </Button>
+          ) : null}
+
           {managedState === "ready" && !managedActive ? (
             <Button
               size="sm"
@@ -387,15 +437,35 @@ export function BackendCenter({ project, onOpenGithub, githubConnected }: Backen
             </Button>
           ) : null}
 
-          {managedState === "not_connected" ? (
-            /**
-             * ⚠️ THIS DOES NOT PROVISION. Provisioning happens inside a
-             * generation run, behind enrollment authorization, so this button
-             * explains the next step instead of faking a database.
-             */
+          {/**
+           * ⚠️ THE LOCK EXPLANATION, NOT AN ERROR. A locked card is a deliberate
+           * product state: the other backend is working and the user has to switch
+           * on purpose. It uses muted text, never the destructive palette.
+           */}
+          {supabaseActive ? (
+            <p
+              id="backend-mavly-locked"
+              className="flex items-start gap-1.5 text-sm text-muted-foreground"
+            >
+              <LockIcon className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
+              <span>
+                You are currently using your own Supabase backend. Mavly Managed Backend is
+                inactive for this project. To use Mavly&apos;s backend, switch your backend.
+              </span>
+            </p>
+          ) : null}
+
+          {managedState === "not_connected" && !supabaseActive ? (
             <p className="text-sm text-muted-foreground">
-              A Mavly database is created automatically the first time a generation needs
-              stored data. Nothing is provisioned until then.
+              A Mavly database is created with the first generation that needs stored data.
+              Enabling it here records your choice and checks this project&apos;s eligibility;
+              nothing is provisioned until a generation needs it.
+            </p>
+          ) : null}
+
+          {managedState === "provisioning" ? (
+            <p className="text-sm text-muted-foreground">
+              The database is being provisioned. This page updates when it is ready.
             </p>
           ) : null}
 
@@ -454,15 +524,42 @@ export function BackendCenter({ project, onOpenGithub, githubConnected }: Backen
               size="sm"
               variant="outline"
               onClick={() => void requestSwitch("external_supabase")}
-              disabled={pending !== null}
+              disabled={pending !== null || managedActive}
+              aria-describedby={managedActive ? "backend-supabase-locked" : undefined}
             >
               {pending === "switch:external_supabase" ? (
                 <LoaderIcon className="size-4 animate-spin" aria-hidden="true" />
+              ) : managedActive ? (
+                <LockIcon className="size-4" aria-hidden="true" />
               ) : null}
               Use this backend
             </Button>
           )}
         </div>
+      ) : null}
+
+      {/**
+       * ⚠️ THE SUPABASE-SIDE LOCK. Shown whenever the managed backend is active,
+       * including before a Supabase project is connected, because the lock is
+       * about which backend is authoritative — not about whether Supabase happens
+       * to be connected yet.
+       *
+       * ⚠️ THE OAUTH CONNECTION IS NOT REVOKED. An existing Supabase
+       * authorization stays intact while Neon is active; only the activation is
+       * locked. Disconnecting it would destroy a working credential the user
+       * would have to re-grant.
+       */}
+      {managedActive ? (
+        <p
+          id="backend-supabase-locked"
+          className="flex items-start gap-1.5 px-1 text-sm text-muted-foreground"
+        >
+          <LockIcon className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
+          <span>
+            You are currently using Mavly Managed Backend. To use your own Supabase project,
+            switch your active backend first.
+          </span>
+        </p>
       ) : null}
 
       {/* ── 3. GitHub — source control, independent of the backend ───────── */}

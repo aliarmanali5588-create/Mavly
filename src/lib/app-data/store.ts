@@ -40,7 +40,7 @@ export type GatewayStoreResult<T> =
   | { ok: true; data: T }
   | { ok: false; code: GatewayStoreFailureCode };
 
-function mapError(error: { code?: string } | null): GatewayStoreFailureCode {
+export function mapError(error: { code?: string } | null): GatewayStoreFailureCode {
   const code = error?.code ?? "unknown";
   console.error(`[app-data] gateway RPC failed (${code})`);
   if (code === "42P01" || code === "42883" || code === "PGRST202" || code === "PGRST205") {
@@ -54,7 +54,7 @@ function mapError(error: { code?: string } | null): GatewayStoreFailureCode {
 
 let cachedClient: SupabaseClient | null = null;
 
-function publicClient(): SupabaseClient | null {
+export function publicClient(): SupabaseClient | null {
   if (!isValidSupabaseUrl(SUPABASE_URL) || !SUPABASE_ANON_KEY) return null;
   if (!cachedClient) {
     cachedClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {

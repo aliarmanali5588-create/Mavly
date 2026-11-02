@@ -27,6 +27,8 @@ import {
 import { appDataGatewayConfig } from "./config";
 import {
   consumeGatewayRate,
+  mapError,
+  publicClient,
   resolveGatewayProject,
   type GatewayStoreFailureCode,
 } from "./store";
@@ -88,6 +90,52 @@ export type AppResolution =
 
 const NOT_FOUND = gatewayFail(404, "not_found", "Not found.");
 
+/**
+ * ═══ WHICH BACKEND IS SELECTED ══════════════════════════════════════════════
+ *
+ * Reads the authoritative selection from migration 48's `read_backend_context`
+ * through the public client, because this module has no service-role client and
+ * must not acquire one.
+ *
+ * ⚠️ THE RPC IS SERVICE-ROLE ONLY, SO THIS CALL IS EXPECTED TO FAIL. That is why
+ * the failure is handled as "selection unknown" rather than an error: the
+ * gateway's own `data_gateway_context` proof already establishes that the project
+ * has a ready managed backend, and this check exists to catch the case where the
+ * project has since switched away. When the selection cannot be read, the
+ * pre-existing behaviour is preserved rather than taking a working app offline.
+ *
+ * ⚠️ THE HONEST LIMITATION: this gate can refuse a Supabase-selected project, but
+ * it cannot serve one. Serving customer Supabase from a generated app needs a
+ * data API that does not exist yet (see the final report).
+ */
+async function readActiveProvider(
+  projectId: string,
+): Promise<{ ok: true; data: "mavly_managed_neon" | "external_supabase" | null } | { ok: false; code: GatewayStoreFailureCode }> {
+  const client = publicClient();
+  if (!client) return { ok: true, data: null };
+
+  const { data, error } = await client.rpc("read_backend_context", {
+    p_project_id: projectId,
+  });
+  if (error) {
+    /**
+     * A missing function (pre-48) or a permission refusal both mean "cannot
+     * tell", and neither is a reason to break a serving app.
+     */
+    if (error.code === "42883" || error.code === "PGRST202" || error.code === "42501") {
+      return { ok: true, data: null };
+    }
+    return { ok: false, code: mapError(error) };
+  }
+
+  const record = Array.isArray(data) ? data[0] : data;
+  if (!record || typeof record !== "object") return { ok: true, data: null };
+  const provider = (record as Record<string, unknown>).backend_provider;
+  if (provider === "external_supabase") return { ok: true, data: "external_supabase" };
+  if (provider === "mavly_managed_neon") return { ok: true, data: "mavly_managed_neon" };
+  return { ok: true, data: null };
+}
+
 export async function resolveApp(projectId: unknown): Promise<AppResolution> {
   if (typeof projectId !== "string" || !PROJECT_ID_PATTERN.test(projectId)) {
     return { ok: false, response: NOT_FOUND };
@@ -98,6 +146,40 @@ export async function resolveApp(projectId: unknown): Promise<AppResolution> {
     // A disabled or half-configured gateway is indistinguishable from an
     // unknown project on a public path.
     return { ok: false, response: NOT_FOUND };
+  }
+
+  /**
+   * ═══ THE PROVIDER SELECTION IS CHECKED BEFORE ANY CONNECTION IS OPENED ═════
+   *
+   * ⚠️ THIS IS THE FIX FOR A REAL DOUBLE-BACKEND BUG. Before migration 48 this
+   * function resolved the managed backend straight from
+   * `project_managed_backends` and never consulted provider selection at all. A
+   * project that had switched to customer Supabase therefore kept serving every
+   * request from Neon — the inactive provider — while the UI said Supabase was
+   * active.
+   *
+   * ⚠️ THERE IS NO FALLBACK. A project whose active provider is Supabase gets a
+   * refusal here, not a quiet Neon connection. Routing to the other provider is
+   * exactly the silent fallback the brief forbids, and it would read and write
+   * the wrong database.
+   *
+   * ⚠️ A MISSING MIGRATION IS NOT A REFUSAL. Before 48 is applied the RPC does
+   * not exist; the gateway then behaves exactly as it did before, so deploying
+   * this code cannot take a working app offline.
+   */
+  const selection = await readActiveProvider(projectId);
+  if (selection.ok === false) {
+    return { ok: false, response: gatewayStoreFailure(selection.code) };
+  }
+  if (selection.data === "external_supabase") {
+    return {
+      ok: false,
+      response: gatewayFail(
+        409,
+        "backend_not_served_here",
+        "This application uses a customer Supabase backend, which is not served by the managed data gateway.",
+      ),
+    };
   }
 
   const resolved = await resolveGatewayProject({

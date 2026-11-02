@@ -71,6 +71,10 @@ import {
   parseAppDataModel,
   type AppDataModel,
 } from "@/lib/managed-backend/model";
+import {
+  renderBackendContextBlock,
+  type BackendAgentContext,
+} from "@/lib/backend-providers/context";
 import { isAgentControlPath } from "@/lib/project-rules/rules";
 import {
   projectGenerationContext,
@@ -240,6 +244,20 @@ export interface AgentGenerationInput {
     | "not_provisioned";
   /** Server-authored data API contract for a `ready` backend. */
   backendContract?: string | null;
+  /**
+   * ═══ THE AUTHORITATIVE BACKEND SELECTION ═══════════════════════════════════
+   *
+   * Resolved server-side from `read_backend_context` (migration 48), never from
+   * UI state, local storage, conversation history or a client-supplied name.
+   *
+   * ⚠️ THIS IS SEPARATE FROM `managedBackendContext`, AND BOTH ARE USED.
+   * `managedBackendContext` describes whether a MANAGED database is usable;
+   * this describes WHICH backend the project selected. A project on customer
+   * Supabase has `managedBackendContext: "not_provisioned"` and a selected
+   * provider of `external_supabase` — reading only the first would tell the model
+   * the project has no backend at all.
+   */
+  backendAgentContext?: BackendAgentContext | null;
   /** Ask the existing planner for the optional multi-step plan (Phase 8 cohort). */
   planning?: boolean;
   requestedModel?: string | null;
@@ -796,6 +814,7 @@ function systemPromptFor(
   managedBackendContext?: AgentGenerationInput["managedBackendContext"],
   backendContract?: string | null,
   rules?: AgentGenerationInput["projectRules"],
+  backendAgentContext?: BackendAgentContext | null,
 ): string {
   const prompt = profile === "android" ? ANDROID_SYSTEM_PROMPT : SYSTEM_PROMPT;
   /**
@@ -807,19 +826,37 @@ function systemPromptFor(
     profile === "website" && rules
       ? projectRulesSystemBlock(rules.rules, rules.changeClass)
       : "";
-  if (!managedBackendContext || profile === "android") {
-    return `${prompt}${rulesBlock}`;
+
+  /**
+   * ═══ THE AUTHORITATIVE BACKEND SELECTION ═══════════════════════════════════
+   *
+   * ⚠️ THIS IS EMITTED FOR EVERY PROFILE, INCLUDING ANDROID, AND EVEN WHEN NO
+   * MANAGED BACKEND EXISTS. The old code returned early whenever
+   * `managedBackendContext` was absent, so a project on customer Supabase — or
+   * one with no backend at all — was told nothing about its backend. The model
+   * then either invented one or assumed Neon.
+   *
+   * The block is server-authored and carries no credential, so it is safe in a
+   * system message. It never replaces the data API contract below; it states
+   * which provider that contract belongs to.
+   */
+  const backendBlock = backendAgentContext
+    ? `\n\n${renderBackendContextBlock(backendAgentContext)}`
+    : "";
+
+  if (!managedBackendContext) {
+    return `${prompt}${rulesBlock}${backendBlock}`;
   }
 
   if (managedBackendContext === "ready" && backendContract) {
-    return `${prompt}${rulesBlock}\n\nManaged database boundary (server-controlled):\nA managed database is provisioned, its application schema was applied and verified, and Mavly's data API is configured for this project. The contract below is the ONLY data layer: build the UI against exactly these endpoints and fields, with real loading, empty, error and signed-out states. Do not add a database client, a direct SQL call, DATABASE_URL, your own password storage or any endpoint not listed.\n${backendContract}`;
+    return `${prompt}${rulesBlock}${backendBlock}\n\nManaged database boundary (server-controlled):\nA managed database is provisioned, its application schema was applied and verified, and Mavly's data API is configured for this project. The contract below is the ONLY data layer: build the UI against exactly these endpoints and fields, with real loading, empty, error and signed-out states. Do not add a database client, a direct SQL call, DATABASE_URL, your own password storage or any endpoint not listed.\n${backendContract}`;
   }
 
   const backendBoundary =
     managedBackendContext === "provisioned_without_runtime"
       ? "A Neon database project has been provisioned and its server-side connection was checked, but its application schema was not applied and the data API is not configured. Do not include or request DATABASE_URL, do not connect from browser code, do not create or claim working persistent CRUD/auth, and do not claim schema migrations were applied. Use clearly labeled prototype-only in-memory data and state this limitation in README.md."
       : "No managed database was provisioned for this run. Do not include or request DATABASE_URL, do not connect from browser code, and do not claim working persistent CRUD/auth. Use clearly labeled prototype-only in-memory data and state this limitation in README.md.";
-  return `${prompt}${rulesBlock}\n\nManaged database boundary (server-controlled):\n${backendBoundary}`;
+  return `${prompt}${rulesBlock}${backendBlock}\n\nManaged database boundary (server-controlled):\n${backendBoundary}`;
 }
 
 /** The files the first generated version must contain for this profile. */
@@ -2861,6 +2898,7 @@ function buildBatchMessages(
         input.managedBackendContext,
         input.backendContract,
         rules,
+        input.backendAgentContext,
       ),
     },
     { role: "user", content: user },

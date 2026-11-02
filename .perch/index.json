@@ -1,21 +1,21 @@
 {
   "schemaVersion": "perch-folder-index-v1",
-  "generatedAt": "2026-11-01T17:39:02.232Z",
+  "generatedAt": "2026-11-02T06:01:14.511Z",
   "rootId": "root_1793457532221_ye4hde",
   "rootPath": "/Users/ashadali/Mavly",
   "counts": {
-    "totalFiles": 773,
-    "registeredSources": 735,
-    "indexedFiles": 734,
+    "totalFiles": 779,
+    "registeredSources": 741,
+    "indexedFiles": 740,
     "skippedFiles": 29,
     "failedFiles": 10,
-    "staleFiles": 22,
-    "sourceChunkCount": 2651,
-    "sourceChunkFiles": 734,
-    "retrievalChunkCount": 2651,
-    "retrievalReadyFiles": 734,
-    "embeddedChunkCount": 332,
-    "vectorReadyFiles": 54,
+    "staleFiles": 23,
+    "sourceChunkCount": 2677,
+    "sourceChunkFiles": 740,
+    "retrievalChunkCount": 2677,
+    "retrievalReadyFiles": 740,
+    "embeddedChunkCount": 342,
+    "vectorReadyFiles": 57,
     "filesNeedingOcr": 0
   },
   "status": "partial",
@@ -26,12 +26,12 @@
     "retrieval chunks",
     "embeddings"
   ],
-  "lastIndexedAt": "2026-11-01T17:39:02.232Z",
+  "lastIndexedAt": "2026-11-02T06:01:14.510Z",
   "diagnostics": [
-    "Indexed 734/773 file(s) for retrieval.",
-    "2651 text/source chunk(s) available for keyword search.",
-    "2651 retrieval chunk(s) available.",
-    "332 embedded retrieval chunk(s) available for vector search.",
+    "Indexed 740/779 file(s) for retrieval.",
+    "2677 text/source chunk(s) available for keyword search.",
+    "2677 retrieval chunk(s) available.",
+    "342 embedded retrieval chunk(s) available for vector search.",
     "29 file(s) were skipped.",
     "10 file(s) failed indexing."
   ],
@@ -384,10 +384,10 @@
       "modifiedAt": "2026-11-01T17:30:49.865Z",
       "status": "indexed",
       "retrievalReady": true,
-      "vectorReady": false,
+      "vectorReady": true,
       "sourceChunkCount": 1,
       "retrievalChunkCount": 1,
-      "embeddedChunkCount": 0,
+      "embeddedChunkCount": 1,
       "supabaseSourceId": "2bb140e7-9287-4a66-bae4-fdc8be09e5b8",
       "contentHash": "3d798674f28e05f40c25765488dcdd3e53c061a41431830ec0c7642eec5ba3dd"
     },
@@ -605,10 +605,10 @@
       "modifiedAt": "2026-11-01T17:30:21.632Z",
       "status": "indexed",
       "retrievalReady": true,
-      "vectorReady": false,
+      "vectorReady": true,
       "sourceChunkCount": 6,
       "retrievalChunkCount": 6,
-      "embeddedChunkCount": 0,
+      "embeddedChunkCount": 6,
       "supabaseSourceId": "8a50560c-133d-40f2-8d45-33838dff112a",
       "contentHash": "829302528c35a74e3bf12276a49cd2653959cab2aaa6898cd305013b26d48fda"
     },
@@ -618,10 +618,10 @@
       "modifiedAt": "2026-11-01T17:27:41.275Z",
       "status": "indexed",
       "retrievalReady": true,
-      "vectorReady": false,
+      "vectorReady": true,
       "sourceChunkCount": 3,
       "retrievalChunkCount": 3,
-      "embeddedChunkCount": 0,
+      "embeddedChunkCount": 3,
       "supabaseSourceId": "19f5d677-9dc3-4f9c-847b-e63edc084352",
       "contentHash": "b2a2c173e65dfcfe653e44d875c0b127711e97cab460e682cc9d407f98409bbe",
       "message": "Changed since last indexing pass."
@@ -2257,7 +2257,7 @@
     {
       "relativePath": "src/app/api/projects/[projectId]/backend-providers/route.ts",
       "fileName": "route.ts",
-      "modifiedAt": "2026-11-01T14:10:24.794Z",
+      "modifiedAt": "2026-11-02T05:50:53.835Z",
       "status": "indexed",
       "retrievalReady": true,
       "vectorReady": false,
@@ -2265,7 +2265,7 @@
       "retrievalChunkCount": 2,
       "embeddedChunkCount": 0,
       "supabaseSourceId": "492947fb-5282-4f9f-b60b-54aaa66c831a",
-      "contentHash": "5a34d0387640589e9b70e743ac065cc5737dccfb983df32e864fc8d47952229b"
+      "contentHash": "34a8da90c32eb001dc3ebe34c26474c8f6f765bc5d4427d8f8c5ae2dad40148e"
     },
     {
       "relativePath": "src/app/api/projects/[projectId]/supabase/route.ts",
@@ -4322,6 +4322,19 @@
       "contentHash": "9f7949d7d80e2bf01bed8a8795d8e8746eec2306365ad1311aff408754fe35d1"
     },
     {
+      "relativePath": "src/components/workspace/v2/BackendCenter.tsx",
+      "fileName": "BackendCenter.tsx",
+      "modifiedAt": "2026-11-02T05:51:16.424Z",
+      "status": "indexed",
+      "retrievalReady": true,
+      "vectorReady": false,
+      "sourceChunkCount": 6,
+      "retrievalChunkCount": 6,
+      "embeddedChunkCount": 0,
+      "supabaseSourceId": "dcd6be81-4d0a-43fb-8888-2f6d63173dd2",
+      "contentHash": "9dd73359778f224e6dc1938ac6c44a42c9f79f20f1fe7695acfdc65223c36b1d"
+    },
+    {
       "relativePath": "src/components/workspace/v2/SupabaseOAuthCard.tsx",
       "fileName": "SupabaseOAuthCard.tsx",
       "modifiedAt": "2026-11-01T15:45:32.642Z",
@@ -4333,19 +4346,6 @@
       "embeddedChunkCount": 0,
       "supabaseSourceId": "4b0cc0c5-0cc7-46ee-b8fc-3c071b41db74",
       "contentHash": "07447aa62b17bc81c5d98f46251c32c18395d83227225026acda684b1c4a18bf"
-    },
-    {
-      "relativePath": "src/components/workspace/v2/BackendCenter.tsx",
-      "fileName": "BackendCenter.tsx",
-      "modifiedAt": "2026-11-01T13:58:37.855Z",
-      "status": "indexed",
-      "retrievalReady": true,
-      "vectorReady": false,
-      "sourceChunkCount": 5,
-      "retrievalChunkCount": 5,
-      "embeddedChunkCount": 0,
-      "supabaseSourceId": "dcd6be81-4d0a-43fb-8888-2f6d63173dd2",
-      "contentHash": "68e214200c9f89c3b87dad4cc29a062e122b13d02579b7ff9ab4809e4c34edae"
     },
     {
       "relativePath": "src/components/workspace/v2/WorkspaceMore.tsx",
@@ -5651,15 +5651,15 @@
     {
       "relativePath": "src/lib/ai/agent.ts",
       "fileName": "agent.ts",
-      "modifiedAt": "2026-11-01T14:29:55.952Z",
+      "modifiedAt": "2026-11-01T18:05:17.628Z",
       "status": "indexed",
       "retrievalReady": true,
       "vectorReady": false,
-      "sourceChunkCount": 34,
-      "retrievalChunkCount": 34,
+      "sourceChunkCount": 35,
+      "retrievalChunkCount": 35,
       "embeddedChunkCount": 0,
       "supabaseSourceId": "2b34feb3-c24d-4d21-9198-d4787534c676",
-      "contentHash": "1aa5198b153a45e868abd8ce6b88d7b1245e910c91d8a89ed86deff1723bfc7c"
+      "contentHash": "93c7453c29d87690631390e5f49477902a1c2f173c0d84a8818b9acbae218804"
     },
     {
       "relativePath": "src/lib/ai/openrouter.ts",
@@ -5909,6 +5909,32 @@
       "contentHash": "f07ab43937cff9caf882561ad138a75e4cfac761d7a6c6373a4aadc77dbf3a1a"
     },
     {
+      "relativePath": "src/lib/app-data/context.ts",
+      "fileName": "context.ts",
+      "modifiedAt": "2026-11-01T18:07:55.598Z",
+      "status": "indexed",
+      "retrievalReady": true,
+      "vectorReady": false,
+      "sourceChunkCount": 3,
+      "retrievalChunkCount": 3,
+      "embeddedChunkCount": 0,
+      "supabaseSourceId": "ba310665-1c60-4939-b7f7-04f209960dc6",
+      "contentHash": "5bbc201df03cfccef4548262b3418be67306e1dc91096954feedff3ce1d7e3f4"
+    },
+    {
+      "relativePath": "src/lib/app-data/store.ts",
+      "fileName": "store.ts",
+      "modifiedAt": "2026-11-01T18:07:55.577Z",
+      "status": "indexed",
+      "retrievalReady": true,
+      "vectorReady": false,
+      "sourceChunkCount": 2,
+      "retrievalChunkCount": 2,
+      "embeddedChunkCount": 0,
+      "supabaseSourceId": "189ec63c-e774-46b4-9264-3d874c5005f9",
+      "contentHash": "cb022302b6dd57fcac1ddd5ed4a9aea2606389efb187f2fbf659661eae9a6827"
+    },
+    {
       "relativePath": "src/lib/app-data/auth-service.ts",
       "fileName": "auth-service.ts",
       "modifiedAt": "2026-10-29T17:34:58.548Z",
@@ -5935,19 +5961,6 @@
       "contentHash": "05e9957f410a62bfa27471aed4ca52eab63c2c7d85ee53c28f7c0edcfd9bef0c"
     },
     {
-      "relativePath": "src/lib/app-data/context.ts",
-      "fileName": "context.ts",
-      "modifiedAt": "2026-10-29T17:19:59.785Z",
-      "status": "indexed",
-      "retrievalReady": true,
-      "vectorReady": false,
-      "sourceChunkCount": 2,
-      "retrievalChunkCount": 2,
-      "embeddedChunkCount": 0,
-      "supabaseSourceId": "ba310665-1c60-4939-b7f7-04f209960dc6",
-      "contentHash": "554023da52a141a806cda2c0121872997f41b8b671fb61831ddc86297a808208"
-    },
-    {
       "relativePath": "src/lib/app-data/cors.ts",
       "fileName": "cors.ts",
       "modifiedAt": "2026-10-29T17:19:41.947Z",
@@ -5959,19 +5972,6 @@
       "embeddedChunkCount": 0,
       "supabaseSourceId": "7b2a8a17-73b9-46b8-a490-f9edcd8df5bb",
       "contentHash": "13ff24421042baeeaac2d0eb08d7a70729d54e1ecee1aceb5ac491ae1ddd5df4"
-    },
-    {
-      "relativePath": "src/lib/app-data/store.ts",
-      "fileName": "store.ts",
-      "modifiedAt": "2026-10-29T17:19:03.262Z",
-      "status": "indexed",
-      "retrievalReady": true,
-      "vectorReady": false,
-      "sourceChunkCount": 2,
-      "retrievalChunkCount": 2,
-      "embeddedChunkCount": 0,
-      "supabaseSourceId": "189ec63c-e774-46b4-9264-3d874c5005f9",
-      "contentHash": "b47838c728db7e083d612a4780a4936269de658801d8a2070755bfbf6616903f"
     },
     {
       "relativePath": "src/lib/app-data/query.ts",
@@ -6104,9 +6104,22 @@
       "contentHash": "c4f330c37b68be356b85323f65d8c0d8cda61ec1f54196015c83a90348806e81"
     },
     {
+      "relativePath": "src/lib/backend-providers/enable-managed.ts",
+      "fileName": "enable-managed.ts",
+      "modifiedAt": "2026-11-02T05:50:47.844Z",
+      "status": "indexed",
+      "retrievalReady": true,
+      "vectorReady": false,
+      "sourceChunkCount": 2,
+      "retrievalChunkCount": 2,
+      "embeddedChunkCount": 0,
+      "supabaseSourceId": "15c2e1fc-f059-4aca-a945-1b90010c1378",
+      "contentHash": "1af3cfe3c2f90edf1efd9fd64813a21906e876176634bee0cbde2df4969e9aed"
+    },
+    {
       "relativePath": "src/lib/backend-providers/service.ts",
       "fileName": "service.ts",
-      "modifiedAt": "2026-11-01T14:10:32.159Z",
+      "modifiedAt": "2026-11-02T05:50:35.038Z",
       "status": "indexed",
       "retrievalReady": true,
       "vectorReady": false,
@@ -6114,7 +6127,34 @@
       "retrievalChunkCount": 4,
       "embeddedChunkCount": 0,
       "supabaseSourceId": "b45d1f1e-9065-4556-8d2d-e27a6d869011",
-      "contentHash": "8a7e9c40bfbb5933514a3cb35719ea58fd5313348110b2f06f136f2b39b207fb"
+      "contentHash": "8a7e9c40bfbb5933514a3cb35719ea58fd5313348110b2f06f136f2b39b207fb",
+      "message": "Changed since last indexing pass."
+    },
+    {
+      "relativePath": "src/lib/backend-providers/context-server.ts",
+      "fileName": "context-server.ts",
+      "modifiedAt": "2026-11-01T18:04:35.516Z",
+      "status": "indexed",
+      "retrievalReady": true,
+      "vectorReady": false,
+      "sourceChunkCount": 2,
+      "retrievalChunkCount": 2,
+      "embeddedChunkCount": 0,
+      "supabaseSourceId": "d7281cfc-50f3-459d-a6ed-3cc419917eb3",
+      "contentHash": "570c3ff17a07d112961ae7efd73deaea6a8b68c28ddae3e56178c5107203e72d"
+    },
+    {
+      "relativePath": "src/lib/backend-providers/context.ts",
+      "fileName": "context.ts",
+      "modifiedAt": "2026-11-01T18:04:01.579Z",
+      "status": "indexed",
+      "retrievalReady": true,
+      "vectorReady": false,
+      "sourceChunkCount": 4,
+      "retrievalChunkCount": 4,
+      "embeddedChunkCount": 0,
+      "supabaseSourceId": "e592c316-532e-46d7-bdb0-56421c188c06",
+      "contentHash": "d6d95274f8c6cceb4b49cf3592e56b3075a06a829a3e0a1850cb7f747030a55a"
     },
     {
       "relativePath": "src/lib/backend-providers/store.ts",
@@ -7291,15 +7331,15 @@
     {
       "relativePath": "src/lib/mavly/run-agent.ts",
       "fileName": "run-agent.ts",
-      "modifiedAt": "2026-11-01T14:32:24.530Z",
+      "modifiedAt": "2026-11-01T18:07:28.473Z",
       "status": "indexed",
       "retrievalReady": true,
       "vectorReady": false,
-      "sourceChunkCount": 37,
-      "retrievalChunkCount": 37,
+      "sourceChunkCount": 39,
+      "retrievalChunkCount": 39,
       "embeddedChunkCount": 0,
       "supabaseSourceId": "32dce06f-4c0d-49f9-aaf5-4437b8e71313",
-      "contentHash": "83ef1d0fa266e13322dd36d535d9189b47ce1e214213405820ab5fea3dddb090"
+      "contentHash": "ac093e70797355d31cfc207ef296bdc7eb0d26e2a5e5531241b2b2faa538ce58"
     },
     {
       "relativePath": "src/lib/mavly/api.ts",
@@ -7601,6 +7641,19 @@
       "contentHash": "3ac74bae2e6ebbb3e98c6c70d9427f8afb1ceb62fd7c42dd19564479dd57098e"
     },
     {
+      "relativePath": "src/lib/orchestration/engine.ts",
+      "fileName": "engine.ts",
+      "modifiedAt": "2026-11-01T18:06:09.990Z",
+      "status": "indexed",
+      "retrievalReady": true,
+      "vectorReady": false,
+      "sourceChunkCount": 18,
+      "retrievalChunkCount": 18,
+      "embeddedChunkCount": 0,
+      "supabaseSourceId": "08fc28ce-41c5-4c44-92ed-0b10200acbdd",
+      "contentHash": "651ab37d7573a4579a05b3d466af4feb20c192835532eb04d6fc815c52ec4af5"
+    },
+    {
       "relativePath": "src/lib/orchestration/tools.ts",
       "fileName": "tools.ts",
       "modifiedAt": "2026-11-01T13:57:25.438Z",
@@ -7625,19 +7678,6 @@
       "embeddedChunkCount": 0,
       "supabaseSourceId": "61bb9ad2-3083-441c-ad57-c36adcdb83ab",
       "contentHash": "57f409b9a387ce26bd939c83f3347519fad2d8795904620d92c921796f8ecfd8"
-    },
-    {
-      "relativePath": "src/lib/orchestration/engine.ts",
-      "fileName": "engine.ts",
-      "modifiedAt": "2026-10-31T17:32:56.859Z",
-      "status": "indexed",
-      "retrievalReady": true,
-      "vectorReady": false,
-      "sourceChunkCount": 18,
-      "retrievalChunkCount": 18,
-      "embeddedChunkCount": 0,
-      "supabaseSourceId": "08fc28ce-41c5-4c44-92ed-0b10200acbdd",
-      "contentHash": "9946bf7618a6a59631bef87a1558c8b3b50ce73908f19c20b8a1639755b293d6"
     },
     {
       "relativePath": "src/lib/orchestration/workflow.ts",
@@ -8502,6 +8542,32 @@
       "contentHash": "edf61d6f242b810b2e44ee6750dc92555ff472e22d6a070a875e80c58db6c3fe"
     },
     {
+      "relativePath": "supabase/migrations/48_backend_selection_authority.sql",
+      "fileName": "48_backend_selection_authority.sql",
+      "modifiedAt": "2026-11-01T18:03:42.791Z",
+      "status": "indexed",
+      "retrievalReady": true,
+      "vectorReady": false,
+      "sourceChunkCount": 6,
+      "retrievalChunkCount": 6,
+      "embeddedChunkCount": 0,
+      "supabaseSourceId": "9c7bbeb3-ca7c-4bbf-adf0-766420868e47",
+      "contentHash": "65b8aa02c2f6bc0301d4095804ca16cdf6fb0d03cd5e231052fe92bfa925e5ad"
+    },
+    {
+      "relativePath": "supabase/migrations/47_supabase_oauth_state_project_column.sql",
+      "fileName": "47_supabase_oauth_state_project_column.sql",
+      "modifiedAt": "2026-11-01T17:44:37.308Z",
+      "status": "indexed",
+      "retrievalReady": true,
+      "vectorReady": false,
+      "sourceChunkCount": 2,
+      "retrievalChunkCount": 2,
+      "embeddedChunkCount": 0,
+      "supabaseSourceId": "9a1192aa-000d-4319-bf61-5d49ea53a77d",
+      "contentHash": "6085f798bbf2c4f41251340d9acae8b85c7c2b397ecb108d41a69462f49be31a"
+    },
+    {
       "relativePath": "supabase/migrations/46_admin_directory_optional_publication.sql",
       "fileName": "46_admin_directory_optional_publication.sql",
       "modifiedAt": "2026-11-01T17:32:09.831Z",
@@ -8982,6 +9048,19 @@
       "embeddedChunkCount": 0,
       "supabaseSourceId": "be23a778-4cc4-4807-803e-d166023d91eb",
       "contentHash": "687a76f29e5804f99aa69b9cd463f2a260ee925ebdaa901ba6642ab4f2ff5979"
+    },
+    {
+      "relativePath": "tests/backend-selection-authority.test.ts",
+      "fileName": "backend-selection-authority.test.ts",
+      "modifiedAt": "2026-11-02T05:52:01.138Z",
+      "status": "indexed",
+      "retrievalReady": true,
+      "vectorReady": false,
+      "sourceChunkCount": 5,
+      "retrievalChunkCount": 5,
+      "embeddedChunkCount": 0,
+      "supabaseSourceId": "081e83a2-155b-407b-99ce-0ed571585a19",
+      "contentHash": "989657bedf79b9957f75191af7e60ef3a9e1c42c3c2fdc0615b7122136bc7e9b"
     },
     {
       "relativePath": "tests/admin-directory-optional-publication.test.ts",

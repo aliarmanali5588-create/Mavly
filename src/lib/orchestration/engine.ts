@@ -74,6 +74,11 @@ import {
   parseRepairDiagnosis,
   parseSourceReview,
 } from "./roles";
+import {
+  renderBackendContextBlock,
+  ROLE_BACKEND_CONSTRAINTS,
+  type BackendAgentContext,
+} from "@/lib/backend-providers/context";
 import { securityReview } from "./security";
 import {
   ensureTasks,
@@ -136,6 +141,19 @@ export interface OrchestrationHandle {
     workState: string;
     changeClass: ChangeClass;
   } | null;
+  /**
+   * ═══ THE AUTHORITATIVE BACKEND SELECTION ═══════════════════════════════════
+   *
+   * Resolved server-side from `read_backend_context` (migration 48) before the
+   * workflow begins. Every specialist receives this same object through
+   * `callRoleModel`, so no two roles can disagree about which backend the
+   * project uses.
+   *
+   * ⚠️ ABSENT MEANS UNKNOWN, NOT `none`. A handle without this context is a
+   * workflow that could not resolve it, and the roles are told the selection is
+   * unresolved rather than being told there is no backend.
+   */
+  backendAgentContext?: BackendAgentContext | null;
 }
 
 interface BeginInput {
@@ -158,6 +176,19 @@ interface BeginInput {
     workState: string;
     changeClass: ChangeClass;
   } | null;
+  /**
+   * ═══ THE AUTHORITATIVE BACKEND SELECTION ═══════════════════════════════════
+   *
+   * Resolved server-side from `read_backend_context` (migration 48) before the
+   * workflow begins. Every specialist receives this same object through
+   * `callRoleModel`, so no two roles can disagree about which backend the
+   * project uses.
+   *
+   * ⚠️ ABSENT MEANS UNKNOWN, NOT `none`. A handle without this context is a
+   * workflow that could not resolve it, and the roles are told the selection is
+   * unresolved rather than being told there is no backend.
+   */
+  backendAgentContext?: BackendAgentContext | null;
 }
 
 /**
@@ -278,6 +309,9 @@ export async function beginOrchestration(
     env,
     ...(input.runtimeEvidence ? { runtimeEvidence: input.runtimeEvidence } : {}),
     ...(input.projectRules ? { projectRules: input.projectRules } : {}),
+    ...(input.backendAgentContext
+      ? { backendAgentContext: input.backendAgentContext }
+      : {}),
     costUsd:
       workflow.provider_calls === 0
         ? 0
@@ -444,6 +478,41 @@ type ModelResult =
   | { ok: true; content: string; costUsd: number | null }
   | { ok: false; errorClass: string; message: string; costUsd: number | null };
 
+/**
+ * ═══ EVERY ROLE GETS THE SAME BACKEND SELECTION ══════════════════════════════
+ *
+ * ⚠️ THIS IS THE SINGLE FUNNEL. All six model-calling roles reach the provider
+ * through `callRoleModel`, so composing the backend block here is what makes
+ * "every agent receives the same authoritative backend selection" true by
+ * construction rather than by six separate call sites remembering to do it.
+ *
+ * ⚠️ AN UNRESOLVED SELECTION IS STATED AS UNRESOLVED. A handle without the
+ * context is a workflow that could not read it; telling the role "no backend"
+ * would invite it to propose one, and telling it nothing would let it assume
+ * Neon. Both are the failure this module exists to prevent.
+ */
+function roleSystemPrompt(
+  handle: OrchestrationHandle,
+  role: keyof typeof ROLE_BACKEND_CONSTRAINTS,
+  base: string,
+): string {
+  const context = handle.backendAgentContext;
+  const constraint = ROLE_BACKEND_CONSTRAINTS[role];
+
+  if (!context) {
+    return [
+      base,
+      "",
+      "Backend selection (server-controlled):",
+      "- The backend selection for this project could not be resolved.",
+      "- Do not assume Neon or Supabase is available, do not invent a database, and do not propose changing the backend.",
+      `- ${constraint}`,
+    ].join("\n");
+  }
+
+  return [base, "", renderBackendContextBlock(context), `- ${constraint}`].join("\n");
+}
+
 async function callRoleModel(
   handle: OrchestrationHandle,
   input: {
@@ -454,8 +523,7 @@ async function callRoleModel(
     timeoutMs: number;
     maxTokens: number;
   },
-): Promise<ModelResult> {
-  const model = resolveRoleModel({
+): Promise<ModelResult> {  const model = resolveRoleModel({
     role: input.role,
     env: handle.env,
     projectId: handle.projectId,
@@ -529,7 +597,7 @@ async function callRoleModel(
   const result = await chatCompletion(
     model,
     [
-      { role: "system", content: input.system },
+      { role: "system", content: roleSystemPrompt(handle, input.role, input.system) },
       { role: "user", content: input.user },
     ],
     { timeoutMs: input.timeoutMs, maxTokens: Math.min(model.maxOutputTokens, input.maxTokens) },
