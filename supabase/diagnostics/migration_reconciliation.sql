@@ -295,7 +295,8 @@ with markers(function_name, migration) as (
     ('runtime_sandbox_schema_version',           '34'),
     ('backend_providers_schema_version',         '39'),
     ('supabase_oauth_schema_version',            '40'),
-    ('supabase_oauth_audit_schema_version',      '42')
+    ('supabase_oauth_audit_schema_version',      '42'),
+    ('admin_auth_schema_version',                '55')
 )
 select
   '9. schema markers' as section,

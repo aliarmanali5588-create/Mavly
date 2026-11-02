@@ -5,10 +5,9 @@ import { createSupabaseServerClient, getRequestUser } from "@/lib/supabase/serve
 /**
  * Shared guard for `/api/adminsh/*`.
  *
- * Authority is `public.current_user_is_admin()` evaluated for the caller's own
- * session — never a header, body, cookie or client flag. A signed-in non-admin
- * receives the same 404 as a missing page (no account enumeration), while a
- * missing allowlist migration fails closed with an explicit configuration error.
+ * Authority is `public.current_user_admin_status()` evaluated for the caller's
+ * own verified session — never a header, body, cookie or client flag. The same
+ * database check enforces the fixed eight-hour admin grant.
  */
 
 export const ADMIN_NO_STORE_HEADERS = {
@@ -43,19 +42,34 @@ export async function requireAdmin(): Promise<
   }
 
   try {
-    const { data, error } = await supabase.rpc("current_user_is_admin");
+    const { data, error } = await supabase.rpc("current_user_admin_status");
     if (error) {
       return {
         ok: false,
         response: adminError(
           503,
           "ADMIN_SCHEMA_MISSING",
-          "The admin allowlist schema is not installed. Apply supabase/migrations/18_admin_allowlist.sql."
+          "The admin authentication schema is not installed. Apply supabase/migrations/55_admin_authentication.sql."
         ),
       };
     }
-    if (data !== true) {
-      return { ok: false, response: adminError(404, "NOT_FOUND", "Not found") };
+    if (data === "expired") {
+      return {
+        ok: false,
+        response: adminError(401, "ADMIN_SESSION_EXPIRED", "Your admin session expired. Sign in again."),
+      };
+    }
+    if (data === "needs_login") {
+      return {
+        ok: false,
+        response: adminError(401, "ADMIN_AUTHENTICATION_REQUIRED", "Admin authentication required."),
+      };
+    }
+    if (data !== "active") {
+      return {
+        ok: false,
+        response: adminError(403, "FORBIDDEN", "This account is not authorized to access the Mavly Admin Panel."),
+      };
     }
   } catch {
     return {

@@ -121,3 +121,47 @@ export async function refreshSession(request: NextRequest) {
     await updateSupabaseSession(request);
   return { response, user, restrictionState, accountSuspended };
 }
+
+export type AdminStatus =
+  | "unauthenticated"
+  | "unauthorized"
+  | "needs_login"
+  | "active"
+  | "expired";
+
+/** Read the current caller's database-backed admin state and expire old grants. */
+export async function currentAdminStatus(request: NextRequest): Promise<{
+  status: AdminStatus | null;
+  error: unknown | null;
+}> {
+  if (!isSupabaseConfigured()) return { status: null, error: new Error("SUPABASE_NOT_CONFIGURED") };
+
+  const supabase = createServerClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    cookieOptions: authCookieOptions(),
+    cookies: {
+      getAll() {
+        return request.cookies.getAll();
+      },
+      setAll(cookiesToSet) {
+        cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
+      },
+    },
+  });
+
+  try {
+    const { data, error } = await supabase.rpc("current_user_admin_status");
+    if (error) return { status: null, error };
+    if (
+      data === "unauthenticated" ||
+      data === "unauthorized" ||
+      data === "needs_login" ||
+      data === "active" ||
+      data === "expired"
+    ) {
+      return { status: data, error: null };
+    }
+    return { status: null, error: new Error("INVALID_ADMIN_STATUS") };
+  } catch (error) {
+    return { status: null, error };
+  }
+}

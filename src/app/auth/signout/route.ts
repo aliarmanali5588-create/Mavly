@@ -44,6 +44,16 @@ export async function POST(request: NextRequest) {
   });
 
   if (supabase) {
+    // Revoke the caller's separate admin grant before removing the Supabase
+    // session. The RPC derives the current Auth UUID/session_id and cannot
+    // revoke another administrator's session. Older deployments without the
+    // additive admin-auth migration fall through to the normal sign-out path.
+    try {
+      await supabase.rpc("revoke_current_admin_session");
+    } catch {
+      // Local cookie removal must still complete if the optional RPC is absent.
+    }
+
     try {
       await supabase.auth.signOut();
     } catch {

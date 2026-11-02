@@ -31,9 +31,14 @@ export function getSupabaseBrowserClient(): SupabaseClient | null {
   if (!cachedClient) {
     cachedClient = createBrowserClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
       // Same attributes as the server/proxy clients — one cookie jar, one
-      // session. `persistSession` and cookie storage are the library defaults
-      // (enabled); this app never sets them to false for the browser client.
+      // session. These are explicit so a browser/PWA restart cannot depend on
+      // a library default changing between releases.
       cookieOptions: authCookieOptions(),
+      auth: {
+        persistSession: true,
+        autoRefreshToken: true,
+        detectSessionInUrl: true,
+      },
     });
   }
   return cachedClient;

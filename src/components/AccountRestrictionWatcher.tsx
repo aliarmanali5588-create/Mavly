@@ -19,12 +19,13 @@ export function AccountRestrictionWatcher() {
   const pathname = usePathname();
 
   useEffect(() => {
+    const adminPage =
+      pathname === "/adminsh" || (pathname.startsWith("/adminsh/") && pathname !== "/adminsh/auth");
     const protectedPage =
       pathname === "/dashboard" ||
       pathname.startsWith("/dashboard/") ||
       pathname.startsWith("/project/") ||
-      pathname === "/adminsh" ||
-      pathname.startsWith("/adminsh/") ||
+      adminPage ||
       pathname === RESTRICTED_PATH;
     if (!protectedPage) return;
 
@@ -35,11 +36,32 @@ export function AccountRestrictionWatcher() {
       checking = true;
 
       try {
-        const response = await fetch(RESTRICTION_STATUS_API_PATH, {
+        const response = await fetch(adminPage ? "/api/admin-auth/status" : RESTRICTION_STATUS_API_PATH, {
           cache: "no-store",
           headers: { accept: "application/json" },
         });
         const result = (await response.json()) as RestrictionStatusResponse;
+
+        if (adminPage) {
+          if (
+            response.status === 401 ||
+            result.code === "ADMIN_SESSION_EXPIRED" ||
+            result.code === "ADMIN_AUTHENTICATION_REQUIRED"
+          ) {
+            const target = new URL("/adminsh/auth", window.location.origin);
+            target.searchParams.set("error", "session_expired");
+            target.searchParams.set("redirect", "/adminsh/dashboard");
+            window.location.replace(target.toString());
+            return;
+          }
+          if (response.status === 403 || result.code === "FORBIDDEN") {
+            const target = new URL("/adminsh/auth", window.location.origin);
+            target.searchParams.set("error", "unauthorized");
+            target.searchParams.set("redirect", "/adminsh/dashboard");
+            window.location.replace(target.toString());
+          }
+          return;
+        }
 
         if (result.code === "ACCOUNT_RESTRICTED" || result.data?.restricted === true) {
           if (pathname !== RESTRICTED_PATH) {

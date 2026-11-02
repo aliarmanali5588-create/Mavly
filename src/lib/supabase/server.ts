@@ -101,6 +101,10 @@ export function createSupabaseRequestClient(
         return request.cookies.getAll();
       },
       setAll(cookiesToSet) {
+        // Keep the request-side jar in sync for any Auth/RPC call that follows
+        // an exchange in the same route handler (the OAuth callback starts the
+        // separate admin grant immediately after exchanging its code).
+        cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
         onSetCookies(cookiesToSet as CookieToSet[]);
       },
     },

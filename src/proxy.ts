@@ -12,7 +12,7 @@ import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { loginUrlFor } from "@/lib/auth/redirect";
 import { authenticatedRootTarget } from "@/lib/auth/route-policy";
 import { AUTH_CALLBACK_PATH } from "@/lib/auth/oauth-url";
-import { refreshSession } from "@/lib/supabase/proxy";
+import { currentAdminStatus, refreshSession } from "@/lib/supabase/proxy";
 import { isNextInternalPath, parseTenantHost } from "@/lib/tenant-host";
 
 const isProduction = process.env.NODE_ENV === "production";
@@ -123,15 +123,16 @@ function isStaticAssetPath(pathname: string): boolean {
  */
 function requiresSession(pathname: string): boolean {
   if (pathname.startsWith("/api/")) return false;
+  // The admin sign-in screen must be reachable without a normal customer login.
+  // The proxy rewrites it to an un-nested route after the session refresh.
+  if (pathname === "/adminsh/auth") return false;
   if (pathname === "/dashboard" || pathname.startsWith("/dashboard/")) return true;
   if (pathname.startsWith("/project/")) return true;
   /**
    * ⚠️ THE ADMIN CONSOLE IS NOT PUBLIC. `/adminsh/auth` used to be a client
    * side `setTimeout`, and every `/adminsh/*` page was reachable signed-out.
-   * This is the coarse session gate; `app/adminsh/layout.tsx` performs the
-   * real, database-backed `current_user_is_admin()` check and returns 404 to a
-   * signed-in non-admin. Keeping both means a future page under `/adminsh`
-   * cannot accidentally bypass the session layer.
+   * This is the coarse session gate; the request boundary, layout and
+   * `requireAdmin()` perform the database-backed UUID/session check.
    */
   if (pathname === "/adminsh" || pathname.startsWith("/adminsh/")) return true;
   return false;
@@ -279,6 +280,143 @@ export async function proxy(request: NextRequest) {
         restrictionState: "clear" as const,
         accountSuspended: false,
       };
+
+  const pathname = request.nextUrl.pathname;
+  const isAdminAuthPath = pathname === "/adminsh/auth";
+  const isAdminPagePath = pathname === "/adminsh" || pathname.startsWith("/adminsh/");
+  const isAdminApiPath = pathname.startsWith("/api/adminsh/");
+  const isAdminSurface = (isAdminPagePath && !isAdminAuthPath) || isAdminApiPath;
+  const isAppLandingPath = pathname === "/" || pathname === "/dashboard";
+
+  /**
+   * Admin authorization is checked at the request boundary as well as in the
+   * layout and route guard. This prevents an authenticated customer from ever
+   * reaching an admin page and lets the PWA's `/dashboard` start URL land an
+   * active admin directly in the console.
+   */
+  let adminStatus: Awaited<ReturnType<typeof currentAdminStatus>> | null = null;
+  if (user && (isAdminSurface || isAdminAuthPath || isAppLandingPath)) {
+    adminStatus = await currentAdminStatus(request);
+  }
+
+  const adminSchemaUnavailable = adminStatus?.error !== null && adminStatus?.error !== undefined;
+  const adminAuthUrl = (reason?: string) => {
+    const target = new URL("/adminsh/auth", request.nextUrl.origin);
+    target.searchParams.set("redirect", "/adminsh/dashboard");
+    if (reason) target.searchParams.set("error", reason);
+    return target;
+  };
+
+  if (user && adminStatus && adminSchemaUnavailable && isAdminSurface) {
+    const unavailable = carrySessionCookies(
+      new NextResponse("Admin authentication is temporarily unavailable.", {
+        status: 503,
+        headers: {
+          "cache-control": "private, no-store, max-age=0",
+          "content-type": "text/plain; charset=utf-8",
+        },
+      }),
+      response,
+    );
+    addCorsHeaders(unavailable, request);
+    addCspHeaders(unavailable, request);
+    return unavailable;
+  }
+
+  if (user && adminStatus?.status === "unauthorized" && (isAdminSurface || isAdminAuthPath)) {
+    const denied = carrySessionCookies(
+      isAdminApiPath
+        ? NextResponse.json(
+            {
+              ok: false,
+              code: "FORBIDDEN",
+              error: "This account is not authorized to access the Mavly Admin Panel.",
+              data: null,
+            },
+            { status: 403, headers: { "cache-control": "private, no-store, max-age=0" } },
+          )
+        : new NextResponse("This account is not authorized to access the Mavly Admin Panel.", {
+            status: 403,
+            headers: {
+              "cache-control": "private, no-store, max-age=0",
+              "content-type": "text/plain; charset=utf-8",
+            },
+          }),
+      response,
+    );
+    addCorsHeaders(denied, request);
+    addCspHeaders(denied, request);
+    return denied;
+  }
+
+  if (isAdminAuthPath && user && adminStatus?.status === "active") {
+    const redirectResponse = carrySessionCookies(
+      NextResponse.redirect(new URL("/adminsh/dashboard", request.nextUrl.origin), 303),
+      response,
+    );
+    redirectResponse.headers.set("Cache-Control", "private, no-store, no-cache, must-revalidate, max-age=0");
+    return redirectResponse;
+  }
+
+  if (isAdminSurface && !isAdminAuthPath) {
+    if (!user && !isAdminApiPath) {
+      const redirectResponse = carrySessionCookies(
+        NextResponse.redirect(adminAuthUrl(), 303),
+        response,
+      );
+      redirectResponse.headers.set("Cache-Control", "private, no-store, no-cache, must-revalidate, max-age=0");
+      return redirectResponse;
+    }
+
+    if (user && (adminStatus?.status === "expired" || adminStatus?.status === "needs_login")) {
+      const redirectResponse = carrySessionCookies(
+        isAdminApiPath
+          ? NextResponse.json(
+              {
+                ok: false,
+                code: adminStatus.status === "expired" ? "ADMIN_SESSION_EXPIRED" : "ADMIN_AUTHENTICATION_REQUIRED",
+                error:
+                  adminStatus.status === "expired"
+                    ? "Your admin session expired. Sign in again."
+                    : "Admin authentication required.",
+                data: null,
+              },
+              { status: 401, headers: { "cache-control": "private, no-store, max-age=0" } },
+            )
+          : NextResponse.redirect(
+              adminAuthUrl(adminStatus.status === "expired" ? "session_expired" : "admin_session_required"),
+              303,
+            ),
+        response,
+      );
+      redirectResponse.headers.set("Cache-Control", "private, no-store, no-cache, must-revalidate, max-age=0");
+      return redirectResponse;
+    }
+
+    if (pathname === "/adminsh" && user && adminStatus?.status === "active") {
+      const redirectResponse = carrySessionCookies(
+        NextResponse.redirect(new URL("/adminsh/dashboard", request.nextUrl.origin), 307),
+        response,
+      );
+      redirectResponse.headers.set("Cache-Control", "private, no-store, no-cache, must-revalidate, max-age=0");
+      return redirectResponse;
+    }
+  }
+
+  if (user && isAppLandingPath && (adminStatus?.status === "active" || adminStatus?.status === "expired" || adminStatus?.status === "needs_login")) {
+    const redirectResponse = carrySessionCookies(
+      adminStatus.status === "active"
+        ? NextResponse.redirect(new URL("/adminsh/dashboard", request.nextUrl.origin), 307)
+        : NextResponse.redirect(
+            adminAuthUrl(adminStatus.status === "expired" ? "session_expired" : "admin_session_required"),
+            303,
+          ),
+      response,
+    );
+    redirectResponse.headers.set("Cache-Control", "private, no-store, no-cache, must-revalidate, max-age=0");
+    redirectResponse.headers.append("Vary", "Cookie");
+    return redirectResponse;
+  }
 
   if (accountSuspended) {
     if (request.nextUrl.pathname.startsWith("/api/")) {
@@ -500,6 +638,22 @@ export async function proxy(request: NextRequest) {
     addCorsHeaders(redirectResponse, request);
     addCspHeaders(redirectResponse, request);
     return redirectResponse;
+  }
+
+  /**
+   * `/adminsh/auth` is kept as the public URL, but it cannot live below the
+   * protected `/adminsh` layout or an unauthenticated visitor would be sent to
+   * the normal customer login first. The target route contains only the login
+   * screen and never serves admin data.
+   */
+  if (isAdminAuthPath) {
+    const target = request.nextUrl.clone();
+    target.pathname = "/adminsh-auth";
+    const rewritten = carrySessionCookies(NextResponse.rewrite(target), response);
+    rewritten.headers.set("Cache-Control", "private, no-store, no-cache, must-revalidate, max-age=0");
+    addCorsHeaders(rewritten, request);
+    addCspHeaders(rewritten, request);
+    return rewritten;
   }
 
   addCorsHeaders(response, request);

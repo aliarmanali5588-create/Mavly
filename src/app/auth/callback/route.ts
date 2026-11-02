@@ -89,7 +89,34 @@ export async function GET(request: NextRequest) {
       destination = new URL("/login", origin);
       destination.searchParams.set("error", "exchange_failed");
     } else {
-      destination = new URL(outcome.redirectTo, origin);
+      const isAdminDestination =
+        outcome.redirectTo === "/adminsh" || outcome.redirectTo.startsWith("/adminsh/");
+
+      if (isAdminDestination) {
+        /**
+         * OAuth establishes the normal Supabase session first. The separate
+         * admin grant is created only for an admin-targeted flow and only by a
+         * database function that derives the Auth UUID/session_id itself.
+         */
+        const { data: started, error: adminError } = await supabase.rpc("start_admin_session");
+        if (adminError || started !== true) {
+          // Do not leave an unapproved account signed in after an admin-targeted
+          // flow. This also lets the next request render the generic denial copy
+          // instead of falling back into the protected customer session.
+          try {
+            await supabase.auth.signOut({ scope: "local" });
+          } catch {
+            // The response still carries any queued cookie removals below.
+          }
+          destination = new URL("/adminsh/auth", origin);
+          destination.searchParams.set("error", adminError ? "admin_schema_missing" : "unauthorized");
+          destination.searchParams.set("redirect", "/adminsh/dashboard");
+        } else {
+          destination = new URL("/adminsh/dashboard", origin);
+        }
+      } else {
+        destination = new URL(outcome.redirectTo, origin);
+      }
     }
   }
 

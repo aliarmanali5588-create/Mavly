@@ -240,7 +240,7 @@ test("payment diagnostics never include an amount or provider order id", () => {
 test("the admin console requires a session at the proxy", async () => {
   const res = await proxy(req("/adminsh/dashboard"));
   assert.equal(res.status, 303);
-  assert.match(res.headers.get("location") ?? "", /\/login/);
+  assert.match(res.headers.get("location") ?? "", /\/adminsh\/auth/);
 });
 
 test("the admin console has a database-backed allowlist gate", () => {

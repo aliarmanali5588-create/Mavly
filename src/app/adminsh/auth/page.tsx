@@ -6,23 +6,107 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, ShieldCheck, Loader2, Lock } from "lucide-react";
 import { toast } from "sonner";
+import { startOAuth } from "@/lib/auth/oauth";
+import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
-export default function AdminAuthPage() {
+export default function AdminAuthPage({ initialError = null }: { initialError?: string | null }) {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState<string | null>(() => {
+    const code = initialError;
+    if (code === "session_expired" || code === "admin_session_required") {
+      return "Your admin session expired or is not active. Please authenticate again.";
+    }
+    if (code === "unauthorized") {
+      return "This account is not authorized to access the Mavly Admin Panel.";
+    }
+    if (code === "admin_schema_missing") {
+      return "Admin authentication is temporarily unavailable. Please contact the operator.";
+    }
+    return null;
+  });
 
-  const handleGoogleClick = () => {
+  const handleGoogleClick = async () => {
     if (isLoading) return;
     setIsLoading(true);
+    setError(null);
 
     toast.info("Authenticating Administrator Session...", {
       description: "Redirecting to Mavly Control Console.",
       duration: 1200,
     });
 
-    setTimeout(() => {
-      router.push("/adminsh/dashboard");
-    }, 900);
+    const supabase = getSupabaseBrowserClient();
+    if (supabase) {
+      // An expired admin grant must not be revived by the old refresh-token
+      // session. Start the provider flow from a local sign-out so Supabase
+      // creates a fresh Auth session whose creation time anchors the new grant.
+      await supabase.auth.signOut({ scope: "local" }).catch(() => undefined);
+    }
+
+    const result = await startOAuth("google", "/adminsh/dashboard");
+    if (!result.ok) {
+      setIsLoading(false);
+      setError(
+        result.error === "not_configured"
+          ? "Admin authentication is not configured on this deployment."
+          : "We could not start authentication. Please try again.",
+      );
+      toast.error("We could not start admin authentication.");
+    }
+  };
+
+  const handlePasswordSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (isLoading || !email.trim() || !password) return;
+
+    const supabase = getSupabaseBrowserClient();
+    if (!supabase) {
+      setError("Admin authentication is not configured on this deployment.");
+      return;
+    }
+
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      // Force a new Supabase Auth session before establishing the eight-hour
+      // admin grant. This prevents an old refresh token from reviving access.
+      await supabase.auth.signOut({ scope: "local" }).catch(() => undefined);
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email: email.trim(),
+        password,
+      });
+      if (signInError) {
+        setError("We could not authenticate this account for the Mavly Admin Panel.");
+        setIsLoading(false);
+        return;
+      }
+
+      const response = await fetch("/api/admin-auth/session", {
+        method: "POST",
+        cache: "no-store",
+        headers: { accept: "application/json" },
+      });
+      const body = (await response.json().catch(() => null)) as { error?: string } | null;
+      if (!response.ok) {
+        setError(
+          response.status === 403
+            ? "This account is not authorized to access the Mavly Admin Panel."
+            : body?.error || "Admin authentication could not be completed. Please try again.",
+        );
+        setIsLoading(false);
+        return;
+      }
+
+      router.replace("/adminsh/dashboard");
+      router.refresh();
+    } catch {
+      setError("Admin authentication could not be completed. Please try again.");
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -98,12 +182,20 @@ export default function AdminAuthPage() {
             </span>
           </div>
 
-          {/* Single Action: Continue with Google (Retained as sole auth option) */}
-          <div className="pt-2">
+          {/* Admin authentication: provider OAuth or normal Supabase credentials. */}
+           <div className="pt-2">
+            {error ? (
+              <div
+                role="alert"
+                className="mb-3 rounded-xl border border-destructive/25 bg-destructive-subtle px-3.5 py-3 text-xs text-destructive-subtle-foreground"
+              >
+                {error}
+              </div>
+            ) : null}
             <button
               type="button"
               disabled={isLoading}
-              onClick={handleGoogleClick}
+              onClick={() => void handleGoogleClick()}
               className="w-full h-11 px-4 rounded-xl bg-primary hover:bg-[var(--clay-brand-hover)] text-white font-semibold text-xs sm:text-sm flex items-center justify-center gap-3 shadow-[var(--clay-elev-ink-2)] clay-press transition-all duration-200 disabled:opacity-70 disabled:pointer-events-none cursor-pointer select-none"
             >
               {isLoading ? (
@@ -130,6 +222,46 @@ export default function AdminAuthPage() {
               )}
               <span>Continue with Google</span>
             </button>
+
+            <div className="my-4 flex items-center gap-3 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+              <span className="h-px flex-1 bg-[var(--clay-line)]" />
+              <span>or use credentials</span>
+              <span className="h-px flex-1 bg-[var(--clay-line)]" />
+            </div>
+
+            <form onSubmit={(event) => void handlePasswordSubmit(event)} className="space-y-3">
+              <label className="block text-left text-xs font-semibold text-foreground">
+                Email
+                <input
+                  type="email"
+                  autoComplete="username"
+                  value={email}
+                  onChange={(event) => setEmail(event.target.value)}
+                  disabled={isLoading}
+                  className="mt-1.5 h-11 w-full rounded-xl border border-[var(--clay-line)] bg-card px-3 text-sm font-normal outline-none transition focus:border-foreground"
+                  required
+                />
+              </label>
+              <label className="block text-left text-xs font-semibold text-foreground">
+                Password
+                <input
+                  type="password"
+                  autoComplete="current-password"
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  disabled={isLoading}
+                  className="mt-1.5 h-11 w-full rounded-xl border border-[var(--clay-line)] bg-card px-3 text-sm font-normal outline-none transition focus:border-foreground"
+                  required
+                />
+              </label>
+              <button
+                type="submit"
+                disabled={isLoading || !email.trim() || !password}
+                className="w-full h-11 rounded-xl bg-card hover:bg-[var(--clay-sunken)] text-foreground border border-[var(--clay-line)] font-semibold text-xs sm:text-sm shadow-[var(--clay-elev-1)] transition-all disabled:opacity-60 disabled:pointer-events-none"
+              >
+                {isLoading ? <Loader2 className="mx-auto h-4 w-4 animate-spin" /> : "Sign in securely"}
+              </button>
+            </form>
           </div>
 
           {/* Security Caption */}
