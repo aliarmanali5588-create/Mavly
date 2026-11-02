@@ -27,6 +27,8 @@ export const AUTH_ERROR_MESSAGES: Record<string, string> = {
     "This sign-in request could not be verified. Please try again.",
   /** The sign-in request is older than the ten minutes it is good for. */
   session_expired: "Your sign-in request expired. Please try again.",
+  /** A banned user may be unable to establish a Mavly session to see their reason. */
+  account_suspended: "This account is suspended. Contact customer support for a review.",
   /** The code could not be exchanged for a session. */
   exchange_failed: "We could not complete the sign-in. Please try again.",
   /** This deployment has no Supabase keys, so nobody can sign in. */

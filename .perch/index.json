@@ -1,13 +1,13 @@
 {
   "schemaVersion": "perch-folder-index-v1",
-  "generatedAt": "2026-11-02T07:49:05.719Z",
+  "generatedAt": "2026-11-02T08:07:48.318Z",
   "rootId": "root_1793457532221_ye4hde",
   "rootPath": "/Users/ashadali/Mavly",
   "counts": {
-    "totalFiles": 782,
+    "totalFiles": 783,
     "registeredSources": 744,
     "indexedFiles": 743,
-    "skippedFiles": 29,
+    "skippedFiles": 30,
     "failedFiles": 10,
     "staleFiles": 22,
     "sourceChunkCount": 2689,
@@ -26,16 +26,30 @@
     "retrieval chunks",
     "embeddings"
   ],
-  "lastIndexedAt": "2026-11-02T07:49:05.719Z",
+  "lastIndexedAt": "2026-11-02T08:07:48.318Z",
   "diagnostics": [
-    "Indexed 743/782 file(s) for retrieval.",
+    "Indexed 743/783 file(s) for retrieval.",
     "2689 text/source chunk(s) available for keyword search.",
     "2689 retrieval chunk(s) available.",
     "342 embedded retrieval chunk(s) available for vector search.",
-    "29 file(s) were skipped.",
+    "30 file(s) were skipped.",
     "10 file(s) failed indexing."
   ],
   "files": [
+    {
+      "relativePath": "probe-headers.mjs",
+      "fileName": "probe-headers.mjs",
+      "modifiedAt": "2026-11-02T08:07:28.156Z",
+      "status": "skipped",
+      "retrievalReady": false,
+      "vectorReady": false,
+      "sourceChunkCount": 0,
+      "retrievalChunkCount": 0,
+      "embeddedChunkCount": 0,
+      "supabaseSourceId": null,
+      "contentHash": null,
+      "message": "probe-headers.mjs: unsupported file type (.mjs). Supported: text, csv, xlsx, pdf, docx, pptx, common images."
+    },
     {
       "relativePath": "next-env.d.ts",
       "fileName": "next-env.d.ts",

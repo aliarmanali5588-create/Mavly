@@ -91,6 +91,7 @@ import {
   type RunFinishPatch,
   type RunRow,
 } from "./store";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 import {
   dispatchModeForProject,
   generationWorkerConfig,
@@ -972,11 +973,49 @@ async function assertRunOwned(input: RunAgentInput, guard: RunGuard): Promise<vo
 
   if (guard.leaseToken) {
     if (current.lease_token !== guard.leaseToken) throw new RunLeaseLostError();
-    return;
-  }
-  if (!guard.claimedAt || current.claimed_at !== guard.claimedAt) {
+  } else if (!guard.claimedAt || current.claimed_at !== guard.claimedAt) {
     throw new RunSupersededError();
   }
+
+  const statusClient = guard.client ?? (await createSupabaseServerClient());
+  if (!statusClient) {
+    throw new RunStoreError("Could not verify account status before continuing the run.");
+  }
+  const restriction = guard.leaseToken
+    ? await statusClient.rpc("account_user_is_restricted", { p_user_id: input.userId })
+    : await statusClient.rpc("current_user_is_restricted");
+  if (restriction.error || typeof restriction.data !== "boolean") {
+    throw new RunStoreError("Could not verify account status before continuing the run.");
+  }
+  if (!restriction.data) return;
+
+  const cancelled = await finishRun(
+    input.runId,
+    "cancelled",
+    "The run was cancelled because this account is suspended.",
+    {
+      stage: "cancelled",
+      errorCode: "ACCOUNT_SUSPENDED",
+      ...guardPatch(guard),
+    },
+    statusClient,
+  );
+  if (cancelled && guard.leaseToken) {
+    await releaseRunCredits({
+      runId: input.runId,
+      projectId: input.projectId,
+      traceId: guard.traceId,
+      client: statusClient,
+      reason: "Generation cancelled because the account is suspended",
+    });
+    await recordRunUsage({
+      runId: input.runId,
+      projectId: input.projectId,
+      traceId: guard.traceId,
+      client: statusClient,
+    });
+  }
+  throw new RunCancelledError();
 }
 
 // ── The run itself ──────────────────────────────────────────────────────────
@@ -988,6 +1027,8 @@ async function execute(
 ): Promise<RunAgentOutcome> {
   const runId = input.runId;
   const client = guard.client;
+
+  await assertRunOwned(input, guard);
 
   const project = await getProject(input.userId, input.projectId, client);
   if (isStoreFailure(project)) {
@@ -2233,6 +2274,7 @@ async function execute(
       },
       onProviderAttempt: async (event) => {
         if (event.type === "dispatching") {
+          await assertRunOwned(input, guard);
           if (!guard.trackProviderUsage || !guard.client || !guard.leaseToken) return;
           const inputForStart = {
             attemptId: event.attemptId,

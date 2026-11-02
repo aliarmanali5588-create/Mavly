@@ -37,7 +37,7 @@ export async function updateSupabaseSession(request: NextRequest) {
   // Without keys there is nothing to refresh and nobody to verify. The caller
   // gets `configured: false` and knows that the deployment has no auth at all.
   if (!isSupabaseConfigured()) {
-    return { response, user: null, configured: false, restricted: false };
+    return { response, user: null, configured: false, restrictionState: "clear" as const };
   }
 
   const supabase = createServerClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
@@ -59,6 +59,11 @@ export async function updateSupabaseSession(request: NextRequest) {
   });
 
   const { data, error } = await supabase.auth.getUser();
+  const accountSuspended =
+    !!error &&
+    typeof error === "object" &&
+    "code" in error &&
+    error.code === "user_banned";
 
   /**
    * ═══ IS THIS VERIFIED CALLER CURRENTLY RESTRICTED? ═══════════════════════
@@ -71,19 +76,30 @@ export async function updateSupabaseSession(request: NextRequest) {
    *
    * ⚠️ ONLY ASKED FOR A VERIFIED USER. A signed-out request has no account to
    * check, and an anonymous caller must never be able to probe this.
-   * ⚠️ A FAILED CHECK FAILS CLOSED-ISH: it is treated as "not restricted" so a
-   * database hiccup cannot lock every user out of the product. The protected
-   * routes behind this still verify the session and ownership independently.
+   * ⚠️ A FAILED CHECK FAILS CLOSED FOR PROTECTED ROUTES. Only the suspension,
+   * status, login, sign-out and support paths remain reachable so the user can
+   * retry or recover without exposing protected account operations.
    */
-  let restricted = false;
+  let restrictionState: "clear" | "restricted" | "unavailable" = "clear";
   if (!error && data?.user) {
     try {
       const { data: restrictedResult, error: restrictedError } = await supabase.rpc(
         "current_user_is_restricted"
       );
-      if (!restrictedError) restricted = restrictedResult === true;
+      if (restrictedError) {
+        restrictionState = "unavailable";
+        console.error("[proxy] account restriction check failed", {
+          code: restrictedError.code ?? "unknown",
+        });
+      } else if (typeof restrictedResult === "boolean") {
+        restrictionState = restrictedResult ? "restricted" : "clear";
+      } else {
+        restrictionState = "unavailable";
+        console.error("[proxy] account restriction check returned an invalid response");
+      }
     } catch {
-      restricted = false;
+      restrictionState = "unavailable";
+      console.error("[proxy] account restriction check failed", { code: "unexpected_error" });
     }
   }
 
@@ -91,7 +107,8 @@ export async function updateSupabaseSession(request: NextRequest) {
     response,
     user: error ? null : data?.user ?? null,
     configured: true,
-    restricted,
+    restrictionState,
+    accountSuspended,
   };
 }
 
@@ -100,6 +117,7 @@ export async function updateSupabaseSession(request: NextRequest) {
  * `isSupabaseConfigured()` themselves.
  */
 export async function refreshSession(request: NextRequest) {
-  const { response, user, restricted } = await updateSupabaseSession(request);
-  return { response, user, restricted };
+  const { response, user, restrictionState, accountSuspended } =
+    await updateSupabaseSession(request);
+  return { response, user, restrictionState, accountSuspended };
 }

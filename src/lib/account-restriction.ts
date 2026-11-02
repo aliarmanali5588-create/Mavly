@@ -22,6 +22,7 @@
 
 /** Where a restricted user is sent. Not a protected route, not the dashboard. */
 export const RESTRICTED_PATH = "/account-restricted";
+export const RESTRICTION_STATUS_API_PATH = "/api/account/restriction";
 
 /**
  * Paths a restricted user may still reach.
@@ -37,16 +38,17 @@ const RESTRICTED_ALLOWED_PATHS: readonly string[] = [
   "/auth/signout",
 ];
 
-/** API paths a restricted user may still call, so the screen can work. */
-const RESTRICTED_ALLOWED_API_PREFIXES: readonly string[] = [
+/** Exact API paths a restricted user may still call, so the screen can work. */
+const RESTRICTED_ALLOWED_API_PATHS: readonly string[] = [
   "/auth/signout",
+  RESTRICTION_STATUS_API_PATH,
 ];
 
 function isAllowedWhileRestricted(pathname: string): boolean {
   if (RESTRICTED_ALLOWED_PATHS.includes(pathname)) return true;
   if (pathname.startsWith("/support/")) return true;
   if (pathname.startsWith("/auth/")) return true;
-  return RESTRICTED_ALLOWED_API_PREFIXES.some((prefix) => pathname.startsWith(prefix));
+  return RESTRICTED_ALLOWED_API_PATHS.includes(pathname);
 }
 
 export type RestrictionDecision =
@@ -55,7 +57,11 @@ export type RestrictionDecision =
   /** A restricted user asking for an API route: answer JSON 403. */
   | "deny_api"
   /** A restricted user asking for a page: send them to the restriction screen. */
-  | "redirect_page";
+  | "redirect_page"
+  /** The status check failed for an API request: fail closed with 503. */
+  | "unavailable_api"
+  /** The status check failed for a page: fail closed with a readable 503. */
+  | "unavailable_page";
 
 /**
  * The whole enforcement decision.
@@ -71,4 +77,14 @@ export function restrictionDecision(
   if (isAllowedWhileRestricted(pathname)) return "allow";
   if (pathname.startsWith("/api/")) return "deny_api";
   return "redirect_page";
+}
+
+/**
+ * Keep the suspension explanation, sign-out, login and support reachable if
+ * the status database is unavailable. Protected routes fail closed rather than
+ * assuming the account is unrestricted.
+ */
+export function restrictionUnavailableDecision(pathname: string): RestrictionDecision {
+  if (isAllowedWhileRestricted(pathname)) return "allow";
+  return pathname.startsWith("/api/") ? "unavailable_api" : "unavailable_page";
 }

@@ -20,19 +20,9 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 import { SUPABASE_URL, isValidSupabaseUrl } from "./config";
+import { buildServiceRoleHeaders } from "./service-role-headers";
 
 const SERVICE_ROLE_ENV = "SUPABASE_SERVICE_ROLE_KEY";
-
-/**
- * Determines whether a key is in the legacy JWT format (3 dot-separated parts).
- * Legacy keys: `eyJ...` (3-part JWT)
- * New opaque keys: `sb_secret_...` or `sb_publishable_...` (no dots, or not 3 parts)
- */
-function isLegacyJwtKey(key: string): boolean {
-  const trimmed = key.trim();
-  const parts = trimmed.split(".");
-  return parts.length === 3;
-}
 
 /**
  * Create a fetch wrapper that handles new-format API keys correctly.
@@ -44,23 +34,15 @@ function isLegacyJwtKey(key: string): boolean {
  *
  * This wrapper strips `Authorization: Bearer <opaque_key>` for new-format keys,
  * leaving `apikey` intact so the Supabase API Gateway can route them correctly.
+ *
+ * ⚠️ THE HEADER RULES LIVE IN `service-role-headers.ts` so they can be tested
+ * without importing the Supabase client or the Next.js server environment.
  */
 function createAuthCompatibleFetch(key: string): typeof fetch {
   const trimmedKey = key.trim();
-  const isLegacy = isLegacyJwtKey(trimmedKey);
 
   return async (input, init) => {
-    const headers = new Headers(init?.headers);
-
-    // For new-format keys, strip the Bearer Authorization header.
-    // GoTrue cannot validate opaque keys as JWTs; the API Gateway handles them.
-    if (!isLegacy) {
-      const auth = headers.get("authorization");
-      if (auth === `Bearer ${trimmedKey}`) {
-        headers.delete("authorization");
-      }
-    }
-
+    const headers = buildServiceRoleHeaders(input, init, trimmedKey);
     return fetch(input, { ...init, headers });
   };
 }

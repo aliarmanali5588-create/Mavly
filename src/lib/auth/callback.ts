@@ -14,6 +14,7 @@ export type AuthErrorCode =
   | "missing_code"
   | "invalid_state"
   | "session_expired"
+  | "account_suspended"
   | "exchange_failed";
 
 /**
@@ -39,6 +40,15 @@ export type CallbackInput = {
   exchangeCode: (code: string) => Promise<{ error: unknown } | null>;
 };
 
+function isBannedAccountError(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    error.code === "user_banned"
+  );
+}
+
 function decodeCookieValue(value: string | null): string | null {
   if (!value) return null;
   try {
@@ -52,6 +62,9 @@ export async function resolveCallbackOutcome(input: CallbackInput): Promise<Call
   const { searchParams } = input;
 
   // The provider reported a failure (user cancelled, provider error, ...).
+  if (searchParams.get("error_code") === "user_banned") {
+    return { ok: false, error: "account_suspended" };
+  }
   if (searchParams.get("error")) {
     return { ok: false, error: "oauth_failed" };
   }
@@ -91,7 +104,12 @@ export async function resolveCallbackOutcome(input: CallbackInput): Promise<Call
     result = { error: new Error("exchange threw") };
   }
   if (!result || result.error) {
-    return { ok: false, error: "exchange_failed" };
+    return {
+      ok: false,
+      error: result?.error && isBannedAccountError(result.error)
+        ? "account_suspended"
+        : "exchange_failed",
+    };
   }
 
   return { ok: true, redirectTo };

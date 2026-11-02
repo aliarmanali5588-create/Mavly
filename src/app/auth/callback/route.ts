@@ -66,8 +66,15 @@ export async function GET(request: NextRequest) {
     // `strict: false`, and TypeScript only narrows a boolean discriminant when
     // strict null checks are on.
     if ("error" in outcome) {
-      destination = new URL("/login", origin);
-      destination.searchParams.set("error", outcome.error);
+      destination = new URL(
+        outcome.error === "account_suspended" ? "/account-restricted" : "/login",
+        origin,
+      );
+      if (outcome.error === "account_suspended") {
+        destination.searchParams.set("source", "auth");
+      } else {
+        destination.searchParams.set("error", outcome.error);
+      }
     } else if (
       !hasEstablishedSessionCookie(sessionCookies) &&
       !hasEstablishedSessionCookie(existingSessionCookies)

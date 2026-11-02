@@ -7,6 +7,7 @@ import { GlobalErrorCatcher } from "@/components/GlobalErrorCatcher";
 import { Toaster } from "@/components/ui/sonner";
 import { InsufficientCreditsModal } from "@/components/workspace/InsufficientCreditsModal";
 import { PWAInitializer } from "@/components/pwa/PWAInitializer";
+import { AccountRestrictionWatcher } from "@/components/AccountRestrictionWatcher";
 
 const dmSans = DM_Sans({ variable: "--font-dm-sans", subsets: ["latin"], weight: ["300", "400", "500", "600", "700"] });
 const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
@@ -56,6 +57,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body className={`${dmSans.variable} ${geistMono.variable} antialiased`}>
         <GlobalErrorCatcher />
+        <AccountRestrictionWatcher />
         <Toaster position="top-right" richColors />
         {/*
           ⭐ MOUNTED ONCE FOR THE WHOLE APP. Running out of credits can happen on any

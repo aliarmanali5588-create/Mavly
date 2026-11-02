@@ -1333,6 +1333,20 @@ export async function generationWorkerSchemaVersion(
   return Number.isInteger(version) ? version : 0;
 }
 
+/** Migration 49 is required before workers can safely run account-owned work. */
+export async function accountRestrictionSchemaVersion(
+  supabase: SupabaseClient,
+): Promise<number | null> {
+  const { data, error } = await supabase.rpc("account_restriction_schema_version");
+  if (error) {
+    if (isMissingFunction(error)) return null;
+    console.error("[mavly] account restriction schema check:", error.code ?? "unknown");
+    return null;
+  }
+  const version = typeof data === "number" ? data : Number(data);
+  return Number.isInteger(version) ? version : 0;
+}
+
 /** One atomic claim. The raw answer is verified by `parseClaimResult`. */
 export async function claimWorkerJob(
   supabase: SupabaseClient,

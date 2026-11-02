@@ -6,8 +6,8 @@ import { loginUrlFor } from "@/lib/auth/redirect";
 import { RestrictedScreen } from "./restricted-screen";
 
 export const metadata: Metadata = {
-  title: "Account Restricted — Mavly",
-  description: "This Mavly account is temporarily restricted by the administration team.",
+  title: "Account Suspended — Mavly",
+  description: "Your Mavly account has been suspended.",
   robots: { index: false, follow: false },
 };
 
@@ -27,36 +27,70 @@ export const dynamic = "force-dynamic";
  * means the state changed (an admin unblocked the account) — so the visitor
  * belongs in the product, not on an error screen.
  */
-export default async function AccountRestrictedPage() {
+export default async function AccountRestrictedPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const user = await getCurrentUser();
-  if (!user) redirect(loginUrlFor("/dashboard"));
+  const params = await searchParams;
+  const rawSource = params.source;
+  const source = Array.isArray(rawSource) ? rawSource[0] : rawSource;
+  if (!user) {
+    if (source === "auth") {
+      return (
+        <RestrictedScreen
+          email={null}
+          reason={null}
+          reasonState="identity_unverified"
+          status="sign_in_rejected"
+        />
+      );
+    }
+    redirect(loginUrlFor("/dashboard"));
+  }
 
   const supabase = await createSupabaseServerClient();
   if (!supabase) redirect(loginUrlFor("/dashboard"));
 
-  /**
-   * Ask the database for the caller's own restriction state and the most recent
-   * block reason. `current_user_is_restricted()` takes no argument, so this can
-   * only ever describe the signed-in caller.
-   *
-   * The audit read is best-effort: RLS on `account_restriction_events` allows an
-   * admin to read rows, and an ordinary restricted user cannot. When the read
-   * returns nothing, the screen simply shows no reason rather than inventing one.
-   */
-  const { data: restrictedResult } = await supabase.rpc("current_user_is_restricted");
+  const { data: restrictedResult, error: statusError } = await supabase.rpc(
+    "current_user_is_restricted",
+  );
+  if (statusError || typeof restrictedResult !== "boolean") {
+    console.error("[account-restricted] status lookup failed", {
+      code: statusError?.code ?? "invalid_response",
+    });
+    return (
+      <RestrictedScreen
+        email={user.email ?? null}
+        reason={null}
+        reasonState="unavailable"
+        status="unavailable"
+      />
+    );
+  }
   if (restrictedResult !== true) redirect("/dashboard");
 
-  const { data: events } = await supabase
-    .from("account_restriction_events")
-    .select("reason, created_at, action")
-    .eq("target_user_id", user.id)
-    .eq("action", "blocked")
-    .order("created_at", { ascending: false })
-    .limit(1);
+  const { data: reasonResult, error: reasonError } = await supabase.rpc(
+    "current_user_restriction_reason",
+  );
+  if (reasonError) {
+    console.error("[account-restricted] reason lookup failed", {
+      code: reasonError.code ?? "unknown",
+    });
+  }
+  const reason =
+    !reasonError && typeof reasonResult === "string" && reasonResult.trim()
+      ? reasonResult.trim()
+      : null;
+  const reasonState = reasonError ? "unavailable" : reason ? "recorded" : "not_recorded";
 
-  const latest = Array.isArray(events) && events.length > 0 ? events[0] : null;
-  const rawReason = typeof latest?.reason === "string" ? latest.reason.trim() : "";
-  const reason = rawReason === "" ? null : rawReason;
-
-  return <RestrictedScreen email={user.email ?? null} reason={reason} />;
+  return (
+    <RestrictedScreen
+      email={user.email ?? null}
+      reason={reason}
+      reasonState={reasonState}
+      status="suspended"
+    />
+  );
 }

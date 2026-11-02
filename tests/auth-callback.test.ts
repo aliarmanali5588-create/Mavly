@@ -66,6 +66,22 @@ test("a failed exchange is reported, not thrown", async () => {
   assert.deepEqual(outcome, { ok: false, error: "exchange_failed" });
 });
 
+test("a Supabase user_banned exchange is identified as a suspended account", async () => {
+  const outcome = await resolveCallbackOutcome(
+    input({ exchangeCode: async () => ({ error: { code: "user_banned" } }) }),
+  );
+  assert.deepEqual(outcome, { ok: false, error: "account_suspended" });
+});
+
+test("a Supabase user_banned callback error is identified without an exchange", async () => {
+  const outcome = await resolveCallbackOutcome(
+    input({
+      searchParams: new URLSearchParams("error=access_denied&error_code=user_banned"),
+    }),
+  );
+  assert.deepEqual(outcome, { ok: false, error: "account_suspended" });
+});
+
 test("an exchange that returns nothing is reported", async () => {
   const outcome = await resolveCallbackOutcome(
     input({ exchangeCode: async () => null }),

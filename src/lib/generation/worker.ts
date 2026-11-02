@@ -25,6 +25,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { runAgent } from "@/lib/mavly/run-agent";
 import {
+  accountRestrictionSchemaVersion,
   claimWorkerJob,
   generationWorkerSchemaVersion,
   getProject,
@@ -132,6 +133,15 @@ export async function runGenerationWorkerOnce(
       reason: "schema_outdated",
     });
     return { status: "unavailable", reason: "schema_outdated" };
+  }
+
+  const restrictionSchemaVersion = await accountRestrictionSchemaVersion(client);
+  if (restrictionSchemaVersion === null || restrictionSchemaVersion < 49) {
+    emitGenerationEvent("generation.worker_unavailable", {
+      workerId: config.workerId,
+      reason: "account_restriction_schema_outdated",
+    });
+    return { status: "unavailable", reason: "account_restriction_schema_outdated" };
   }
 
   const recovered = await recoverExpired(client, config);

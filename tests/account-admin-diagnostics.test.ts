@@ -245,11 +245,27 @@ test("the directory returns auth.users ids and the page sends that id", async ()
 
 // ── 7. Service-role client compatibility with new and legacy API keys ───────
 
-test("service-role client factory correctly detects legacy JWT keys (3 parts)", () => {
-  // This is tested indirectly by verifying the source code does not crash on key
-  // detection. The test imports the module to ensure it parses without errors.
-  const workerModule = require("../src/lib/supabase/worker.ts");
-  assert.ok(typeof workerModule.createSupabaseAccountAdminClient === "function");
-  assert.ok(typeof workerModule.createSupabaseWorkerClient === "function");
+test("service-role client factory correctly detects legacy JWT keys (3 parts)", async () => {
+  /**
+   * ⚠️ THIS TEST USED `require()` IN AN ESM MODULE, so it threw
+   * `require is not defined` and asserted nothing. It also claimed to test key
+   * detection while only checking that two exports existed.
+   *
+   * The real behaviour is covered by `service-role-fetch-wrapper.test.ts`, which
+   * runs the actual header builder. What is asserted here is the WIRING: the
+   * wrapper is installed on the client, and the header rules are the shared
+   * ones rather than a second, drifting copy.
+   */
+  const workerSource = await source("src/lib/supabase/worker.ts");
+
+  assert.match(workerSource, /function createAuthCompatibleFetch/);
+  assert.match(workerSource, /fetch: createAuthCompatibleFetch\(serviceRoleKey\)/);
+  assert.match(workerSource, /buildServiceRoleHeaders\(input, init, trimmedKey\)/);
+  assert.match(workerSource, /from "\.\/service-role-headers"/);
+
+  const rules = await source("src/lib/supabase/service-role-headers.ts");
+  assert.match(rules, /split\("\."\)\.length === 3/, "legacy detection is by JWT parts");
+  assert.match(rules, /if \(!isLegacyJwtKey\(key\) && headers\.get\("authorization"\)/, "Bearer stripped only for opaque keys");
+  assert.match(rules, /input instanceof URL \? undefined : input\.headers/, "Request headers preserved");
 });
 

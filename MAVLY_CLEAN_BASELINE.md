@@ -24,6 +24,7 @@ revocation or database mutation was performed while preparing this document.
 | Marketing homepage (`/`) | Loads. |
 | Sign-in page (`/login`) | Loads. Google and GitHub OAuth start are unchanged. |
 | Supabase authentication | `@supabase/ssr` clients, session refresh in `src/proxy.ts`, `/auth/callback`, `/auth/signout`. |
+| Account suspension | Auth `banned_until` remains authoritative (migration 45). The proxy checks each verified request; migration 49 adds an authenticated caller-only reason RPC and a service-role-only worker status check while the audit table remains admin-readable only. `/api/account/restriction` supports a workspace-wide watcher that redirects already-open sessions and detects unblocking. Generation workers stop suspended users' active runs at the next safe checkpoint and release reserved credits. Apply migration 49 after migration 48. |
 | Session-gated pages | `/dashboard` and `/project/*` redirect signed-out visitors to `/login`. |
 | API session gate | `/api/*` returns JSON `401 UNAUTHENTICATED` without a verified session. |
 | Project ownership | `public.projects`, RLS, `registerProjectOwnership`, `checkProjectAccess`, `enforceProjectScope`. |
