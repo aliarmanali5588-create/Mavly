@@ -488,7 +488,7 @@ function FileBlock({
                                 : t("workspace.diff.noTextualChanges")}
                         </p>
                     ) : (
-                        <table className="w-full border-collapse font-mono text-[11px] leading-[1.6]">
+                        <table data-selectable="true" className="w-full border-collapse font-mono text-[11px] leading-[1.6]">
                             <tbody>
                                 {file.lines.map((line, index) => (
                                     <DiffRow key={index} line={line} />

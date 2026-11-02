@@ -277,7 +277,7 @@ export function PaymentsModal({
                             </p>
                         ) : null}
                         {secret ? (
-                            <p className="bg-muted flex items-center gap-2 rounded-md p-2 font-mono text-xs break-all">
+                            <p data-selectable="true" className="bg-muted flex items-center gap-2 rounded-md p-2 font-mono text-xs break-all">
                                 {secret}
                                 <CopyButton value={secret} />
                             </p>

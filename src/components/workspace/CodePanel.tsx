@@ -867,7 +867,7 @@ export function CodePanel({ projectId, darkMode, onAskAiEdit, wake, sourceRevisi
         </div>
         <div>
           <p className="text-sm font-medium text-foreground mb-1">{"Failed to load source code"}</p>
-          <p className="text-xs text-muted-foreground max-w-sm break-words">{String(error)}</p>
+          <p data-selectable="true" className="text-xs text-muted-foreground max-w-sm break-words">{String(error)}</p>
         </div>
         <Button
           onClick={() => fetchCode(true)}

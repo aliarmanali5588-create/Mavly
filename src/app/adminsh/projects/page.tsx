@@ -347,7 +347,7 @@ export default function ProjectsAdminPage() {
                             <Copy className="w-3 h-3" />
                           </button>
                         </div>
-                        <p className="text-[10px] font-mono text-muted-foreground">{project.id}</p>
+                        <p data-selectable="true" className="text-[10px] font-mono text-muted-foreground">{project.id}</p>
                       </td>
                       <td className="py-3.5">
                         <p className="font-medium text-foreground">{project.owner ?? "Name not recorded"}</p>

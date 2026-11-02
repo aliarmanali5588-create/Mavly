@@ -19,6 +19,8 @@ export default function GlobalError({
       <body style={{
         margin: 0,
         padding: 0,
+        userSelect: "none",
+        WebkitUserSelect: "none",
         fontFamily: 'system-ui, -apple-system, sans-serif',
         background: 'linear-gradient(to bottom right, #fffcfb, #f7f2f0)',
         minHeight: '100vh',

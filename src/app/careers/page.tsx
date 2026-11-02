@@ -159,6 +159,7 @@ export default function CareersPage() {
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
             <a
               href="mailto:careers@mavly.xyz?subject=Mavly%20Careers%20Inquiry"
+              data-selectable="true"
               className="px-5 py-2.5 rounded-xl bg-card text-black font-bold text-xs border border-[var(--clay-line)] shadow-[var(--clay-elev-2)] hover:border-[var(--clay-line-strong)] clay-press transition-[box-shadow,border-color,background-color] inline-flex items-center gap-2"
             >
               <span>Email careers@mavly.xyz</span>

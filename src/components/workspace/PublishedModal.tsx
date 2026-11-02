@@ -89,7 +89,7 @@ export function PublishedModal({
                     </p>
 
                     <div className="mt-2 flex items-start gap-2">
-                        <p className="min-w-0 flex-1 font-mono text-sm break-all">{host}</p>
+                        <p data-selectable="true" className="min-w-0 flex-1 font-mono text-sm break-all">{host}</p>
                         <CopyButton value={url} size="icon" className="shrink-0" />
                     </div>
                 </section>

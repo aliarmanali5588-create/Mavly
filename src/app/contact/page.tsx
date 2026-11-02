@@ -137,6 +137,7 @@ export default function ContactPage() {
                       </span>
                       <a
                         href={mailtoHref}
+                        data-selectable="true"
                         className="font-mono text-xs font-semibold text-foreground hover:underline truncate block"
                       >
                         {ch.email}

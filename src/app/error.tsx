@@ -56,7 +56,7 @@ export default function Error({
         </div>
 
         <div className="mb-4 rounded-md bg-destructive-subtle p-3">
-          <p className="text-sm font-medium text-destructive-subtle-foreground">
+          <p data-selectable="true" className="text-sm font-medium text-destructive-subtle-foreground">
             Error: {error.message || "Unknown error"}
           </p>
         </div>
@@ -75,7 +75,7 @@ export default function Error({
             Copy this and paste it in the AI chat:
           </p>
           <div className="relative">
-            <div className="rounded-lg border border-[var(--clay-line)] bg-card p-3 pr-12 font-mono text-sm text-foreground dark:border-[var(--clay-line-strong)] dark:bg-[var(--clay-sunken-deep)] shadow-[var(--clay-well-1)]">
+            <div data-selectable="true" className="rounded-lg border border-[var(--clay-line)] bg-card p-3 pr-12 font-mono text-sm text-foreground dark:border-[var(--clay-line-strong)] dark:bg-[var(--clay-sunken-deep)] shadow-[var(--clay-well-1)]">
               {aiPrompt}
             </div>
             <button
@@ -128,7 +128,7 @@ export default function Error({
               {error.stack || "No stack trace available"}
             </pre>
             {error.digest && (
-              <p className="mt-2 text-xs text-muted-foreground">
+              <p data-selectable="true" className="mt-2 text-xs text-muted-foreground">
                 Digest: {error.digest}
               </p>
             )}

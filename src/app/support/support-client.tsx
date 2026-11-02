@@ -227,6 +227,7 @@ export function SupportClient({ profile }: SupportClientProps) {
                       </span>
                       <a
                         href={mailtoHref}
+                        data-selectable="true"
                         className="font-mono text-xs sm:text-[13px] font-medium text-foreground hover:underline truncate block"
                         title={`Open email to ${channel.email}`}
                       >

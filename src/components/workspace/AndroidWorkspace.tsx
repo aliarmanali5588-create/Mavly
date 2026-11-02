@@ -753,7 +753,7 @@ export function AndroidWorkspace({ project }: { project: VcaasProject }) {
                 <AlertCircle className="size-4 shrink-0" aria-hidden="true" /> {generationError}
               </p>
             ) : null}
-            {status?.lastErrorClass ? <p className="mt-3 text-xs text-muted-foreground">Latest run error: {status.lastErrorClass}</p> : null}
+            {status?.lastErrorClass ? <p data-selectable="true" className="mt-3 text-xs text-muted-foreground">Latest run error: {status.lastErrorClass}</p> : null}
           </div>
 
           <form

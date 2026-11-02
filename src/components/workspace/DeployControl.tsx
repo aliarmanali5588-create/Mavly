@@ -330,7 +330,7 @@ export function DeployControl({
                           be read and checked.
                         */}
                         <div className="mt-2 flex items-start gap-2">
-                            <p className="min-w-0 flex-1 font-mono text-sm break-all">
+                            <p data-selectable="true" className="min-w-0 flex-1 font-mono text-sm break-all">
                                 {publishedHost}
                             </p>
                             <div className="flex shrink-0 items-center gap-1">
