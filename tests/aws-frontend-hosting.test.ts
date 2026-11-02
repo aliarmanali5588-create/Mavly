@@ -53,10 +53,11 @@ test("content SHA-256 is stable across string and byte inputs", () => {
 });
 
 test("AWS hosting stays opt-in and requires its complete private-hosting config", () => {
-  const disabled = readAwsFrontendHostingConfig({});
+  const disabled = readAwsFrontendHostingConfig({ NODE_ENV: "test" } as NodeJS.ProcessEnv);
   assert.equal(disabled.enabled, false);
 
   const enabled = readAwsFrontendHostingConfig({
+    NODE_ENV: "test",
     MAVLY_AWS_FRONTEND_HOSTING_ENABLED: "true",
     MAVLY_AWS_S3_BUCKET: "mavly-test-assets",
     MAVLY_AWS_REGION: "us-west-2",
@@ -67,6 +68,7 @@ test("AWS hosting stays opt-in and requires its complete private-hosting config"
   assert.equal(enabled.problem, null);
 
   const wildcard = readAwsFrontendHostingConfig({
+    NODE_ENV: "test",
     MAVLY_AWS_FRONTEND_HOSTING_ENABLED: "true",
     MAVLY_AWS_S3_BUCKET: "mavly-test-assets",
     MAVLY_AWS_REGION: "us-west-2",

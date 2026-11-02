@@ -1817,7 +1817,7 @@ export async function getProjectDeploymentStatus(
     return sharedDeploymentStatus(projectId, row.data);
   }
   if (row.data.provider === "aws") {
-    return awsDeploymentStatus(projectId, row.data);
+    return { ok: true, data: wireDeploymentStatus(row.data) };
   }
 
   /**
