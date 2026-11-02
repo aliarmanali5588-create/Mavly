@@ -9,7 +9,7 @@
 export const ADMIN_PERIODS = [
   { id: "7d", label: "7D", description: "Last 7 days" },
   { id: "30d", label: "30D", description: "Last 30 days" },
-  { id: "3m", label: "3M", description: "Last 90 days" },
+  { id: "3m", label: "3M", description: "Previous 3 calendar months" },
   { id: "ytd", label: "YTD", description: "Year to date" },
 ] as const;
 
@@ -31,7 +31,7 @@ export function parseAdminPeriod(value: string | null | undefined): AdminPeriod 
 }
 
 export interface AdminPeriodWindow {
-  /** Inclusive start, UTC instant. */
+  /** Inclusive start, at midnight in the reporting timezone (Asia/Kolkata). */
   start: Date;
   /** Exclusive end (the current instant). */
   end: Date;
@@ -42,22 +42,47 @@ export interface AdminPeriodWindow {
 
 const DAY_MS = 86_400_000;
 
+const REPORTING_TIMEZONE_OFFSET_MS = 5.5 * 60 * 60 * 1000;
+
+/**
+ * Return the instant representing midnight for an India calendar date.
+ * Asia/Kolkata has no daylight-saving transitions, so its fixed +05:30 offset
+ * is safe for these reporting boundaries and keeps this pure helper aligned
+ * with the database RPC without depending on the browser's local timezone.
+ */
+function indiaMidnight(year: number, month: number, day: number): Date {
+  return new Date(Date.UTC(year, month, day) - REPORTING_TIMEZONE_OFFSET_MS);
+}
+
+function indiaDateParts(now: Date): { year: number; month: number; day: number } {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Kolkata",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(now);
+  const value = (type: string) => Number(parts.find((part) => part.type === type)?.value);
+  return { year: value("year"), month: value("month") - 1, day: value("day") };
+}
+
 export function adminPeriodWindow(period: AdminPeriod, now: Date = new Date()): AdminPeriodWindow {
   const end = new Date(now.getTime());
+  const { year, month, day } = indiaDateParts(end);
+  const indiaToday = indiaMidnight(year, month, day);
   let start: Date;
   switch (period) {
     case "7d":
-      start = new Date(end.getTime() - 7 * DAY_MS);
+      start = new Date(indiaToday.getTime() - 6 * DAY_MS);
       break;
     case "3m":
-      start = new Date(end.getTime() - 90 * DAY_MS);
+      start = indiaMidnight(year, month - 2, 1);
       break;
     case "ytd":
-      start = new Date(Date.UTC(end.getUTCFullYear(), 0, 1));
+      start = indiaMidnight(year, 0, 1);
       break;
     case "30d":
     default:
-      start = new Date(end.getTime() - 30 * DAY_MS);
+      start = new Date(indiaToday.getTime() - 29 * DAY_MS);
       break;
   }
   const span = end.getTime() - start.getTime();

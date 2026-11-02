@@ -170,6 +170,12 @@ owner-checked, claim-fenced SECURITY DEFINER function that moves a LIVE inline r
 one verified checkpoint, and cannot be repeated. It is additive: no column, table, policy,
 grant or existing RPC changes. Without it the hand-off is refused and the run fails exactly
 as before.
+Apply `52_admin_notifications_and_reporting.sql` after 51 before enabling the
+production admin notification store: it adds admin-only persistent notifications,
+the trusted signup notification trigger, read/unread RPCs, optional Realtime
+publication, retention cleanup, and the Asia/Kolkata reporting-window authority
+used by the admin Overview and AI-usage aggregates. It does not add Mavly billing
+or treat customer-app Razorpay payments as platform revenue.
 Project-secret encryption also
 requires the server-only `MAVLY_PROJECT_SECRETS_ENCRYPTION_KEY` (32 random bytes,
 base64-encoded); without it create/update fail closed. `npm test` covers the pure

@@ -18,7 +18,7 @@ export type AdminConsolePeriod = "7d" | "30d" | "3m" | "ytd";
 export const ADMIN_CONSOLE_PERIODS = [
   { id: "7d", label: "7D", description: "Last 7 days" },
   { id: "30d", label: "30D", description: "Last 30 days" },
-  { id: "3m", label: "3M", description: "Last 90 days" },
+  { id: "3m", label: "3M", description: "Previous 3 calendar months" },
   { id: "ytd", label: "YTD", description: "Year to date" },
 ] as const;
 

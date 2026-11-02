@@ -46,20 +46,20 @@ test("each period has an inclusive start, exclusive end and a comparable previou
   const now = new Date("2026-10-28T12:00:00.000Z");
 
   const week = adminPeriodWindow("7d", now);
-  assert.equal(week.start.toISOString(), "2026-10-21T12:00:00.000Z");
+  assert.equal(week.start.toISOString(), "2026-10-21T18:30:00.000Z");
   assert.equal(week.end.toISOString(), now.toISOString());
   assert.equal(week.previousEnd.toISOString(), week.start.toISOString());
-  assert.equal(week.previousStart.toISOString(), "2026-10-14T12:00:00.000Z");
+  assert.equal(week.previousStart.toISOString(), "2026-10-14T18:30:00.000Z");
 
   const month = adminPeriodWindow("30d", now);
-  assert.equal(month.start.toISOString(), "2026-09-28T12:00:00.000Z");
-  assert.equal(month.previousStart.toISOString(), "2026-08-29T12:00:00.000Z");
+  assert.equal(month.start.toISOString(), "2026-09-28T18:30:00.000Z");
+  assert.equal(month.previousStart.toISOString(), "2026-08-29T18:30:00.000Z");
 
   const quarter = adminPeriodWindow("3m", now);
-  assert.equal(quarter.start.toISOString(), "2026-07-30T12:00:00.000Z");
+  assert.equal(quarter.start.toISOString(), "2026-07-31T18:30:00.000Z");
 
   const ytd = adminPeriodWindow("ytd", now);
-  assert.equal(ytd.start.toISOString(), "2026-01-01T00:00:00.000Z");
+  assert.equal(ytd.start.toISOString(), "2025-12-31T18:30:00.000Z");
   assert.ok(ytd.previousStart.getTime() < ytd.start.getTime());
 });
 

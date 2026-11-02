@@ -110,6 +110,7 @@ export function AdminShell({
           statusSummary={statusSummary}
           statusTone={statusTone}
           environment={environment}
+          loading={loading}
         />
 
         {/* Main Content Scroll Area */}
