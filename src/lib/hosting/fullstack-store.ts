@@ -34,7 +34,7 @@ export type FullstackLifecycle =
 
 export interface FullstackDeploymentRow {
   project_id: string;
-  provider: "vercel" | "shared";
+  provider: "vercel" | "shared" | "aws";
   status: string;
   lifecycle: FullstackLifecycle | null;
   deployment_kind: "static" | "fullstack";

@@ -862,7 +862,7 @@ async function unpublishAwsProject(
   if (queued.ok === false) {
     const restoredStatus =
       previousStatus === "unpublishing" ? "error" : previousStatus;
-    await releaseUnpublish(projectId, lease, restoredStatus, {
+    await releaseUnpublish(projectId, lease, restoredStatus as Exclude<StoredDeploymentStatus, "unpublishing" | "unpublished">, {
       code: queued.code,
       message: "Mavly could not queue the AWS route removal.",
     });
