@@ -312,7 +312,7 @@ export function useAdminNotifications(enabled = true) {
       }
     };
 
-    const releaseRealtime = subscribeToAdminNotificationRealtime({ onRealtimeEvent, onStatus: onRealtimeStatus });
+    const releaseRealtime = subscribeToAdminNotificationRealtime({ onEvent: onRealtimeEvent, onStatus: onRealtimeStatus });
     // The manager starts the channel before emitting SUBSCRIBING. This fallback
     // prevents a permanently pending history view if auth or Realtime is down.
     const historyFallback = window.setTimeout(startInitialHistory, 5_000);
