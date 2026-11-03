@@ -21,6 +21,7 @@ import {
   verifyAwsPublicTenantRouteRemoved,
 } from "./tenant-mapping";
 import { publishToS3, verifyS3Publication } from "./s3-publisher";
+import { emitAwsPublicationEvent } from "./observability";
 
 export interface AwsPublicationTickSummary {
   status:
@@ -142,8 +143,20 @@ async function failClaim(
   });
   if (failed.ok === false) {
     console.error("[aws-publication] could not persist outcome:", failed.code);
+    emitAwsPublicationEvent("outcome_persistence_failed", {
+      versionId: claim.versionId,
+      code: failed.code,
+    });
     return { status: "error", versionId: claim.versionId, reason: "outcome_persistence_failed" };
   }
+  emitAwsPublicationEvent(
+    failed.data === "retry_wait" ? "publication_retry" : "publication_failed",
+    {
+      versionId: claim.versionId,
+      code,
+      status: failed.data,
+    },
+  );
   return {
     status: failed.data === "retry_wait" ? "retry" : "failed",
     versionId: claim.versionId,
@@ -163,12 +176,20 @@ async function failUnpublishClaim(
   });
   if (failed.ok === false) {
     console.error("[aws-publication] could not persist unpublish outcome:", failed.code);
+    emitAwsPublicationEvent("outcome_persistence_failed", {
+      projectId: claim.projectId,
+      code: failed.code,
+    });
     return {
       status: "error",
       projectId: claim.projectId,
       reason: "outcome_persistence_failed",
     };
   }
+  emitAwsPublicationEvent(
+    failed.data === "retry_wait" ? "publication_retry" : "publication_failed",
+    { projectId: claim.projectId, code: reason, status: failed.data },
+  );
   return {
     status: failed.data === "retry_wait" ? "retry" : "failed",
     projectId: claim.projectId,
@@ -200,6 +221,11 @@ export async function runAwsFrontendPublicationTick(input: {
     return { status: "error", reason: "unpublish_claim_failed" };
   }
   if (unpublishClaim.status === "claimed") {
+    emitAwsPublicationEvent("unpublish_started", {
+      projectId: unpublishClaim.projectId,
+      attempt: unpublishClaim.attemptCount,
+      generation: unpublishClaim.routingGeneration,
+    });
     const identity = {
       projectId: unpublishClaim.projectId,
       leaseToken: unpublishClaim.leaseToken,
@@ -254,6 +280,10 @@ export async function runAwsFrontendPublicationTick(input: {
         reason: "unpublish_completion_failed",
       };
     }
+    emitAwsPublicationEvent("unpublish_completed", {
+      projectId: unpublishClaim.projectId,
+      generation: unpublishClaim.routingGeneration,
+    });
     return { status: "unpublished", projectId: unpublishClaim.projectId };
   }
 
@@ -275,6 +305,13 @@ export async function runAwsFrontendPublicationTick(input: {
     versionId: claim.versionId,
     leaseToken: claim.leaseToken,
   };
+
+  emitAwsPublicationEvent("publication_claimed", {
+    projectId: claim.projectId,
+    versionId: claim.versionId,
+    attempt: claim.attemptCount,
+    generation: claim.routingGeneration,
+  });
 
   if (!isAwsFrontendHostingProject(claim.projectId)) {
     return failClaim(input.client, identity, "INVALID_MANIFEST", false);
@@ -310,6 +347,13 @@ export async function runAwsFrontendPublicationTick(input: {
   ) {
     return failClaim(input.client, identity, "INVALID_MANIFEST", false);
   }
+
+  emitAwsPublicationEvent("publication_started", {
+    projectId: claim.projectId,
+    versionId: claim.versionId,
+    attempt: claim.attemptCount,
+    generation: claim.routingGeneration,
+  });
 
   const fileResult = await input.client
     .from("project_published_files")
@@ -375,6 +419,14 @@ export async function runAwsFrontendPublicationTick(input: {
       published.code === "S3_UPLOAD_FAILED",
     );
   }
+  emitAwsPublicationEvent("s3_upload_completed", {
+    projectId: claim.projectId,
+    versionId: claim.versionId,
+    uploadedCount: published.uploadedCount,
+    failedCount: 0,
+    totalBytes: published.totalBytes,
+    durationMs: published.durationMs,
+  });
   if (
     published.manifestHash !== version.content_hash ||
     !(await verifyS3Publication(
@@ -386,9 +438,20 @@ export async function runAwsFrontendPublicationTick(input: {
   ) {
     return failClaim(input.client, identity, "S3_UPLOAD_FAILED", true);
   }
+  emitAwsPublicationEvent("s3_verification_completed", {
+    projectId: claim.projectId,
+    versionId: claim.versionId,
+    uploadedCount: files.length,
+    totalBytes: published.totalBytes,
+  });
 
   const renewed = await renewAwsFrontendPublication(input.client, identity);
   if (renewed.ok === false || !renewed.data) {
+    emitAwsPublicationEvent("lease_lost", {
+      projectId: claim.projectId,
+      versionId: claim.versionId,
+      reason: "lease_lost_before_activation",
+    });
     return { status: "error", versionId: claim.versionId, reason: "lease_lost_before_activation" };
   }
   const hostname = mavlyHostname(claim.projectId);
@@ -411,10 +474,27 @@ export async function runAwsFrontendPublicationTick(input: {
       claim.versionId,
     );
     if (restored === "failed") {
+      emitAwsPublicationEvent("route_recovery_failed", {
+        projectId: claim.projectId,
+        versionId: claim.versionId,
+        reason: "activation_failed",
+      });
       return { status: "error", versionId: claim.versionId, reason: "route_recovery_failed" };
     }
+    emitAwsPublicationEvent("publication_retry", {
+      projectId: claim.projectId,
+      versionId: claim.versionId,
+      code: "KEY_VALUE_STORE_FAILED",
+      status: restored,
+    });
     return failClaim(input.client, identity, "KEY_VALUE_STORE_FAILED", true);
   }
+
+  emitAwsPublicationEvent("kvs_activation_completed", {
+    projectId: claim.projectId,
+    versionId: claim.versionId,
+    generation: claim.routingGeneration,
+  });
 
   const routeReady = await verifyAwsTenantRoute({
     projectId: claim.projectId,
@@ -428,6 +508,11 @@ export async function runAwsFrontendPublicationTick(input: {
       claim.versionId,
     );
     if (restored === "failed") {
+      emitAwsPublicationEvent("route_recovery_failed", {
+        projectId: claim.projectId,
+        versionId: claim.versionId,
+        reason: "route_verification_failed",
+      });
       return { status: "error", versionId: claim.versionId, reason: "route_recovery_failed" };
     }
     return failClaim(input.client, identity, "KEY_VALUE_STORE_FAILED", true);
@@ -444,11 +529,21 @@ export async function runAwsFrontendPublicationTick(input: {
       return { status: "completed", versionId: claim.versionId };
     }
     if (restored === "failed") {
+      emitAwsPublicationEvent("route_recovery_failed", {
+        projectId: claim.projectId,
+        versionId: claim.versionId,
+        reason: "completion_failed",
+      });
       return { status: "error", versionId: claim.versionId, reason: "route_recovery_failed" };
     }
     console.error("[aws-publication] activation persistence failed:", completed.code);
     return failClaim(input.client, identity, "PUBLICATION_ACTIVATION_FAILED", true);
   }
 
+  emitAwsPublicationEvent("publication_completed", {
+    projectId: claim.projectId,
+    versionId: claim.versionId,
+    generation: claim.routingGeneration,
+  });
   return { status: "completed", versionId: claim.versionId };
 }

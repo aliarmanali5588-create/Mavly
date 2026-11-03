@@ -1,10 +1,25 @@
 -- Durable, worker-owned AWS static publication queue.
 --
--- Apply after migrations 15 and 16. This migration does not create deployment
+-- Apply after migrations 14, 15 and 16. This migration does not create deployment
 -- rows, alter existing deployment state, delete S3 objects, or depend on the
 -- admin-console migration.
 
 begin;
+
+do $$
+begin
+  if to_regclass('public.project_published_versions') is null
+     or to_regclass('public.project_published_files') is null then
+    raise exception 'AWS_FRONTEND_PREREQUISITE_MISSING: apply migration 14_shared_hosting.sql first';
+  end if;
+  if to_regprocedure('public.shared_hosting_schema_version()') is null then
+    raise exception 'AWS_FRONTEND_PREREQUISITE_MISSING: apply migration 15_shared_hosting_attempt_state.sql first';
+  end if;
+  if to_regprocedure('public.generation_worker_schema_version()') is null then
+    raise exception 'AWS_FRONTEND_PREREQUISITE_MISSING: apply migration 16_durable_generation_worker.sql first';
+  end if;
+end
+$$;
 
 do $$
 begin
@@ -27,8 +42,106 @@ $$;
 comment on column public.project_deployments.provider is
   'vercel = legacy per-project Vercel; shared = Mavly tenant runtime; aws = immutable S3/CloudFront publication.';
 
+-- A direct owner delete must not cascade away an AWS deployment while its KVS
+-- route is still public. The API also performs the worker-confirmed unpublish
+-- first, but this trigger protects the database boundary when a caller reaches
+-- the project DELETE path without going through that application orchestration.
+create or replace function public.guard_aws_project_deletion()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+begin
+  if exists (
+    select 1
+      from public.project_deployments d
+     where d.project_id = old.project_id
+       and d.provider = 'aws'
+       and d.status <> 'unpublished'
+  ) then
+    raise exception 'AWS_PUBLICATION_MUST_BE_UNPUBLISHED' using errcode = '42501';
+  end if;
+  return old;
+end;
+$$;
+
+drop trigger if exists guard_aws_project_deletion on public.projects;
+create trigger guard_aws_project_deletion
+  before delete on public.projects
+  for each row execute function public.guard_aws_project_deletion();
+
+revoke all on function public.guard_aws_project_deletion() from public, anon;
+grant execute on function public.guard_aws_project_deletion() to authenticated;
+
 alter table public.project_deployments
   add column if not exists aws_route_generation bigint not null default 0;
+
+-- Authenticated owners may start an AWS attempt and request an unpublish, but
+-- they must not forge a live pointer, mark a route unpublished, change the
+-- generation fence, or delete an AWS mapping while its public route may still
+-- exist. The worker-owned SECURITY DEFINER RPCs run as service_role and are the
+-- only path that may perform those transitions.
+create or replace function public.guard_aws_deployment_mutations()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+begin
+  if coalesce(auth.role(), '') = 'service_role' then
+    if tg_op = 'DELETE' then return old; end if;
+    return new;
+  end if;
+
+  if tg_op = 'INSERT' then
+    if new.provider = 'aws' and (
+      new.status <> 'queued'
+      or new.active_version_id is not null
+      or new.aws_route_generation <> 0
+    ) then
+      raise exception 'AWS_DEPLOYMENT_MUTATION_FORBIDDEN' using errcode = '42501';
+    end if;
+    return new;
+  end if;
+
+  if tg_op = 'DELETE' then
+    if old.provider = 'aws' and old.status <> 'unpublished' then
+      raise exception 'AWS_PUBLICATION_MUST_BE_UNPUBLISHED' using errcode = '42501';
+    end if;
+    return old;
+  end if;
+
+  if old.provider = 'aws' or new.provider = 'aws' then
+    if old.provider = 'aws' and new.provider <> 'aws' then
+      raise exception 'AWS_DEPLOYMENT_PROVIDER_IMMUTABLE' using errcode = '42501';
+    end if;
+    if old.provider <> 'aws' and new.provider = 'aws' then
+      raise exception 'AWS_DEPLOYMENT_MIGRATION_REQUIRED' using errcode = '42501';
+    end if;
+    if new.provider = 'aws'
+       and old.status is distinct from new.status
+       and new.status in ('ready', 'unpublished') then
+      raise exception 'AWS_DEPLOYMENT_STATE_WORKER_ONLY' using errcode = '42501';
+    end if;
+    if old.provider = 'aws' and new.active_version_id is distinct from old.active_version_id then
+      raise exception 'AWS_ACTIVE_VERSION_WORKER_ONLY' using errcode = '42501';
+    end if;
+    if old.provider = 'aws' and new.aws_route_generation is distinct from old.aws_route_generation then
+      raise exception 'AWS_ROUTE_GENERATION_WORKER_ONLY' using errcode = '42501';
+    end if;
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists guard_aws_deployment_mutations on public.project_deployments;
+create trigger guard_aws_deployment_mutations
+  before insert or update or delete on public.project_deployments
+  for each row execute function public.guard_aws_deployment_mutations();
+
+revoke all on function public.guard_aws_deployment_mutations() from public, anon;
+grant execute on function public.guard_aws_deployment_mutations() to authenticated;
 
 do $$
 begin
@@ -702,11 +815,24 @@ begin
      set status = 'failed',
          lease_token = null,
          lease_expires_at = null,
-         error_code = 'ROUTE_REMOVAL_FAILED',
-         updated_at = now()
+          error_code = 'ROUTE_REMOVAL_FAILED',
+          updated_at = now()
    where status = 'processing'
-     and lease_expires_at <= now()
-     and attempt_count >= 8;
+      and lease_expires_at <= now()
+      and attempt_count >= 8;
+
+   update public.project_deployments d
+      set status = 'error',
+          error_code = 'ROUTE_REMOVAL_FAILED',
+          error_message = 'The AWS route removal could not be confirmed.',
+          updated_at = now()
+     from public.aws_frontend_unpublish_jobs j
+    where j.project_id = d.project_id
+      and j.status = 'failed'
+      and j.error_code = 'ROUTE_REMOVAL_FAILED'
+      and d.provider = 'aws'
+      and d.status = 'unpublishing'
+      and d.aws_route_generation = j.routing_generation;
 
   select j.project_id
     into v_project_id
@@ -788,8 +914,8 @@ begin
     300,
     15 * (2 ^ greatest(v_job.attempt_count - 1, 0))::integer
   );
-  update public.aws_frontend_unpublish_jobs
-     set status = case when v_retry then 'retry_wait' else 'failed' end,
+   update public.aws_frontend_unpublish_jobs
+      set status = case when v_retry then 'retry_wait' else 'failed' end,
          next_attempt_at = case
            when v_retry then now() + make_interval(secs => v_delay_seconds)
            else next_attempt_at
@@ -797,9 +923,22 @@ begin
          lease_token = null,
          lease_expires_at = null,
          error_code = 'ROUTE_REMOVAL_FAILED',
-         updated_at = now()
-   where project_id = p_project_id;
-  return case when v_retry then 'retry_wait' else 'failed' end;
+          updated_at = now()
+    where project_id = p_project_id;
+
+   if not v_retry then
+     update public.project_deployments
+        set status = 'error',
+            error_code = 'ROUTE_REMOVAL_FAILED',
+            error_message = 'The AWS route removal could not be confirmed.',
+            updated_at = now()
+      where project_id = v_job.project_id
+        and provider = 'aws'
+        and status = 'unpublishing'
+        and aws_route_generation = v_job.routing_generation;
+   end if;
+
+   return case when v_retry then 'retry_wait' else 'failed' end;
 end;
 $$;
 

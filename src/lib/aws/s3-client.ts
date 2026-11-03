@@ -8,6 +8,12 @@ import { readAwsFrontendHostingConfig } from "./config";
 
 let client: S3Client | null = null;
 
+/** Injectable only so unit tests can exercise the exact AWS command contract. */
+export function setS3ClientForTests(next: S3Client | null): void {
+  client?.destroy();
+  client = next;
+}
+
 export function getS3Client(): S3Client {
   if (client) return client;
   const config = readAwsFrontendHostingConfig();
@@ -16,6 +22,10 @@ export function getS3Client(): S3Client {
   }
   client = new S3Client({
     region: config.region,
+    // The durable publication lease retries the whole job; the SDK retry budget
+    // handles transient transport failures for one object without duplicating a
+    // publication attempt or requiring DeleteObject permission.
+    maxAttempts: 3,
   });
   return client;
 }

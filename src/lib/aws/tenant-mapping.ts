@@ -20,6 +20,14 @@ export interface AwsTenantMapping {
 
 let client: CloudFrontKeyValueStoreClient | null = null;
 
+/** Injectable only so unit tests can exercise KVS fencing without AWS calls. */
+export function setTenantMappingClientForTests(
+  next: CloudFrontKeyValueStoreClient | null,
+): void {
+  client?.destroy();
+  client = next;
+}
+
 function getClient(): CloudFrontKeyValueStoreClient {
   if (!client) {
     client = new CloudFrontKeyValueStoreClient({

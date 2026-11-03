@@ -2,9 +2,11 @@
 
 ## Status
 
-Repository implementation is **opt-in and not production-ready**. No AWS resources,
-DNS records, migrations, production environment variables, or live publications have
-been changed or verified.
+Repository implementation is **opt-in and not production-ready**. This task does not
+change AWS resources, DNS records, database state, production environment variables,
+or live publications. The supplied account-side bucket, KVS, instance role, and
+policy are production candidates with only the operator-reported partial verification;
+the dedicated staging stack still requires operator deployment and acceptance.
 
 The feature adds an immutable S3 publisher, a CloudFront KeyValueStore (KVS) tenant
 router, and a durable publication side queue processed by the existing AWS generation
@@ -71,6 +73,11 @@ and version, so cache entries cannot collide across tenants or publications.
   no public S3 website endpoint, and no cache invalidation dependency.
 - The database publication lease is renewed before the external routing mutation.
   Stale workers cannot complete a newer worker's lease.
+- Authenticated callers may create an AWS queued attempt and request unpublish, but
+  migration 51 blocks owner-side live-pointer, generation, ready/unpublished,
+  provider-migration, and unsafe-delete mutations. Worker-only SECURITY DEFINER
+  functions own live activation and terminal unpublish; the project-delete trigger
+  requires the worker-confirmed `unpublished` state.
 - A failed publish leaves the existing database active-version pointer unchanged.
   Cross-service activation is not a distributed transaction; the worker uses a
   compensating KVS restore and retries when the result is uncertain.
@@ -92,13 +99,38 @@ and version, so cache entries cannot collide across tenants or publications.
   template. The normal worker emits sanitized publication outcome events. Logging
   setup remains operator work before production acceptance.
 
-## Infrastructure and configuration
+## Infrastructure reconciliation and staging
 
-`infra/aws-frontend-hosting/template.yaml` prepares a private bucket, OAC, KVS,
-CloudFront Function/distribution, wildcard alias, and a least-privilege policy
-attached to a **named existing worker role**. It does not create an EC2 instance or
-instance profile. The template has not been deployed or validated against an AWS
-account. The ACM certificate must already exist in `us-east-1`.
+The operator supplied these existing production candidates:
+
+- account `505384438340`, worker region `eu-north-1`;
+- EC2 `i-05ac7a8d4a0e1d499` (`mavly-generation-worker`) with role `MavlyEC2SSMRole`;
+- S3 bucket `mavly-frontend-505384438340-eu-north-1-an`;
+- CloudFront KVS `mavly-tenant-routing-prod`, ARN
+  `arn:aws:cloudfront::505384438340:key-value-store/5ea7516a-8088-4833-9749-4aac8b6f652c`;
+- attached policy `MavlyAWSFrontendHostingPublisher`.
+
+The operator reported successful role assumption, `HeadBucket`, KVS description, and
+IAM policy simulation. Actual object writes, object reads, KVS reads, and KVS updates
+remain only partially verified. No CloudFront distribution, OAC, Function, certificate,
+or DNS change is claimed here. The existing bucket and KVS are therefore treated as
+production candidates and are not staging resources.
+
+`infra/aws-frontend-hosting/template.yaml` now has an isolated staging default:
+
+- creates a new retained private/versioned S3 bucket and a stack-named KVS;
+- uses the existing EC2 role but attaches a stack-scoped publisher policy only when
+  `AttachWorkerHostingPolicy=true`;
+- grants only the S3 object and KVS actions used by the code, with no delete/list/IAM/
+  CloudFront administration;
+- accepts one explicit `ViewerAlias` such as `<approved-project>.mavly.xyz`, rather
+  than defaulting to `*.mavly.xyz`;
+- can reuse an existing bucket/KVS only with explicit parameters, and can leave an
+  existing bucket policy untouched with `ManageFrontendBucketPolicy=false`.
+
+It does not create an EC2 instance, instance profile, ACM certificate, or DNS record.
+The ACM certificate must already exist in `us-east-1`. The staging runbook requires an
+exact DNS record for one disposable internal project; it never changes `*.mavly.xyz`.
 
 The application and worker need the same non-secret hosting configuration:
 
@@ -109,8 +141,9 @@ The application and worker need the same non-secret hosting configuration:
 - `MAVLY_AWS_FRONTEND_HOSTING_PROJECTS`
 
 Keep the flag unset/off until the migration is applied, the worker role is confirmed,
-and staging acceptance is complete. A wildcard (`*`) cohort is not a safe rollout
-shortcut.
+and staging acceptance is complete. Production must use
+`MAVLY_AWS_FRONTEND_HOSTING_ENABLED=false`; a wildcard (`*`) cohort is rejected by the
+configuration parser and is not a safe rollout shortcut.
 
 ## Database and existing systems
 
@@ -128,18 +161,20 @@ Next.js server code.
 
 ## Required acceptance before production
 
-1. Review and apply migration 51 after its prerequisites in a staging database.
-2. Deploy the infrastructure template in a non-production AWS account/stack and
-   verify its actual resource and role policy.
-3. Run the existing AWS worker with the same feature settings and confirmed EC2
-   instance profile; do not install long-lived access keys.
-4. Test a new internal project end-to-end: publish, retry after partial upload,
+1. Reconcile the supplied bucket, KVS, IAM role, and policy using the runbook's
+   read-only commands; do not overwrite them.
+2. Deploy and inspect the isolated staging stack with one exact approved tenant alias.
+3. Review and apply migration 51 after prerequisites 14, 15, and 16 in a staging
+   database, then verify all three schema markers.
+4. Run the existing AWS worker with the same feature settings and confirmed EC2
+   instance profile; do not install long-lived access keys or a second worker.
+5. Test a disposable internal project end-to-end: publish, retry after partial upload,
    verify exact asset bytes and SPA behavior, unpublish, delete, and confirm the old
    route is not served.
-5. Add CloudFront access logging and alerts, and implement/test rollback and a
-   resumable shared/Vercel migration with dual-read compatibility.
-6. Only after every existing hostname has a verified serving path may operators
-   review a wildcard DNS cutover.
+6. Add CloudFront access logging and alerts, and implement/test owner-checked rollback
+   and a resumable shared/Vercel migration with dual-read compatibility.
+7. Only after every existing hostname has a verified serving path may operators review
+   a wildcard DNS cutover; production DNS cutover is outside this task.
 
 Until then, production readiness is **BLOCKED**. See
 [the AWS frontend setup runbook](../runbooks/aws-frontend-setup.md).
