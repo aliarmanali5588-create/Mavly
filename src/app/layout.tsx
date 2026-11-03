@@ -71,9 +71,6 @@ export const metadata: Metadata = {
       "max-video-preview": -1,
     },
   },
-  verification: {
-    google: GOOGLE_SITE_VERIFICATION,
-  },
   icons: {
     icon: [
       { url: "/favicon.ico", type: "image/x-icon" },

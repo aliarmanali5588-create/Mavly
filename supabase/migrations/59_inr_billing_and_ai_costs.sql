@@ -240,7 +240,7 @@ begin
     raise exception 'BILLING_ROUTE_MISMATCH' using errcode = 'P0001';
   end if;
 
-   select p, v.version into v_price, v_catalog_version
+   select p.* into v_price
   from public.price_catalog p
   join public.price_catalog_versions v
     on v.id = p.version_id
@@ -256,6 +256,8 @@ begin
   if not found or v_price.amount_minor is null then
     raise exception 'PRICE_NOT_CONFIGURED' using errcode = 'P0001';
   end if;
+  select v.version into v_catalog_version
+  from public.price_catalog_versions v where v.id = v_price.version_id;
 
   select * into v_payment
   from public.platform_payments

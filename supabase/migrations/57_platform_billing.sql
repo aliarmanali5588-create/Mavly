@@ -485,12 +485,13 @@ declare v_price public.price_catalog; v_payment public.platform_payments; v_key 
 begin
   if auth.role() is distinct from 'service_role' then raise exception 'FORBIDDEN' using errcode = '42501'; end if;
   if p_user_id is null or v_key = '' then raise exception 'INVALID_BILLING_REQUEST' using errcode = '22023'; end if;
-  select p, v.version into v_price, v_catalog_version from public.price_catalog p
+  select p.* into v_price from public.price_catalog p
   join public.price_catalog_versions v on v.id = p.version_id and v.status = 'active'
   where p.product_id = p_product_id and p.market = p_market and p.billing_interval = p_interval
     and p.currency = p_currency and p.active and p.approved and (p_catalog_version is null or v.version = p_catalog_version)
   order by v.created_at desc limit 1;
   if not found or v_price.amount_minor is null then raise exception 'PRICE_NOT_CONFIGURED' using errcode = 'P0001'; end if;
+  select v.version into v_catalog_version from public.price_catalog_versions v where v.id = v_price.version_id;
   if (p_market = 'india' and (p_provider <> 'razorpay' or p_currency <> 'INR'))
      or (p_market = 'global' and (p_provider <> 'dodo' or p_currency <> 'USD')) then
     raise exception 'BILLING_ROUTE_MISMATCH' using errcode = 'P0001';
