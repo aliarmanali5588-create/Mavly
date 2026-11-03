@@ -53,6 +53,17 @@ function validateMapping(mapping: AwsTenantMapping): void {
   }
 }
 
+function storedVersion(value: string): string | null {
+  try {
+    const parsed: unknown = JSON.parse(value);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
+    const versionId = (parsed as Record<string, unknown>).versionId;
+    return typeof versionId === "string" ? versionId : null;
+  } catch {
+    return null;
+  }
+}
+
 function storedGeneration(value: string): number {
   let parsed: unknown;
   try {
@@ -84,7 +95,11 @@ function isMissingKey(error: unknown): boolean {
 async function updateMapping(
   projectId: string,
   value: string,
-  options: { allowWhenDisabled?: boolean; allowSameGenerationOverride?: boolean } = {},
+  options: {
+    allowWhenDisabled?: boolean;
+    allowSameGenerationOverride?: boolean;
+    expectedVersionId?: string;
+  } = {},
 ): Promise<void> {
   const config = readAwsFrontendHostingConfig();
   if (
@@ -113,6 +128,13 @@ async function updateMapping(
     }
 
     if (existing === value) return;
+    if (
+      options.expectedVersionId &&
+      existing !== null &&
+      storedVersion(existing) !== options.expectedVersionId
+    ) {
+      throw new Error("The tenant route changed before restoration.");
+    }
     if (existing !== null) {
       const currentGeneration = storedGeneration(existing);
       const nextGeneration = storedGeneration(value);
@@ -153,9 +175,14 @@ function isEtagConflict(error: unknown): boolean {
 
 export async function readAwsTenantMapping(
   projectId: string,
+  options: { allowWhenDisabled?: boolean } = {},
 ): Promise<AwsTenantMapping | null> {
   const config = readAwsFrontendHostingConfig();
-  if (!config.enabled || config.problem !== null || !config.keyValueStoreArn) {
+  if (
+    (!(options.allowWhenDisabled && config.keyValueStoreArn) &&
+      (!config.enabled || config.problem !== null)) ||
+    !config.keyValueStoreArn
+  ) {
     throw new Error(`AWS frontend hosting is not configured: ${config.problem ?? "disabled"}`);
   }
   try {
@@ -166,6 +193,7 @@ export async function readAwsTenantMapping(
     const value: unknown = JSON.parse(result.Value);
     if (!value || typeof value !== "object" || Array.isArray(value)) return null;
     const record = value as Record<string, unknown>;
+    if (record.projectId !== projectId) return null;
     if (record.disabled === true) return null;
     if (
       typeof record.projectId !== "string" ||
@@ -211,6 +239,7 @@ export async function activateAwsTenantMapping(
 
 export async function restoreAwsTenantMapping(
   mapping: AwsTenantMapping,
+  expectedVersionId: string,
 ): Promise<void> {
   validateMapping(mapping);
   await updateMapping(
@@ -222,13 +251,14 @@ export async function restoreAwsTenantMapping(
       spaFallback: mapping.spaFallback,
       generation: mapping.generation,
     }),
-    { allowWhenDisabled: true, allowSameGenerationOverride: true },
+    { allowWhenDisabled: true, allowSameGenerationOverride: true, expectedVersionId },
   );
 }
 
 export async function removeAwsTenantMapping(
   projectId: string,
   generation: number,
+  expectedVersionId?: string,
 ): Promise<void> {
   if (
     !mavlyHostname(projectId) ||
@@ -240,7 +270,7 @@ export async function removeAwsTenantMapping(
   await updateMapping(
     projectId,
     JSON.stringify({ projectId, generation, disabled: true }),
-    { allowWhenDisabled: true },
+    { allowWhenDisabled: true, expectedVersionId },
   );
 }
 

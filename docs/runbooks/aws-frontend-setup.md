@@ -18,13 +18,13 @@ account `505384438340`, region `eu-north-1`:
 | EC2 `i-05ac7a8d4a0e1d499` / `mavly-generation-worker` | Existing; instance-profile assumption was verified by the operator | Reuse the existing instance and `MavlyEC2SSMRole`; never create a second worker |
 | S3 `mavly-frontend-505384438340-eu-north-1-an` | Existing; `HeadBucket` was verified, but privacy, ownership, encryption, versioning, bucket policy, and actual object writes were not fully verified here | Treat as a production candidate; do not use for staging |
 | CloudFront KVS `mavly-tenant-routing-prod` / `5ea7516a-8088-4833-9749-4aac8b6f652c` | Existing; `DescribeKeyValueStore` was verified and last reported `READY` with zero items; `GetKey`/`UpdateKeys` were not fully verified by a live operation | Treat as a production candidate; do not use for staging |
-| IAM policy `MavlyAWSFrontendHostingPublisher` | Existing and attached to `MavlyEC2SSMRole`; policy simulation allowed the configured actions | Review resource scopes and actual `GetObject`/`PutObject`/KVS operations before production use; do not overwrite it |
+| IAM policy `MavlyAWSFrontendHostingPublisher` | Existing and attached to `MavlyEC2SSMRole`; policy simulation allowed the configured actions | Review resource scopes and actual `GetObject`/`PutObject`/`ListBucket`/KVS operations before production use; do not overwrite it |
 | CloudFront distribution, OAC, viewer Function, cache policy, wildcard certificate, DNS | Not supplied as verified existing resources | Create only in the dedicated staging stack or reconcile through a separately approved production change |
 
 The staging template defaults to a new CloudFormation-managed bucket and KVS. Its
 stack-scoped worker policy is limited to those staging resources and grants only
-`s3:GetObject`, `s3:PutObject`, and the three KVS control-plane actions used by the
-publisher. It grants no `s3:DeleteObject`, bucket listing, IAM administration,
+`s3:GetObject`, `s3:PutObject`, narrowly scoped `s3:ListBucket`, and the three KVS control-plane actions used by the
+publisher. It grants no `s3:DeleteObject`, listing of any other bucket, IAM administration,
 CloudFront distribution administration, or unrelated-resource access.
 
 **Do not change `*.mavly.xyz` DNS to CloudFront.** The current Function serves only
@@ -148,7 +148,7 @@ aws cloudformation create-change-set \
   --parameters \
     ParameterKey=DeploymentStage,ParameterValue=staging \
     ParameterKey=ViewerCertificateArn,ParameterValue="$CERTIFICATE_ARN" \
-    ParameterKey=ViewerAlias,ParameterValue="$TEST_PROJECT_ID.mavly.xyz" \
+    ParameterKey=StagingProjectId,ParameterValue="$TEST_PROJECT_ID" \
     ParameterKey=ExistingWorkerRoleName,ParameterValue="$WORKER_ROLE_NAME" \
     ParameterKey=CreateFrontendBucket,ParameterValue=true \
     ParameterKey=CreateTenantRouteStore,ParameterValue=true \
@@ -176,9 +176,11 @@ OAC, and KVS before continuing. CloudFront distribution deployment can take time
 
 The staging bucket uses S3-managed AES-256 encryption and versioning, blocks public
 access, enforces bucket-owner ownership, and allows reads only from the staging
-distribution through OAC. The worker policy allows object reads/writes and KVS updates
-only for these resources; it does not grant `DeleteObject`, bucket-wide listing,
-invalidation, or access to unrelated S3 resources. Review the change set before
+distribution through OAC. The worker policy allows object reads/writes, a bucket-level
+`s3:ListBucket` grant only on this bucket, and KVS updates only for these resources.
+The publisher needs `ListBucket` because S3 returns 403 rather than 404 for a missing
+`HeadObject` without it; the worker never lists or enumerates objects. It does not grant
+`DeleteObject`, listing of any other bucket, invalidation, or unrelated S3 access. Review the change set before
 execution and record its outputs. No stack deployment is performed by this repository
 task.
 
@@ -229,10 +231,14 @@ region, KVS ARN, and one-project staging cohort. Production remains explicitly
 
 ## 5. Apply the database migration through the reviewed release process
 
-Apply `supabase/migrations/51_aws_frontend_deployment.sql` after migrations 14, 15,
-and 16. Use the same reviewed migration process as other production schema changes.
-Do not apply it from this runbook to a production database. The migration is additive;
-it has not been run against a database in this task.
+Apply `supabase/migrations/51_aws_frontend_deployment.sql` after migrations 13, 14,
+15, 32 and 49. Migration 51 checks the shared-hosting marker 15, worker marker 32,
+and account-restriction marker 49. Then apply
+`supabase/migrations/56_aws_frontend_fencing_and_status.sql` after 51 and 55.
+Migration 56 is required for lease-fenced route restoration, owner-scoped AWS route verification,
+the corrected AWS enqueue transition, and the worker fencing marker 56. Use the same
+reviewed migration process as other schema changes. Do not apply these migrations
+from this runbook to a production database; neither has been run in this task.
 
 After applying in staging, run these safe verification queries through the reviewed
 database procedure. Do not run them against production without explicit approval:
@@ -240,7 +246,9 @@ database procedure. Do not run them against production without explicit approval
 ```sql
 select public.shared_hosting_schema_version();
 select public.generation_worker_schema_version();
+select public.account_restriction_schema_version();
 select public.aws_frontend_hosting_schema_version();
+select public.aws_frontend_fencing_schema_version();
 
 select routine_name, security_type
 from information_schema.routines
@@ -253,7 +261,9 @@ from pg_class
 where relname in ('aws_frontend_publications', 'aws_frontend_unpublish_jobs');
 ```
 
-Expected markers are 15, 16, and 51. The worker refuses to claim AWS work below 51.
+Expected markers are 15, 32, 49, 51, and 56. The worker refuses generation work
+below 32 or account-restriction work below 49, and refuses AWS publication work below
+56.
 Verify worker RPC grants and RLS behavior using the repository's reviewed database
 procedure. A missing marker or RPC is a staging blocker; do not fabricate a ready
 publication.
@@ -352,16 +362,23 @@ daemon or a second generation worker.
 - **A queued or failed upload:** leave the immutable objects in place; the existing
   worker queue retries idempotently and verifies object checksum/metadata before
   reusing them. Do not delete objects manually while a job may still be active.
-- **KVS activation or database completion failure:** the worker attempts to restore
-  the route to the database's prior active version. If route recovery reports an
-  error, keep the feature paused and inspect the deployment row, publication row,
-  active version, and KVS value together before any manual change.
+- **KVS activation or database completion failure:** the worker first asks the
+  migration-56 worker-only RPC to confirm the exact publication lease, routing
+  generation, and expected active version. It then restores only when the KVS still
+  contains the attempted version; an ETag race or newer active version refuses the
+  restore. If route recovery reports an error, keep the feature paused and inspect
+  the deployment row, publication row, active version, and KVS value together before
+  any manual change.
 - **Unpublish:** use the authorized project deployment API. It queues an unpublish
   job and reports `unpublishing`; it does not mutate KVS from the app server. The
   existing EC2 worker writes a generation-fenced tombstone, confirms the public route
   returns 404, and only then clears the active database pointer. Keep the KVS ARN and
   worker role available while draining unpublish jobs, even if publishing is disabled.
   A failed or unconfirmed removal never reports the project as unpublished.
+- **Terminal unpublish failure:** after eight fenced attempts the database marks the
+  deployment `error`, keeps the project undeletable, and retains the KVS ARN and
+  worker credentials for a later retry. Do not clear the deployment row manually;
+  reconcile the tombstone, public 404, lease row, and generation together.
 - **Project deletion:** the API waits for that worker-owned unpublish to complete. If
   removal cannot be confirmed, deletion is refused.
 - **Rollback to a prior AWS publication:** not implemented. Do not manually edit KVS
@@ -377,7 +394,7 @@ The following are required before production rollout:
 
 - Confirmed AWS account, worker region, and existing EC2 instance profile.
 - Staging template deployment and policy review.
-- Migration 51 applied and checked in staging.
+- Migrations 51 and 56 applied and checked in staging.
 - Successful AWS publication/unpublish/delete acceptance with the real worker.
 - CloudFront access logging and alerting.
 - Owner-checked rollback to a prior immutable version.

@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { contentTypeForPath, isSafePublishedSegment } from "@/lib/hosting/published-version";
 import { readAwsFrontendHostingConfig } from "./config";
-import { uploadToS3, verifyS3Object } from "./s3-client";
+import { uploadToS3, verifyS3Object, type S3RequestOptions } from "./s3-client";
 
 const MAX_FILES = 1_000;
 const MAX_BYTES = 8_000_000;
@@ -33,6 +33,22 @@ export interface S3PublicationFailure {
 }
 
 export type S3PublicationOutcome = S3PublicationResult | S3PublicationFailure;
+
+export class AwsPublicationLeaseLostError extends Error {
+  constructor() {
+    super("The AWS publication lease was lost while accessing S3.");
+    this.name = "AwsPublicationLeaseLostError";
+  }
+}
+
+export interface S3PublicationOptions extends S3RequestOptions {
+  assertLease?: () => void;
+}
+
+function assertLease(options: S3PublicationOptions): void {
+  options.assertLease?.();
+  if (options.abortSignal?.aborted) throw new AwsPublicationLeaseLostError();
+}
 
 function validId(value: string): boolean {
   return /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(value);
@@ -107,6 +123,7 @@ export async function publishToS3(
   projectId: string,
   versionId: string,
   files: PublishableFile[],
+  options: S3PublicationOptions = {},
 ): Promise<S3PublicationOutcome> {
   const config = readAwsFrontendHostingConfig();
   if (
@@ -135,6 +152,7 @@ export async function publishToS3(
 
   async function uploadWorker(): Promise<void> {
     while (true) {
+      assertLease(options);
       const index = nextIndex++;
       if (index >= files.length) return;
       const file = files[index];
@@ -148,7 +166,7 @@ export async function publishToS3(
           contentType: file.contentType,
           projectId,
           versionId,
-        });
+        }, options);
         if (existing.exists) {
           if (existing.matches) {
             uploadedCount += 1;
@@ -166,6 +184,7 @@ export async function publishToS3(
           sha256,
           projectId,
           versionId,
+          options,
         );
         const verified = await verifyS3Object(config.bucket!, key, {
           sha256,
@@ -173,13 +192,16 @@ export async function publishToS3(
           contentType: file.contentType,
           projectId,
           versionId,
-        });
+        }, options);
+        assertLease(options);
         if (!verified.exists || !verified.matches) {
           failureCount += 1;
         } else {
           uploadedCount += 1;
         }
-      } catch {
+      } catch (error) {
+        if (error instanceof AwsPublicationLeaseLostError) throw error;
+        assertLease(options);
         failureCount += 1;
       }
     }
@@ -229,6 +251,7 @@ export async function verifyS3Publication(
   versionId: string,
   files: readonly PublishableFile[],
   expectedManifestHash: string,
+  options: S3PublicationOptions = {},
 ): Promise<boolean> {
   const config = readAwsFrontendHostingConfig();
   if (!config.enabled || config.problem !== null || !config.bucket) {
@@ -238,6 +261,7 @@ export async function verifyS3Publication(
 
   const expectedHash = manifestHash(files);
   for (const file of files) {
+    assertLease(options);
     const object = await verifyS3Object(
       config.bucket,
       buildS3ObjectKey(projectId, versionId, file.path),
@@ -248,8 +272,10 @@ export async function verifyS3Publication(
         projectId,
         versionId,
       },
+      options,
     );
     if (!object.exists || !object.matches) return false;
   }
+  assertLease(options);
   return expectedHash === expectedManifestHash;
 }

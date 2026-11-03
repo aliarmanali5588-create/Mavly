@@ -1,13 +1,29 @@
 -- Durable, worker-owned AWS static publication queue.
 --
--- Apply after migrations 14, 15 and 16. This migration does not create deployment
+-- Apply after migrations 13, 14, 15, 32 and 49. Migrations 32 and 49 are required
+-- because the existing EC2 worker refuses to run below those schema markers.
+-- This migration does not create deployment
 -- rows, alter existing deployment state, delete S3 objects, or depend on the
 -- admin-console migration.
 
 begin;
 
 do $$
+declare
+  v_shared integer;
+  v_worker integer;
+  v_restriction integer;
 begin
+  if to_regclass('public.project_deployments') is null
+     or not exists (
+       select 1
+         from pg_attribute
+        where attrelid = 'public.project_deployments'::regclass
+          and attname = 'last_unpublished_at'
+          and not attisdropped
+     ) then
+    raise exception 'AWS_FRONTEND_PREREQUISITE_MISSING: apply migration 13_deployment_unpublish.sql first';
+  end if;
   if to_regclass('public.project_published_versions') is null
      or to_regclass('public.project_published_files') is null then
     raise exception 'AWS_FRONTEND_PREREQUISITE_MISSING: apply migration 14_shared_hosting.sql first';
@@ -15,8 +31,23 @@ begin
   if to_regprocedure('public.shared_hosting_schema_version()') is null then
     raise exception 'AWS_FRONTEND_PREREQUISITE_MISSING: apply migration 15_shared_hosting_attempt_state.sql first';
   end if;
+  execute 'select public.shared_hosting_schema_version()' into v_shared;
+  if v_shared < 15 then
+    raise exception 'AWS_FRONTEND_PREREQUISITE_MISSING: migration 15_shared_hosting_attempt_state.sql is outdated';
+  end if;
   if to_regprocedure('public.generation_worker_schema_version()') is null then
-    raise exception 'AWS_FRONTEND_PREREQUISITE_MISSING: apply migration 16_durable_generation_worker.sql first';
+    raise exception 'AWS_FRONTEND_PREREQUISITE_MISSING: apply migration 32_credit_reliability_hardening.sql first';
+  end if;
+  execute 'select public.generation_worker_schema_version()' into v_worker;
+  if v_worker < 32 then
+    raise exception 'AWS_FRONTEND_PREREQUISITE_MISSING: apply migration 32_credit_reliability_hardening.sql first';
+  end if;
+  if to_regprocedure('public.account_restriction_schema_version()') is null then
+    raise exception 'AWS_FRONTEND_PREREQUISITE_MISSING: apply migration 49_account_restriction_reason.sql first';
+  end if;
+  execute 'select public.account_restriction_schema_version()' into v_restriction;
+  if v_restriction < 49 then
+    raise exception 'AWS_FRONTEND_PREREQUISITE_MISSING: apply migration 49_account_restriction_reason.sql first';
   end if;
 end
 $$;
@@ -113,6 +144,9 @@ begin
   end if;
 
   if old.provider = 'aws' or new.provider = 'aws' then
+    if old.project_id is distinct from new.project_id then
+      raise exception 'AWS_PROJECT_ID_IMMUTABLE' using errcode = '42501';
+    end if;
     if old.provider = 'aws' and new.provider <> 'aws' then
       raise exception 'AWS_DEPLOYMENT_PROVIDER_IMMUTABLE' using errcode = '42501';
     end if;
@@ -124,11 +158,52 @@ begin
        and new.status in ('ready', 'unpublished') then
       raise exception 'AWS_DEPLOYMENT_STATE_WORKER_ONLY' using errcode = '42501';
     end if;
+    if new.provider = 'aws'
+       and old.status is distinct from new.status
+       and new.status not in ('queued', 'error', 'canceled', 'unpublishing') then
+      raise exception 'AWS_DEPLOYMENT_STATE_WORKER_ONLY' using errcode = '42501';
+    end if;
+    if new.provider = 'aws'
+       and old.status is distinct from new.status
+       and new.status = 'ready'
+       and old.status <> 'unpublishing' then
+      raise exception 'AWS_DEPLOYMENT_STATE_WORKER_ONLY' using errcode = '42501';
+    end if;
     if old.provider = 'aws' and new.active_version_id is distinct from old.active_version_id then
       raise exception 'AWS_ACTIVE_VERSION_WORKER_ONLY' using errcode = '42501';
     end if;
     if old.provider = 'aws' and new.aws_route_generation is distinct from old.aws_route_generation then
       raise exception 'AWS_ROUTE_GENERATION_WORKER_ONLY' using errcode = '42501';
+    end if;
+    if new.provider = 'aws'
+       and new.mavly_hostname is distinct from old.mavly_hostname
+       and not (
+         new.status = 'queued'
+         and new.active_version_id is null
+         and new.mavly_hostname = lower(new.project_id) || '.mavly.xyz'
+       ) then
+      raise exception 'AWS_HOSTNAME_WORKER_ONLY' using errcode = '42501';
+    end if;
+    if new.provider = 'aws'
+       and (
+         new.mavly_domain_status is distinct from old.mavly_domain_status
+         or new.mavly_domain_error is distinct from old.mavly_domain_error
+         or new.mavly_domain_checked_at is distinct from old.mavly_domain_checked_at
+       )
+       and not (
+         new.status = 'queued'
+         and new.mavly_domain_status = 'pending'
+         and new.mavly_domain_error is null
+         and new.mavly_domain_checked_at is null
+       ) then
+      raise exception 'AWS_DOMAIN_STATE_WORKER_ONLY' using errcode = '42501';
+    end if;
+    if new.provider = 'aws'
+       and (
+         new.last_published_at is distinct from old.last_published_at
+         or new.last_unpublished_at is distinct from old.last_unpublished_at
+       ) then
+      raise exception 'AWS_PUBLICATION_TIMESTAMP_WORKER_ONLY' using errcode = '42501';
     end if;
   end if;
   return new;

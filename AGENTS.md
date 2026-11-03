@@ -181,6 +181,13 @@ announcement banner: it extends the existing `admin_settings` registry with the
 plain-text `announcements.message`, adds an atomic admin-only enabled/message write
 RPC with audit logging, and adds the anonymous read-only banner RPC. It creates no
 new announcement table and fails closed on invalid or empty enabled messages.
+Apply `56_aws_frontend_fencing_and_status.sql` after 55 and after
+`51_aws_frontend_deployment.sql` before enabling AWS frontend publication: it adds
+the lease/generation/expected-version route-restore CAS, owner-scoped AWS route
+verification, protected AWS deployment mutation grants, the corrected enqueue
+transition, and schema marker 56. Migration 51 itself requires migrations 13, 14,
+15, 32 and 49; migration 56 does not depend on migration 20 and must not be
+rewritten if 51 has already been applied.
 Project-secret encryption also
 requires the server-only `MAVLY_PROJECT_SECRETS_ENCRYPTION_KEY` (32 random bytes,
 base64-encoded); without it create/update fail closed. `npm test` covers the pure

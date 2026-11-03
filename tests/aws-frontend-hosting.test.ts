@@ -387,7 +387,7 @@ test("KVS routing handles missing keys, ETag retry, generation fencing and tombs
       await restoreAwsTenantMapping({
         ...mapping,
         versionId: "550e8400-e29b-41d4-a716-446655440002",
-      });
+      }, mapping.versionId);
       await removeAwsTenantMapping("proj-alpha", 3);
       assert.equal(await readAwsTenantMapping("proj-alpha"), null);
     } finally {
@@ -403,14 +403,18 @@ test("CloudFront edge routing uses KVS and has no Supabase dependency", () => {
   assert.match(template, /route\.spaFallback && !hasExtension/);
   assert.match(template, /request\.uri = '\/' \+ projectId \+ '\/' \+ route\.versionId/);
   assert.doesNotMatch(template, /Supabase|PostgREST|resolve_published_tenant/i);
-  assert.match(template, /ViewerAlias/);
   assert.match(template, /CreateFrontendBucket/);
   assert.match(template, /CreateTenantRouteStore/);
   assert.match(template, /DeletionPolicy: Retain/);
   assert.match(template, /StagingAliasMustBeExact/);
-  assert.match(template, /ViewerAlias, "\*\.mavly\.xyz"/);
+  assert.match(template, /StagingProjectId/);
+  assert.match(template, /"\*\.mavly\.xyz"/);
+  assert.match(template, /IsStaging/);
+  assert.match(template, /StagingProjectId\}\.mavly\.xyz/);
+  assert.match(template, /DetectMissingVersionedObjects/);
   assert.match(template, /s3:GetObject/);
   assert.match(template, /s3:PutObject/);
+  assert.match(template, /s3:ListBucket/);
   assert.doesNotMatch(template, /s3:DeleteObject/);
 });
 
@@ -441,10 +445,12 @@ test("the single generation worker keeps AWS as an idle side queue", () => {
       generationWorker.indexOf("runAndroidBuildSafely") <
         generationWorker.indexOf("runAwsPublicationSafely"),
   );
-  assert.match(entrypoint, /workers\/register-node-ts-resolver\.mjs/);
+  const service = readFileSync("infra/aws-generation-worker/mavly-aws-worker.service", "utf8");
+  assert.match(service, /workers\/register-node-ts-resolver\.mjs/);
   assert.doesNotMatch(entrypoint, /setInterval\([^)]*publication/i);
   assert.match(publicationWorker, /readAwsFrontendSchemaVersion/);
   assert.match(publicationWorker, /schema\.data < 51/);
+  assert.match(publicationWorker, /fencingSchema\.data < 56/);
 });
 
 test("AWS migration uses existing shared-publication tables without migration-50 dependency", () => {
@@ -477,9 +483,82 @@ test("AWS migration uses existing shared-publication tables without migration-50
   assert.match(migration, /AWS_PUBLICATION_MUST_BE_UNPUBLISHED/);
   assert.match(migration, /guard_aws_deployment_mutations/);
   assert.match(migration, /AWS_ACTIVE_VERSION_WORKER_ONLY/);
+  assert.match(migration, /AWS_HOSTNAME_WORKER_ONLY/);
+  assert.match(migration, /AWS_DOMAIN_STATE_WORKER_ONLY/);
+  assert.match(migration, /AWS_PROJECT_ID_IMMUTABLE/);
   assert.match(migration, /AWS_DEPLOYMENT_STATE_WORKER_ONLY/);
   assert.match(migration, /AWS_DEPLOYMENT_MIGRATION_REQUIRED/);
   assert.match(migration, /shared_hosting_schema_version\(\)/);
   assert.match(migration, /generation_worker_schema_version\(\)/);
   assert.match(migration, /AWS_FRONTEND_PREREQUISITE_MISSING/);
+  assert.match(migration, /account_restriction_schema_version/);
+  assert.match(migration, /generation_worker_schema_version/);
+});
+
+test("AWS route reads reject a KVS value belonging to another project", async () => {
+  await withAwsEnvironment(async () => {
+    const values = new Map<string, string>([
+      [
+        "proj-alpha",
+        JSON.stringify({
+          projectId: "proj-beta",
+          versionId: "550e8400-e29b-41d4-a716-446655440001",
+          entryPath: "index.html",
+          spaFallback: true,
+          generation: 1,
+        }),
+      ],
+    ]);
+    setTenantMappingClientForTests(fakeKvsClient(values).client);
+    try {
+      assert.equal(await readAwsTenantMapping("proj-alpha"), null);
+    } finally {
+      resetAwsTenantMappingClient();
+    }
+  });
+});
+
+test("AWS worker remediation contracts cover lease fencing and status verification", () => {
+  const worker = readFileSync("src/lib/aws/publication-worker.ts", "utf8");
+  const store = readFileSync("src/lib/aws/publication-store.ts", "utf8");
+  const service = readFileSync("src/lib/deployments/service.ts", "utf8");
+  const migration = readFileSync(
+    "supabase/migrations/56_aws_frontend_fencing_and_status.sql",
+    "utf8",
+  );
+  assert.match(worker, /authorizeAwsFrontendRouteRestore/);
+  assert.match(worker, /authorizeAwsFrontendRouteActivation/);
+  assert.match(worker, /startPublicationLeaseGuard/);
+  assert.match(worker, /PUBLICATION_OPERATION_DEADLINE_MS/);
+  assert.match(worker, /renewal_rejected/);
+  assert.match(worker, /lease_lost_during_s3/);
+  assert.match(worker, /abortSignal: leaseGuard\.abortSignal/);
+  assert.match(store, /record_aws_frontend_route_verification/);
+  assert.match(store, /readAwsFrontendRouteGeneration/);
+  assert.match(service, /return awsDeploymentStatus\(projectId, row\.data\)/);
+  assert.match(migration, /AWS_PROJECT_ID_IMMUTABLE/);
+  assert.match(migration, /AWS_ACTIVE_VERSION_WORKER_ONLY/);
+  assert.match(migration, /p_expected_active_version_id/);
+  assert.match(migration, /authorize_aws_frontend_route_activation/);
+  assert.match(migration, /aws_frontend_mutation_nonces/);
+  assert.match(migration, /case when p_verified then 'verified' else 'pending' end/);
+});
+
+test("AWS remediation preserves legacy provider paths and failure backoff", () => {
+  const service = readFileSync("src/lib/deployments/service.ts", "utf8");
+  const worker = readFileSync("src/lib/generation/worker.ts", "utf8");
+  const migration = readFileSync(
+    "supabase/migrations/56_aws_frontend_fencing_and_status.sql",
+    "utf8",
+  );
+  assert.match(service, /if \(row\.data\.provider === "shared"\)/);
+  assert.match(service, /if \(row\.data\.provider === "aws"\)/);
+  assert.match(service, /return sharedDeploymentStatus\(projectId, row\.data\)/);
+  assert.match(service, /return awsDeploymentStatus\(projectId, row\.data\)/);
+  assert.match(worker, /awsPublicationNeedsBackoff/);
+  assert.match(worker, /awsPublicationUnavailable/);
+  assert.match(worker, /status: awsPublicationUnavailable/);
+  assert.match(migration, /revoke update on public\.project_deployments from authenticated/);
+  assert.match(migration, /grant update \(/);
+  assert.match(migration, /on delete cascade/);
 });

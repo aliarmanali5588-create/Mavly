@@ -14,6 +14,30 @@ function failure(code: string | undefined, error: string): AwsPublicationStoreRe
       error: "Apply migration 51_aws_frontend_deployment.sql before enabling AWS hosting.",
     };
   }
+  const message = error.toLowerCase();
+  if (
+    message.includes("aws_frontend_hosting_schema_version") ||
+    message.includes("enqueue_aws_frontend") ||
+    message.includes("claim_aws_frontend")
+  ) {
+    return {
+      ok: false,
+      code: "MIGRATION_REQUIRED",
+      error: "Apply migration 51_aws_frontend_deployment.sql before enabling AWS hosting.",
+    };
+  }
+  if (
+    message.includes("aws_frontend_fencing_schema_version") ||
+    message.includes("authorize_aws_frontend_route_restore") ||
+    message.includes("record_aws_frontend_route_verification")
+  ) {
+    return {
+      ok: false,
+      code: "MIGRATION_REQUIRED",
+      error:
+        "Apply migration 56_aws_frontend_fencing_and_status.sql before enabling AWS hosting.",
+    };
+  }
   return { ok: false, code: code ?? "DATABASE_ERROR", error };
 }
 
@@ -30,6 +54,21 @@ export async function readAwsFrontendSchemaVersion(
   return Number.isSafeInteger(version)
     ? { ok: true, data: version }
     : { ok: false, code: "DATABASE_ERROR", error: "AWS schema marker is invalid." };
+}
+
+export async function readAwsFrontendFencingSchemaVersion(
+  client?: SupabaseClient,
+): Promise<AwsPublicationStoreResult<number>> {
+  const supabase = client ?? (await createSupabaseServerClient());
+  if (!supabase) {
+    return { ok: false, code: "UNAVAILABLE", error: "Supabase is not configured." };
+  }
+  const { data, error } = await supabase.rpc("aws_frontend_fencing_schema_version");
+  if (error) return failure(error.code, error.message);
+  const version = typeof data === "number" ? data : Number(data);
+  return Number.isSafeInteger(version)
+    ? { ok: true, data: version }
+    : { ok: false, code: "DATABASE_ERROR", error: "AWS fencing schema marker is invalid." };
 }
 
 export async function enqueueAwsFrontendPublication(input: {
@@ -261,6 +300,125 @@ export async function renewAwsFrontendPublication(
     };
   }
   return { ok: true, data };
+}
+
+export async function authorizeAwsFrontendRouteRestore(
+  client: SupabaseClient,
+  input: {
+    projectId: string;
+    versionId: string;
+    leaseToken: string;
+    routingGeneration: number;
+    expectedActiveVersionId: string | null;
+  },
+): Promise<AwsPublicationStoreResult<boolean>> {
+  const { data, error } = await client.rpc("authorize_aws_frontend_route_restore", {
+    p_project_id: input.projectId,
+    p_version_id: input.versionId,
+    p_lease_token: input.leaseToken,
+    p_routing_generation: input.routingGeneration,
+    p_expected_active_version_id: input.expectedActiveVersionId,
+  });
+  if (error) return failure(error.code, error.message);
+  if (typeof data !== "boolean") {
+    return {
+      ok: false,
+      code: "DATABASE_ERROR",
+      error: "Supabase did not confirm AWS route-restore ownership.",
+    };
+  }
+  return { ok: true, data };
+}
+
+export async function authorizeAwsFrontendRouteActivation(
+  client: SupabaseClient,
+  input: {
+    projectId: string;
+    versionId: string;
+    leaseToken: string;
+    routingGeneration: number;
+  },
+): Promise<AwsPublicationStoreResult<boolean>> {
+  const { data, error } = await client.rpc("authorize_aws_frontend_route_activation", {
+    p_project_id: input.projectId,
+    p_version_id: input.versionId,
+    p_lease_token: input.leaseToken,
+    p_routing_generation: input.routingGeneration,
+  });
+  if (error) return failure(error.code, error.message);
+  if (typeof data !== "boolean") {
+    return {
+      ok: false,
+      code: "DATABASE_ERROR",
+      error: "Supabase did not confirm AWS route-activation ownership.",
+    };
+  }
+  return { ok: true, data };
+}
+
+export async function recordAwsFrontendRouteVerification(input: {
+  projectId: string;
+  versionId: string;
+  routingGeneration: number;
+  verified: boolean;
+}): Promise<AwsPublicationStoreResult<boolean>> {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) {
+    return { ok: false, code: "UNAVAILABLE", error: "Supabase is not configured." };
+  }
+  const { data, error } = await supabase.rpc("record_aws_frontend_route_verification", {
+    p_project_id: input.projectId,
+    p_version_id: input.versionId,
+    p_routing_generation: input.routingGeneration,
+    p_verified: input.verified,
+  });
+  if (error) return failure(error.code, error.message);
+  if (typeof data !== "boolean") {
+    return {
+      ok: false,
+      code: "DATABASE_ERROR",
+      error: "Supabase did not confirm AWS route verification.",
+    };
+  }
+  return { ok: true, data };
+}
+
+export async function readAwsFrontendRouteGeneration(
+  projectId: string,
+): Promise<
+  AwsPublicationStoreResult<{ routingGeneration: number; activeVersionId: string | null }>
+> {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) {
+    return { ok: false, code: "UNAVAILABLE", error: "Supabase is not configured." };
+  }
+  const { data, error } = await supabase
+    .from("project_deployments")
+    .select("provider,status,active_version_id,aws_route_generation")
+    .eq("project_id", projectId)
+    .maybeSingle();
+  if (error) return failure(error.code, error.message);
+  const routingGeneration = Number(data?.aws_route_generation);
+  if (
+    !data ||
+    data.provider !== "aws" ||
+    data.status !== "ready" ||
+    !Number.isSafeInteger(routingGeneration) ||
+    routingGeneration < 1
+  ) {
+    return {
+      ok: false,
+      code: "LEASE_LOST",
+      error: "The AWS deployment generation changed before route verification.",
+    };
+  }
+  return {
+    ok: true,
+    data: {
+      routingGeneration,
+      activeVersionId: typeof data.active_version_id === "string" ? data.active_version_id : null,
+    },
+  };
 }
 
 export async function completeAwsFrontendPublication(

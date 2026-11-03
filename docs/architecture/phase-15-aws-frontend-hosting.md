@@ -71,16 +71,20 @@ and version, so cache entries cannot collide across tenants or publications.
   and versioning, and is readable only through CloudFront OAC.
 - Publication keys are immutable. There is no arbitrary `DeleteObject` permission,
   no public S3 website endpoint, and no cache invalidation dependency.
-- The database publication lease is renewed before the external routing mutation.
+- The database publication lease is renewed every minute during bounded S3 upload and
+  verification, with a six-minute operation deadline inside the seven-minute lease.
   Stale workers cannot complete a newer worker's lease.
 - Authenticated callers may create an AWS queued attempt and request unpublish, but
-  migration 51 blocks owner-side live-pointer, generation, ready/unpublished,
-  provider-migration, and unsafe-delete mutations. Worker-only SECURITY DEFINER
-  functions own live activation and terminal unpublish; the project-delete trigger
-  requires the worker-confirmed `unpublished` state.
+  migrations 51 and 56 block owner-side project reassignment, live-pointer,
+  generation, ready/unpublished, provider-migration, publication-timestamp, and
+  unsafe-delete mutations. Worker-only SECURITY DEFINER functions own live
+  activation and terminal unpublish; the owner-scoped route-verification RPC can
+  write only the exact currently active AWS version after the server verifies its
+  route. The project-delete trigger requires the worker-confirmed `unpublished` state.
 - A failed publish leaves the existing database active-version pointer unchanged.
   Cross-service activation is not a distributed transaction; the worker uses a
-  compensating KVS restore and retries when the result is uncertain.
+  lease/CAS- and expected-version-fenced compensating KVS restore and retries when
+  the result is uncertain.
 - AWS status and unpublish use the persisted provider. The API only queues AWS route
   removal; KVS mutations run on the existing EC2 worker. Removal remains available
   with the feature flag disabled if the KVS ARN and worker credentials are retained.
@@ -121,10 +125,12 @@ production candidates and are not staging resources.
 - creates a new retained private/versioned S3 bucket and a stack-named KVS;
 - uses the existing EC2 role but attaches a stack-scoped publisher policy only when
   `AttachWorkerHostingPolicy=true`;
-- grants only the S3 object and KVS actions used by the code, with no delete/list/IAM/
-  CloudFront administration;
-- accepts one explicit `ViewerAlias` such as `<approved-project>.mavly.xyz`, rather
-  than defaulting to `*.mavly.xyz`;
+- grants only the S3 object actions, bucket-scoped `s3:ListBucket` needed to
+  distinguish missing `HeadObject` results, and KVS actions used by the code, with no
+  delete access, other-bucket listing, IAM, or CloudFront administration;
+- derives one exact staging alias from the validated `StagingProjectId`, while the
+  production branch is the only branch that contains the reviewed `*.mavly.xyz`
+  alias;
 - can reuse an existing bucket/KVS only with explicit parameters, and can leave an
   existing bucket policy untouched with `ManageFrontendBucketPolicy=false`.
 
@@ -147,11 +153,15 @@ configuration parser and is not a safe rollout shortcut.
 
 ## Database and existing systems
 
-Apply `supabase/migrations/51_aws_frontend_deployment.sql` only after migrations 14,
-15, and 16 through the project's reviewed migration process. It adds provider support,
-the AWS publication queue and fenced lifecycle RPCs, and immutable-version guards.
-It is additive and does not depend on migration 50 or alter Neon provisioning
-authority. It has not been applied or exercised against a database.
+Apply `supabase/migrations/51_aws_frontend_deployment.sql` only after migrations 13,
+14, 15, 32 and 49, then apply
+`supabase/migrations/56_aws_frontend_fencing_and_status.sql` after migration 55.
+Migration 51 adds
+provider support, the AWS publication queue and fenced lifecycle RPCs. Migration 56
+adds the corrective ownership CAS, route-verification RPC, protected authenticated
+column grants, and marker 56. Neither migration depends on migration 20 or 50,
+alters Neon provisioning authority, or has been applied or exercised against a
+database in this task.
 
 Neon provisioning and generated-app connectivity continue through the existing
 managed-backend enrollment, configuration, migration runner, and data-gateway

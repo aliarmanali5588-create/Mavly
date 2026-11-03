@@ -48,9 +48,14 @@ export interface S3ObjectExpectation {
   versionId: string;
 }
 
+export interface S3RequestOptions {
+  abortSignal?: AbortSignal;
+}
+
 export async function inspectS3Object(
   bucket: string,
   key: string,
+  options: S3RequestOptions = {},
 ): Promise<{ exists: false } | { exists: true; etag: string | null; matches: boolean }> {
   try {
     const response = await getS3Client().send(
@@ -59,6 +64,7 @@ export async function inspectS3Object(
         Key: key,
         ChecksumMode: "ENABLED",
       }),
+      options,
     );
     return {
       exists: true,
@@ -75,6 +81,7 @@ export async function verifyS3Object(
   bucket: string,
   key: string,
   expected: S3ObjectExpectation,
+  options: S3RequestOptions = {},
 ): Promise<{ exists: false } | { exists: true; etag: string | null; matches: boolean }> {
   try {
     const response = await getS3Client().send(
@@ -83,6 +90,7 @@ export async function verifyS3Object(
         Key: key,
         ChecksumMode: "ENABLED",
       }),
+      options,
     );
     const expectedChecksum = Buffer.from(expected.sha256, "hex").toString("base64");
     const metadataHash = response.Metadata?.sha256;
@@ -113,6 +121,7 @@ export async function uploadToS3(
   sha256: string,
   projectId: string,
   versionId: string,
+  options: S3RequestOptions = {},
 ): Promise<string | null> {
   const body = Buffer.from(content, "utf8");
   const expectedChecksum = Buffer.from(sha256, "hex").toString("base64");
@@ -131,7 +140,8 @@ export async function uploadToS3(
         "mavly-project-id": projectId,
         "mavly-version-id": versionId,
       },
-    }),
+      }),
+      options,
   );
   return result.ETag ?? null;
 }

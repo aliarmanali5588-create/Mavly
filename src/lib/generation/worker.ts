@@ -205,8 +205,17 @@ export async function runGenerationWorkerOnce(
     const awsPublication = verificationAdvanced || androidAdvanced
       ? null
       : await runAwsPublicationSafely(client);
+    const awsPublicationNeedsBackoff =
+      awsPublication !== null &&
+      ["error", "retry", "failed", "unavailable"].includes(awsPublication.status);
+    const awsPublicationUnavailable = awsPublication?.status === "unavailable";
     return {
-      status: "empty",
+      status: awsPublicationUnavailable
+        ? "unavailable"
+        : awsPublicationNeedsBackoff
+          ? "error"
+          : "empty",
+      ...(awsPublicationNeedsBackoff ? { reason: "aws_publication_tick_failed" } : {}),
       recovered,
       ...(credits ? { credits } : {}),
       ...(verification ? { verification } : {}),

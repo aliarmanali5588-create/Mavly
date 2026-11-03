@@ -8,15 +8,16 @@ Parameters:
     AllowedValues:
       - staging
       - production
-    Description: Deployment label used for operator review. It never changes the tenant hostname rules.
+    Description: Deployment label used for operator review and staging alias derivation.
   ViewerCertificateArn:
     Type: String
     Description: Validated ACM certificate in us-east-1 covering *.mavly.xyz.
     AllowedPattern: "^arn:aws:acm:us-east-1:[0-9]{12}:certificate/[0-9a-fA-F-]+$"
-  ViewerAlias:
+  StagingProjectId:
     Type: String
-    Description: One exact approved tenant hostname for staging, or *.mavly.xyz only for an explicitly reviewed production distribution.
-    AllowedPattern: "^(\\*|[a-z][a-z0-9-]{2,60}[a-z0-9])\\.mavly\\.xyz$"
+    Default: ""
+    Description: Existing validated project ID whose exact .mavly.xyz hostname is used by a staging distribution. Ignored for production.
+    AllowedPattern: "^$|^(?!(?:xn--))[a-z](?:[a-z0-9]|-(?!-)){0,62}(?<!-)$"
   ExistingWorkerRoleName:
     Type: String
     Description: Existing EC2 worker role name. No EC2 instance or instance profile is created.
@@ -55,6 +56,7 @@ Parameters:
 Conditions:
   CreateBucket: !Equals [!Ref CreateFrontendBucket, "true"]
   CreateKvs: !Equals [!Ref CreateTenantRouteStore, "true"]
+  IsStaging: !Equals [!Ref DeploymentStage, staging]
   ManageBucketPolicy: !And
     - !Equals [!Ref ManageFrontendBucketPolicy, "true"]
     - !Condition CreateBucket
@@ -79,8 +81,92 @@ Rules:
   StagingAliasMustBeExact:
     RuleCondition: !Equals [!Ref DeploymentStage, staging]
     Assertions:
-      - Assert: !Not [!Equals [!Ref ViewerAlias, "*.mavly.xyz"]]
-        AssertDescription: Staging must use one exact approved project hostname, never the production wildcard alias.
+      - Assert: !Not [!Equals [!Ref StagingProjectId, ""]]
+        AssertDescription: StagingProjectId is required for an exact staging tenant alias.
+      - Assert: !Not [!Equals [!Ref StagingProjectId, "api"]]
+        AssertDescription: Staging cannot claim the reserved api hostname.
+      - Assert: !Not [!Equals [!Ref StagingProjectId, "www"]]
+        AssertDescription: Staging cannot claim the reserved www hostname.
+      - Assert: !Not [!Equals [!Ref StagingProjectId, "adminsh"]]
+        AssertDescription: Staging cannot claim the reserved adminsh hostname.
+      - Assert: !Not [!Equals [!Ref StagingProjectId, "dashboard"]]
+        AssertDescription: Staging cannot claim the reserved dashboard hostname.
+      - Assert: !Not [!Equals [!Ref StagingProjectId, "auth"]]
+        AssertDescription: Staging cannot claim the reserved auth hostname.
+      - Assert: !Not [!Equals [!Ref StagingProjectId, "app"]]
+        AssertDescription: Staging cannot claim the reserved app hostname.
+      - Assert: !Not [!Equals [!Ref StagingProjectId, "admin"]]
+        AssertDescription: Staging cannot claim the reserved admin hostname.
+      - Assert: !Not [!Equals [!Ref StagingProjectId, "internal"]]
+        AssertDescription: Staging cannot claim the reserved internal hostname.
+      - Assert: !Not [!Equals [!Ref StagingProjectId, "system"]]
+        AssertDescription: Staging cannot claim the reserved system hostname.
+      - Assert: !Not [!Equals [!Ref StagingProjectId, "careers"]]
+        AssertDescription: Staging cannot claim the reserved careers hostname.
+      - Assert: !Not [!Equals [!Ref StagingProjectId, "changelog"]]
+        AssertDescription: Staging cannot claim the reserved changelog hostname.
+      - Assert: !Not [!Equals [!Ref StagingProjectId, "contact"]]
+        AssertDescription: Staging cannot claim the reserved contact hostname.
+      - Assert: !Not [!Equals [!Ref StagingProjectId, "credit-topup"]]
+        AssertDescription: Staging cannot claim the reserved credit-topup hostname.
+      - Assert: !Not [!Equals [!Ref StagingProjectId, "docs"]]
+        AssertDescription: Staging cannot claim the reserved docs hostname.
+      - Assert: !Not [!Equals [!Ref StagingProjectId, "faq"]]
+        AssertDescription: Staging cannot claim the reserved faq hostname.
+      - Assert: !Not [!Equals [!Ref StagingProjectId, "features"]]
+        AssertDescription: Staging cannot claim the reserved features hostname.
+      - Assert: !Not [!Equals [!Ref StagingProjectId, "home"]]
+        AssertDescription: Staging cannot claim the reserved home hostname.
+      - Assert: !Not [!Equals [!Ref StagingProjectId, "integrations"]]
+        AssertDescription: Staging cannot claim the reserved integrations hostname.
+      - Assert: !Not [!Equals [!Ref StagingProjectId, "login"]]
+        AssertDescription: Staging cannot claim the reserved login hostname.
+      - Assert: !Not [!Equals [!Ref StagingProjectId, "preview"]]
+        AssertDescription: Staging cannot claim the reserved preview hostname.
+      - Assert: !Not [!Equals [!Ref StagingProjectId, "privacy"]]
+        AssertDescription: Staging cannot claim the reserved privacy hostname.
+      - Assert: !Not [!Equals [!Ref StagingProjectId, "project"]]
+        AssertDescription: Staging cannot claim the reserved project hostname.
+      - Assert: !Not [!Equals [!Ref StagingProjectId, "projects"]]
+        AssertDescription: Staging cannot claim the reserved projects hostname.
+      - Assert: !Not [!Equals [!Ref StagingProjectId, "signup"]]
+        AssertDescription: Staging cannot claim the reserved signup hostname.
+      - Assert: !Not [!Equals [!Ref StagingProjectId, "support"]]
+        AssertDescription: Staging cannot claim the reserved support hostname.
+      - Assert: !Not [!Equals [!Ref StagingProjectId, "terms"]]
+        AssertDescription: Staging cannot claim the reserved terms hostname.
+      - Assert: !Not [!Equals [!Ref StagingProjectId, "tutorials"]]
+        AssertDescription: Staging cannot claim the reserved tutorials hostname.
+      - Assert: !Not [!Equals [!Ref StagingProjectId, "upgrade"]]
+        AssertDescription: Staging cannot claim the reserved upgrade hostname.
+      - Assert: !Not [!Equals [!Ref StagingProjectId, "blog"]]
+        AssertDescription: Staging cannot claim the reserved blog hostname.
+      - Assert: !Not [!Equals [!Ref StagingProjectId, "help"]]
+        AssertDescription: Staging cannot claim the reserved help hostname.
+      - Assert: !Not [!Equals [!Ref StagingProjectId, "status"]]
+        AssertDescription: Staging cannot claim the reserved status hostname.
+      - Assert: !Not [!Equals [!Ref StagingProjectId, "billing"]]
+        AssertDescription: Staging cannot claim the reserved billing hostname.
+      - Assert: !Not [!Equals [!Ref StagingProjectId, "assets"]]
+        AssertDescription: Staging cannot claim the reserved assets hostname.
+      - Assert: !Not [!Equals [!Ref StagingProjectId, "cdn"]]
+        AssertDescription: Staging cannot claim the reserved cdn hostname.
+      - Assert: !Not [!Equals [!Ref StagingProjectId, "files"]]
+        AssertDescription: Staging cannot claim the reserved files hostname.
+      - Assert: !Not [!Equals [!Ref StagingProjectId, "mail"]]
+        AssertDescription: Staging cannot claim the reserved mail hostname.
+      - Assert: !Not [!Equals [!Ref StagingProjectId, "ns1"]]
+        AssertDescription: Staging cannot claim the reserved ns1 hostname.
+      - Assert: !Not [!Equals [!Ref StagingProjectId, "ns2"]]
+        AssertDescription: Staging cannot claim the reserved ns2 hostname.
+      - Assert: !Not [!Equals [!Ref StagingProjectId, "smtp"]]
+        AssertDescription: Staging cannot claim the reserved smtp hostname.
+      - Assert: !Not [!Equals [!Ref StagingProjectId, "static"]]
+        AssertDescription: Staging cannot claim the reserved static hostname.
+      - Assert: !Not [!Equals [!Ref StagingProjectId, "storage"]]
+        AssertDescription: Staging cannot claim the reserved storage hostname.
+      - Assert: !Not [!Equals [!Ref StagingProjectId, "vercel"]]
+        AssertDescription: Staging cannot claim the reserved vercel hostname.
 
 Resources:
   FrontendBucket:
@@ -133,8 +219,19 @@ Resources:
         import cf from 'cloudfront';
         const routes = cf.kvs();
         const notFound = { statusCode: 404, statusDescription: 'Not Found' };
-        const unavailable = { statusCode: 503, statusDescription: 'Service Unavailable' };
-        const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+          const unavailable = { statusCode: 503, statusDescription: 'Service Unavailable' };
+          const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+          const RESERVED = {
+            adminsh: true, api: true, auth: true, careers: true, changelog: true,
+            contact: true, 'credit-topup': true, dashboard: true, docs: true,
+            faq: true, features: true, home: true, integrations: true, login: true,
+            preview: true, privacy: true, project: true, projects: true, signup: true,
+            support: true, terms: true, tutorials: true, upgrade: true, blog: true,
+            help: true, status: true, www: true, assets: true, cdn: true, files: true,
+            mail: true, ns1: true, ns2: true, smtp: true, static: true, storage: true,
+            vercel: true, admin: true, app: true, billing: true, internal: true,
+            system: true,
+          };
 
         function safePath(path) {
           if (typeof path !== 'string' || path.length > 2048 || path.indexOf('\\') !== -1) return null;
@@ -157,8 +254,9 @@ Resources:
           const hostHeader = request.headers.host;
           const host = hostHeader && hostHeader.value ? hostHeader.value.toLowerCase() : '';
            const match = /^([a-z](?:[a-z0-9]|-(?=[a-z0-9])){0,62})\.mavly\.xyz$/.exec(host);
-          if (!match) return notFound;
-          const projectId = match[1];
+           if (!match) return notFound;
+           const projectId = match[1];
+           if (projectId.startsWith('xn--') || RESERVED[projectId] === true) return notFound;
 
           let route;
           try {
@@ -236,7 +334,10 @@ Resources:
         Comment: Mavly static tenant hosting.
         HttpVersion: http2and3
         Aliases:
-          - !Ref ViewerAlias
+          - !If
+              - IsStaging
+              - !Sub "${StagingProjectId}.mavly.xyz"
+              - "*.mavly.xyz"
         Origins:
           - Id: PrivateS3Origin
             DomainName: !If
@@ -312,6 +413,13 @@ Resources:
               - CreateBucket
               - !Sub "${FrontendBucket.Arn}/*"
               - !Sub "arn:${AWS::Partition}:s3:::${ExistingFrontendBucketName}/*"
+          - Sid: DetectMissingVersionedObjects
+            Effect: Allow
+            Action: s3:ListBucket
+            Resource: !If
+              - CreateBucket
+              - !GetAtt FrontendBucket.Arn
+              - !Sub "arn:${AWS::Partition}:s3:::${ExistingFrontendBucketName}"
           - Sid: UpdateTenantRouteMappings
             Effect: Allow
             Action:
@@ -334,3 +442,5 @@ Outputs:
     Value: !If [CreateKvs, !GetAtt TenantRouteStore.Arn, !Ref ExistingTenantRouteStoreArn]
   DeploymentStage:
     Value: !Ref DeploymentStage
+  StagingProjectId:
+    Value: !Ref StagingProjectId

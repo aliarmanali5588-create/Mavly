@@ -59,6 +59,14 @@ The systemd unit sets `NODE_ENV=production`, `MAVLY_AWS_WORKER=true`, and
 The Cloudflare Worker has a separate `MAVLY_CLOUDFLARE_WORKER_DISABLED=true` setting; it
 does not belong in the EC2 env file. All secrets stay server-side and must not be logged.
 
+Before this existing worker is allowed to claim work, the database must expose
+`generation_worker_schema_version() >= 32` and
+`account_restriction_schema_version() >= 49`. AWS frontend publication additionally
+requires `aws_frontend_hosting_schema_version() >= 51` and
+`aws_frontend_fencing_schema_version() >= 56`; the AWS side queue remains unavailable
+until all four markers are present. Apply migrations 13, 14, 15, 32, 49, 51, 55 and 56
+through the reviewed database process in that order.
+
 Optional worker-owned features need their own existing configuration only when enabled.
 Examples include `MAVLY_CREDITS_ENABLED` and its project/cost policy, the
 `MAVLY_MULTI_AGENT_*` settings, `MAVLY_VERIFICATION_SANDBOX_*`, Android build settings,

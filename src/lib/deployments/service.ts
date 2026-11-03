@@ -36,6 +36,9 @@ import {
 import {
   enqueueAwsFrontendPublication,
   enqueueAwsFrontendUnpublish,
+  recordAwsFrontendRouteVerification,
+  readAwsFrontendFencingSchemaVersion,
+  readAwsFrontendRouteGeneration,
   readAwsFrontendSchemaVersion,
 } from "@/lib/aws/publication-store";
 import {
@@ -529,7 +532,7 @@ export async function publishSharedVersion(
   },
   deps: SharedPublishDependencies = DEFAULT_SHARED_PUBLISH_DEPENDENCIES,
 ): Promise<DeploymentServiceResult<WireDeploymentStatus>> {
-  const { projectId, hostname, site, publishFiles } = input;
+  const { projectId, site, publishFiles } = input;
 
   deps.log("publish_started", {
     project: projectId,
@@ -698,6 +701,14 @@ async function enqueueAwsPublication(input: {
       "AWS frontend hosting is not installed. Apply migration 51_aws_frontend_deployment.sql.",
     );
   }
+  const fencingSchema = await readAwsFrontendFencingSchemaVersion();
+  if (fencingSchema.ok === false || fencingSchema.data < 56) {
+    return fail(
+      503,
+      "BACKEND_NOT_CONFIGURED",
+      "AWS frontend hosting hardening is not installed. Apply migration 56_aws_frontend_fencing_and_status.sql.",
+    );
+  }
 
   const prepared = preparePublishedFiles(publishFiles, contentTypeForPath);
   if (isHostingStoreFailure(prepared)) {
@@ -753,15 +764,8 @@ async function enqueueAwsPublication(input: {
     );
   }
 
-  const recorded = await updateDeploymentRow(projectId, {
-    mavly_hostname: hostname,
-    mavly_domain_status: "pending",
-    mavly_domain_error: null,
-    mavly_domain_checked_at: null,
-    error_code: null,
-    error_message: null,
-  });
-  if (isDeploymentStoreFailure(recorded)) {
+  const recorded = await getDeploymentRow(projectId);
+  if (isDeploymentStoreFailure(recorded) || !recorded.data) {
     return fail(
       500,
       "UNKNOWN",
@@ -880,6 +884,58 @@ async function unpublishAwsProject(
  * Terminal states are authoritative; a pending probe is retried at most once a
  * minute; a stale in-flight claim becomes an actionable failure.
  */
+async function awsDeploymentStatus(
+  projectId: string,
+  row: DeploymentRow,
+): Promise<DeploymentServiceResult<WireDeploymentStatus>> {
+  if (
+    row.status !== "ready" ||
+    !row.mavly_hostname ||
+    row.mavly_domain_status === "verified" ||
+    row.mavly_domain_status === "error" ||
+    !row.active_version_id ||
+    !domainCheckDue(row)
+  ) {
+    return { ok: true, data: wireDeploymentStatus(row) };
+  }
+
+  let verified = false;
+  try {
+    verified = await verifyAwsPublicTenantRoute({
+      projectId,
+      versionId: row.active_version_id,
+      hostname: row.mavly_hostname,
+    });
+  } catch {
+    return { ok: true, data: wireDeploymentStatus(row) };
+  }
+
+  const fence = await readAwsFrontendRouteGeneration(projectId);
+  if (
+    fence.ok === false ||
+    fence.data.activeVersionId !== row.active_version_id
+  ) {
+    return { ok: true, data: wireDeploymentStatus(row) };
+  }
+  const recorded = await recordAwsFrontendRouteVerification({
+    projectId,
+    versionId: row.active_version_id,
+    routingGeneration: fence.data.routingGeneration,
+    verified,
+  });
+  if (recorded.ok === false || !recorded.data) {
+    return { ok: true, data: wireDeploymentStatus(row) };
+  }
+
+  const patched = await getDeploymentRow(projectId);
+  return {
+    ok: true,
+    data: wireDeploymentStatus(
+      isDeploymentStoreFailure(patched) || !patched.data ? row : patched.data,
+    ),
+  };
+}
+
 async function sharedDeploymentStatus(
   projectId: string,
   row: DeploymentRow,
@@ -899,47 +955,6 @@ async function sharedDeploymentStatus(
     return {
       ok: true,
       data: wireDeploymentStatus(isDeploymentStoreFailure(finished) ? current : finished.data),
-    };
-  }
-
-  async function awsDeploymentStatus(
-    projectId: string,
-    row: DeploymentRow,
-  ): Promise<DeploymentServiceResult<WireDeploymentStatus>> {
-    if (row.status === "unpublishing") {
-      return { ok: true, data: wireDeploymentStatus(row) };
-    }
-
-    if (
-      row.status !== "ready" ||
-      !row.mavly_hostname ||
-      row.mavly_domain_status === "verified" ||
-      row.mavly_domain_status === "error" ||
-      !row.active_version_id ||
-      !domainCheckDue(row)
-    ) {
-      return { ok: true, data: wireDeploymentStatus(row) };
-    }
-
-    let verified = false;
-    try {
-      verified = await verifyAwsPublicTenantRoute({
-        projectId,
-        versionId: row.active_version_id,
-        hostname: row.mavly_hostname,
-      });
-    } catch {
-      return { ok: true, data: wireDeploymentStatus(row) };
-    }
-
-    const patched = await updateDeploymentRow(projectId, {
-      mavly_domain_status: verified ? "verified" : "pending",
-      mavly_domain_error: null,
-      mavly_domain_checked_at: new Date().toISOString(),
-    });
-    return {
-      ok: true,
-      data: wireDeploymentStatus(isDeploymentStoreFailure(patched) ? row : patched.data),
     };
   }
 
@@ -1817,7 +1832,7 @@ export async function getProjectDeploymentStatus(
     return sharedDeploymentStatus(projectId, row.data);
   }
   if (row.data.provider === "aws") {
-    return { ok: true, data: wireDeploymentStatus(row.data) };
+    return awsDeploymentStatus(projectId, row.data);
   }
 
   /**

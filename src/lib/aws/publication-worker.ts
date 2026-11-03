@@ -10,17 +10,26 @@ import {
   completeAwsFrontendPublication,
   failAwsFrontendUnpublish,
   failAwsFrontendPublication,
+  authorizeAwsFrontendRouteRestore,
+  authorizeAwsFrontendRouteActivation,
   readAwsFrontendSchemaVersion,
+  readAwsFrontendFencingSchemaVersion,
   renewAwsFrontendPublication,
 } from "./publication-store";
 import {
   activateAwsTenantMapping,
   removeAwsTenantMapping,
   restoreAwsTenantMapping,
+  readAwsTenantMapping,
   verifyAwsTenantRoute,
   verifyAwsPublicTenantRouteRemoved,
 } from "./tenant-mapping";
-import { publishToS3, verifyS3Publication } from "./s3-publisher";
+import {
+  AwsPublicationLeaseLostError,
+  publishToS3,
+  verifyS3Publication,
+  type S3PublicationOutcome,
+} from "./s3-publisher";
 import { emitAwsPublicationEvent } from "./observability";
 
 export interface AwsPublicationTickSummary {
@@ -35,6 +44,71 @@ export interface AwsPublicationTickSummary {
   versionId?: string;
   projectId?: string;
   reason?: string;
+}
+
+const PUBLICATION_LEASE_RENEW_INTERVAL_MS = 60_000;
+const PUBLICATION_OPERATION_DEADLINE_MS = 6 * 60_000;
+
+interface PublicationLeaseGuard {
+  abortSignal: AbortSignal;
+  assert: () => void;
+  stop: () => void;
+}
+
+function startPublicationLeaseGuard(
+  client: SupabaseClient,
+  identity: { versionId: string; leaseToken: string },
+  projectId: string,
+): PublicationLeaseGuard {
+  const controller = new AbortController();
+  let stopped = false;
+  let lost = false;
+  let renewalInFlight = false;
+
+  const markLost = (reason: string): void => {
+    if (stopped || lost) return;
+    lost = true;
+    controller.abort(reason);
+    emitAwsPublicationEvent("lease_lost", {
+      projectId,
+      versionId: identity.versionId,
+      reason,
+    });
+  };
+
+  const renew = (): void => {
+    if (stopped || lost || renewalInFlight) return;
+    renewalInFlight = true;
+    void renewAwsFrontendPublication(client, identity)
+      .then((result) => {
+        if (result.ok === false || !result.data) markLost("renewal_rejected");
+      })
+      .catch(() => markLost("renewal_failed"))
+      .finally(() => {
+        renewalInFlight = false;
+      });
+  };
+
+  const interval = setInterval(renew, PUBLICATION_LEASE_RENEW_INTERVAL_MS);
+  const deadline = setTimeout(
+    () => markLost("operation_deadline_exceeded"),
+    PUBLICATION_OPERATION_DEADLINE_MS,
+  );
+  if (typeof interval.unref === "function") interval.unref();
+  if (typeof deadline.unref === "function") deadline.unref();
+
+  return {
+    abortSignal: controller.signal,
+    assert: () => {
+      if (lost || controller.signal.aborted) throw new AwsPublicationLeaseLostError();
+    },
+    stop: () => {
+      if (stopped) return;
+      stopped = true;
+      clearInterval(interval);
+      clearTimeout(deadline);
+    },
+  };
 }
 
 interface PublicationVersion {
@@ -59,6 +133,8 @@ async function restoreActiveTenantRoute(
   client: SupabaseClient,
   projectId: string,
   attemptedVersionId: string,
+  leaseToken: string,
+  routingGeneration: number,
 ): Promise<"restored" | "already_active" | "failed"> {
   const deployment = await client
     .from("project_deployments")
@@ -83,11 +159,28 @@ async function restoreActiveTenantRoute(
       : null;
   if (!activeVersionId) {
     try {
-      await removeAwsTenantMapping(projectId, generation);
+      const current = await readAwsTenantMapping(projectId, { allowWhenDisabled: true });
+      if (!current) return "restored";
+      const authorized = await authorizeAwsFrontendRouteRestore(client, {
+        projectId,
+        versionId: attemptedVersionId,
+        leaseToken,
+        routingGeneration,
+        expectedActiveVersionId: null,
+      });
+      if (authorized.ok === false || !authorized.data) return "failed";
+      await removeAwsTenantMapping(projectId, generation, attemptedVersionId);
       return "restored";
     } catch {
       return "failed";
     }
+  }
+
+  try {
+    const current = await readAwsTenantMapping(projectId, { allowWhenDisabled: true });
+    if (current?.versionId === activeVersionId) return "restored";
+  } catch {
+    return "failed";
   }
 
   const version = await client
@@ -107,13 +200,21 @@ async function restoreActiveTenantRoute(
   }
 
   try {
+    const authorized = await authorizeAwsFrontendRouteRestore(client, {
+      projectId,
+      versionId: attemptedVersionId,
+      leaseToken,
+      routingGeneration,
+      expectedActiveVersionId: activeVersionId,
+    });
+    if (authorized.ok === false || !authorized.data) return "failed";
     await restoreAwsTenantMapping({
       projectId,
       versionId: activeVersionId,
       entryPath: version.data.entry_path,
       spaFallback: version.data.spa_fallback,
       generation,
-    });
+    }, attemptedVersionId);
     return "restored";
   } catch {
     return "failed";
@@ -214,6 +315,13 @@ export async function runAwsFrontendPublicationTick(input: {
     return { status: "unavailable", reason: schema.code.toLowerCase() };
   }
   if (schema.data < 51) return { status: "unavailable", reason: "schema_outdated" };
+  const fencingSchema = await readAwsFrontendFencingSchemaVersion(input.client);
+  if (fencingSchema.ok === false) {
+    return { status: "unavailable", reason: fencingSchema.code.toLowerCase() };
+  }
+  if (fencingSchema.data < 56) {
+    return { status: "unavailable", reason: "fencing_schema_outdated" };
+  }
 
   const unpublishClaim = await claimAwsFrontendUnpublish(input.client);
   if (unpublishClaim.status === "error") {
@@ -410,8 +518,24 @@ export async function runAwsFrontendPublicationTick(input: {
     content: row.content,
     contentType: row.content_type,
   }));
-  const published = await publishToS3(claim.projectId, claim.versionId, files);
+  const leaseGuard = startPublicationLeaseGuard(input.client, identity, claim.projectId);
+  let published: S3PublicationOutcome;
+  try {
+    leaseGuard.assert();
+    published = await publishToS3(claim.projectId, claim.versionId, files, {
+      abortSignal: leaseGuard.abortSignal,
+      assertLease: leaseGuard.assert,
+    });
+    leaseGuard.assert();
+  } catch (error) {
+    leaseGuard.stop();
+    if (error instanceof AwsPublicationLeaseLostError) {
+      return { status: "error", versionId: claim.versionId, reason: "lease_lost_during_s3" };
+    }
+    return failClaim(input.client, identity, "S3_UPLOAD_FAILED", true);
+  }
   if (published.ok === false) {
+    leaseGuard.stop();
     return failClaim(
       input.client,
       identity,
@@ -427,17 +551,30 @@ export async function runAwsFrontendPublicationTick(input: {
     totalBytes: published.totalBytes,
     durationMs: published.durationMs,
   });
-  if (
-    published.manifestHash !== version.content_hash ||
-    !(await verifyS3Publication(
-      claim.projectId,
-      claim.versionId,
-      files,
-      version.content_hash,
-    ))
-  ) {
+  let verified = false;
+  try {
+    verified =
+      published.manifestHash === version.content_hash &&
+      (await verifyS3Publication(
+        claim.projectId,
+        claim.versionId,
+        files,
+        version.content_hash,
+        {
+          abortSignal: leaseGuard.abortSignal,
+          assertLease: leaseGuard.assert,
+        },
+      ));
+    leaseGuard.assert();
+  } catch (error) {
+    leaseGuard.stop();
+    if (error instanceof AwsPublicationLeaseLostError) {
+      return { status: "error", versionId: claim.versionId, reason: "lease_lost_during_s3" };
+    }
     return failClaim(input.client, identity, "S3_UPLOAD_FAILED", true);
   }
+  leaseGuard.stop();
+  if (!verified) return failClaim(input.client, identity, "S3_UPLOAD_FAILED", true);
   emitAwsPublicationEvent("s3_verification_completed", {
     projectId: claim.projectId,
     versionId: claim.versionId,
@@ -460,6 +597,20 @@ export async function runAwsFrontendPublicationTick(input: {
   }
 
   try {
+    const authorized = await authorizeAwsFrontendRouteActivation(input.client, {
+      projectId: claim.projectId,
+      versionId: claim.versionId,
+      leaseToken: identity.leaseToken,
+      routingGeneration: claim.routingGeneration,
+    });
+    if (authorized.ok === false || !authorized.data) {
+      emitAwsPublicationEvent("lease_lost", {
+        projectId: claim.projectId,
+        versionId: claim.versionId,
+        reason: "lease_lost_before_activation",
+      });
+      return { status: "error", versionId: claim.versionId, reason: "lease_lost_before_activation" };
+    }
     await activateAwsTenantMapping({
       projectId: claim.projectId,
       versionId: claim.versionId,
@@ -472,6 +623,8 @@ export async function runAwsFrontendPublicationTick(input: {
       input.client,
       claim.projectId,
       claim.versionId,
+      identity.leaseToken,
+      claim.routingGeneration,
     );
     if (restored === "failed") {
       emitAwsPublicationEvent("route_recovery_failed", {
@@ -506,6 +659,8 @@ export async function runAwsFrontendPublicationTick(input: {
       input.client,
       claim.projectId,
       claim.versionId,
+      identity.leaseToken,
+      claim.routingGeneration,
     );
     if (restored === "failed") {
       emitAwsPublicationEvent("route_recovery_failed", {
@@ -524,6 +679,8 @@ export async function runAwsFrontendPublicationTick(input: {
       input.client,
       claim.projectId,
       claim.versionId,
+      identity.leaseToken,
+      claim.routingGeneration,
     );
     if (restored === "already_active") {
       return { status: "completed", versionId: claim.versionId };
