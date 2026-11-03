@@ -62,9 +62,13 @@ and validated. A failure writes one terminal row, optionally after a bounded ret
 
 Consequences worth stating plainly:
 
-- **Outside the multi-agent cohort, four of the seven roles never execute.** That is by
-  design (`orchestration.skipped` is emitted with the reason), not a crash. A "seven-agent
-  generation" only happens for a worker-dispatched cohort project.
+- **Outside the multi-agent cohort, the six orchestration-only specialist stages never execute
+  as Phase 10 tasks.** Coding still runs through the existing generation engine for every run;
+  Planner, UI/UX, QA, Security, Repair and Deployment are not simulated. That is by design
+  (`orchestration.skipped` is emitted when the relevant worker/cohort path is considered), not a
+  crash. Even in a worker cohort, a simple update omits Planner, UI/UX and Deployment, while
+  Repair is failure-gated. A "seven-role generation" therefore requires the applicable
+  worker/cohort/complexity/failure conditions.
 - **A failed QA/Security review cannot fail or refund a generation.** It runs after the
   terminal write, so it reports separately in the workflow and the chat.
 - **No agent approves anything.** A review is not a verification `passed`, and neither is a
@@ -139,6 +143,16 @@ Consequences worth stating plainly:
    their manifest order and the preview remains isolated. This reduces exposure to later
    timeouts but does not make the file deterministic or guarantee that its own provider
    request will finish.
+9. **The opt-in specialist workflow had an independent deadline.** Its planner/design
+   calls used their configured provider timeout even when the parent generation run had
+   less time left, and the workflow budget was not tied to the worker's shared run budget.
+   A specialist could therefore consume the Coding window or push the worker tick past its
+   bounded execution budget. Fixed: the parent reserves a 120-second Coding window before
+   starting orchestration; the planner/design phase receives only the remaining pre-coding
+   window, while the same handle retains the worker's separate post-coding review reserve.
+   Each role call is clamped to the time actually left while retaining a 10-second
+   persistence/transition reserve. If the shared window is too small, orchestration emits
+   a structured skip event rather than silently starving Coding.
 
 ### The reported `package.json` timeout
 
@@ -370,11 +384,15 @@ changes what every user sees.
 
 ## 10. Measurements
 
-**None were taken.** No generation was executed, and the three changes are reasoned from
+**None were taken.** No generation was executed, and the changes are reasoned from
 the code. In particular no before/after figure exists for output tokens, provider calls,
 generation duration, file count or verification duration; the hand-off removes a *terminal
 failure* for large inline runs, and the static stage adds a bounded in-process check with no
 provider call, but neither claim is a measurement.
+
+The specialist deadline fix is also a static correctness change. It has not been exercised
+against a live worker, provider, database or production workload; no latency or reliability
+improvement is claimed.
 
 ## 11. Unverified
 

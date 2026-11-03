@@ -26,6 +26,7 @@ import type {
     AgentRole,
     AgentTaskStatus,
     AgentVerificationStatus,
+    WorkflowEvidenceStatus,
     AgentWorkflowStatus,
     DeploymentProposalList,
     DeploymentProposalStatus,
@@ -90,6 +91,15 @@ const CHECK_TONE: Record<AgentVerificationStatus, StatusTone> = {
     unavailable: "warning",
 };
 
+const EVIDENCE_TONE: Record<WorkflowEvidenceStatus, StatusTone> = {
+    passed: "success",
+    failed: "danger",
+    pending: "warning",
+    skipped: "neutral",
+    unavailable: "warning",
+    not_started: "neutral",
+};
+
 const ROLE_LABEL: Record<AgentRole, string> = {
     planner: "Planner",
     ui_ux: "UI/UX",
@@ -109,6 +119,12 @@ function when(value: string | null | undefined): string {
 function costLabel(costUsd: number | null, costKnown: boolean): string {
     if (!costKnown || typeof costUsd !== "number") return "Cost not reported";
     return `$${costUsd.toFixed(4)} reported`;
+}
+
+function durationLabel(durationMs: number | null): string {
+    if (typeof durationMs !== "number" || !Number.isFinite(durationMs)) return "duration —";
+    if (durationMs < 1_000) return `${Math.max(0, Math.round(durationMs))} ms`;
+    return `${(durationMs / 1_000).toFixed(1)} s`;
 }
 
 function summaryRecord(proposal: DeploymentProposalView): Record<string, unknown> {
@@ -339,12 +355,36 @@ export function ProjectWorkflowPanel({
                                         </span>
                                     </div>
 
-                                    {workflow.summary ? (
-                                        <p className="text-xs whitespace-pre-wrap">{workflow.summary}</p>
-                                    ) : null}
-                                    {workflow.errorClass ? (
-                                        <p className="text-destructive text-xs">Error class: {workflow.errorClass}</p>
-                                    ) : null}
+                                     {workflow.summary ? (
+                                         <p className="text-xs whitespace-pre-wrap">{workflow.summary}</p>
+                                     ) : null}
+                                     <div className="rounded-lg border p-3">
+                                         <div className="mb-2 flex flex-wrap items-center gap-2">
+                                             <span className="text-xs font-medium">Evidence status</span>
+                                             <StatusPill tone={workflow.verification.fullyVerified ? "success" : "warning"}>
+                                                 {workflow.verification.fullyVerified ? "fully verified" : "not fully verified"}
+                                             </StatusPill>
+                                         </div>
+                                         <div className="grid gap-2 text-[11px] sm:grid-cols-2 lg:grid-cols-4">
+                                             {([
+                                                 ["Generated", workflow.verification.generated],
+                                                 ["Structurally valid", workflow.verification.structurallyValid],
+                                                 ["Compiled", workflow.verification.compiled],
+                                                 ["Rendered", workflow.verification.rendered],
+                                                 ["Functionally verified", workflow.verification.functionallyVerified],
+                                                 ["Security reviewed", workflow.verification.securityReviewed],
+                                                 ["Deployment verified", workflow.verification.deploymentVerified],
+                                             ] as const).map(([label, evidence]) => (
+                                                 <div key={label} className="flex items-center gap-1.5">
+                                                     <StatusPill tone={EVIDENCE_TONE[evidence]}>{evidence.replaceAll("_", " ")}</StatusPill>
+                                                     <span className="text-muted-foreground">{label}</span>
+                                                 </div>
+                                             ))}
+                                         </div>
+                                     </div>
+                                     {workflow.errorClass ? (
+                                         <p className="text-destructive text-xs">Error class: {workflow.errorClass}</p>
+                                     ) : null}
 
                                     {workflow.tasks.length === 0 ? (
                                         <p className="text-muted-foreground text-xs">No specialist tasks were recorded.</p>
@@ -357,12 +397,32 @@ export function ProjectWorkflowPanel({
                                                             {task.status.replaceAll("_", " ")}
                                                         </StatusPill>
                                                         <span className="text-xs font-medium">{task.title}</span>
-                                                        <span className="text-muted-foreground text-[11px]">
-                                                            {ROLE_LABEL[task.role]} · attempt {task.attempt}/{task.maxAttempts}
-                                                            {task.required ? " · required" : " · optional"}
-                                                        </span>
-                                                    </div>
-                                                    {task.summary ? (
+                                                         <span className="text-muted-foreground text-[11px]">
+                                                             {ROLE_LABEL[task.role]} · attempt {task.attempt}/{task.maxAttempts} · retries {task.retryCount}
+                                                             {task.required ? " · required" : " · optional"}
+                                                         </span>
+                                                         <span className="text-muted-foreground text-[11px]">
+                                                             {task.eligible ? "eligible" : "ineligible"} · {task.scheduleReason ?? "not scheduled"}
+                                                         </span>
+                                                     </div>
+                                                     <div className="text-muted-foreground flex flex-wrap gap-x-3 gap-y-1 text-[11px]">
+                                                         <span>{task.scheduled ? (task.startedAt ? "executed" : "scheduled") : "not scheduled"}</span>
+                                                         <span>{durationLabel(task.durationMs)}</span>
+                                                         <span>{task.provider ?? "provider —"}</span>
+                                                         <span className="font-mono">{task.model ?? "model —"}</span>
+                                                         <span>output {task.outputProduced ? "produced" : "not produced"}</span>
+                                                         <span>output {task.outputConsumed ? "consumed" : "not consumed"}</span>
+                                                     </div>
+                                                     {!task.eligible && task.eligibilityReason ? (
+                                                         <p className="text-muted-foreground text-[11px]">Eligibility: {task.eligibilityReason}</p>
+                                                     ) : null}
+                                                     {task.skipReason ? (
+                                                         <p className="text-muted-foreground text-[11px]">Skip reason: {task.skipReason}</p>
+                                                     ) : null}
+                                                     {task.failureReason ? (
+                                                         <p className="text-destructive text-[11px]">Failure reason: {task.failureReason}</p>
+                                                     ) : null}
+                                                     {task.summary ? (
                                                         <p className="text-muted-foreground text-xs whitespace-pre-wrap">{task.summary}</p>
                                                     ) : null}
                                                     {task.errorClass ? (

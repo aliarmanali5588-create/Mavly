@@ -766,7 +766,12 @@ async function createProjectResponse(userId: string, body: unknown): Promise<Nex
     projectType,
     projectType === "android" ? creationRequestId : undefined,
   );
-  if (isStoreFailure(created)) return fail(created.code === "CONFLICT" ? 409 : 500, created.code ?? "UNKNOWN", created.error);
+  if (isStoreFailure(created)) {
+    if (created.code === "P0001" || /PROJECT_LIMIT_REACHED/i.test(created.error)) {
+      return fail(403, "PROJECT_LIMIT_REACHED", "Your current plan has reached its project limit.");
+    }
+    return fail(created.code === "CONFLICT" ? 409 : 500, created.code ?? "UNKNOWN", created.error);
+  }
 
   /**
    * ⚠️ EVERY WEBSITE PROJECT OWNS ITS CONTROL FILES FROM CREATION. The rules
@@ -842,7 +847,12 @@ async function launchProjectResponse(userId: string, body: unknown): Promise<Nex
     projectType,
     creationRequestId ? creationRequestId : undefined,
   );
-  if (isStoreFailure(created)) return fail(created.code === "CONFLICT" ? 409 : 500, created.code ?? "UNKNOWN", created.error);
+  if (isStoreFailure(created)) {
+    if (created.code === "P0001" || /PROJECT_LIMIT_REACHED/i.test(created.error)) {
+      return fail(403, "PROJECT_LIMIT_REACHED", "Your current plan has reached its project limit.");
+    }
+    return fail(created.code === "CONFLICT" ? 409 : 500, created.code ?? "UNKNOWN", created.error);
+  }
 
   /**
    * ⚠️ A KEYED LAUNCH MAY HAVE RETURNED AN EXISTING PROJECT. It is then not this

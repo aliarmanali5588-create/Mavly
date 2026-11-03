@@ -52,7 +52,10 @@ export type CreditLedgerOperation =
   | "generation_reserved"
   | "generation_consumed"
   | "generation_released"
-  | "generation_refunded";
+  | "generation_refunded"
+  | "purchase"
+  | "subscription_grant"
+  | "refund";
 
 export const CREDIT_LEDGER_OPERATIONS: readonly CreditLedgerOperation[] = [
   "grant",
@@ -61,6 +64,9 @@ export const CREDIT_LEDGER_OPERATIONS: readonly CreditLedgerOperation[] = [
   "generation_consumed",
   "generation_released",
   "generation_refunded",
+  "purchase",
+  "subscription_grant",
+  "refund",
 ];
 
 export type CreditLedgerFilter = "all" | CreditLedgerOperation;
@@ -93,6 +99,9 @@ export interface AdminCreditLedgerRow {
 
 export interface AdminCreditSummary {
   issued: number;
+  purchased?: number;
+  subscription?: number;
+  operator?: number;
   consumed: number;
   refunded: number;
   outstanding: number;
@@ -123,6 +132,10 @@ export function creditOperationLabel(operation: CreditLedgerOperation): string {
   switch (operation) {
     case "grant":
       return "Grant";
+    case "purchase":
+      return "Purchased credits";
+    case "subscription_grant":
+      return "Subscription credits";
     case "admin_adjustment":
       return "Adjustment";
     case "generation_reserved":
@@ -133,6 +146,8 @@ export function creditOperationLabel(operation: CreditLedgerOperation): string {
       return "Hold released";
     case "generation_refunded":
       return "Refund";
+    case "refund":
+      return "Payment refund";
   }
 }
 
@@ -142,7 +157,11 @@ export function creditOperationTone(
   switch (operation) {
     case "grant":
     case "generation_refunded":
+    case "purchase":
+    case "subscription_grant":
       return "positive";
+    case "refund":
+      return "negative";
     case "generation_consumed":
       return "negative";
     case "admin_adjustment":
@@ -176,7 +195,9 @@ export interface AdminAiUsageModelRow {
   promptTokens: number;
   completionTokens: number;
   /** Sum of provider-reported cost. Only meaningful with `costKnownRuns`. */
-  costUsd: number;
+  costUsd: number | null;
+  costInrPaise?: number | null;
+  estimatedCostInrPaise?: number | null;
   costKnownRuns: number;
   costUnknownRuns: number;
   /** Run duration percentiles in seconds — NOT provider request latency. */
@@ -197,6 +218,9 @@ export interface AdminAiUsageAttemptRow {
   usageSource: "provider" | "unavailable";
   estimatedCostUsd: number | null;
   actualCostUsd: number | null;
+  actualCostInrPaise?: number | null;
+  estimatedCostInrPaise?: number | null;
+  inrCostSource?: string | null;
   costSource: "provider_reported" | "rate_card" | "unavailable";
   reconciliationStatus: "reconciled" | "unreconciled" | "uncertain" | "unavailable";
   uncertain: boolean;
@@ -212,7 +236,9 @@ export interface AdminAiUsageSummary {
   tokens: number;
   promptTokens: number;
   completionTokens: number;
-  costUsd: number;
+  costUsd: number | null;
+  costInrPaise?: number | null;
+  estimatedCostInrPaise?: number | null;
   costKnownRuns: number;
   costUnknownRuns: number;
   durationP50: number | null;
@@ -251,6 +277,31 @@ export function costDisplay(input: {
     return { text: `${amount} (partial)`, available: true, partial: true };
   }
   return { text: amount, available: true, partial: false };
+}
+
+export function inrCostDisplay(input: {
+  actualPaise: number | null | undefined;
+  estimatedPaise?: number | null;
+  knownAttempts: number;
+  unknownAttempts?: number;
+}): { text: string; available: boolean; partial: boolean } {
+  const known = numberOrZero(input.knownAttempts);
+  const unknown = numberOrZero(input.unknownAttempts);
+  if (known <= 0 || input.actualPaise === null || input.actualPaise === undefined) {
+    if (input.estimatedPaise !== null && input.estimatedPaise !== undefined) {
+      return {
+        text: `~₹${(Number(input.estimatedPaise) / 100).toFixed(2)}`,
+        available: true,
+        partial: true,
+      };
+    }
+    return { text: "Cost unavailable", available: false, partial: false };
+  }
+  return {
+    text: `₹${(Number(input.actualPaise) / 100).toFixed(2)}${unknown > 0 ? " · partial" : ""}`,
+    available: true,
+    partial: unknown > 0,
+  };
 }
 
 /** Success rate over terminal runs only; `null` when nothing is terminal. */

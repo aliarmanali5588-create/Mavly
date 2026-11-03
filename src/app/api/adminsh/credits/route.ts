@@ -69,7 +69,7 @@ export async function GET(request: NextRequest) {
         503,
         missing ? "CREDITS_SCHEMA_MISSING" : "CREDITS_UNAVAILABLE",
         missing
-          ? "The credit ledger functions are not installed. Apply supabase/migrations/50_admin_console_backend.sql."
+           ? "The credit ledger functions are not installed. Apply supabase/migrations/50_admin_console_backend.sql and 59_inr_billing_and_ai_costs.sql."
           : "The credit ledger could not be read."
       );
     }

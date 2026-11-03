@@ -83,6 +83,9 @@ const OPERATION_ICON: Record<CreditLedgerOperation, React.ReactNode> = {
   generation_consumed: <ArrowDownLeft className="w-3 h-3" />,
   generation_released: <RefreshCw className="w-3 h-3" />,
   generation_refunded: <RefreshCw className="w-3 h-3" />,
+  purchase: <ArrowUpRight className="w-3 h-3" />,
+  subscription_grant: <ArrowUpRight className="w-3 h-3" />,
+  refund: <RefreshCw className="w-3 h-3" />,
 };
 
 const OPERATION_TONE: Record<
@@ -95,6 +98,9 @@ const OPERATION_TONE: Record<
   generation_consumed: "negative",
   generation_released: "neutral",
   generation_refunded: "positive",
+  purchase: "positive",
+  subscription_grant: "positive",
+  refund: "positive",
 };
 
 export default function CreditsAdminPage() {

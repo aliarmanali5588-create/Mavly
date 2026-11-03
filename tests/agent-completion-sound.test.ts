@@ -23,6 +23,7 @@ function workflow(
     repairAttempts: 0,
     reportedCostUsd: null,
     costKnown: false,
+    verification: null,
     tasks: tasks.map(({ key, role, status }) => ({
       key,
       role,
@@ -40,7 +41,7 @@ function workflow(
       errorClass: null,
       startedAt: null,
       finishedAt: null,
-    })),
+    })) as WorkflowView["tasks"],
   };
 }
 

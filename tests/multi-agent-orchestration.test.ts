@@ -58,6 +58,7 @@ import {
   deadlineReached,
   dependencyVerdict,
   deriveWorkflowState,
+  deriveWorkflowVerification,
   failureSignature,
   isRepeatedFailure,
   normalizeAgentOutput,
@@ -68,6 +69,7 @@ import {
   selectRunnable,
   taskRetryDelayMs,
   tasksForComplexity,
+  allRoleTaskDefinitionsForComplexity,
   workflowStatesThatCanTransitionTo,
 } from "../src/lib/orchestration/workflow";
 import {
@@ -81,6 +83,7 @@ const read = (path: string) =>
   readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
 
 const MIGRATION = read("supabase/migrations/29_multi_agent_orchestration.sql");
+const LIFECYCLE_MIGRATION = read("supabase/migrations/58_multi_agent_lifecycle_observability.sql");
 const RUN_AGENT = read("src/lib/mavly/run-agent.ts");
 const ENGINE = read("src/lib/orchestration/engine.ts");
 const MODEL_ROLE_SOURCE = read("src/lib/ai/model-roles.ts");
@@ -116,8 +119,21 @@ function task(
     output: null,
     errorClass: null,
     errorSummary: null,
+    eligible: true,
+    eligibilityReason: "test",
+    scheduledAt: null,
+    scheduled: false,
+    scheduleReason: null,
     startedAt: null,
     finishedAt: null,
+    provider: null,
+    model: null,
+    outputProduced: false,
+    outputConsumed: false,
+    durationMs: null,
+    skipReason: null,
+    failureReason: null,
+    retryCount: 0,
     ...overrides,
   };
 }
@@ -269,6 +285,24 @@ test("a simple workflow pays for fewer specialists", () => {
   assert.ok(!standard.includes("repair"));
 });
 
+test("every locked role receives an explicit eligibility decision", () => {
+  const simple = allRoleTaskDefinitionsForComplexity("simple", { repairEnabled: false });
+  assert.deepEqual(
+    simple.map((entry) => entry.role),
+    ["planner", "ui_ux", "coding", "qa", "security", "repair", "deployment"],
+  );
+  assert.equal(simple.find((entry) => entry.role === "coding")?.eligible, true);
+  assert.equal(simple.find((entry) => entry.role === "planner")?.eligible, false);
+  assert.equal(simple.find((entry) => entry.role === "repair")?.eligible, false);
+  assert.equal(
+    simple.find((entry) => entry.role === "planner")?.eligibilityReason,
+    "complexity_gate_simple_request",
+  );
+
+  const repairEnabled = allRoleTaskDefinitionsForComplexity("standard", { repairEnabled: true });
+  assert.equal(repairEnabled.find((entry) => entry.role === "repair")?.eligibilityReason, "failure_only");
+});
+
 test("dependencies name real tasks and only coding writes files", () => {
   const tasks = tasksForComplexity("standard", { repairEnabled: true });
   const byKey = new Map(tasks.map((entry) => [entry.key, entry]));
@@ -407,6 +441,17 @@ test("provider calls and repair attempts stop at their budget", () => {
   assert.equal(reserveRepairAttempt(budget), false);
 });
 
+test("specialist calls inherit the generation deadline and reserve coding time", () => {
+  assert.match(ENGINE, /maxWallClockMs: Math\.min\(/);
+  assert.match(ENGINE, /ROLE_FINALIZE_RESERVE_MS/);
+  assert.match(ENGINE, /remainingMs - ROLE_FINALIZE_RESERVE_MS/);
+  assert.match(ENGINE, /preCodingDeadlineAtMs/);
+  assert.match(RUN_AGENT, /ORCHESTRATION_CODING_RESERVE_MS/);
+  assert.match(RUN_AGENT, /maxWallClockMs:/);
+  assert.match(RUN_AGENT, /orchestrationRemainingMs \+ POST_CODING_REVIEW_RESERVE_MS/);
+  assert.match(RUN_AGENT, /insufficient_shared_budget/);
+});
+
 test("task retry backoff is bounded and jittered inside its range", () => {
   for (let attempt = 1; attempt <= 5; attempt += 1) {
     const delay = taskRetryDelayMs(attempt, { baseMs: 1_000, maxMs: 8_000, random: () => 1 });
@@ -455,6 +500,42 @@ test("agent output is bounded before it can be persisted", () => {
   assert.equal(normalized.findings[0].title.length, 200);
   assert.equal(normalized.findings[0].detail.length, 1_000);
   assert.equal(normalized.findings[0].evidence?.length, 200);
+});
+
+test("verification projection never upgrades generation into a full verification pass", () => {
+  const projection = deriveWorkflowVerification([
+    task("implement", "completed", { output: output({ role: "coding", taskKey: "implement" }), outputProduced: true }),
+    task("verify", "completed", {
+      output: output({
+        role: "qa",
+        taskKey: "verify",
+        verification: {
+          status: "pending",
+          summary: "Build and runtime evidence are unavailable.",
+          checks: [
+            { id: "source-present", label: "Source", status: "passed" },
+            { id: "static-entry", label: "Entry", status: "passed" },
+            { id: "build", label: "Build", status: "unavailable" },
+          ],
+          evidence: [],
+        },
+      }),
+    }),
+    task("security-review", "completed", {
+      output: output({
+        role: "security",
+        taskKey: "security-review",
+        verification: { status: "passed", summary: "Static review passed.", checks: [], evidence: [] },
+      }),
+    }),
+  ]);
+  assert.equal(projection.generated, "passed");
+  assert.equal(projection.structurallyValid, "passed");
+  assert.equal(projection.compiled, "unavailable");
+  assert.equal(projection.rendered, "unavailable");
+  assert.equal(projection.functionallyVerified, "unavailable");
+  assert.equal(projection.securityReviewed, "passed");
+  assert.equal(projection.fullyVerified, false);
 });
 
 // ── Configuration ───────────────────────────────────────────────────────────
@@ -870,6 +951,8 @@ test("role completions use durable per-attempt accounting and the existing codin
   assert.match(RUN_AGENT, /requestedModel: codingRoleModel\?\.id \?\? input\.requestedModel/);
   // A specialist call that cannot be durably recorded is never sent.
   assert.match(ENGINE, /usage_attempt_unavailable/);
+  assert.match(ENGINE, /outcome\.allFiles\.length === 0 \|\| runtimeFailed \|\| buildFailed/);
+  assert.match(ENGINE, /deterministicFailed \? "failed" : "ok"/);
 });
 
 test("specialist context is explicitly subordinate and bounded", () => {
@@ -911,6 +994,18 @@ test("migration 29 is additive, owner-scoped and exposes only fenced writes", ()
   assert.match(MIGRATION, /grant all on public\.deployment_proposals to service_role/);
 });
 
+test("migration 58 persists explicit role lifecycle and consumption metadata", () => {
+  assert.match(LIFECYCLE_MIGRATION, /add column if not exists eligible boolean/);
+  assert.match(LIFECYCLE_MIGRATION, /add column if not exists scheduled_at timestamptz/);
+  assert.match(LIFECYCLE_MIGRATION, /add column if not exists scheduled boolean/);
+  assert.match(LIFECYCLE_MIGRATION, /add column if not exists provider text/);
+  assert.match(LIFECYCLE_MIGRATION, /add column if not exists model text/);
+  assert.match(LIFECYCLE_MIGRATION, /add column if not exists output_consumed boolean/);
+  assert.match(LIFECYCLE_MIGRATION, /multi_agent_lifecycle_schema_version/);
+  assert.match(LIFECYCLE_MIGRATION, /select 58/);
+  assert.match(LIFECYCLE_MIGRATION, /grant select \([\s\S]*?output_consumed/);
+});
+
 test("generation integrates orchestration without creating a second pipeline", () => {
   assert.match(RUN_AGENT, /beginOrchestration/);
   assert.match(RUN_AGENT, /runPlanningAgents/);
@@ -921,6 +1016,12 @@ test("generation integrates orchestration without creating a second pipeline", (
   assert.match(RUN_AGENT, /input\.worker\s*\?\s*await beginOrchestration/);
   // The failure path must not substitute a second run/queue.
   assert.doesNotMatch(RUN_AGENT, /create_generation_job/);
+});
+
+test("image-stage failures reach Coding as explicit unavailable placements", () => {
+  assert.match(RUN_AGENT, /markImagePlacementsUnavailable/);
+  assert.match(RUN_AGENT, /generationInput\.imagePending = manifest\.images\.map/);
+  assert.match(RUN_AGENT, /The pages use placeholders for the planned imagery/);
 });
 
 test("the deploy route passes a server-derived approval and reuses the gate", () => {
@@ -941,6 +1042,8 @@ test("the workspace exposes the truthful agent/approval surface through the cata
   assert.match(PANEL, /pending/);
   assert.match(PANEL, /not proof|not a pass/i);
   assert.match(PANEL, /Deploy this approval/);
+  assert.match(PANEL, /outputProduced/);
+  assert.match(PANEL, /eligibilityReason/);
   // No panel may call a raw /api path or auto-deploy.
   assert.doesNotMatch(PANEL, /fetch\(/);
   assert.doesNotMatch(PANEL, /\/api\//);

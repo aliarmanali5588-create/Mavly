@@ -24,7 +24,11 @@ import { randomUUID } from "node:crypto";
 
 import { chatCompletion } from "@/lib/ai/provider";
 import { isChatCompletionFailure } from "@/lib/ai/chat-contract";
-import { resolveRoleModel, type AgentModelRole } from "@/lib/ai/model-roles";
+import {
+  resolveRoleModel,
+  roleModelDefinition,
+  type AgentModelRole,
+} from "@/lib/ai/model-roles";
 import {
   beginProviderAttempt,
   completeProviderAttempt,
@@ -50,13 +54,14 @@ import type {
   WorkflowView,
 } from "./contracts";
 import {
+  allRoleTaskDefinitionsForComplexity,
   classifyComplexity,
   createBudget,
   deadlineReached,
+  deriveWorkflowVerification,
   normalizeAgentOutput,
   reserveProviderCall,
   reserveRepairAttempt,
-  tasksForComplexity,
   repairTaskDefinition,
   workflowStatesThatCanTransitionTo,
 } from "./workflow";
@@ -83,8 +88,9 @@ import { securityReview } from "./security";
 import {
   ensureTasks,
   ensureWorkflow,
+  activateRepairTask,
   isWorkflowStoreFailure,
-  listTasks,
+  markTaskOutputConsumed,
   recordWorkflowEvent,
   transitionTask,
   updateWorkflow,
@@ -100,6 +106,14 @@ const REPAIR_TIMEOUT_MS = 45_000;
  */
 const REVIEW_TIMEOUT_MS = 20_000;
 export const POST_CODING_REVIEW_RESERVE_MS = REVIEW_TIMEOUT_MS * 2 + 10_000;
+/**
+ * A specialist call is followed by metering, workflow persistence and (for the
+ * pre-coding roles) the actual coding pipeline. Never spend the last part of a
+ * workflow window on a provider request that leaves no time to record its
+ * result or produce source.
+ */
+const ROLE_FINALIZE_RESERVE_MS = 10_000;
+const MIN_ROLE_ATTEMPT_MS = 10_000;
 const PLANNER_MAX_TOKENS = 2_000;
 const DESIGN_MAX_TOKENS = 1_500;
 const REVIEW_MAX_TOKENS = 1_500;
@@ -126,6 +140,8 @@ export interface OrchestrationHandle {
   env: NodeJS.ProcessEnv;
   costUsd: number | null;
   costKnown: boolean;
+  /** Absolute cap for planner/design work before Coding starts. */
+  preCodingDeadlineAtMs?: number;
   /**
    * Optional live-runtime evidence for QA/Security. The provider only READS an
    * existing durable sandbox session; it never creates, restarts or installs
@@ -168,6 +184,10 @@ interface BeginInput {
   mode: "create" | "update";
   existingFiles: readonly ProjectFile[];
   requestedModel?: string | null;
+  /** Upper bound supplied by the parent generation run. */
+  maxWallClockMs?: number;
+  /** Smaller cap for pre-coding specialist work; post-coding reviews use the full cap. */
+  preCodingMaxWallClockMs?: number;
   now?: () => number;
   env?: NodeJS.ProcessEnv;
   runtimeEvidence?: () => Promise<RuntimeEvidenceType | null>;
@@ -208,6 +228,7 @@ export async function beginOrchestration(
   }
 
   const now = input.now ?? (() => Date.now());
+  const startedAtMs = now();
   /**
    * ⚠️ THE BACKEND'S CHANGE CLASS WINS FOR WEBSITE RUNS. `classifyChange` in
    * `src/lib/project-rules/scope.ts` already classified this request once, and
@@ -236,7 +257,7 @@ export async function beginOrchestration(
     runId: input.runId,
     complexity,
     promptExcerpt: input.prompt,
-    startedAt: new Date(now()).toISOString(),
+    startedAt: new Date(startedAtMs).toISOString(),
   });
   if (isWorkflowStoreFailure(ensured)) {
     console.warn(`[orchestration] workflow unavailable: ${ensured.code}`);
@@ -260,19 +281,20 @@ export async function beginOrchestration(
     if (!isWorkflowStoreFailure(reopened) && reopened.data) workflow = reopened.data;
   }
 
-  const stored = await listTasks(input.client, workflow.id);
-  let tasks = stored.ok ? stored.data : [];
-  if (tasks.length === 0) {
-    const created = await ensureTasks(
-      input.client,
-      workflow.id,
-      input.projectId,
-      tasksForComplexity(complexity, { repairEnabled: config.repairEnabled }),
-      1,
-    );
-    if (isWorkflowStoreFailure(created)) return null;
-    tasks = created.data;
-  }
+  /**
+   * Always upsert the complete role set. Existing rows are untouched, while a
+   * resumed or older workflow gains explicit rows for roles that were never
+   * eligible, rather than making absence look like execution.
+   */
+  const created = await ensureTasks(
+    input.client,
+    workflow.id,
+    input.projectId,
+    allRoleTaskDefinitionsForComplexity(complexity, { repairEnabled: config.repairEnabled }),
+    0,
+  );
+  if (isWorkflowStoreFailure(created)) return null;
+  const tasks = created.data;
 
   /**
    * The wall-clock window is per attempt. A resumed run must not inherit an
@@ -283,9 +305,12 @@ export async function beginOrchestration(
     {
       maxProviderCalls: config.maxProviderCalls,
       maxRepairAttempts: config.maxRepairs,
-      maxWallClockMs: config.maxWallClockMs,
+      maxWallClockMs: Math.min(
+        config.maxWallClockMs,
+        input.maxWallClockMs ?? config.maxWallClockMs,
+      ),
     },
-    now(),
+    startedAtMs,
   );
   budget.providerCalls = workflow.provider_calls;
   budget.repairAttempts = workflow.repair_attempts;
@@ -319,6 +344,16 @@ export async function beginOrchestration(
           ? workflow.reported_cost_usd
           : null,
     costKnown: workflow.provider_calls === 0 ? true : workflow.cost_known,
+    ...(input.preCodingMaxWallClockMs !== undefined
+      ? {
+          preCodingDeadlineAtMs:
+            startedAtMs +
+            Math.min(
+              budget.maxWallClockMs,
+              Math.max(30_000, Math.floor(input.preCodingMaxWallClockMs)),
+            ),
+        }
+      : {}),
   };
 }
 
@@ -336,7 +371,7 @@ async function startTask(
   handle: OrchestrationHandle,
   key: string,
 ): Promise<AgentTask | null> {
-  const task = taskOf(handle, key);
+  let task = taskOf(handle, key);
   if (!task) return null;
   if (
     task.status === "completed" ||
@@ -347,22 +382,40 @@ async function startTask(
   }
   if (task.status === "running") return task;
 
+  if (!task.eligible) {
+    return null;
+  }
+
   if (task.status !== "queued") {
+    const nextAttempt =
+      task.status === "pending" ? Math.max(1, task.attempt) : task.attempt + 1;
     const queued = await transitionTask(handle.client, handle.workflow.id, handle.projectId, {
       taskKey: key,
       from: [task.status],
       to: "queued",
-      attempt: task.attempt + 1,
-      startedAt: new Date(handle.now()).toISOString(),
+      attempt: nextAttempt,
+      scheduled: true,
+      scheduledAt: new Date(handle.now()).toISOString(),
+      scheduleReason: "dependency_ready",
+      retryCount: Math.max(0, nextAttempt - 1),
     });
     if (isWorkflowStoreFailure(queued) || !queued.data) return null;
     replaceTask(handle, queued.data);
+    task = queued.data;
   }
 
+  const modelDefinition = roleModelDefinition(task.role);
+  const resolvedModel = modelDefinition.kind === "model"
+    ? resolveRoleModel({ role: task.role, env: handle.env, projectId: handle.projectId })
+    : null;
   const running = await transitionTask(handle.client, handle.workflow.id, handle.projectId, {
     taskKey: key,
     from: ["queued"],
     to: "running",
+    scheduled: true,
+    startedAt: new Date(handle.now()).toISOString(),
+    provider: modelDefinition.kind === "model" ? "openrouter" : "deterministic",
+    model: resolvedModel?.id ?? modelDefinition.modelId,
   });
   if (isWorkflowStoreFailure(running) || !running.data) return null;
   replaceTask(handle, running.data);
@@ -381,6 +434,18 @@ async function finishTask(
       : normalized.status === "skipped" || normalized.status === "unavailable"
         ? "skipped"
         : "completed";
+  const finishedAt = new Date(handle.now()).toISOString();
+  const startedAt = taskOf(handle, key)?.startedAt;
+  const elapsed = startedAt ? Math.max(0, handle.now() - Date.parse(startedAt)) : 0;
+  const outputProduced = normalized.status === "ok";
+  const skipReason =
+    terminal === "skipped"
+      ? String(normalized.data.skipReason ?? normalized.summary).slice(0, 500)
+      : null;
+  const failureReason =
+    terminal === "failed"
+      ? String(normalized.data.errorClass ?? normalized.summary).slice(0, 500)
+      : null;
   const updated = await transitionTask(handle.client, handle.workflow.id, handle.projectId, {
     taskKey: key,
     from: ["running", "queued"],
@@ -391,9 +456,33 @@ async function finishTask(
         ? String(normalized.data.errorClass ?? "agent_failed").slice(0, 80)
         : null,
     errorSummary: normalized.status === "failed" ? normalized.summary : null,
-    finishedAt: new Date(handle.now()).toISOString(),
+    outputProduced,
+    durationMs: Math.max(0, normalized.durationMs || elapsed),
+    skipReason,
+    failureReason,
+    finishedAt,
   });
   if (!isWorkflowStoreFailure(updated) && updated.data) replaceTask(handle, updated.data);
+}
+
+async function consumeTaskOutput(handle: OrchestrationHandle, key: string): Promise<void> {
+  const task = taskOf(handle, key);
+  if (!task?.outputProduced || task.outputConsumed) return;
+  const updated = await markTaskOutputConsumed(
+    handle.client,
+    handle.workflow.id,
+    handle.projectId,
+    key,
+  );
+  if (!isWorkflowStoreFailure(updated) && updated.data) replaceTask(handle, updated.data);
+}
+
+/** Record specialist-to-Coding handoffs without changing task status. */
+export async function markSpecialistOutputsConsumed(
+  handle: OrchestrationHandle,
+  keys: readonly string[],
+): Promise<void> {
+  for (const key of keys) await consumeTaskOutput(handle, key);
 }
 
 function skippedOutput(
@@ -407,7 +496,7 @@ function skippedOutput(
     role,
     status: "skipped",
     summary,
-    data,
+    data: { ...data, skipReason: summary.slice(0, 500) },
     filesChanged: [],
     findings: [],
     reportedCostUsd: null,
@@ -523,7 +612,8 @@ async function callRoleModel(
     timeoutMs: number;
     maxTokens: number;
   },
-): Promise<ModelResult> {  const model = resolveRoleModel({
+): Promise<ModelResult> {
+  const model = resolveRoleModel({
     role: input.role,
     env: handle.env,
     projectId: handle.projectId,
@@ -544,6 +634,34 @@ async function callRoleModel(
       costUsd: null,
     };
   }
+
+  /**
+   * The role timeout is a ceiling, not a promise that the whole configured
+   * window is still available. Keep enough time for the durable usage result,
+   * workflow transition and the next dependent stage. Without this clamp a
+   * role that starts near its deadline can keep the worker alive past the
+   * parent run's budget even though the budget check above passed.
+   */
+  const fullDeadlineAtMs =
+    handle.budget.startedAtMs + handle.budget.maxWallClockMs;
+  const isPreCodingRole = input.taskKey === "plan" || input.taskKey === "design-review";
+  const deadlineAtMs =
+    isPreCodingRole && handle.preCodingDeadlineAtMs
+      ? Math.min(fullDeadlineAtMs, handle.preCodingDeadlineAtMs)
+      : fullDeadlineAtMs;
+  const remainingMs = deadlineAtMs - handle.now();
+  if (remainingMs < MIN_ROLE_ATTEMPT_MS + ROLE_FINALIZE_RESERVE_MS) {
+    return {
+      ok: false,
+      errorClass: "workflow_deadline",
+      message: "The workflow did not have enough time left for a useful specialist call.",
+      costUsd: null,
+    };
+  }
+  const timeoutMs = Math.min(
+    input.timeoutMs,
+    Math.max(MIN_ROLE_ATTEMPT_MS, remainingMs - ROLE_FINALIZE_RESERVE_MS),
+  );
   const reserved = reserveProviderCall(handle.budget, handle.now());
   if (reserved.ok === false) {
     return {
@@ -600,7 +718,7 @@ async function callRoleModel(
       { role: "system", content: roleSystemPrompt(handle, input.role, input.system) },
       { role: "user", content: input.user },
     ],
-    { timeoutMs: input.timeoutMs, maxTokens: Math.min(model.maxOutputTokens, input.maxTokens) },
+    { timeoutMs, maxTokens: Math.min(model.maxOutputTokens, input.maxTokens) },
   );
 
   const costUsd = result.metadata.usage.costUsd;
@@ -683,7 +801,8 @@ export async function runPlanningAgents(
    * `planning` and do not call the planner for it: Coding, QA and Security are
    * the whole pipeline for that change class.
    */
-  if (!taskOf(handle, "plan")) {
+  const planTask = taskOf(handle, "plan");
+  if (!planTask || !planTask.eligible) {
     return { planContext: null, designDirectives: null };
   }
 
@@ -988,7 +1107,25 @@ const REVIEWS_PASSED: CodingReviewOutcome = {
 /** Mark the coding task as running before the existing pipeline executes it. */
 export async function markCodingStarted(handle: OrchestrationHandle): Promise<void> {
   await safeWorkflowState(handle, "executing");
+  const plan = taskOf(handle, "plan");
+  if (
+    plan &&
+    !["completed", "failed", "skipped", "cancelled"].includes(plan.status)
+  ) {
+    await skipTask(handle, "plan", "Planning did not reach execution before Coding started.");
+  }
+  if (taskOf(handle, "plan")?.status === "failed") {
+    await skipTask(
+      handle,
+      "design-review",
+      "Planner failed, so the dependent design review was not scheduled.",
+    );
+  }
   await startTask(handle, "implement");
+  // The existing generation engine receives these blocks immediately after
+  // planning; record that handoff separately from the roles merely completing.
+  await consumeTaskOutput(handle, "plan");
+  await consumeTaskOutput(handle, "design-review");
 }
 
 export async function recordCodingCompleted(
@@ -1022,6 +1159,9 @@ export async function recordCodingCompleted(
   await runSecurityReview(handle, outcome.allFiles);
   await recordQa(handle, outcome);
   await recordDeploymentTask(handle);
+  await consumeTaskOutput(handle, "security-review");
+  await consumeTaskOutput(handle, "verify");
+  await consumeTaskOutput(handle, "deployment-proposal");
   await finalizeState(handle);
   return summarizeReviews(handle);
 }
@@ -1043,24 +1183,32 @@ function summarizeReviews(handle: OrchestrationHandle): CodingReviewOutcome {
     .filter((finding) => finding.severity === "critical").length;
   const reviewCallsFailed = handle.tasks.filter(
     (task) =>
-      task.role !== "coding" &&
-      task.role !== "deployment" &&
-      typeof task.errorClass === "string" &&
-      task.errorClass.length > 0,
+      task.output?.data.modelReviewAvailable === false ||
+      (task.role !== "coding" &&
+        task.role !== "deployment" &&
+        typeof task.errorClass === "string" &&
+        task.errorClass.length > 0),
   ).length;
 
-  if (failed.length === 0 && criticalFindings === 0) return REVIEWS_PASSED;
+  const unavailableReviews = handle.tasks.filter(
+    (task) => task.output?.data.modelReviewAvailable === false,
+  );
+  if (failed.length === 0 && criticalFindings === 0 && reviewCallsFailed === 0) {
+    return REVIEWS_PASSED;
+  }
 
   return {
     reviewsPassed: false,
     reviewCallsFailed,
     criticalFindings,
-    failedTasks: failed.map((task) => ({
-      key: task.key,
-      title: task.title,
-      summary: (task.output?.summary ?? task.errorSummary ?? "The review did not complete.")
-        .slice(0, 300),
-    })),
+    failedTasks: [...failed, ...unavailableReviews]
+      .filter((task, index, all) => all.findIndex((candidate) => candidate.key === task.key) === index)
+      .map((task) => ({
+        key: task.key,
+        title: task.title,
+        summary: (task.output?.summary ?? task.errorSummary ?? "The review did not complete.")
+          .slice(0, 300),
+      })),
   };
 }
 
@@ -1098,6 +1246,9 @@ export async function recordCodingFailed(
     await runRepairDiagnosis(handle, failure);
     await persistUsage(handle);
   }
+  await skipTask(handle, "verify", "Coding failed; QA was not scheduled.");
+  await skipTask(handle, "security-review", "Coding failed; Security was not scheduled.");
+  await skipTask(handle, "deployment-proposal", "Coding failed; Deployment was not scheduled.");
   await safeWorkflowState(handle, "failed", {
     summary: redactSensitiveText(failure.message, 500),
     error_class: failure.errorClass,
@@ -1193,15 +1344,20 @@ async function runSecurityReview(
     ...modelFindings,
   ].filter((finding) => finding.severity === "critical");
   const findings = [...review.findings, ...modelFindings];
+  const deterministicFailed = review.verification.status === "failed" || critical.length > 0;
   const verificationStatus =
-    review.verification.status === "failed" || critical.length > 0
+    deterministicFailed
       ? "failed"
-      : review.verification.status;
+      : modelReviewFailed
+        ? "unavailable"
+        : review.verification.status;
   const output: AgentOutput = {
     taskKey: "security-review",
     role: "security",
-    status:
-      verificationStatus === "passed" && !modelReviewFailed ? "ok" : "failed",
+    /** The deterministic scan is the blocking security gate. A failed advisory
+     * model call remains visible as unavailable without turning a valid source
+     * into a failed generation; critical/static failures still block. */
+    status: deterministicFailed ? "failed" : "ok",
     summary: modelReviewFailed
       ? "The deterministic scan completed, but the model-backed security review did not return a valid result."
       : critical.length > 0
@@ -1211,6 +1367,7 @@ async function runSecurityReview(
       checks: review.verification.checks,
       evidence: review.verification.evidence,
       criticalFindings: critical.length,
+      modelReviewAvailable: !modelReviewFailed,
       runtime: runtimeEvidence
         ? {
             status: runtimeEvidence.status,
@@ -1220,12 +1377,14 @@ async function runSecurityReview(
         : null,
       modelReview: parsedReview?.ok
         ? {
+            modelReviewAvailable: true,
             summary: redactSensitiveText(parsedReview.value.summary, 1_000),
             risks: parsedReview.value.risks.map((risk) =>
               redactSensitiveText(risk, 500),
             ),
           }
         : {
+            modelReviewAvailable: false,
             error:
               parsedReview && parsedReview.ok === false
                 ? parsedReview.error
@@ -1405,13 +1564,13 @@ async function recordQa(handle: OrchestrationHandle, outcome: CodingOutcome): Pr
     taskKey: "verify",
     role: "qa",
     /**
-     * ⚠️ A RECORDED RUNTIME OR BUILD FAILURE IS NOT AN "ok" QA TASK. The
-     * advisory review may have completed, but the task's own verification
-     * failed, and reporting `ok` here would make the projection disagree with
-     * the check table.
+     * ⚠️ A RECORDED RUNTIME OR BUILD FAILURE IS NOT AN "ok" QA TASK. The model
+     * review is advisory, so its unavailable/malformed result remains visible
+     * without turning an otherwise valid generated source into a false build
+     * failure.
      */
     status:
-      outcome.allFiles.length === 0 || modelReviewFailed || runtimeFailed || buildFailed
+      outcome.allFiles.length === 0 || runtimeFailed || buildFailed
         ? "failed"
         : "ok",
     summary: modelReviewFailed
@@ -1427,6 +1586,7 @@ async function recordQa(handle: OrchestrationHandle, outcome: CodingOutcome): Pr
               : "No generated source was available to verify.",
     data: {
       checks,
+      modelReviewAvailable: !modelReviewFailed,
       /** Delegated only when no runtime session was observed at all. */
       delegated: !runtimeEvidence || runtimeEvidence.status === "unavailable",
       runtime: runtimeEvidence
@@ -1439,12 +1599,14 @@ async function recordQa(handle: OrchestrationHandle, outcome: CodingOutcome): Pr
         : null,
       modelReview: parsedReview?.ok
         ? {
+            modelReviewAvailable: true,
             summary: redactSensitiveText(parsedReview.value.summary, 1_000),
             risks: parsedReview.value.risks.map((risk) =>
               redactSensitiveText(risk, 500),
             ),
           }
         : {
+            modelReviewAvailable: false,
             error:
               parsedReview && parsedReview.ok === false
                 ? parsedReview.error
@@ -1526,10 +1688,20 @@ async function runRepairDiagnosis(
     handle.workflow.id,
     handle.projectId,
     [definition],
-    1,
+    0,
   );
   if (isWorkflowStoreFailure(ensured)) return;
   handle.tasks = ensured.data;
+
+  if (taskOf(handle, "repair")?.status === "skipped") {
+    const activated = await activateRepairTask(
+      handle.client,
+      handle.workflow.id,
+      handle.projectId,
+    );
+    if (isWorkflowStoreFailure(activated) || !activated.data) return;
+    replaceTask(handle, activated.data);
+  }
 
   const started = handle.now();
   const startedTask = await startTask(handle, "repair");
@@ -1667,7 +1839,29 @@ async function safeWorkflowState(
   if (!isWorkflowStoreFailure(updated) && updated.data) handle.workflow = updated.data;
 }
 
+async function skipTask(handle: OrchestrationHandle, key: string, reason: string): Promise<void> {
+  const task = taskOf(handle, key);
+  if (!task || task.status === "completed" || task.status === "failed" || task.status === "skipped" || task.status === "cancelled") {
+    return;
+  }
+  const updated = await transitionTask(handle.client, handle.workflow.id, handle.projectId, {
+    taskKey: key,
+    from: ["pending", "waiting_for_dependency", "queued"],
+    to: "skipped",
+    skipReason: reason,
+    errorSummary: null,
+    finishedAt: new Date(handle.now()).toISOString(),
+    durationMs: 0,
+  });
+  if (!isWorkflowStoreFailure(updated) && updated.data) replaceTask(handle, updated.data);
+}
+
 async function finalizeState(handle: OrchestrationHandle): Promise<void> {
+  await skipTask(
+    handle,
+    "repair",
+    "Repair is failure-dependent and was not triggered by this generation outcome.",
+  );
   const critical = handle.tasks
     .filter((task) => task.role === "security")
     .flatMap((task) => task.output?.findings ?? [])
@@ -1738,6 +1932,7 @@ export function toWorkflowView(
     repairAttempts: workflow.repair_attempts,
     reportedCostUsd: workflow.reported_cost_usd,
     costKnown: workflow.cost_known,
+    verification: deriveWorkflowVerification(tasks),
     tasks: tasks.map((task) => ({
       key: task.key,
       role: task.role,
@@ -1746,8 +1941,21 @@ export function toWorkflowView(
       status: task.status,
       dependsOn: task.dependsOn.map((dependency) => dependency.key),
       required: task.required,
+      scheduled: task.scheduled,
+      eligible: task.eligible,
+      eligibilityReason: task.eligibilityReason,
       attempt: task.attempt,
       maxAttempts: task.maxAttempts,
+      scheduledAt: task.scheduledAt,
+      scheduleReason: task.scheduleReason,
+      provider: task.provider,
+      model: task.model,
+      outputProduced: task.outputProduced,
+      outputConsumed: task.outputConsumed,
+      durationMs: task.durationMs,
+      skipReason: task.skipReason,
+      failureReason: task.failureReason,
+      retryCount: task.retryCount,
       summary: task.output?.summary ?? null,
       filesChanged: task.output?.filesChanged ?? [],
       findings: task.output?.findings ?? [],

@@ -46,7 +46,7 @@ function parseCohort(raw: string | undefined): ReadonlySet<string> | null {
 }
 
 export function readAwsFrontendHostingConfig(
-  env: NodeJS.ProcessEnv = process.env,
+  env: Partial<NodeJS.ProcessEnv> = process.env,
 ): AwsFrontendHostingConfig {
   const enabled = ENABLED_VALUES.has(
     (env.MAVLY_AWS_FRONTEND_HOSTING_ENABLED ?? "").trim().toLowerCase(),
@@ -99,7 +99,7 @@ export function readAwsFrontendHostingConfig(
 }
 
 export function isAwsFrontendHostingConfigured(
-  env: NodeJS.ProcessEnv = process.env,
+  env: Partial<NodeJS.ProcessEnv> = process.env,
 ): boolean {
   const config = readAwsFrontendHostingConfig(env);
   return config.enabled && config.problem === null;
@@ -107,7 +107,7 @@ export function isAwsFrontendHostingConfigured(
 
 export function isAwsFrontendHostingProject(
   projectId: string,
-  env: NodeJS.ProcessEnv = process.env,
+  env: Partial<NodeJS.ProcessEnv> = process.env,
 ): boolean {
   const config = readAwsFrontendHostingConfig(env);
   if (!config.enabled || config.problem !== null || !config.cohort) return false;
@@ -115,7 +115,7 @@ export function isAwsFrontendHostingProject(
 }
 
 export function describeAwsFrontendHostingConfig(
-  env: NodeJS.ProcessEnv = process.env,
+  env: Partial<NodeJS.ProcessEnv> = process.env,
 ): {
   configured: boolean;
   enabled: boolean;

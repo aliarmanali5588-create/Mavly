@@ -341,6 +341,7 @@ export async function savePaymentsIntegration(
 
   const saved = await savePaymentIntegration({
     projectId,
+    userId,
     provider: PAYMENT_PROVIDER,
     keyId: input.value.keyId,
     enabled: input.value.enabled,

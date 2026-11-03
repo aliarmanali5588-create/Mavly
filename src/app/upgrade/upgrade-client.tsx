@@ -1,12 +1,13 @@
 "use client";
 
-import React, { useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { ArrowLeft, Sparkles, CreditCard, ExternalLink, ShieldAlert } from "lucide-react";
 import {
   PricingSection,
   type PricingPlan,
+  formatINR,
 } from "@/components/home/PricingSection";
 import { AuthNav } from "@/components/auth/AuthNav";
 import { AnnouncementBanner } from "@/components/common/AnnouncementBanner";
@@ -19,6 +20,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { CheckoutButton } from "@/components/billing/CheckoutButton";
 
 interface UpgradeClientProps {
   profile: ProfileSummary | null;
@@ -134,12 +136,12 @@ export function UpgradeClient({ profile }: UpgradeClientProps) {
               <ShieldAlert className="w-5 h-5" />
             </div>
             <DialogTitle className="text-xl font-bold tracking-tight text-foreground">
-              Checkout Not Yet Configured
+              Secure checkout
             </DialogTitle>
             <DialogDescription className="text-xs sm:text-sm text-muted-foreground leading-relaxed pt-2">
-              Automated subscription checkout for the{" "}
-              <strong className="text-foreground">{selectedPlanForNotice?.name}</strong> plan is currently in development.
-              No payment provider is active on this deployment, and no charges have been made. Your account remains safely on the Free tier.
+              Your selected subscription is priced and routed by Mavly's verified billing profile. The provider confirms activation asynchronously; returning from checkout alone does not activate access. Selected plan: {" "}
+              <strong className="text-foreground">{selectedPlanForNotice?.name}</strong> plan.
+              No charge is created until the configured provider accepts the checkout request.
             </DialogDescription>
           </DialogHeader>
 
@@ -150,7 +152,7 @@ export function UpgradeClient({ profile }: UpgradeClientProps) {
             </div>
             <div className="flex justify-between font-medium">
               <span>Base Monthly Price:</span>
-              <span>₹{selectedPlanForNotice?.monthlyPrice} / month</span>
+               <span>{selectedPlanForNotice?.monthlyPrice === null ? "Unavailable" : `${formatINR(selectedPlanForNotice?.monthlyPrice ?? 0)} / month`}</span>
             </div>
             <p className="text-[11px] text-muted-foreground pt-1 border-t border-[var(--clay-line)]">
               To request early access or volume agency billing, please contact our team directly.
@@ -166,14 +168,13 @@ export function UpgradeClient({ profile }: UpgradeClientProps) {
             >
               Close
             </Button>
-            <Button asChild className="w-full sm:w-auto mavly-btn-primary text-xs py-2 px-4">
-              <a
-                href={`mailto:billing@mavly.xyz?subject=Mavly%20Plan%20Upgrade%20Inquiry%20-%20${encodeURIComponent(selectedPlanForNotice?.name || "")}`}
-              >
-                <span>Contact Sales</span>
-                <ExternalLink className="w-3 h-3 ml-1" />
-              </a>
-            </Button>
+            {selectedPlanForNotice && selectedPlanForNotice.id !== "free" ? (
+              <CheckoutButton productId={selectedPlanForNotice.id} subscription label="Start secure checkout" className="w-full sm:w-auto mavly-btn-primary text-xs py-2 px-4" />
+            ) : (
+              <Button asChild className="w-full sm:w-auto mavly-btn-primary text-xs py-2 px-4">
+                <a href="mailto:billing@mavly.xyz?subject=Mavly%20Plan%20Upgrade%20Inquiry"><span>Contact Sales</span><ExternalLink className="w-3 h-3 ml-1" /></a>
+              </Button>
+            )}
           </div>
         </DialogContent>
       </Dialog>

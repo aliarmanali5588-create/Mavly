@@ -27,10 +27,8 @@ export const dynamic = "force-dynamic";
  *      case `attemptsAvailable` is false and the UI says so instead of showing
  *      an empty table as if nothing had happened.
  *
- * ⚠️ NO COST IS COMPUTED HERE. The route does not multiply tokens by a price it
- * happens to know. `reported_cost_usd` is written only when the provider
- * reported a cost, and `cost_known` marks it; everything else is counted as
- * unknown. Zero and unknown are different answers and are never merged.
+ * ⚠️ NO COST IS COMPUTED HERE. The route exposes database-owned INR snapshots;
+ * an explicit conversion/rate-card path is required and unknown remains NULL.
  */
 
 interface RpcUsage {
@@ -55,7 +53,7 @@ export async function GET(request: NextRequest) {
 
   try {
     const { data, error } = await withTimeout(
-      auth.supabase.rpc("admin_ai_usage", {
+      auth.supabase.rpc("admin_ai_usage_inr", {
         p_period: period,
         p_model: model ? model : null,
         p_limit: limit,
@@ -70,7 +68,7 @@ export async function GET(request: NextRequest) {
         503,
         missing ? "AI_USAGE_SCHEMA_MISSING" : "AI_USAGE_UNAVAILABLE",
         missing
-          ? "The AI usage aggregate is not installed. Apply supabase/migrations/50_admin_console_backend.sql."
+           ? "The INR AI usage aggregate is not installed. Apply supabase/migrations/59_inr_billing_and_ai_costs.sql."
           : "AI usage could not be read."
       );
     }

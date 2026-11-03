@@ -34,6 +34,7 @@
 export const PUBLIC_API_PATHS: readonly string[] = [
   "/api/config",
   "/api/public/announcement",
+  "/api/billing/catalog",
 ];
 
 /**
@@ -57,6 +58,7 @@ export const PUBLIC_API_PATHS: readonly string[] = [
 export const PUBLIC_API_PREFIXES: readonly string[] = [
   "/api/app/v1/",
   "/api/integrations/webhooks/",
+  "/api/billing/webhooks/",
 ];
 
 /** True for an exact public path or a documented public prefix. */

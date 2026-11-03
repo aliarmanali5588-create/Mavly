@@ -109,6 +109,7 @@ import {
 import { verifyCheckpointBatches } from "./checkpoints";
 import {
   beginOrchestration,
+  markSpecialistOutputsConsumed,
   markCodingStarted,
   POST_CODING_REVIEW_RESERVE_MS,
   recordCodingCompleted,
@@ -209,6 +210,14 @@ import {
   configureManagedBackend,
   ensureManagedBackend,
 } from "@/lib/managed-backend/service";
+
+/**
+ * The specialist layer is advisory; the Coding role is the work that must
+ * still receive a real window in the same durable run. This reserve is applied
+ * only to the opt-in pre-coding workflow and is never added to the run budget.
+ */
+const ORCHESTRATION_CODING_RESERVE_MS = 120_000;
+const MIN_ORCHESTRATION_WINDOW_MS = 30_000;
 
 /**
  * Present only when the durable worker claimed this run. The worker has no user
@@ -1240,25 +1249,46 @@ async function execute(
   }
 
   let orchestration: OrchestrationHandle | null = null;
+  const orchestrationRemainingMs = remainingRunMs(guard.budget, Date.now());
+  const orchestrationWindowMs =
+    orchestrationRemainingMs - ORCHESTRATION_CODING_RESERVE_MS;
+  const multiAgent = multiAgentConfig();
+  const orchestrationEligible =
+    !!input.worker && isProjectInMultiAgentCohort(input.projectId, multiAgent);
   try {
-    orchestration = input.worker
-      ? await beginOrchestration({
-          client: guard.client,
-          userId: input.userId,
-          projectId: input.projectId,
-          runId,
-          prompt: input.prompt,
-          projectType,
-          mode,
-          existingFiles: before,
-          requestedModel: input.requestedModel,
-          leaseToken: input.worker.leaseToken,
-          trackProviderUsage: guard.trackProviderUsage,
-          runtimeEvidence: runtimeEvidenceProvider,
-          projectRules,
-          backendAgentContext: backendContext,
-        })
-      : null;
+    if (
+      orchestrationEligible &&
+      orchestrationWindowMs >= MIN_ORCHESTRATION_WINDOW_MS
+    ) {
+      orchestration = await beginOrchestration({
+        client: guard.client,
+        userId: input.userId,
+        projectId: input.projectId,
+        runId,
+        prompt: input.prompt,
+        projectType,
+        mode,
+        existingFiles: before,
+        requestedModel: input.requestedModel,
+        maxWallClockMs:
+          orchestrationRemainingMs + POST_CODING_REVIEW_RESERVE_MS,
+        preCodingMaxWallClockMs: orchestrationWindowMs,
+        leaseToken: input.worker.leaseToken,
+        trackProviderUsage: guard.trackProviderUsage,
+        runtimeEvidence: runtimeEvidenceProvider,
+        projectRules,
+        backendAgentContext: backendContext,
+      });
+    } else if (orchestrationEligible) {
+      emitGenerationEvent("orchestration.skipped", {
+        traceId: guard.traceId,
+        runId,
+        projectId: input.projectId,
+        workerId: guard.workerId,
+        reason: "insufficient_shared_budget",
+        dispatchMode: "worker",
+      });
+    }
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
     console.warn(`[mavly] run ${runId}: orchestration setup failed:`, detail);
@@ -1744,11 +1774,39 @@ async function execute(
   let imageStageSummary: string | null = null;
   let imageStageAttempted = false;
 
+  /**
+   * Keep every planned placement explicit when the image stage cannot produce
+   * an asset. Without this fallback the Coding prompt would contain no ready
+   * URL and no unavailable placement, which invites the model to invent a
+   * remote image URL. A pending placement is a layout placeholder, never a
+   * generated asset.
+   */
+  const markImagePlacementsUnavailable = (
+    manifest: AgentManifest,
+    reason: "deferred" | "failed" | "pending",
+  ): void => {
+    if (!generationInput || !manifest.images || manifest.images.length === 0) return;
+    generationInput.imageAssets = [];
+    generationInput.imagePending = manifest.images.map((asset) => ({
+      assetId: asset.assetId,
+      pagePath: asset.pagePath,
+      purpose: asset.purpose,
+      alt: asset.alt,
+      reason,
+    }));
+    generationInput.imagePlanCounts = {
+      siteType: manifest.imageSiteType ?? "other",
+      approved: 0,
+      deferred: reason === "deferred" ? manifest.images.length : 0,
+    };
+  };
+
   const prepareImageStage = async (manifest: AgentManifest): Promise<void> => {
     if (projectType !== "website" || imageStageAttempted) return;
     imageStageAttempted = true;
 
     if (manifest.imagePlanIssue) {
+      markImagePlacementsUnavailable(manifest, "failed");
       imageStageSummary = `The planner proposed an image plan Mavly rejected (${manifest.imagePlanIssue}). No images were generated for this run.`;
       emitGenerationEvent("image.plan", {
         traceId: guard.traceId,
@@ -1773,6 +1831,7 @@ async function execute(
       providerConfigured: isAiConfigured(),
     });
     if (!policy.enabled) {
+      markImagePlacementsUnavailable(manifest, "pending");
       imageStageSummary = `Image generation is not enabled for this run (${policy.disabledReason ?? "disabled"}): no images were generated and the plan's imagery is not available.`;
       emitGenerationEvent("image.plan", {
         traceId: guard.traceId,
@@ -1791,6 +1850,7 @@ async function execute(
       images: manifest.images,
     });
     if (!validated.ok) {
+      markImagePlacementsUnavailable(manifest, "failed");
       imageStageSummary = `The saved image plan could not be re-validated (${(validated as { error: string }).error}). No images were generated for this run.`;
       return;
     }
@@ -1807,6 +1867,7 @@ async function execute(
     });
 
     if (stageBudgetMs <= 0) {
+      markImagePlacementsUnavailable(manifest, "pending");
       imageStageSummary = `The run's remaining time was too short to generate the ${validated.plan.images.length} planned image(s); no images were generated for this run.`;
       emitGenerationEvent("image.stage", {
         traceId: guard.traceId,
@@ -1837,10 +1898,17 @@ async function execute(
         error instanceof Error ? error.message : String(error),
       );
       imageStageSummary = `The image stage could not run (${error instanceof Error ? error.message.slice(0, 160) : "unknown error"}). The pages use placeholders for the planned imagery.`;
+      markImagePlacementsUnavailable(manifest, "failed");
       return;
     }
 
     const approved = result.counts.approved;
+    if (result.references.length === 0 && result.pending.length === 0 && manifest.images.length > 0) {
+      markImagePlacementsUnavailable(
+        manifest,
+        result.status === "failed" || result.status === "persist_failed" ? "failed" : "pending",
+      );
+    }
     if (approved > 0) {
       imageStageSummary =
         result.status === "completed"
@@ -2137,6 +2205,9 @@ async function execute(
    */
   const generationBudgetMs = Math.max(0, remainingRunMs(guard.budget, Date.now()));
   const repairContext = priorRepairContext(orchestration, resumeManifest);
+  if (orchestration && repairContext) {
+    await markSpecialistOutputsConsumed(orchestration, ["repair"]);
+  }
   /**
    * A failed live sandbox is real runtime evidence for the coding context. It is
    * read from the durable session only; this never starts a sandbox, and the

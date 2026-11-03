@@ -16,6 +16,7 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 import { SUPABASE_ANON_KEY, SUPABASE_URL, isValidSupabaseUrl } from "@/lib/supabase/config";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { createSupabaseBillingClient } from "@/lib/supabase/worker";
 import type { PaymentStatus } from "./types";
 
 export interface IntegrationRow {
@@ -245,6 +246,7 @@ export async function readOwnerPaymentCredentials(
 
 export async function savePaymentIntegration(input: {
   projectId: string;
+  userId: string;
   provider: string;
   keyId: string;
   enabled: boolean;
@@ -260,11 +262,12 @@ export async function savePaymentIntegration(input: {
     created: boolean;
   }>
 > {
-  const supabase = await ownerClient();
+  const supabase = createSupabaseBillingClient();
   if (!supabase) return failure("unavailable", "Supabase is not configured.");
 
-  const { data, error } = await supabase.rpc("save_payment_integration", {
+  const { data, error } = await supabase.rpc("save_payment_integration_server", {
     p_project_id: input.projectId,
+    p_user_id: input.userId,
     p_provider: input.provider,
     p_key_id: input.keyId,
     p_enabled: input.enabled,

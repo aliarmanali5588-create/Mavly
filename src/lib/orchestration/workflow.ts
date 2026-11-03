@@ -11,7 +11,8 @@
  * The SQL layer stores the result; it does not invent a state. The orchestrator
  * validates every transition through these helpers before it writes, so a
  * duplicate queue delivery cannot re-run a completed task or finalize a
- * cancelled workflow.
+ * cancelled workflow. The only conditional reactivation is the explicit
+ * failure-only Repair role, which is fenced separately by the worker store.
  */
 
 import {
@@ -26,6 +27,8 @@ import {
   type TaskComplexity,
   type TaskDependency,
   type WorkflowState,
+  type WorkflowEvidenceStatus,
+  type WorkflowVerificationView,
 } from "./contracts";
 
 // ── Workflow transitions ────────────────────────────────────────────────────
@@ -179,6 +182,22 @@ export function tasksForComplexity(
   complexity: TaskComplexity,
   options: { repairEnabled: boolean } = { repairEnabled: false },
 ): AgentTaskDefinition[] {
+  return allRoleTaskDefinitionsForComplexity(complexity, options).filter(
+    (task) => task.eligible,
+  );
+}
+
+/**
+ * Return one definition for every locked role. Ineligible roles are retained so
+ * the durable workflow can record an explicit skip instead of making an absent
+ * row look like an agent that silently ran elsewhere.
+ */
+export function allRoleTaskDefinitionsForComplexity(
+  complexity: TaskComplexity,
+  options: { repairEnabled: boolean } = { repairEnabled: false },
+): AgentTaskDefinition[] {
+  const planningEligible = complexity !== "simple";
+
   const plan: AgentTaskDefinition = {
     key: "plan",
     role: "planner",
@@ -188,6 +207,10 @@ export function tasksForComplexity(
     writesFiles: false,
     required: true,
     maxAttempts: 2,
+    eligible: planningEligible,
+    eligibilityReason: planningEligible
+      ? "complexity_requires_planning"
+      : "complexity_gate_simple_request",
   };
 
   const design: AgentTaskDefinition = {
@@ -199,6 +222,10 @@ export function tasksForComplexity(
     writesFiles: false,
     required: false,
     maxAttempts: 2,
+    eligible: planningEligible,
+    eligibilityReason: planningEligible
+      ? "complexity_requires_design_review"
+      : "complexity_gate_simple_request",
   };
 
   const implement: AgentTaskDefinition = {
@@ -216,6 +243,8 @@ export function tasksForComplexity(
     writesFiles: true,
     required: true,
     maxAttempts: 1,
+    eligible: true,
+    eligibilityReason: "mandatory_source_generation",
   };
 
   const verify: AgentTaskDefinition = {
@@ -227,6 +256,8 @@ export function tasksForComplexity(
     writesFiles: false,
     required: true,
     maxAttempts: 1,
+    eligible: true,
+    eligibilityReason: "verification_policy",
   };
 
   const security: AgentTaskDefinition = {
@@ -238,6 +269,8 @@ export function tasksForComplexity(
     writesFiles: false,
     required: true,
     maxAttempts: 1,
+    eligible: true,
+    eligibilityReason: "security_policy",
   };
 
   const deployment: AgentTaskDefinition = {
@@ -252,19 +285,19 @@ export function tasksForComplexity(
     writesFiles: false,
     required: false,
     maxAttempts: 1,
+    eligible: planningEligible,
+    eligibilityReason: planningEligible
+      ? "owner_authorization_stage"
+      : "complexity_gate_simple_request",
   };
 
-  /**
-   * ⚠️ A SIMPLE EDIT DOES NOT PAY FOR A FULL PLANNING PASS. The planner and the
-   * design review exist for new builds and structural changes; a copy/colour/
-   * single-component edit goes straight to Coding, then QA and Security. The
-   * existing manifest planner inside `generateApp` still selects the exact files.
-   */
-  const tasks: AgentTaskDefinition[] = [];
-  if (complexity !== "simple") tasks.push(plan, design);
-  tasks.push(implement, verify, security);
-  if (complexity !== "simple") tasks.push(deployment);
-  return tasks.filter((task) => task.kind !== "repair" || options.repairEnabled);
+  const repair = repairTaskDefinition(1);
+  repair.eligible = options.repairEnabled;
+  repair.eligibilityReason = options.repairEnabled
+    ? "failure_only"
+    : "repair_disabled";
+
+  return [plan, design, implement, verify, security, repair, deployment];
 }
 
 /**
@@ -282,6 +315,8 @@ export function repairTaskDefinition(maxAttempts = 1): AgentTaskDefinition {
     writesFiles: false,
     required: false,
     maxAttempts: Math.max(1, Math.min(2, Math.floor(maxAttempts))),
+    eligible: true,
+    eligibilityReason: "failure_only",
   };
 }
 
@@ -522,6 +557,103 @@ export function normalizeAgentOutput(output: AgentOutput): AgentOutput {
         : {}),
     })),
     data: boundedRecord(output.data),
+  };
+}
+
+function checkStatus(
+  task: AgentTask | undefined,
+  ids: readonly string[],
+): WorkflowEvidenceStatus {
+  if (!task) return "not_started";
+  if (task.status === "failed" || task.status === "cancelled") return "failed";
+  if (task.status === "skipped") return "skipped";
+  const checks = task.output?.verification?.checks ?? [];
+  const check = checks.find((entry) => ids.includes(entry.id));
+  return check?.status ?? (task.status === "completed" ? "unavailable" : "pending");
+}
+
+/**
+ * Project the independently observed milestones without upgrading one kind of
+ * evidence into another. A generated source file is not a build, a readiness
+ * response is not a browser render, and a proposal is not a deployment.
+ */
+export function deriveWorkflowVerification(
+  tasks: readonly AgentTask[],
+): WorkflowVerificationView {
+  const coding = tasks.find((task) => task.key === "implement");
+  const qa = tasks.find((task) => task.key === "verify");
+  const security = tasks.find((task) => task.key === "security-review");
+  const deployment = tasks.find((task) => task.key === "deployment-proposal");
+
+  const generated: WorkflowEvidenceStatus = !coding
+    ? "not_started"
+    : coding.status === "completed" && coding.output?.status === "ok"
+      ? "passed"
+      : coding.status === "failed" || coding.status === "cancelled"
+        ? "failed"
+        : coding.status === "skipped"
+          ? "skipped"
+          : "pending";
+
+  const structuralChecks = qa?.output?.verification?.checks ?? [];
+  const sourceCheck = structuralChecks.find((entry) => entry.id === "source-present");
+  const entryCheck = structuralChecks.find((entry) => entry.id === "static-entry");
+  const structurallyValid: WorkflowEvidenceStatus = !qa
+    ? "not_started"
+    : qa.status === "failed" || qa.status === "cancelled"
+      ? "failed"
+      : sourceCheck?.status === "failed" || entryCheck?.status === "failed"
+        ? "failed"
+        : sourceCheck?.status === "passed" &&
+            (entryCheck?.status === "passed" || entryCheck?.status === "skipped")
+          ? "passed"
+          : qa.status === "completed"
+            ? "unavailable"
+            : qa.status === "skipped"
+              ? "skipped"
+              : "pending";
+
+  const compiled = checkStatus(qa, ["build", "runtime-build"]);
+  const rendered = checkStatus(qa, ["rendered", "browser-render", "application-render"]);
+  const functionallyVerified = checkStatus(qa, [
+    "functional",
+    "functional-verification",
+    "interaction-check",
+  ]);
+  const securityReviewed: WorkflowEvidenceStatus = !security
+    ? "not_started"
+    : security.status === "failed" || security.status === "cancelled"
+      ? "failed"
+      : security.status === "skipped"
+        ? "skipped"
+        : security.output?.verification?.status ??
+          (security.status === "completed" ? "unavailable" : "pending");
+  const deploymentVerified: WorkflowEvidenceStatus = !deployment
+    ? "not_started"
+    : deployment.status === "failed" || deployment.status === "cancelled"
+      ? "failed"
+      : deployment.output?.data.deploymentVerified === true
+        ? "passed"
+        : deployment.status === "skipped"
+          ? "skipped"
+          : "not_started";
+
+  return {
+    generated,
+    structurallyValid,
+    compiled,
+    rendered,
+    functionallyVerified,
+    securityReviewed,
+    deploymentVerified,
+    fullyVerified: [
+      generated,
+      structurallyValid,
+      compiled,
+      rendered,
+      functionallyVerified,
+      securityReviewed,
+    ].every((status) => status === "passed"),
   };
 }
 

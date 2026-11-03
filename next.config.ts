@@ -62,6 +62,56 @@ const nextConfig: NextConfig = {
           { key: "Expires", value: "0" },
         ],
       },
+      /**
+       * ═══ PUBLIC DISCOVERY LINK HEADERS ═══════════════════════════════════
+       *
+       * `Link: <…>; rel="sitemap"` advertises the sitemap on the response itself,
+       * so a crawler or agent that fetched a page without reading robots.txt
+       * still learns where the map is. This is the Cloudflare Agent Readiness
+       * "give agents a website map" signal, alongside robots.txt and the
+       * sitemap file itself.
+       *
+       * ⚠️ SCOPED TO PUBLIC MARKETING PATHS, NOT `/:path*`. A `Link` header on
+       * `/api/*` or on an authenticated page would advertise a discovery
+       * resource from a response that is neither public nor cacheable, and it
+       * would be duplicated onto every per-user payload for no benefit. The
+       * requirements say "no unnecessary headers on private API responses";
+       * the narrow matcher is how that is honoured rather than asserted.
+       *
+       * ⚠️ THE SITEMAP IS NOT THE ONLY LINK. `rel="llms-txt"` is a
+       * non-registered relation type (there is no IANA registration for it), so
+       * it is emitted as a plain `rel` string that consumers may ignore. It is
+       * additive: it cannot break a client that does not know it.
+       *
+       * ⚠️ ONE VALUE PER HEADER, COMMA-SEPARATED. Emitting the `Link` key twice
+       * in this array produces two separate `Link` headers, which is legal but
+       * makes de-duplication the client's problem. A single combined value is
+       * unambiguous and cannot be duplicated by the matcher.
+       *
+       * ⚠️ THIS DOES NOT TOUCH CACHING. It adds a response header only; the
+       * `Cache-Control` rules above (and Cloudflare's own edge behaviour) are
+       * unchanged.
+       */
+      {
+        source: "/",
+        headers: [
+          {
+            key: "Link",
+            value:
+              '</sitemap.xml>; rel="sitemap", </llms.txt>; rel="llms-txt", </auth.md>; rel="authorization"',
+          },
+        ],
+      },
+      {
+        source: "/:page((?!api/|dashboard|project/|adminsh|login|auth/|upgrade|credit-topup|account-restricted).*)",
+        headers: [
+          {
+            key: "Link",
+            value:
+              '</sitemap.xml>; rel="sitemap", </llms.txt>; rel="llms-txt", </auth.md>; rel="authorization"',
+          },
+        ],
+      },
     ];
   },
 };

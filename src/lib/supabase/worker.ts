@@ -68,7 +68,7 @@ function isServiceRoleConfigured(): boolean {
  * new-format API keys (sb_secret_..., sb_publishable_...).
  */
 function createServiceRoleClient(
-  actor: "generation-worker" | "credit-accounting" | "account-administration"
+  actor: "generation-worker" | "credit-accounting" | "billing-accounting" | "account-administration"
 ): SupabaseClient | null {
   if (!isServiceRoleConfigured()) return null;
 
@@ -94,6 +94,11 @@ export function createSupabaseWorkerClient(): SupabaseClient | null {
 /** Used only by the server-side credit RPC wrappers; never expose to a client. */
 export function createSupabaseCreditClient(): SupabaseClient | null {
   return createServiceRoleClient("credit-accounting");
+}
+
+/** Used only by signed platform-billing webhooks and the billing worker path. */
+export function createSupabaseBillingClient(): SupabaseClient | null {
+  return createServiceRoleClient("billing-accounting");
 }
 
 /**

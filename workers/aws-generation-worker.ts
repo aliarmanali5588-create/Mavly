@@ -2,6 +2,7 @@ import {
   runGenerationWorkerOnce,
   type WorkerTickResult,
 } from "../src/lib/generation/worker";
+import { runBillingReconciliationOnce } from "../src/lib/billing/reconciliation";
 
 const WORKER_ID = "aws-generation-worker";
 const IDLE_POLL_INTERVAL_MS = 5_000;
@@ -93,6 +94,7 @@ async function run(): Promise<void> {
 
     try {
       result = await runGenerationWorkerOnce();
+      await runBillingReconciliationOnce();
     } catch (error) {
       console.error(
         "[aws-generation-worker] tick threw",

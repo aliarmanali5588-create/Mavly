@@ -1,4 +1,7 @@
 import type { Metadata } from "next";
+import { canonicalFor } from "@/lib/seo/site";
+import { JsonLd } from "@/components/seo/JsonLd";
+import { breadcrumbSchema } from "@/lib/seo/structured-data";
 import Link from "next/link";
 import {
   Sparkles,
@@ -13,6 +16,9 @@ import {
 import { MarketingPageShell } from "@/components/common/MarketingPageShell";
 
 export const metadata: Metadata = {
+  alternates: {
+    canonical: canonicalFor("/changelog"),
+  },
   title: "Changelog — Mavly AI Website Builder",
   description:
     "What’s changing in Mavly. Follow shipped improvements, fixes, and architectural updates to the website-building platform.",
@@ -82,79 +88,83 @@ const RELEASES: ChangelogRelease[] = [
 
 export default function ChangelogPage() {
   return (
-    <MarketingPageShell>
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-16">
-        {/* Hero */}
-        <div className="max-w-3xl mx-auto text-center space-y-4 pt-6 sm:pt-12">
-          <div className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-muted-foreground bg-[var(--clay-sunken)] px-3 py-1 rounded-full border border-[var(--clay-line)]">
-            <GitCommit className="w-3.5 h-3.5 text-foreground" />
-            <span>PRODUCT UPDATES</span>
+    <>
+      {/* Breadcrumb trail for this nested public page. */}
+      <JsonLd data={breadcrumbSchema([{ name: "Home", path: "/" }, { name: "Changelog", path: "/changelog" }])} />
+      <MarketingPageShell>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-16">
+          {/* Hero */}
+          <div className="max-w-3xl mx-auto text-center space-y-4 pt-6 sm:pt-12">
+            <div className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-muted-foreground bg-[var(--clay-sunken)] px-3 py-1 rounded-full border border-[var(--clay-line)]">
+              <GitCommit className="w-3.5 h-3.5 text-foreground" />
+              <span>PRODUCT UPDATES</span>
+            </div>
+
+            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight text-foreground leading-[1.1]">
+              What’s changing in Mavly.
+            </h1>
+
+            <p className="text-base sm:text-lg text-muted-foreground leading-relaxed font-normal max-w-2xl mx-auto">
+              Follow shipped improvements, fixes, and changes to the website-building experience.
+            </p>
           </div>
 
-          <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight text-foreground leading-[1.1]">
-            What’s changing in Mavly.
-          </h1>
+          {/* Releases Timeline */}
+          <div className="max-w-3xl mx-auto space-y-12">
+            {RELEASES.map((rel) => (
+              <div
+                key={rel.version}
+                className="p-8 rounded-3xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)] space-y-6"
+              >
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-[var(--clay-line)] pb-4">
+                  <div className="flex items-center gap-3">
+                    <span className="font-mono text-xs font-bold px-2.5 py-1 rounded-lg bg-black text-white shadow-[var(--clay-elev-ink-1)]">
+                      {rel.version}
+                    </span>
+                    <span className="text-xs text-muted-foreground font-medium">
+                      {rel.date}
+                    </span>
+                  </div>
 
-          <p className="text-base sm:text-lg text-muted-foreground leading-relaxed font-normal max-w-2xl mx-auto">
-            Follow shipped improvements, fixes, and changes to the website-building experience.
-          </p>
-        </div>
-
-        {/* Releases Timeline */}
-        <div className="max-w-3xl mx-auto space-y-12">
-          {RELEASES.map((rel) => (
-            <div
-              key={rel.version}
-              className="p-8 rounded-3xl bg-card border border-[var(--clay-line)] shadow-[var(--clay-elev-2)] space-y-6"
-            >
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-[var(--clay-line)] pb-4">
-                <div className="flex items-center gap-3">
-                  <span className="font-mono text-xs font-bold px-2.5 py-1 rounded-lg bg-black text-white shadow-[var(--clay-elev-ink-1)]">
-                    {rel.version}
-                  </span>
-                  <span className="text-xs text-muted-foreground font-medium">
-                    {rel.date}
+                  <span
+                    className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full self-start sm:self-auto ${
+                      rel.status === "Shipped"
+                        ? "bg-success-subtle text-success-subtle-foreground border border-success/25"
+                        : "bg-[var(--clay-sunken)] text-foreground border border-[var(--clay-line)]"
+                    }`}
+                  >
+                    {rel.status}
                   </span>
                 </div>
 
-                <span
-                  className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full self-start sm:self-auto ${
-                    rel.status === "Shipped"
-                      ? "bg-success-subtle text-success-subtle-foreground border border-success/25"
-                      : "bg-[var(--clay-sunken)] text-foreground border border-[var(--clay-line)]"
-                  }`}
-                >
-                  {rel.status}
-                </span>
-              </div>
+                <div>
+                  <h2 className="text-xl font-bold text-foreground">{rel.headline}</h2>
+                </div>
 
-              <div>
-                <h2 className="text-xl font-bold text-foreground">{rel.headline}</h2>
-              </div>
+                <ul className="space-y-3 text-xs sm:text-sm text-foreground">
+                  {rel.highlights.map((item, idx) => (
+                    <li key={idx} className="flex items-start gap-2.5 leading-relaxed">
+                      <CheckCircle2 className="w-4 h-4 text-success shrink-0 mt-0.5" />
+                      <span>{item}</span>
+                    </li>
+                  ))}
+                </ul>
 
-              <ul className="space-y-3 text-xs sm:text-sm text-foreground">
-                {rel.highlights.map((item, idx) => (
-                  <li key={idx} className="flex items-start gap-2.5 leading-relaxed">
-                    <CheckCircle2 className="w-4 h-4 text-success shrink-0 mt-0.5" />
-                    <span>{item}</span>
-                  </li>
-                ))}
-              </ul>
-
-              <div className="pt-2 flex items-center justify-between text-xs text-muted-foreground">
-                <span>Verified in repository codebase</span>
-                <Link
-                  href="/docs"
-                  className="font-semibold text-black hover:underline inline-flex items-center gap-1"
-                >
-                  <span>Related Documentation</span>
-                  <ArrowRight className="w-3 h-3" />
-                </Link>
+                <div className="pt-2 flex items-center justify-between text-xs text-muted-foreground">
+                  <span>Verified in repository codebase</span>
+                  <Link
+                    href="/docs"
+                    className="font-semibold text-black hover:underline inline-flex items-center gap-1"
+                  >
+                    <span>Related Documentation</span>
+                    <ArrowRight className="w-3 h-3" />
+                  </Link>
+                </div>
               </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
-      </div>
-    </MarketingPageShell>
+      </MarketingPageShell>
+    </>
   );
 }

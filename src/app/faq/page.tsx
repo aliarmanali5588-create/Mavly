@@ -127,7 +127,7 @@ const FAQS: FaqItem[] = [
     id: "faq-16",
     category: "Plans & Credits",
     question: "Where can I see plans and prices?",
-    answer: "Visit our dedicated Pricing page to compare Free, Starter (₹399/mo), Creator (₹599/mo), Pro (₹1,999/mo), and Agency tiers.",
+    answer: "Visit our dedicated Pricing page to compare the available Free, Starter, Creator, Pro, and Agency tiers. Paid prices are loaded from the approved billing catalog.",
     relatedLink: { label: "View Pricing Plans", href: "/pricing" },
   },
   {

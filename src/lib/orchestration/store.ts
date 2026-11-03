@@ -55,7 +55,7 @@ const WORKFLOW_COLUMNS =
   "id,project_id,run_id,user_id,state,complexity,prompt_excerpt,plan_context,design_directives,summary,error_class,provider_calls,repair_attempts,reported_cost_usd,cost_known,started_at,finished_at,created_at,updated_at";
 
 const TASK_COLUMNS =
-  "id,workflow_id,project_id,task_key,role,kind,title,status,depends_on,writes_files,required,max_attempts,attempt,idempotency_key,output,error_class,error_summary,started_at,finished_at,created_at,updated_at";
+  "id,workflow_id,project_id,task_key,role,kind,title,status,depends_on,writes_files,required,max_attempts,attempt,idempotency_key,output,error_class,error_summary,eligible,eligibility_reason,scheduled,scheduled_at,schedule_reason,started_at,finished_at,provider,model,output_produced,output_consumed,duration_ms,skip_reason,failure_reason,retry_count,created_at,updated_at";
 
 function failure(code: WorkflowStoreCode, error: string): WorkflowStoreFailure {
   return { ok: false, code, error };
@@ -73,7 +73,7 @@ function mapError(scope: string, error: { code?: string; message?: string } | nu
   ) {
     return failure(
       "migration_required",
-      "Multi-agent workflow storage is not installed. Apply supabase/migrations/29_multi_agent_orchestration.sql.",
+      "Multi-agent workflow storage is not installed or is missing lifecycle metadata. Apply migrations 29_multi_agent_orchestration.sql and 58_multi_agent_lifecycle_observability.sql.",
     );
   }
   if (code === "28000" || code === "42501") {
@@ -102,6 +102,10 @@ function taskFromRow(row: Record<string, unknown>): AgentTask {
     row.output && typeof row.output === "object" && !Array.isArray(row.output)
       ? (row.output as AgentOutput)
       : null;
+  const parsedDurationMs =
+    row.duration_ms === null || row.duration_ms === undefined
+      ? null
+      : Number(row.duration_ms);
 
   return {
     id: String(row.id),
@@ -120,8 +124,33 @@ function taskFromRow(row: Record<string, unknown>): AgentTask {
     output,
     errorClass: typeof row.error_class === "string" ? row.error_class : null,
     errorSummary: typeof row.error_summary === "string" ? row.error_summary : null,
+    eligible: row.eligible !== false,
+    eligibilityReason:
+      typeof row.eligibility_reason === "string"
+        ? row.eligibility_reason
+        : "legacy_workflow_record",
+    scheduledAt: typeof row.scheduled_at === "string" ? row.scheduled_at : null,
+    scheduled:
+      row.scheduled === true ||
+      typeof row.scheduled_at === "string" ||
+      row.status === "queued" ||
+      row.status === "running" ||
+      row.status === "completed" ||
+      row.status === "failed",
+    scheduleReason: typeof row.schedule_reason === "string" ? row.schedule_reason : null,
     startedAt: typeof row.started_at === "string" ? row.started_at : null,
     finishedAt: typeof row.finished_at === "string" ? row.finished_at : null,
+    provider: typeof row.provider === "string" ? row.provider : null,
+    model: typeof row.model === "string" ? row.model : null,
+    outputProduced: row.output_produced === true || output !== null,
+    outputConsumed: row.output_consumed === true,
+    durationMs:
+      parsedDurationMs !== null && Number.isFinite(parsedDurationMs)
+        ? parsedDurationMs
+        : null,
+    skipReason: typeof row.skip_reason === "string" ? row.skip_reason : null,
+    failureReason: typeof row.failure_reason === "string" ? row.failure_reason : null,
+    retryCount: Number(row.retry_count ?? 0),
   };
 }
 
@@ -315,7 +344,28 @@ export async function ensureTasks(
     attempt,
     idempotency_key: `${workflowId}:${definition.key}:${attempt}`,
     output: null,
+    eligible: definition.eligible,
+    eligibility_reason: definition.eligibilityReason.slice(0, 200),
+    scheduled: false,
+    scheduled_at: null,
+    schedule_reason: definition.eligible ? null : definition.eligibilityReason.slice(0, 200),
+    started_at: null,
+    finished_at: null,
+    output_produced: false,
+    output_consumed: false,
+    duration_ms: null,
+    skip_reason: null,
+    failure_reason: null,
+    retry_count: 0,
   }));
+
+  for (const row of rows) {
+    if (row.eligible === false) {
+      row.status = "skipped";
+      row.skip_reason = row.eligibility_reason;
+      row.finished_at = new Date().toISOString();
+    }
+  }
 
   const { error } = await client
     .from("agent_tasks")
@@ -350,6 +400,19 @@ export interface TaskTransition {
   errorSummary?: string | null;
   startedAt?: string | null;
   finishedAt?: string | null;
+  eligible?: boolean;
+  eligibilityReason?: string | null;
+  scheduledAt?: string | null;
+  scheduleReason?: string | null;
+  provider?: string | null;
+  model?: string | null;
+  outputProduced?: boolean;
+  outputConsumed?: boolean;
+  durationMs?: number | null;
+  skipReason?: string | null;
+  failureReason?: string | null;
+  retryCount?: number;
+  scheduled?: boolean;
 }
 
 export async function transitionTask(
@@ -368,6 +431,21 @@ export async function transitionTask(
   if (transition.errorSummary !== undefined) patch.error_summary = transition.errorSummary;
   if (transition.startedAt !== undefined) patch.started_at = transition.startedAt;
   if (transition.finishedAt !== undefined) patch.finished_at = transition.finishedAt;
+  if (transition.eligible !== undefined) patch.eligible = transition.eligible;
+  if (transition.eligibilityReason !== undefined) {
+    patch.eligibility_reason = transition.eligibilityReason;
+  }
+  if (transition.scheduledAt !== undefined) patch.scheduled_at = transition.scheduledAt;
+  if (transition.scheduleReason !== undefined) patch.schedule_reason = transition.scheduleReason;
+  if (transition.scheduled !== undefined) patch.scheduled = transition.scheduled;
+  if (transition.provider !== undefined) patch.provider = transition.provider;
+  if (transition.model !== undefined) patch.model = transition.model;
+  if (transition.outputProduced !== undefined) patch.output_produced = transition.outputProduced;
+  if (transition.outputConsumed !== undefined) patch.output_consumed = transition.outputConsumed;
+  if (transition.durationMs !== undefined) patch.duration_ms = transition.durationMs;
+  if (transition.skipReason !== undefined) patch.skip_reason = transition.skipReason;
+  if (transition.failureReason !== undefined) patch.failure_reason = transition.failureReason;
+  if (transition.retryCount !== undefined) patch.retry_count = transition.retryCount;
 
   const { data, error } = await client
     .from("agent_tasks")
@@ -379,6 +457,62 @@ export async function transitionTask(
     .select(TASK_COLUMNS)
     .maybeSingle();
   if (error) return mapError("transition task", error);
+  return {
+    ok: true,
+    data: data ? taskFromRow(data as Record<string, unknown>) : null,
+  };
+}
+
+/** Mark a persisted role result as consumed by a downstream stage. */
+export async function markTaskOutputConsumed(
+  client: SupabaseClient,
+  workflowId: string,
+  projectId: string,
+  taskKey: string,
+): Promise<WorkflowStoreResult<AgentTask | null>> {
+  const { data, error } = await client
+    .from("agent_tasks")
+    .update({ output_consumed: true, updated_at: new Date().toISOString() })
+    .eq("workflow_id", workflowId)
+    .eq("project_id", projectId)
+    .eq("task_key", taskKey)
+    .not("output", "is", null)
+    .select(TASK_COLUMNS)
+    .maybeSingle();
+  if (error) return mapError("mark task output consumed", error);
+  return {
+    ok: true,
+    data: data ? taskFromRow(data as Record<string, unknown>) : null,
+  };
+}
+
+/** Activate the pre-registered failure-only Repair role exactly once. */
+export async function activateRepairTask(
+  client: SupabaseClient,
+  workflowId: string,
+  projectId: string,
+): Promise<WorkflowStoreResult<AgentTask | null>> {
+  const { data, error } = await client
+    .from("agent_tasks")
+    .update({
+      status: "queued",
+      eligible: true,
+      eligibility_reason: "failure_triggered_repair",
+      skip_reason: null,
+      scheduled_at: new Date().toISOString(),
+      schedule_reason: "failure_triggered_repair",
+      scheduled: true,
+      attempt: 0,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("workflow_id", workflowId)
+    .eq("project_id", projectId)
+    .eq("task_key", "repair")
+    .eq("role", "repair")
+    .eq("status", "skipped")
+    .select(TASK_COLUMNS)
+    .maybeSingle();
+  if (error) return mapError("activate repair task", error);
   return {
     ok: true,
     data: data ? taskFromRow(data as Record<string, unknown>) : null,

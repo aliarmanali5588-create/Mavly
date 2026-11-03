@@ -41,7 +41,7 @@ export function FAQSection() {
       q: "How does Mavly pricing work?",
       a: (
         <span>
-          Mavly offers four primary tiers: a Free plan (₹0) to explore and build with starter credits, Starter (₹399/month), Creator (₹599/month), and Pro (₹1,999/month) for demanding projects, along with Agency and Custom solutions. Annual billing includes a 20% discount. View our{" "}
+          Mavly offers Free, Starter, Creator, Pro, Agency, and Custom solutions. Current paid prices and included credits are loaded from the approved billing catalog. View our{" "}
           <a
             href="#pricing"
             onClick={(e) => e.stopPropagation()}

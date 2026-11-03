@@ -530,7 +530,7 @@ export async function publishSharedVersion(
   },
   deps: SharedPublishDependencies = DEFAULT_SHARED_PUBLISH_DEPENDENCIES,
 ): Promise<DeploymentServiceResult<WireDeploymentStatus>> {
-  const { projectId, site, publishFiles } = input;
+  const { projectId, hostname, site, publishFiles } = input;
 
   deps.log("publish_started", {
     project: projectId,

@@ -1,8 +1,10 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { Check, ArrowRight, Sparkles, Building2, ShieldCheck } from "lucide-react";
+import { fetchPublicBillingCatalog } from "@/lib/billing/catalog-client";
+import type { BillingCatalogProduct } from "@/lib/billing/types";
 
 /**
  * Single source of truth for Mavly pricing definitions, formulas, and tiers.
@@ -15,7 +17,7 @@ export interface PricingPlan {
   badge?: string;
   tierLabel: string;
   description: string;
-  monthlyPrice: number; // Base price in INR
+  monthlyPrice: number | null; // Server catalog price
   ctaLabel: string;
   ctaHref: string;
   isPrimaryChoice: boolean;
@@ -47,7 +49,6 @@ export const PRIMARY_PLANS: PricingPlan[] = [
     ctaHref: "/login",
     isPrimaryChoice: false,
     features: [
-      "10 one-time AI credits",
       "1 active project",
       "AI prompt-based website generation",
       "Chat-based editing and live preview",
@@ -63,13 +64,11 @@ export const PRIMARY_PLANS: PricingPlan[] = [
     badge: "Most Popular",
     tierLabel: "Starter",
     description: "Individual creators",
-    monthlyPrice: 399,
+    monthlyPrice: null,
     ctaLabel: "Try the Magic",
     ctaHref: "/login?plan=starter",
     isPrimaryChoice: true,
     features: [
-      "100 monthly AI credits",
-      "Up to 5 active projects",
       "Everything included in Free",
       "Source-code export and ZIP download",
       "Custom domain connection with SSL",
@@ -83,13 +82,11 @@ export const PRIMARY_PLANS: PricingPlan[] = [
     name: "Creator",
     tierLabel: "Creator",
     description: "Regular website builders",
-    monthlyPrice: 599,
+    monthlyPrice: null,
     ctaLabel: "Choose Creator",
     ctaHref: "/login?plan=creator",
     isPrimaryChoice: false,
     features: [
-      "200 monthly AI credits",
-      "Up to 15 active projects",
       "Everything included in Starter",
       "Multiple custom domains",
       "Supabase connection and advanced database workflows",
@@ -104,13 +101,11 @@ export const PRIMARY_PLANS: PricingPlan[] = [
     name: "Pro",
     tierLabel: "Pro",
     description: "Professional developers and commercial projects",
-    monthlyPrice: 1999,
+    monthlyPrice: null,
     ctaLabel: "Choose Pro",
     ctaHref: "/login?plan=pro",
     isPrimaryChoice: false,
     features: [
-      "600 monthly AI credits",
-      "Higher project limits, proposed as 50",
       "Everything included in Creator",
       "Advanced scheduled jobs and webhooks",
       "Custom MCP server integrations",
@@ -182,6 +177,20 @@ export function formatINR(amount: number): string {
  * Annual saving = (Monthly base price * 12) - Annual total
  */
 export function calculatePlanPricing(plan: PricingPlan, cycle: BillingCycle) {
+  if (plan.monthlyPrice === null) {
+    return {
+      displayMonthly: "Unavailable",
+      integerPart: "Unavailable",
+      decimalPart: "",
+      isFree: false,
+      unavailable: true,
+      annualTotal: null,
+      annualSavings: null,
+      annualTotalFormatted: "Unavailable",
+      annualSavingsFormatted: "Unavailable",
+    };
+  }
+
   if (plan.monthlyPrice === 0) {
     return {
       displayMonthly: "₹0",
@@ -192,6 +201,7 @@ export function calculatePlanPricing(plan: PricingPlan, cycle: BillingCycle) {
       annualSavings: 0,
       annualTotalFormatted: "₹0",
       annualSavingsFormatted: "₹0",
+      unavailable: false,
     };
   }
 
@@ -206,6 +216,7 @@ export function calculatePlanPricing(plan: PricingPlan, cycle: BillingCycle) {
       annualSavings: 0,
       annualTotalFormatted: formatINR(plan.monthlyPrice * 12),
       annualSavingsFormatted: "₹0",
+      unavailable: false,
     };
   }
 
@@ -230,6 +241,7 @@ export function calculatePlanPricing(plan: PricingPlan, cycle: BillingCycle) {
     annualSavings,
     annualTotalFormatted: formatINR(annualTotal),
     annualSavingsFormatted: formatINR(annualSavings),
+    unavailable: false,
   };
 }
 
@@ -256,14 +268,29 @@ export function PricingSection({
   userEmail,
   onSelectPlan,
 }: PricingSectionProps = {}) {
-  const [billingCycle, setBillingCycle] = useState<BillingCycle>("monthly");
+  const billingCycle: BillingCycle = "monthly";
+  const [catalog, setCatalog] = useState<BillingCatalogProduct[] | null>(null);
+  const [catalogUnavailable, setCatalogUnavailable] = useState(false);
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
-      e.preventDefault();
-      setBillingCycle((prev) => (prev === "monthly" ? "yearly" : "monthly"));
-    }
-  };
+  useEffect(() => {
+    let active = true;
+    fetchPublicBillingCatalog()
+      .then((rows) => {
+        if (!active) return;
+        setCatalog(rows.filter((row) => row.market === "india"));
+      })
+      .catch(() => {
+        if (!active) return;
+        setCatalog([]);
+        setCatalogUnavailable(true);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const catalogFor = (productId: string) =>
+    catalog?.find((row) => row.productId === productId && row.interval === "monthly") ?? null;
 
   return (
     <section id={id} className={`py-24 sm:py-32 bg-[var(--clay-base)] relative ${className}`}>
@@ -280,59 +307,29 @@ export function PricingSection({
             {description}
           </p>
 
-          {/* Accessible Monthly / Yearly Billing Toggle */}
-          <div className="mt-8 flex items-center justify-center">
-            <div
-              role="radiogroup"
-              aria-label="Billing frequency"
-              tabIndex={0}
-              onKeyDown={handleKeyDown}
-              className="inline-flex items-center p-1.5 rounded-full bg-[var(--clay-sunken)] border border-[var(--clay-line)] shadow-[var(--clay-well-2)] select-none outline-none focus-visible:shadow-[var(--clay-well-2),var(--clay-focus)]"
-            >
-              <button
-                type="button"
-                role="radio"
-                aria-checked={billingCycle === "monthly"}
-                onClick={() => setBillingCycle("monthly")}
-                className={`px-4 py-2 rounded-full text-xs font-semibold transition-all duration-200 cursor-pointer focus-visible:outline-none ${
-                  billingCycle === "monthly"
-                    ? "bg-primary text-primary-foreground shadow-[var(--clay-elev-ink-1)]"
-                    : "text-foreground hover:text-black"
-                }`}
-              >
-                Monthly
-              </button>
-
-              <button
-                type="button"
-                role="radio"
-                aria-checked={billingCycle === "yearly"}
-                onClick={() => setBillingCycle("yearly")}
-                className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-semibold transition-all duration-200 cursor-pointer focus-visible:outline-none ${
-                  billingCycle === "yearly"
-                    ? "bg-primary text-primary-foreground shadow-[var(--clay-elev-ink-1)]"
-                    : "text-foreground hover:text-black"
-                }`}
-              >
-                <span>Yearly</span>
-                <span
-                  className={`px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wide transition-colors ${
-                    billingCycle === "yearly"
-                      ? "bg-success text-success-foreground"
-                      : "bg-success-subtle text-success-subtle-foreground"
-                  }`}
-                >
-                  Save 20%
-                </span>
-              </button>
-            </div>
-          </div>
+          <p className="mt-8 text-xs text-muted-foreground">India pricing · billed monthly</p>
         </div>
 
         {/* ── 4 Primary Pricing Cards Grid ──────────────────────────────── */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 items-stretch">
           {PRIMARY_PLANS.map((plan) => {
-            const pricing = calculatePlanPricing(plan, billingCycle);
+            const catalogProduct = plan.id === "free"
+              ? catalog?.find((row) => row.productId === "free") ?? null
+              : catalogFor(plan.id);
+            const displayPlan: PricingPlan = {
+              ...plan,
+              monthlyPrice: plan.id === "free"
+                ? 0
+                : catalogProduct?.amountMinor === null || catalogProduct?.amountMinor === undefined
+                  ? null
+                  : catalogProduct.amountMinor / 100,
+            };
+            const pricing = calculatePlanPricing(displayPlan, billingCycle);
+            const dynamicFeatures = [
+              ...(catalogProduct?.credits ? [`${catalogProduct.credits.toLocaleString("en-IN")} monthly AI credits`] : []),
+              ...(catalogProduct?.projectLimit ? [`Up to ${catalogProduct.projectLimit} active projects`] : []),
+              ...plan.features,
+            ];
 
             return (
               <div
@@ -368,14 +365,14 @@ export function PricingSection({
                   <div className="mt-5 pb-5 border-b border-[var(--clay-line)]">
                     <div className="flex items-baseline gap-0.5">
                       <span className="text-3xl sm:text-4xl font-black text-foreground tracking-tight">
-                        {pricing.integerPart}
+                        {pricing.unavailable ? "Unavailable" : pricing.integerPart}
                       </span>
                       {pricing.decimalPart && (
                         <span className="text-lg sm:text-xl font-bold text-muted-foreground tracking-tight">
                           {pricing.decimalPart}
                         </span>
                       )}
-                      {!pricing.isFree && (
+                      {!pricing.isFree && !pricing.unavailable && (
                         <span className="text-xs text-muted-foreground font-medium ml-1.5">
                           / month
                         </span>
@@ -384,11 +381,15 @@ export function PricingSection({
 
                     {/* Secondary Yearly Calculation Disclosures */}
                     <div className="min-h-[42px] mt-1.5 flex flex-col justify-center">
-                      {pricing.isFree ? (
+                      {pricing.unavailable ? (
+                        <span className="text-[11px] text-warning-subtle-foreground font-medium">
+                          Billing catalog unavailable
+                        </span>
+                      ) : pricing.isFree ? (
                         <span className="text-[11px] text-muted-foreground font-medium">
                           Free forever · No card required
                         </span>
-                      ) : billingCycle === "yearly" ? (
+                      ) : billingCycle !== "monthly" ? (
                         <>
                           <span className="text-[11px] text-muted-foreground font-medium leading-tight">
                             Effective monthly rate · Billed annually at {pricing.annualTotalFormatted}/yr
@@ -407,7 +408,7 @@ export function PricingSection({
 
                   {/* Feature Checklist */}
                   <div className="mt-5 space-y-2.5">
-                    {plan.features.map((feat, i) => (
+                    {dynamicFeatures.map((feat, i) => (
                       <div key={i} className="flex items-start gap-2.5 text-xs text-foreground leading-snug">
                         <Check className="w-4 h-4 text-black shrink-0 mt-0.5" />
                         <span>{feat}</span>
@@ -433,10 +434,10 @@ export function PricingSection({
                       <span>Current Plan</span>
                       <ArrowRight className="w-3.5 h-3.5 shrink-0" />
                     </Link>
-                  ) : isUpgradePage && userEmail && onSelectPlan ? (
+                  ) : isUpgradePage && userEmail && onSelectPlan && !pricing.unavailable && catalogProduct ? (
                     <button
                       type="button"
-                      onClick={() => onSelectPlan(plan)}
+                       onClick={() => onSelectPlan(displayPlan)}
                       className={`w-full py-3 text-xs font-semibold cursor-pointer ${
                         plan.isPrimaryChoice
                           ? "mavly-btn-primary"
@@ -450,6 +451,10 @@ export function PricingSection({
                         <ArrowRight className="w-3.5 h-3.5 shrink-0" />
                       )}
                     </button>
+                  ) : isUpgradePage && userEmail && pricing.unavailable ? (
+                    <span className="w-full py-3 text-xs font-semibold text-center text-muted-foreground border border-[var(--clay-line)] rounded-xl">
+                      Billing unavailable
+                    </span>
                   ) : (
                     <Link
                       href={plan.ctaHref}
@@ -471,7 +476,7 @@ export function PricingSection({
                   <p className="text-[11px] text-center text-muted-foreground mt-2.5">
                     {pricing.isFree
                       ? (isUpgradePage && userEmail ? "Active Free Tier" : "No credit card required")
-                      : (isUpgradePage ? "Select plan to review" : "Direct entry to AI workspace")}
+                      : (isUpgradePage ? (catalogUnavailable ? "Billing unavailable" : "Select plan to review") : "Direct entry to AI workspace")}
                   </p>
                 </div>
               </div>
@@ -554,7 +559,7 @@ export function PricingSection({
 
         {/* Bottom Disclosures & Pricing Truthfulness Note */}
         <div className="mt-12 text-center text-[11px] text-muted-foreground max-w-lg mx-auto">
-          All prices in Indian Rupees (INR). Annual plans billed as a single annual charge. Need a custom plan structure or have questions? Contact our team.
+          Prices are loaded from the approved billing catalog. Global USD pricing remains unavailable until approved. Need a custom plan structure or have questions? Contact our team.
         </div>
       </div>
     </section>

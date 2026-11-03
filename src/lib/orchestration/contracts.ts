@@ -145,6 +145,10 @@ export interface AgentTaskDefinition {
   required: boolean;
   /** Bounded task-level attempt budget. */
   maxAttempts: number;
+  /** Whether this role is eligible for the current workflow policy. */
+  eligible: boolean;
+  /** Bounded, operator-safe explanation of the eligibility decision. */
+  eligibilityReason: string;
 }
 
 export interface AgentFinding {
@@ -182,6 +186,25 @@ export interface AgentVerificationResult {
   evidence: string[];
 }
 
+/** Evidence state for the owner-facing generation/verification projection. */
+export type WorkflowEvidenceStatus = AgentVerificationStatus | "not_started";
+
+/**
+ * Generation completion and runtime verification are separate facts. In
+ * particular, `generated` may pass while `compiled`, `rendered` and
+ * `functionallyVerified` remain pending or unavailable.
+ */
+export interface WorkflowVerificationView {
+  generated: WorkflowEvidenceStatus;
+  structurallyValid: WorkflowEvidenceStatus;
+  compiled: WorkflowEvidenceStatus;
+  rendered: WorkflowEvidenceStatus;
+  functionallyVerified: WorkflowEvidenceStatus;
+  securityReviewed: WorkflowEvidenceStatus;
+  deploymentVerified: WorkflowEvidenceStatus;
+  fullyVerified: boolean;
+}
+
 /** The only shape a role may hand back to the orchestrator. */
 export interface AgentOutput {
   taskKey: string;
@@ -208,8 +231,28 @@ export interface AgentTask extends AgentTaskDefinition {
   output: AgentOutput | null;
   errorClass: string | null;
   errorSummary: string | null;
+  /** The task was put on the durable execution path at this time. */
+  scheduled: boolean;
+  scheduledAt: string | null;
+  /** Why the task was or was not scheduled. */
+  scheduleReason: string | null;
   startedAt: string | null;
   finishedAt: string | null;
+  /** Resolved execution provider/model; never a credential. */
+  provider: string | null;
+  model: string | null;
+  /** True only when the role produced a usable output, not merely a row. */
+  outputProduced: boolean;
+  /** True only after a downstream stage consumed that output. */
+  outputConsumed: boolean;
+  /** Elapsed execution time for the recorded attempt. */
+  durationMs: number | null;
+  /** Explicit terminal explanation for skipped tasks. */
+  skipReason: string | null;
+  /** Explicit terminal explanation for failed tasks. */
+  failureReason: string | null;
+  /** Number of retries after the first scheduled attempt. */
+  retryCount: number;
 }
 
 /**
@@ -308,6 +351,7 @@ export interface WorkflowView {
   repairAttempts: number;
   reportedCostUsd: number | null;
   costKnown: boolean;
+  verification: WorkflowVerificationView;
   tasks: Array<{
     key: string;
     role: AgentRole;
@@ -316,8 +360,21 @@ export interface WorkflowView {
     status: AgentTaskStatus;
     dependsOn: string[];
     required: boolean;
+    eligible: boolean;
+    eligibilityReason: string;
     attempt: number;
     maxAttempts: number;
+    scheduled: boolean;
+    scheduledAt: string | null;
+    scheduleReason: string | null;
+    provider: string | null;
+    model: string | null;
+    outputProduced: boolean;
+    outputConsumed: boolean;
+    durationMs: number | null;
+    skipReason: string | null;
+    failureReason: string | null;
+    retryCount: number;
     summary: string | null;
     filesChanged: string[];
     findings: AgentFinding[];

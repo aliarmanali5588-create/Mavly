@@ -104,6 +104,11 @@ orchestration or the deployment approval gate: it adds the durable workflow/task
 tables, the owner-scoped deployment-proposal table and atomic consume RPC, and schema
 marker 29. It is additive and non-destructive and can be applied while the previous
 application version is live. Apply `30_managed_backends.sql` after 29 and before
+
+Apply `58_multi_agent_lifecycle_observability.sql` after 29 before enabling the
+explicit seven-role lifecycle projection: it adds eligibility, scheduling,
+provider/model, duration, output-production/consumption and skip/failure metadata
+to `agent_tasks`, with schema marker 58. It is additive and non-destructive.
 enabling managed Neon provisioning; it adds an owner-readable-metadata-only registry
 and service-role-only fenced provisioning RPCs. It is additive and non-destructive.
 Apply `31_credit_foundation.sql` after 30 before enabling ANY credit enforcement or
@@ -188,6 +193,8 @@ verification, protected AWS deployment mutation grants, the corrected enqueue
 transition, and schema marker 56. Migration 51 itself requires migrations 13, 14,
 15, 32 and 49; migration 56 does not depend on migration 20 and must not be
 rewritten if 51 has already been applied.
+The worker's fenced completion is the authoritative verified-state write; owner status
+reads may re-probe a pending route but cannot mark it verified through a browser-callable RPC.
 Project-secret encryption also
 requires the server-only `MAVLY_PROJECT_SECRETS_ENCRYPTION_KEY` (32 random bytes,
 base64-encoded); without it create/update fail closed. `npm test` covers the pure

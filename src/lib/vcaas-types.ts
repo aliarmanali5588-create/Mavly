@@ -1333,7 +1333,9 @@ export type {
   AgentVerificationResult,
   AgentVerificationStatus,
   TaskComplexity,
+  WorkflowEvidenceStatus,
   WorkflowState,
+  WorkflowVerificationView,
   WorkflowView,
 } from "@/lib/orchestration/contracts";
 export type {

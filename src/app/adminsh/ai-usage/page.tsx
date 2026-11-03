@@ -10,7 +10,7 @@ import {
   CheckCircle2,
   Clock,
   Cpu,
-  DollarSign,
+  IndianRupee,
   Gauge,
   RefreshCw,
   Search,
@@ -19,7 +19,7 @@ import {
 
 import {
   ADMIN_CONSOLE_PERIODS,
-  costDisplay,
+  inrCostDisplay,
   formatCompactNumber,
   formatSeconds,
   terminalSuccessRate,
@@ -56,11 +56,10 @@ import {
  *            engine. Absent on a deployment that never enabled it, in which case
  *            the table says so instead of showing an empty result as "no usage".
  *
- * ⚠️ COST IS NEVER DERIVED FROM A PRICE LIST. The old page multiplied invented
- * token counts by invented per-million rates to produce a confident dollar
- * figure. Here a cost exists only where `reported_cost_usd` was recorded, and a
- * run with no recorded cost is counted as unknown — shown as "Cost unavailable",
- * never as $0.00, because zero spend and unknown spend are different facts.
+ * ⚠️ COST IS NEVER DERIVED FROM an unapproved price list. INR cost exists only
+ * where an auditable provider conversion or operator rate card exists, and a
+ * run with no recorded INR cost is counted as unknown — shown as "Cost
+ * unavailable", never as ₹0.00.
  *
  * ⚠️ LATENCY IS RUN DURATION. The database records when a run started and
  * finished; it does not record per-request provider latency. The column is
@@ -83,10 +82,11 @@ export default function AiUsageAdminPage() {
   const attempts = data?.attempts ?? [];
 
   const cost = summary
-    ? costDisplay({
-        costUsd: summary.costUsd,
-        costKnownRuns: summary.costKnownRuns,
-        costUnknownRuns: summary.costUnknownRuns,
+    ? inrCostDisplay({
+        actualPaise: summary.costInrPaise,
+        estimatedPaise: summary.estimatedCostInrPaise,
+        knownAttempts: summary.costKnownRuns,
+        unknownAttempts: summary.costUnknownRuns,
       })
     : null;
 
@@ -200,7 +200,7 @@ export default function AiUsageAdminPage() {
           unavailable={!summary}
         />
         <StatCard
-          label="Provider-reported cost"
+           label="AI cost (INR)"
           value={cost ? cost.text : null}
           hint={
             summary
@@ -209,7 +209,7 @@ export default function AiUsageAdminPage() {
                 : "No run in this window recorded a cost"
               : undefined
           }
-          icon={<DollarSign className="w-3.5 h-3.5 text-muted-foreground" />}
+           icon={<IndianRupee className="w-3.5 h-3.5 text-muted-foreground" />}
           tone={cost?.available ? "neutral" : "warning"}
           unavailable={!cost || !cost.available}
         />
@@ -230,9 +230,8 @@ export default function AiUsageAdminPage() {
       {/* ── Cost honesty note ─────────────────────────────────────────────── */}
       {summary && summary.costUnknownRuns > 0 && (
         <UnavailableNote>
-          {summary.costUnknownRuns.toLocaleString()} run(s) in this window have no recorded
-          provider cost. They are counted as unknown, not as $0.00. Mavly records a cost only when
-          the provider reports one, and it never estimates a cost from a price list.
+           {summary.costUnknownRuns.toLocaleString()} attempt(s) in this window have no
+           authoritative INR cost. They are counted as unknown, not as ₹0.00.
         </UnavailableNote>
       )}
 
@@ -265,10 +264,11 @@ export default function AiUsageAdminPage() {
               </thead>
               <tbody className="divide-y divide-[var(--clay-line)]">
                 {models.map((row) => {
-                  const rowCost = costDisplay({
-                    costUsd: row.costUsd,
-                    costKnownRuns: row.costKnownRuns,
-                    costUnknownRuns: row.costUnknownRuns,
+                  const rowCost = inrCostDisplay({
+                    actualPaise: row.costInrPaise,
+                    estimatedPaise: row.estimatedCostInrPaise,
+                    knownAttempts: row.costKnownRuns,
+                    unknownAttempts: row.costUnknownRuns,
                   });
                   return (
                     <tr key={row.model} className="hover:bg-[var(--clay-sunken)] transition-colors">
@@ -391,11 +391,11 @@ function AttemptRow({ row }: { row: AdminAiUsageAttemptRow }) {
    * rate-card estimate, and no cost at all are different claims; collapsing the
    * last two into "$0.00" is exactly the error this page exists to avoid.
    */
-  const costText =
-    row.costSource === "provider_reported" && row.actualCostUsd !== null
-      ? `$${row.actualCostUsd.toFixed(6)}`
-      : row.costSource === "rate_card" && row.estimatedCostUsd !== null
-        ? `~$${row.estimatedCostUsd.toFixed(6)}`
+   const costText =
+    row.actualCostInrPaise !== null && row.actualCostInrPaise !== undefined
+      ? `₹${(row.actualCostInrPaise / 100).toFixed(2)}`
+      : row.estimatedCostInrPaise !== null && row.estimatedCostInrPaise !== undefined
+        ? `~₹${(row.estimatedCostInrPaise / 100).toFixed(2)}`
         : "unavailable";
 
   return (
