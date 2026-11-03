@@ -78,9 +78,11 @@ and version, so cache entries cannot collide across tenants or publications.
   migrations 51 and 56 block owner-side project reassignment, live-pointer,
   generation, ready/unpublished, provider-migration, publication-timestamp, and
   unsafe-delete mutations. Worker-only SECURITY DEFINER functions own live
-  activation and terminal unpublish; the owner-scoped route-verification RPC can
-  write only the exact currently active AWS version after the server verifies its
-  route. The project-delete trigger requires the worker-confirmed `unpublished` state.
+  activation, route mutation, and terminal unpublish. The worker completion RPC
+  records `verified` only after the exact owner/project route probe; the authenticated
+  status read re-probes a pending route and projects `verified` only for that response;
+  no browser-callable RPC can mark a route verified. The project-delete trigger
+  requires the worker-confirmed `unpublished` state.
 - A failed publish leaves the existing database active-version pointer unchanged.
   Cross-service activation is not a distributed transaction; the worker uses a
   lease/CAS- and expected-version-fenced compensating KVS restore and retries when
@@ -158,7 +160,7 @@ Apply `supabase/migrations/51_aws_frontend_deployment.sql` only after migrations
 `supabase/migrations/56_aws_frontend_fencing_and_status.sql` after migration 55.
 Migration 51 adds
 provider support, the AWS publication queue and fenced lifecycle RPCs. Migration 56
-adds the corrective ownership CAS, route-verification RPC, protected authenticated
+adds the corrective ownership CAS, worker-verified completion, protected authenticated
 column grants, and marker 56. Neither migration depends on migration 20 or 50,
 alters Neon provisioning authority, or has been applied or exercised against a
 database in this task.

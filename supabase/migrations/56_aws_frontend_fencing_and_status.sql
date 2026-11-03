@@ -1,4 +1,4 @@
--- AWS frontend hosting corrective fencing and owner-scoped route verification.
+-- AWS frontend hosting corrective fencing and worker-verified status.
 --
 -- Apply after migrations 14, 15, 32, 49, 51 and 55. This is additive and must be
 -- applied as a new migration; it does not rewrite migration 51 in an existing
@@ -75,7 +75,7 @@ grant update (
 -- bypass setting. No application role can read or write this table.
 create table if not exists public.aws_frontend_mutation_nonces (
   nonce uuid primary key,
-  purpose text not null check (purpose in ('route_verification', 'publication_enqueue')),
+  purpose text not null check (purpose = 'publication_enqueue'),
   created_at timestamptz not null default now()
 );
 do $$
@@ -88,7 +88,7 @@ begin
   ) then
     alter table public.aws_frontend_mutation_nonces
       add constraint aws_frontend_mutation_nonces_purpose_check
-      check (purpose in ('route_verification', 'publication_enqueue'));
+      check (purpose = 'publication_enqueue');
   end if;
 end
 $$;
@@ -111,7 +111,7 @@ begin
        select 1
          from public.aws_frontend_mutation_nonces n
         where n.nonce::text = current_setting('mavly.aws_mutation_nonce', true)
-          and n.purpose in ('route_verification', 'publication_enqueue')
+          and n.purpose = 'publication_enqueue'
      ) then
     return new;
   end if;
@@ -222,7 +222,7 @@ declare
   v_hostname text;
   v_nonce uuid := gen_random_uuid();
 begin
-  if auth.uid() is null or not exists (
+  if auth.role() <> 'authenticated' or auth.uid() is null or not exists (
     select 1
       from public.projects p
      where p.project_id = p_project_id
@@ -397,56 +397,99 @@ revoke all on function public.authorize_aws_frontend_route_activation(text, uuid
 grant execute on function public.authorize_aws_frontend_route_activation(text, uuid, uuid, bigint)
   to service_role;
 
-create or replace function public.record_aws_frontend_route_verification(
-  p_project_id text,
+-- Migration 51 intentionally left the domain pending until a later read. The
+-- worker has already performed the exact-host, exact-version public probe before
+-- calling this fenced completion RPC, so migration 56 records that proof atomically
+-- with activation. This replaces the 51 definition for databases that already ran it.
+create or replace function public.complete_aws_frontend_publication(
   p_version_id uuid,
-  p_routing_generation bigint,
-  p_verified boolean
+  p_lease_token uuid
 )
-returns boolean
+returns void
 language plpgsql
 security definer
 set search_path = public, pg_temp
 as $$
 declare
-  v_nonce uuid := gen_random_uuid();
-  v_updated boolean := false;
+  v_job public.aws_frontend_publications%rowtype;
+  v_version public.project_published_versions%rowtype;
+  v_hostname text;
 begin
-  if auth.uid() is null or not exists (
-    select 1
-      from public.projects p
-     where p.project_id = p_project_id
-       and p.user_id = auth.uid()
-  ) then
+  if auth.role() <> 'service_role' then
     raise exception 'FORBIDDEN' using errcode = '42501';
   end if;
 
-  insert into public.aws_frontend_mutation_nonces (nonce, purpose)
-  values (v_nonce, 'route_verification');
-  perform set_config('mavly.aws_mutation_nonce', v_nonce::text, true);
+  select * into v_job
+    from public.aws_frontend_publications
+   where version_id = p_version_id
+     and status = 'processing'
+     and lease_token = p_lease_token
+     and lease_expires_at > now()
+   for update;
+  if not found then
+    raise exception 'LEASE_LOST' using errcode = '40001';
+  end if;
+
+  select * into v_version
+    from public.project_published_versions
+   where id = p_version_id
+     and project_id = v_job.project_id
+     and status in ('draft', 'active');
+  if not found then
+    raise exception 'VERSION_NOT_FOUND' using errcode = 'P0002';
+  end if;
+
+  v_hostname := lower(v_job.project_id) || '.mavly.xyz';
+
+  update public.project_published_versions
+     set status = 'superseded', superseded_at = now()
+   where project_id = v_job.project_id
+     and status = 'active'
+     and id <> p_version_id;
+
+  update public.project_published_versions
+     set status = 'active',
+         activated_at = coalesce(activated_at, now()),
+         superseded_at = null
+   where id = p_version_id;
 
   update public.project_deployments
-     set mavly_domain_status = case when p_verified then 'verified' else 'pending' end,
+     set provider = 'aws',
+         status = 'ready',
+         active_version_id = p_version_id,
+         mavly_hostname = v_hostname,
+         mavly_domain_status = 'verified',
          mavly_domain_error = null,
          mavly_domain_checked_at = now(),
+         vercel_deployment_id = null,
+         url = null,
+         error_code = null,
+         error_message = null,
+         last_published_at = now(),
          updated_at = now()
-   where project_id = p_project_id
+   where project_id = v_job.project_id
      and provider = 'aws'
-     and status = 'ready'
-     and active_version_id = p_version_id
-     and aws_route_generation = p_routing_generation
-     and mavly_hostname = lower(p_project_id) || '.mavly.xyz';
-  v_updated := found;
+     and status = 'building'
+     and aws_route_generation = v_job.routing_generation;
+  if not found then
+    raise exception 'DEPLOYMENT_STATE_CHANGED' using errcode = '40001';
+  end if;
 
-  delete from public.aws_frontend_mutation_nonces where nonce = v_nonce;
-  return v_updated;
+  update public.aws_frontend_publications
+     set status = 'complete',
+         lease_token = null,
+         lease_expires_at = null,
+         error_code = null,
+         updated_at = now(),
+         completed_at = now()
+   where version_id = p_version_id;
 end;
 $$;
 
-revoke all on function public.record_aws_frontend_route_verification(text, uuid, bigint, boolean)
-  from public, anon;
-grant execute on function public.record_aws_frontend_route_verification(text, uuid, bigint, boolean)
-  to authenticated;
+revoke all on function public.complete_aws_frontend_publication(uuid, uuid)
+  from public, anon, authenticated;
+grant execute on function public.complete_aws_frontend_publication(uuid, uuid)
+  to service_role;
 
 create or replace function public.aws_frontend_fencing_schema_version()
 returns integer

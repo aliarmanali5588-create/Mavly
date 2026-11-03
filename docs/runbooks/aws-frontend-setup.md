@@ -235,8 +235,9 @@ Apply `supabase/migrations/51_aws_frontend_deployment.sql` after migrations 13, 
 15, 32 and 49. Migration 51 checks the shared-hosting marker 15, worker marker 32,
 and account-restriction marker 49. Then apply
 `supabase/migrations/56_aws_frontend_fencing_and_status.sql` after 51 and 55.
-Migration 56 is required for lease-fenced route restoration, owner-scoped AWS route verification,
-the corrected AWS enqueue transition, and the worker fencing marker 56. Use the same
+Migration 56 is required for lease-fenced route restoration, worker-verified AWS
+completion, the corrected owner-scoped enqueue transition, and the worker fencing marker
+56. Use the same
 reviewed migration process as other schema changes. Do not apply these migrations
 from this runbook to a production database; neither has been run in this task.
 

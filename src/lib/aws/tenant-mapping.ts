@@ -64,6 +64,17 @@ function storedVersion(value: string): string | null {
   }
 }
 
+function storedProjectId(value: string): string | null {
+  try {
+    const parsed: unknown = JSON.parse(value);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
+    const projectId = (parsed as Record<string, unknown>).projectId;
+    return typeof projectId === "string" ? projectId : null;
+  } catch {
+    return null;
+  }
+}
+
 function storedGeneration(value: string): number {
   let parsed: unknown;
   try {
@@ -128,6 +139,9 @@ async function updateMapping(
     }
 
     if (existing === value) return;
+    if (existing !== null && storedProjectId(existing) !== projectId) {
+      throw new Error("The tenant route belongs to another project.");
+    }
     if (
       options.expectedVersionId &&
       existing !== null &&

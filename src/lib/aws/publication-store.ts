@@ -29,7 +29,7 @@ function failure(code: string | undefined, error: string): AwsPublicationStoreRe
   if (
     message.includes("aws_frontend_fencing_schema_version") ||
     message.includes("authorize_aws_frontend_route_restore") ||
-    message.includes("record_aws_frontend_route_verification")
+    message.includes("authorize_aws_frontend_route_activation")
   ) {
     return {
       ok: false,
@@ -354,71 +354,6 @@ export async function authorizeAwsFrontendRouteActivation(
     };
   }
   return { ok: true, data };
-}
-
-export async function recordAwsFrontendRouteVerification(input: {
-  projectId: string;
-  versionId: string;
-  routingGeneration: number;
-  verified: boolean;
-}): Promise<AwsPublicationStoreResult<boolean>> {
-  const supabase = await createSupabaseServerClient();
-  if (!supabase) {
-    return { ok: false, code: "UNAVAILABLE", error: "Supabase is not configured." };
-  }
-  const { data, error } = await supabase.rpc("record_aws_frontend_route_verification", {
-    p_project_id: input.projectId,
-    p_version_id: input.versionId,
-    p_routing_generation: input.routingGeneration,
-    p_verified: input.verified,
-  });
-  if (error) return failure(error.code, error.message);
-  if (typeof data !== "boolean") {
-    return {
-      ok: false,
-      code: "DATABASE_ERROR",
-      error: "Supabase did not confirm AWS route verification.",
-    };
-  }
-  return { ok: true, data };
-}
-
-export async function readAwsFrontendRouteGeneration(
-  projectId: string,
-): Promise<
-  AwsPublicationStoreResult<{ routingGeneration: number; activeVersionId: string | null }>
-> {
-  const supabase = await createSupabaseServerClient();
-  if (!supabase) {
-    return { ok: false, code: "UNAVAILABLE", error: "Supabase is not configured." };
-  }
-  const { data, error } = await supabase
-    .from("project_deployments")
-    .select("provider,status,active_version_id,aws_route_generation")
-    .eq("project_id", projectId)
-    .maybeSingle();
-  if (error) return failure(error.code, error.message);
-  const routingGeneration = Number(data?.aws_route_generation);
-  if (
-    !data ||
-    data.provider !== "aws" ||
-    data.status !== "ready" ||
-    !Number.isSafeInteger(routingGeneration) ||
-    routingGeneration < 1
-  ) {
-    return {
-      ok: false,
-      code: "LEASE_LOST",
-      error: "The AWS deployment generation changed before route verification.",
-    };
-  }
-  return {
-    ok: true,
-    data: {
-      routingGeneration,
-      activeVersionId: typeof data.active_version_id === "string" ? data.active_version_id : null,
-    },
-  };
 }
 
 export async function completeAwsFrontendPublication(

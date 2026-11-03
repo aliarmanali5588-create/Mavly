@@ -36,9 +36,7 @@ import {
 import {
   enqueueAwsFrontendPublication,
   enqueueAwsFrontendUnpublish,
-  recordAwsFrontendRouteVerification,
   readAwsFrontendFencingSchemaVersion,
-  readAwsFrontendRouteGeneration,
   readAwsFrontendSchemaVersion,
 } from "@/lib/aws/publication-store";
 import {
@@ -681,11 +679,10 @@ export async function publishSharedVersion(
 
 async function enqueueAwsPublication(input: {
   projectId: string;
-  hostname: string;
   site: StaticSite;
   publishFiles: readonly StaticPublishFile[];
 }): Promise<DeploymentServiceResult<WireDeploymentStatus>> {
-  const { projectId, hostname, site, publishFiles } = input;
+  const { projectId, site, publishFiles } = input;
   const schema = await readAwsFrontendSchemaVersion();
   if (schema.ok === false) {
     return fail(
@@ -910,29 +907,14 @@ async function awsDeploymentStatus(
     return { ok: true, data: wireDeploymentStatus(row) };
   }
 
-  const fence = await readAwsFrontendRouteGeneration(projectId);
-  if (
-    fence.ok === false ||
-    fence.data.activeVersionId !== row.active_version_id
-  ) {
-    return { ok: true, data: wireDeploymentStatus(row) };
-  }
-  const recorded = await recordAwsFrontendRouteVerification({
-    projectId,
-    versionId: row.active_version_id,
-    routingGeneration: fence.data.routingGeneration,
-    verified,
-  });
-  if (recorded.ok === false || !recorded.data) {
-    return { ok: true, data: wireDeploymentStatus(row) };
-  }
-
-  const patched = await getDeploymentRow(projectId);
   return {
     ok: true,
-    data: wireDeploymentStatus(
-      isDeploymentStoreFailure(patched) || !patched.data ? row : patched.data,
-    ),
+    data: wireDeploymentStatus({
+      ...row,
+      mavly_domain_status: verified ? "verified" : "pending",
+      mavly_domain_error: null,
+      mavly_domain_checked_at: new Date().toISOString(),
+    }),
   };
 }
 
@@ -1213,7 +1195,6 @@ export async function publishProject(
   if (aws) {
     return enqueueAwsPublication({
       projectId,
-      hostname,
       site: resolved.site,
       publishFiles,
     });

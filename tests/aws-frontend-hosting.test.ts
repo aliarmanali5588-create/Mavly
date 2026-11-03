@@ -518,9 +518,40 @@ test("AWS route reads reject a KVS value belonging to another project", async ()
   });
 });
 
+test("AWS route writes reject a KVS value belonging to another project", async () => {
+  await withAwsEnvironment(async () => {
+    const values = new Map<string, string>([
+      [
+        "proj-alpha",
+        JSON.stringify({
+          projectId: "proj-beta",
+          versionId: "550e8400-e29b-41d4-a716-446655440001",
+          entryPath: "index.html",
+          spaFallback: true,
+          generation: 1,
+        }),
+      ],
+    ]);
+    setTenantMappingClientForTests(fakeKvsClient(values).client);
+    try {
+      await assert.rejects(
+        () => activateAwsTenantMapping({
+          projectId: "proj-alpha",
+          versionId: "550e8400-e29b-41d4-a716-446655440002",
+          entryPath: "index.html",
+          spaFallback: true,
+          generation: 2,
+        }),
+        /belongs to another project/i,
+      );
+    } finally {
+      resetAwsTenantMappingClient();
+    }
+  });
+});
+
 test("AWS worker remediation contracts cover lease fencing and status verification", () => {
   const worker = readFileSync("src/lib/aws/publication-worker.ts", "utf8");
-  const store = readFileSync("src/lib/aws/publication-store.ts", "utf8");
   const service = readFileSync("src/lib/deployments/service.ts", "utf8");
   const migration = readFileSync(
     "supabase/migrations/56_aws_frontend_fencing_and_status.sql",
@@ -533,15 +564,13 @@ test("AWS worker remediation contracts cover lease fencing and status verificati
   assert.match(worker, /renewal_rejected/);
   assert.match(worker, /lease_lost_during_s3/);
   assert.match(worker, /abortSignal: leaseGuard\.abortSignal/);
-  assert.match(store, /record_aws_frontend_route_verification/);
-  assert.match(store, /readAwsFrontendRouteGeneration/);
   assert.match(service, /return awsDeploymentStatus\(projectId, row\.data\)/);
   assert.match(migration, /AWS_PROJECT_ID_IMMUTABLE/);
   assert.match(migration, /AWS_ACTIVE_VERSION_WORKER_ONLY/);
   assert.match(migration, /p_expected_active_version_id/);
   assert.match(migration, /authorize_aws_frontend_route_activation/);
   assert.match(migration, /aws_frontend_mutation_nonces/);
-  assert.match(migration, /case when p_verified then 'verified' else 'pending' end/);
+  assert.match(migration, /mavly_domain_status = 'verified'/);
 });
 
 test("AWS remediation preserves legacy provider paths and failure backoff", () => {
