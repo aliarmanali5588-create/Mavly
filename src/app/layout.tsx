@@ -140,6 +140,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <head>
         <link rel="manifest" href="/manifest.json" />
         <meta name="theme-color" content="#000000" />
+        <meta name="google-site-verification" content="lnx3GeC1KdlwHdtsa36BFgCj9c-tnvDpw_cKua9ZhUA" />
       </head>
       <body className={`${dmSans.variable} ${geistMono.variable} antialiased`}>
         <GlobalErrorCatcher />
