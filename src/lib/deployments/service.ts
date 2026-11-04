@@ -34,6 +34,12 @@ import {
   readAwsFrontendHostingConfig,
 } from "@/lib/aws/config";
 import {
+  awsHostingEligibilityMessage,
+  isAwsHostingEligibilityReason,
+  type AwsHostingEligibilityReason,
+} from "@/lib/aws/eligibility";
+import { readAwsHostingEligibility } from "@/lib/aws/eligibility-store";
+import {
   enqueueAwsFrontendPublication,
   enqueueAwsFrontendUnpublish,
   readAwsFrontendFencingSchemaVersion,
@@ -156,6 +162,40 @@ function fail(
 
 function fromVercel(failure: VercelFailure): DeploymentServiceResult<never> {
   return { ok: false, ...publicDeploymentFailure(failure) };
+}
+
+/**
+ * Translate a database eligibility reason into a truthful API refusal.
+ *
+ * ⚠️ NO REASON EVER FALLS BACK TO A DIFFERENT HOSTING PROVIDER. If AWS hosting is
+ * enabled on this deployment, an ineligible project is refused with its exact
+ * reason rather than silently published elsewhere.
+ */
+function awsEligibilityFailure(
+  reason: AwsHostingEligibilityReason,
+): DeploymentServiceResult<never> {
+  const message = awsHostingEligibilityMessage(reason);
+  switch (reason) {
+    case "project_not_found":
+      return fail(404, "PROJECT_NOT_FOUND", message);
+    case "ownership_mismatch":
+      return fail(403, "FORBIDDEN", message);
+    case "project_not_publishable":
+    case "generation_incomplete":
+      return fail(400, "VALIDATION", message);
+    case "plan_not_allowed":
+      return fail(403, "HOSTING_PLAN_REQUIRED", message);
+    case "project_limit_reached":
+      return fail(403, "HOSTING_LIMIT_REACHED", message);
+    case "user_suspended":
+      return fail(403, "ACCOUNT_SUSPENDED", message);
+    case "platform_hosting_disabled":
+      return fail(503, "HOSTING_DISABLED", message);
+    case "hosting_capacity_exceeded":
+      return fail(429, "HOSTING_CAPACITY_EXCEEDED", message, 60);
+    default:
+      return fail(500, "UNKNOWN", "Could not evaluate hosting eligibility.");
+  }
 }
 
 function storedStatusFor(readyState: string): StoredDeploymentStatus {
@@ -752,8 +792,18 @@ async function enqueueAwsPublication(input: {
     await updateDeploymentRow(projectId, {
       status: "error",
       error_code: "aws_queue_failed",
-      error_message: "Mavly could not queue the AWS publication.",
+      error_message:
+        "Mavly could not queue the AWS publication.",
     });
+    /**
+     * The enqueue RPC re-evaluates eligibility. A plan, suspension or capacity
+     * change between the service check and the transaction is reported with its
+     * exact reason instead of a generic database error.
+     */
+    const eligibilityReason = /HOSTING_NOT_ELIGIBLE:([a-z_]+)/i.exec(queued.error)?.[1];
+    if (isAwsHostingEligibilityReason(eligibilityReason)) {
+      return awsEligibilityFailure(eligibilityReason);
+    }
     return fail(
       queued.code === "MIGRATION_REQUIRED" ? 503 : 500,
       queued.code === "MIGRATION_REQUIRED" ? "BACKEND_NOT_CONFIGURED" : "UNKNOWN",
@@ -1046,16 +1096,33 @@ export async function publishProject(
       `AWS frontend hosting is enabled but not fully configured (${awsConfig.problem}).`,
     );
   }
-  const awsCohort = isAwsFrontendHostingProject(projectId);
+  /**
+   * ⚠️ THERE IS NO CUSTOMER PROJECT ALLOWLIST ANY MORE.
+   *
+   * `isAwsFrontendHostingProject` now answers only whether an OPTIONAL operator
+   * emergency restriction excludes this project. With no restriction configured
+   * it is `true` for every project, and the database eligibility RPC below is
+   * the authority. A new customer project never needs an environment-variable or
+   * administrator change to become publishable.
+   */
+  const awsRestrictionSatisfied = isAwsFrontendHostingProject(projectId);
   const existingAwsDeployment = existing.data?.provider === "aws";
-  if (existingAwsDeployment && !awsCohort) {
+  if (existingAwsDeployment && (!awsConfig.enabled || awsConfig.problem !== null)) {
     return fail(
       503,
       "BACKEND_NOT_CONFIGURED",
-      "This project already uses AWS hosting, but its AWS hosting configuration or cohort is no longer enabled.",
+      "This project already uses AWS hosting, but AWS hosting is no longer enabled on this deployment.",
     );
   }
-  const aws = existingAwsDeployment || awsCohort;
+  if (awsConfig.enabled && !awsRestrictionSatisfied) {
+    return fail(
+      503,
+      "BACKEND_NOT_CONFIGURED",
+      "This project is outside the temporary AWS hosting restriction configured for this deployment.",
+    );
+  }
+  const aws =
+    existingAwsDeployment || (awsConfig.enabled && awsConfig.problem === null);
 
   if (aws && existing.data?.provider === "vercel") {
     return fail(
@@ -1083,6 +1150,27 @@ export async function publishProject(
       "HOSTING_PROVIDER_CONFLICT",
       "This project is configured for both AWS and shared hosting. Select exactly one hosting provider.",
     );
+  }
+
+  /**
+   * ⚠️ DATABASE-DRIVEN ELIGIBILITY. Ownership, suspension, completed source, the
+   * canonical billing plan, the published-site ceiling and platform capacity are
+   * evaluated server-side before any version row or queue record is written. The
+   * enqueue RPC repeats the check inside its own transaction, so a direct caller
+   * cannot bypass it.
+   */
+  if (aws) {
+    const eligibility = await readAwsHostingEligibility(projectId);
+    if (eligibility.ok === false) {
+      return fail(
+        eligibility.code === "MIGRATION_REQUIRED" ? 503 : 500,
+        eligibility.code === "MIGRATION_REQUIRED" ? "BACKEND_NOT_CONFIGURED" : "UNKNOWN",
+        eligibility.error,
+      );
+    }
+    if (!eligibility.data.eligible) {
+      return awsEligibilityFailure(eligibility.data.reason);
+    }
   }
 
   /**

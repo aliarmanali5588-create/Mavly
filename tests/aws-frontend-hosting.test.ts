@@ -239,12 +239,22 @@ test("AWS hosting stays opt-in and requires its complete private-hosting config"
       "arn:aws:cloudfront::123456789012:key-value-store/12345678-1234-1234-1234-123456789012",
     MAVLY_AWS_FRONTEND_HOSTING_PROJECTS: "*",
   });
-  assert.equal(wildcard.problem, "invalid_cohort");
+  assert.equal(wildcard.problem, "invalid_project_restriction");
 });
 
-test("AWS cohort authorization is explicit and never wildcard-based", () => {
+test("AWS project restriction is an optional emergency gate, never wildcard-based", () => {
   assert.equal(isAwsFrontendHostingProject("proj-alpha", AWS_ENV), true);
   assert.equal(isAwsFrontendHostingProject("proj-beta", AWS_ENV), false);
+
+  /**
+   * With no restriction configured, a brand-new or unlisted project is NOT
+   * excluded here. The database eligibility RPC decides, which is what removes
+   * the manual per-customer allowlist from onboarding.
+   */
+  const unrestricted: Record<string, string | undefined> = { ...AWS_ENV };
+  delete unrestricted.MAVLY_AWS_FRONTEND_HOSTING_PROJECTS;
+  assert.equal(isAwsFrontendHostingProject("proj-beta", unrestricted), true);
+
   assert.equal(
     isAwsFrontendHostingProject("proj-alpha", {
       ...AWS_ENV,
@@ -262,8 +272,7 @@ test("AWS configuration fails closed for each missing or malformed prerequisite"
     ["MAVLY_AWS_REGION", "", "missing_region"],
     ["MAVLY_AWS_REGION", "not-a-region", "invalid_region"],
     ["MAVLY_AWS_CLOUDFRONT_KEY_VALUE_STORE_ARN", "not-an-arn", "missing_key_value_store"],
-    ["MAVLY_AWS_FRONTEND_HOSTING_PROJECTS", "", "missing_cohort"],
-    ["MAVLY_AWS_FRONTEND_HOSTING_PROJECTS", "*", "invalid_cohort"],
+    ["MAVLY_AWS_FRONTEND_HOSTING_PROJECTS", "*", "invalid_project_restriction"],
   ] as const;
   for (const [key, value, problem] of cases) {
     assert.equal(readAwsFrontendHostingConfig({ ...complete, [key]: value }).problem, problem);

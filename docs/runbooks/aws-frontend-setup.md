@@ -195,7 +195,7 @@ the existing EC2 worker process:
 | `MAVLY_AWS_S3_BUCKET` | `FrontendBucketName` stack output |
 | `MAVLY_AWS_REGION` | Actual region where the stack's S3 bucket was created |
 | `MAVLY_AWS_CLOUDFRONT_KEY_VALUE_STORE_ARN` | `TenantRouteStoreArn` stack output |
-| `MAVLY_AWS_FRONTEND_HOSTING_PROJECTS` | Explicit internal project IDs only |
+| `MAVLY_AWS_FRONTEND_HOSTING_PROJECTS` | Optional emergency restriction; leave empty for normal operation |
 
 These are not `NEXT_PUBLIC_*` values. No AWS secret key is used. The publishing API
 only creates a database job; the EC2 worker uses its standard instance-profile
@@ -226,8 +226,11 @@ grep '^MAVLY_AWS_FRONTEND_HOSTING_ENABLED=' /etc/mavly/worker.env \
 ```
 
 The application deployment and `/etc/mavly/worker.env` must use the same bucket,
-region, KVS ARN, and one-project staging cohort. Production remains explicitly
-`MAVLY_AWS_FRONTEND_HOSTING_ENABLED=false`.
+region and KVS ARN. Leave `MAVLY_AWS_FRONTEND_HOSTING_PROJECTS` **empty** for normal
+operation: eligibility is then read from Supabase, so onboarding a customer needs no
+environment change. For a confined staging run only, set exactly one internal project
+id there; never `*`. Production remains explicitly
+`MAVLY_AWS_FRONTEND_HOSTING_ENABLED=false` until acceptance.
 
 ## 5. Apply the database migration through the reviewed release process
 
@@ -237,7 +240,10 @@ and account-restriction marker 49. Then apply
 `supabase/migrations/56_aws_frontend_fencing_and_status.sql` after 51 and 55.
 Migration 56 is required for lease-fenced route restoration, worker-verified AWS
 completion, the corrected owner-scoped enqueue transition, and the worker fencing marker
-56. Use the same
+56. Finally apply `supabase/migrations/61_aws_hosting_eligibility.sql` after migration
+57 (canonical billing). Migration 61 adds the database eligibility authority, platform
+capacity settings and the enqueue-time eligibility guard; it removes any need for a
+per-customer project allowlist. Use the same
 reviewed migration process as other schema changes. Do not apply these migrations
 from this runbook to a production database; neither has been run in this task.
 
@@ -250,6 +256,9 @@ select public.generation_worker_schema_version();
 select public.account_restriction_schema_version();
 select public.aws_frontend_hosting_schema_version();
 select public.aws_frontend_fencing_schema_version();
+select public.aws_hosting_eligibility_schema_version();
+
+select * from public.hosting_platform_settings;
 
 select routine_name, security_type
 from information_schema.routines
@@ -262,9 +271,9 @@ from pg_class
 where relname in ('aws_frontend_publications', 'aws_frontend_unpublish_jobs');
 ```
 
-Expected markers are 15, 32, 49, 51, and 56. The worker refuses generation work
-below 32 or account-restriction work below 49, and refuses AWS publication work below
-56.
+Expected markers are 15, 32, 49, 51, 56 and 61. The worker refuses generation work
+below 32 or account-restriction work below 49, refuses AWS publication work below 56,
+and refuses automatic eligibility work below 61.
 Verify worker RPC grants and RLS behavior using the repository's reviewed database
 procedure. A missing marker or RPC is a staging blocker; do not fabricate a ready
 publication.
@@ -280,7 +289,9 @@ checklist in order:
 2. Confirm the exact project hostname is routed to the staging CloudFront distribution
    by an approved DNS record; do not switch `*.mavly.xyz`.
 3. Confirm the certificate covers the exact hostname and CloudFront reports `Deployed`.
-4. Add exactly that project ID to the staging cohort; do not use `*`.
+4. For a confined staging run, add exactly that project ID to the optional emergency
+   restriction; never use `*`. For normal automatic onboarding leave the restriction
+   empty and rely on the database eligibility RPC.
 5. Enable the flag in staging only, then review the existing worker environment.
 6. Keep `mavly-aws-generation-worker.service` as the only worker service.
 7. If approved, restart that service once after the reviewed configuration/repository
@@ -358,6 +369,31 @@ sudo journalctl -u mavly-aws-worker.service --since "10 minutes ago" --no-pager
 The restart reuses the existing process and queue; it does not create a publication
 daemon or a second generation worker.
 
+### Platform capacity settings (service role only)
+
+`hosting_platform_settings` has one row. It is not exposed to the browser and is not
+an environment variable. Inspect it through the reviewed operator procedure:
+
+```sql
+select singleton, publication_enabled, max_active_publications,
+       max_queued_publications, max_published_sites, updated_at
+from public.hosting_platform_settings;
+```
+
+To reduce platform intake temporarily without taking live routes down:
+
+```sql
+update public.hosting_platform_settings
+set publication_enabled = false
+where singleton;
+```
+
+Re-enable only after the cause is resolved. Queued jobs stay queued and resume on a
+later worker tick; admission returns `429 HOSTING_CAPACITY_EXCEEDED` while the queue is
+full and does not enqueue the request. `max_published_sites` is optional: when it is
+NULL the published-site ceiling for each owner is the canonical billing plan's
+`project_limit`, so do not invent a second number there.
+
 ## 7. Rollback and recovery
 
 - **A queued or failed upload:** leave the immutable objects in place; the existing
@@ -395,9 +431,13 @@ The following are required before production rollout:
 
 - Confirmed AWS account, worker region, and existing EC2 instance profile.
 - Staging template deployment and policy review.
-- Migrations 51 and 56 applied and checked in staging.
+- Migrations 51, 56 and 61 applied and checked in staging, including an eligibility
+  run for a disposable paid-plan project and a Free-plan refusal with the exact reason.
 - Successful AWS publication/unpublish/delete acceptance with the real worker.
 - CloudFront access logging and alerting.
+- The new customer path exercised without any manual project allowlisting:
+  create a project, generate, publish, open `<project-id>.mavly.xyz`, republish and
+  unpublish. Record the eligibility reason for a Free-plan limit refusal.
 - Owner-checked rollback to a prior immutable version.
 - Resumable migration of existing shared/Vercel publications and dual-read serving.
 - A reviewed DNS plan that preserves all existing `*.mavly.xyz` tenants.

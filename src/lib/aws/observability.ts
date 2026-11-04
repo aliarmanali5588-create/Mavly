@@ -19,7 +19,10 @@ export type AwsPublicationEvent =
   | "publication_failed"
   | "lease_lost"
   | "route_recovery_failed"
-  | "outcome_persistence_failed";
+  | "outcome_persistence_failed"
+  | "eligibility_accepted"
+  | "eligibility_rejected"
+  | "capacity_throttled";
 
 type AwsPublicationFieldValue = string | number | boolean | null;
 
@@ -35,6 +38,11 @@ export interface AwsPublicationEventFields {
   failedCount?: number;
   totalBytes?: number;
   durationMs?: number;
+  plan?: string;
+  activeCount?: number;
+  queuedCount?: number;
+  maxActive?: number;
+  maxQueued?: number;
 }
 
 const ALLOWED_FIELDS = new Set<keyof AwsPublicationEventFields>([
@@ -49,6 +57,11 @@ const ALLOWED_FIELDS = new Set<keyof AwsPublicationEventFields>([
   "failedCount",
   "totalBytes",
   "durationMs",
+  "plan",
+  "activeCount",
+  "queuedCount",
+  "maxActive",
+  "maxQueued",
 ]);
 
 function sanitizedFields(

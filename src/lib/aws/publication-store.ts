@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { isMissingDatabaseObject } from "@/lib/hosting/migration-requirement";
+import type { AwsHostingEligibilityReason } from "./eligibility";
 
 export type AwsPublicationStoreResult<T> =
   | { ok: true; data: T }
@@ -36,6 +37,19 @@ function failure(code: string | undefined, error: string): AwsPublicationStoreRe
       code: "MIGRATION_REQUIRED",
       error:
         "Apply migration 56_aws_frontend_fencing_and_status.sql before enabling AWS hosting.",
+    };
+  }
+  if (
+    message.includes("aws_hosting_eligibility") ||
+    message.includes("aws_hosting_worker_authorization") ||
+    message.includes("aws_hosting_capacity_snapshot") ||
+    message.includes("hosting_platform_settings")
+  ) {
+    return {
+      ok: false,
+      code: "MIGRATION_REQUIRED",
+      error:
+        "Apply migration 61_aws_hosting_eligibility.sql before enabling AWS hosting.",
     };
   }
   return { ok: false, code: code ?? "DATABASE_ERROR", error };
@@ -367,4 +381,118 @@ export async function completeAwsFrontendPublication(
   return error
     ? failure(error.code, error.message)
     : { ok: true, data: undefined };
+}
+
+/**
+ * Platform-wide publication capacity, read by the existing EC2 worker before it
+ * claims a job. Service-role only; a missing row reads as disabled (fail closed).
+ */
+export interface AwsHostingCapacitySnapshot {
+  configured: boolean;
+  enabled: boolean;
+  activeCount: number;
+  queuedCount: number;
+  maxActive: number;
+  maxQueued: number;
+}
+
+export async function readAwsHostingCapacity(
+  client: SupabaseClient,
+): Promise<AwsPublicationStoreResult<AwsHostingCapacitySnapshot>> {
+  const { data, error } = await client.rpc("aws_hosting_capacity_snapshot");
+  if (error) return failure(error.code, error.message);
+  if (!data || typeof data !== "object" || Array.isArray(data)) {
+    return {
+      ok: false,
+      code: "DATABASE_ERROR",
+      error: "The AWS hosting capacity response was invalid.",
+    };
+  }
+  const row = data as Record<string, unknown>;
+  const count = (value: unknown): number =>
+    typeof value === "number" && Number.isSafeInteger(value) && value >= 0
+      ? value
+      : 0;
+  return {
+    ok: true,
+    data: {
+      configured: row.configured === true,
+      enabled: row.enabled === true,
+      activeCount: count(row.activeCount),
+      queuedCount: count(row.queuedCount),
+      maxActive: count(row.maxActive),
+      maxQueued: count(row.maxQueued),
+    },
+  };
+}
+
+/**
+ * Re-prove the claimed project's owner and re-evaluate every eligibility rule on
+ * the worker. `project_limit_reached` and `hosting_capacity_exceeded` are
+ * transient, but the worker records a truthful terminal failure for the claimed
+ * job instead of retrying without bound.
+ */
+export interface AwsHostingWorkerAuthorization {
+  eligible: boolean;
+  reason: AwsHostingEligibilityReason;
+  planId: string;
+  projectLimit: number | null;
+  publishedSiteLimit: number | null;
+  publishedSiteCount: number;
+}
+
+export async function authorizeAwsHostingWorker(
+  client: SupabaseClient,
+  input: { projectId: string; ownerId: string },
+): Promise<AwsPublicationStoreResult<AwsHostingWorkerAuthorization>> {
+  const { data, error } = await client.rpc("aws_hosting_worker_authorization", {
+    p_project_id: input.projectId,
+    p_owner_id: input.ownerId,
+  });
+  if (error) return failure(error.code, error.message);
+  if (!data || typeof data !== "object" || Array.isArray(data)) {
+    return {
+      ok: false,
+      code: "DATABASE_ERROR",
+      error: "The AWS hosting authorization response was invalid.",
+    };
+  }
+  const row = data as Record<string, unknown>;
+  const reason = row.reason;
+  if (
+    typeof reason !== "string" ||
+    ![
+      "eligible",
+      "project_not_found",
+      "ownership_mismatch",
+      "project_not_publishable",
+      "generation_incomplete",
+      "plan_not_allowed",
+      "project_limit_reached",
+      "user_suspended",
+      "hosting_capacity_exceeded",
+      "platform_hosting_disabled",
+    ].includes(reason) ||
+    row.eligible !== (reason === "eligible")
+  ) {
+    return {
+      ok: false,
+      code: "DATABASE_ERROR",
+      error: "The AWS hosting authorization response was invalid.",
+    };
+  }
+  const nullableInteger = (value: unknown): number | null =>
+    typeof value === "number" && Number.isSafeInteger(value) ? value : null;
+  return {
+    ok: true,
+    data: {
+      eligible: row.eligible === true,
+      reason: reason as AwsHostingEligibilityReason,
+      planId: typeof row.planId === "string" ? row.planId : "free",
+      projectLimit: nullableInteger(row.projectLimit),
+      publishedSiteLimit: nullableInteger(row.publishedSiteLimit),
+      publishedSiteCount:
+        typeof row.publishedSiteCount === "number" ? row.publishedSiteCount : 0,
+    },
+  };
 }

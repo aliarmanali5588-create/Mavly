@@ -333,11 +333,28 @@ install/Vite dev server/readiness probe/QA build, or the migrations against a da
   `SECURITY DEFINER` RPCs; `project_files` is never served publicly, drafts never leak, and
   unpublish deactivates the mapping without deleting history. A publish on a database
   missing migration 14/15 fails closed with `503 BACKEND_NOT_CONFIGURED` **before writing
-  any attempt state**. The legacy per-project Vercel path remains the default and its rows
-  keep their Vercel takedown behaviour. Wildcard DNS/TLS and Vercel plan eligibility are
-  still unverified operator prerequisites; see `MAVLY_SHARED_HOSTING.md`.
+  any attempt state**. The legacy per-project Vercel path remains the default and its rows   keep their Vercel takedown behaviour. Wildcard DNS/TLS and Vercel plan eligibility are
+   still unverified operator prerequisites; see `MAVLY_SHARED_HOSTING.md`.
+- **AWS customer frontend hosting is implemented but OFF BY DEFAULT (Phase 15).** It
+   publishes an immutable static version to a private S3 bucket and routes
+   `<project-id>.mavly.xyz` through a CloudFront KeyValueStore on the existing EC2
+   generation worker and its existing durable publication queue. **Eligibility is
+   database-driven (migration 61), not an allowlist:** ownership, an unrestricted
+   account, a website with completed generated source, the canonical billing plan's
+   project ceiling, the published-site count and platform capacity are evaluated by
+   `public.aws_hosting_eligibility` on the server, and the worker re-checks with
+   `aws_hosting_worker_authorization`. `MAVLY_AWS_FRONTEND_HOSTING_PROJECTS` is now
+   only an optional emergency restriction; empty means every eligible project, and a
+   wildcard is refused. Publishing does not consume generation credits. Platform
+   capacity lives in `public.hosting_platform_settings` (service-role only), never in
+   a customer value or environment variable. Apply
+   `61_aws_hosting_eligibility.sql` after 57 before enabling automatic customer
+   onboarding. Existing Vercel/shared rows are never silently switched; customer-owned
+   custom domains remain out of scope. See
+   `docs/architecture/phase-15-aws-frontend-hosting.md` and
+   `docs/runbooks/aws-frontend-setup.md`.
 - `src/lib/vcaas-server.ts` was deleted and must not be recreated. No Totalum host, key or
-  forwarding remains.
+   forwarding remains.
 - Implemented paths authenticate, check `/api/vcaas` scope and project ownership, then use
   Supabase through the caller's RLS-scoped client:
   - project list/create/launch/get/update/delete;

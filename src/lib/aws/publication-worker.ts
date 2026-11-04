@@ -12,8 +12,10 @@ import {
   failAwsFrontendPublication,
   authorizeAwsFrontendRouteRestore,
   authorizeAwsFrontendRouteActivation,
+  authorizeAwsHostingWorker,
   readAwsFrontendSchemaVersion,
   readAwsFrontendFencingSchemaVersion,
+  readAwsHostingCapacity,
   renewAwsFrontendPublication,
 } from "./publication-store";
 import {
@@ -402,6 +404,36 @@ export async function runAwsFrontendPublicationTick(input: {
     };
   }
 
+  /**
+   * Platform capacity is database configuration, not an environment variable and
+   * not a customer-supplied value. A saturated platform leaves the job queued and
+   * reports `empty`; a later tick resumes automatically when capacity frees up.
+   */
+  const capacity = await readAwsHostingCapacity(input.client);
+  if (capacity.ok === false) {
+    console.error("[aws-publication] capacity read failed:", capacity.code);
+    return { status: "unavailable", reason: capacity.code.toLowerCase() };
+  }
+  if (!capacity.data.enabled) {
+    emitAwsPublicationEvent("capacity_throttled", {
+      reason: "platform_hosting_disabled",
+    });
+    return { status: "unavailable", reason: "platform_hosting_disabled" };
+  }
+  if (
+    capacity.data.queuedCount >= capacity.data.maxQueued ||
+    capacity.data.activeCount >= capacity.data.maxActive
+  ) {
+    emitAwsPublicationEvent("capacity_throttled", {
+      reason: "hosting_capacity_exceeded",
+      activeCount: capacity.data.activeCount,
+      queuedCount: capacity.data.queuedCount,
+      maxActive: capacity.data.maxActive,
+      maxQueued: capacity.data.maxQueued,
+    });
+    return { status: "empty", reason: "capacity" };
+  }
+
   const claim = await claimAwsFrontendPublication(input.client);
   if (claim.status === "error") {
     console.error("[aws-publication] claim failed:", claim.code);
@@ -421,8 +453,18 @@ export async function runAwsFrontendPublicationTick(input: {
     generation: claim.routingGeneration,
   });
 
+  /**
+   * The optional operator emergency restriction is checked before the database
+   * eligibility rules. With no restriction configured this is `true` for every
+   * project; the database remains the authority.
+   */
   if (!isAwsFrontendHostingProject(claim.projectId)) {
-    return failClaim(input.client, identity, "INVALID_MANIFEST", false);
+    emitAwsPublicationEvent("eligibility_rejected", {
+      projectId: claim.projectId,
+      versionId: claim.versionId,
+      reason: "project_restricted",
+    });
+    return failClaim(input.client, identity, "PUBLICATION_FAILED", false);
   }
 
   const owner = await input.client
@@ -436,6 +478,34 @@ export async function runAwsFrontendPublicationTick(input: {
   if (!owner.data || owner.data.user_id !== claim.ownerId) {
     return failClaim(input.client, identity, "INVALID_MANIFEST", false);
   }
+
+  /**
+   * Re-evaluate every eligibility rule on the worker. The claim is not proof that
+   * the project is still publishable: the plan may have lapsed, the account may
+   * have been suspended, or the source may have been removed since admission.
+   */
+  const authorization = await authorizeAwsHostingWorker(input.client, {
+    projectId: claim.projectId,
+    ownerId: claim.ownerId,
+  });
+  if (authorization.ok === false) {
+    console.error("[aws-publication] eligibility read failed:", authorization.code);
+    return failClaim(input.client, identity, "PUBLICATION_FAILED", true);
+  }
+  if (!authorization.data.eligible) {
+    emitAwsPublicationEvent("eligibility_rejected", {
+      projectId: claim.projectId,
+      versionId: claim.versionId,
+      reason: authorization.data.reason,
+      plan: authorization.data.planId,
+    });
+    return failClaim(input.client, identity, "PUBLICATION_FAILED", false);
+  }
+  emitAwsPublicationEvent("eligibility_accepted", {
+    projectId: claim.projectId,
+    versionId: claim.versionId,
+    plan: authorization.data.planId,
+  });
 
   const versionResult = await input.client
     .from("project_published_versions")
