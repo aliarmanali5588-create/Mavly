@@ -2318,6 +2318,7 @@ export default function WorkspacePage() {
         open={openModal === "domain"}
         onOpenChange={open => setOpenModal(open ? "domain" : null)}
         project={project}
+        onChanged={() => void fetchProject()}
       />
       <GithubModal
         open={openModal === "github"}

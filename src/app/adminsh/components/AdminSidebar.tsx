@@ -21,6 +21,7 @@ import {
   ShieldCheck,
   Activity,
   Layers,
+  Globe,
 } from "lucide-react";
 import { toast } from "sonner";
 import { AdminNavSection } from "./types";
@@ -81,6 +82,7 @@ export const ADMIN_NAV_GROUPS: NavGroup[] = [
     groupName: "Operations & Health",
     items: [
       { id: "Generation Monitor", label: "Generation Monitor", href: "/adminsh/generation-monitor", icon: Sparkles, badge: "Live" },
+      { id: "Domains", label: "Domains", href: "/adminsh/domains", icon: Globe },
       { id: "System Health", label: "System Health", href: "/adminsh/system-health", icon: Server, badge: "99.9%" },
       { id: "Announcements", label: "Announcements", href: "/adminsh/announcements", icon: Megaphone },
     ],

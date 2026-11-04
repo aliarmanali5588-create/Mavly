@@ -511,6 +511,82 @@ export async function readPublishedFile(
     return { ok: false, error: error.message, code: error.code };
   }
 
+  return normalizePublishedFileRow(data);
+}
+
+/**
+ * ═══ DOMAIN HOSTNAMES (aliases + customer-owned) ════════════════════════════
+ *
+ * `resolve_published_tenant` only understands `<project-id>.mavly.xyz`. A Mavly
+ * alias or a customer hostname resolves through `resolve_public_domain`, which
+ * additionally requires the row to be `active` with ready DNS and an active
+ * certificate. Both halves are needed: the resolver proves which version to
+ * serve, and the read RPC repeats the same gate before returning a byte.
+ *
+ * ⚠️ THE HOSTNAME IS STILL THE ONLY IDENTITY. Nothing here accepts a project id
+ * from the caller, and an inactive/unverified/disabled row resolves to `null`,
+ * which the runtime answers as 404 rather than falling back to a default site.
+ */
+export async function resolvePublicDomain(
+  hostname: string,
+): Promise<HostingStoreResult<ResolvedPublishedTenant | null>> {
+  const supabase = createSupabasePublicClient();
+  if (!supabase) return { ok: false, error: "Supabase is not configured", code: "UNAVAILABLE" };
+
+  const { data, error } = await supabase.rpc("resolve_public_domain", {
+    p_hostname: hostname,
+  });
+
+  if (error) {
+    return { ok: false, error: error.message, code: error.code };
+  }
+
+  const record =
+    data && typeof data === "object" && !Array.isArray(data)
+      ? (data as Record<string, unknown>)
+      : null;
+  if (!record) return { ok: true, data: null };
+  if (typeof record.projectId !== "string" || typeof record.versionId !== "string") {
+    return { ok: true, data: null };
+  }
+
+  return {
+    ok: true,
+    data: {
+      projectId: record.projectId,
+      versionId: record.versionId,
+      publishedAt: null,
+      contentHash: "",
+      entryPath: typeof record.entryPath === "string" ? record.entryPath : "index.html",
+      spaFallback: record.spaFallback === true,
+    },
+  };
+}
+
+export async function readPublicDomainFile(
+  hostname: string,
+  versionId: string,
+  path: string,
+): Promise<HostingStoreResult<StoredPublishedFile | null>> {
+  const supabase = createSupabasePublicClient();
+  if (!supabase) return { ok: false, error: "Supabase is not configured", code: "UNAVAILABLE" };
+
+  const { data, error } = await supabase.rpc("read_public_domain_file", {
+    p_hostname: hostname,
+    p_version_id: versionId,
+    p_path: path,
+  });
+
+  if (error) {
+    return { ok: false, error: error.message, code: error.code };
+  }
+
+  return normalizePublishedFileRow(data);
+}
+
+function normalizePublishedFileRow(
+  data: unknown,
+): HostingStoreResult<StoredPublishedFile | null> {
   const rows = Array.isArray(data) ? data : [];
   const row = rows[0] as Record<string, unknown> | undefined;
   if (!row || typeof row.content !== "string" || typeof row.path !== "string") {

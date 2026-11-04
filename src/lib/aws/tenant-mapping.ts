@@ -103,14 +103,15 @@ function isMissingKey(error: unknown): boolean {
   );
 }
 
-async function updateMapping(
-  projectId: string,
+async function writeMapping(
+  key: string,
   value: string,
   options: {
+    projectId: string;
     allowWhenDisabled?: boolean;
     allowSameGenerationOverride?: boolean;
     expectedVersionId?: string;
-  } = {},
+  },
 ): Promise<void> {
   const config = readAwsFrontendHostingConfig();
   if (
@@ -131,7 +132,7 @@ async function updateMapping(
     let existing: string | null = null;
     try {
       const current = await getClient().send(
-        new GetKeyCommand({ KvsARN: storeArn, Key: projectId }),
+        new GetKeyCommand({ KvsARN: storeArn, Key: key }),
       );
       existing = current.Value ?? null;
     } catch (error) {
@@ -139,7 +140,7 @@ async function updateMapping(
     }
 
     if (existing === value) return;
-    if (existing !== null && storedProjectId(existing) !== projectId) {
+    if (existing !== null && storedProjectId(existing) !== options.projectId) {
       throw new Error("The tenant route belongs to another project.");
     }
     if (
@@ -168,7 +169,7 @@ async function updateMapping(
         new UpdateKeysCommand({
           KvsARN: storeArn,
           IfMatch: description.ETag,
-          Puts: [{ Key: projectId, Value: value }],
+          Puts: [{ Key: key, Value: value }],
         }),
       );
       return;
@@ -176,6 +177,18 @@ async function updateMapping(
       if (!isEtagConflict(error) || attempt === MAX_ETAG_RETRIES - 1) throw error;
     }
   }
+}
+
+async function updateMapping(
+  projectId: string,
+  value: string,
+  options: {
+    allowWhenDisabled?: boolean;
+    allowSameGenerationOverride?: boolean;
+    expectedVersionId?: string;
+  } = {},
+): Promise<void> {
+  await writeMapping(projectId, value, { ...options, projectId });
 }
 
 function isEtagConflict(error: unknown): boolean {
@@ -338,6 +351,168 @@ export async function verifyAwsPublicTenantRouteRemoved(
       signal: AbortSignal.timeout(8_000),
     });
     return response.status === 404;
+  } catch {
+    return false;
+  }
+}
+
+// ── Hostname-keyed mappings (custom domains + Mavly aliases) ────────────────
+//
+// The canonical project-id key above remains unchanged. A hostname mapping is
+// additive and uses the `h:<hostname>` key namespace, so the viewer-request
+// Function can look up an exact host before falling back to the project id. No
+// existing key is renamed, rewritten or removed by these functions.
+
+const HOST_KEY_PREFIX = "h:";
+const HOSTNAME_PATTERN =
+  /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+$/;
+
+export interface AwsHostMapping {
+  hostname: string;
+  projectId: string;
+  versionId: string;
+  entryPath: string;
+  spaFallback: boolean;
+  generation: number;
+}
+
+function hostKey(hostname: string): string {
+  return `${HOST_KEY_PREFIX}${hostname.trim().toLowerCase()}`;
+}
+
+function validateHostnameMapping(mapping: AwsHostMapping): void {
+  const hostname = mapping.hostname.trim().toLowerCase();
+  if (
+    hostname.length < 4 ||
+    hostname.length > 253 ||
+    !HOSTNAME_PATTERN.test(hostname) ||
+    !mavlyHostname(mapping.projectId) ||
+    !Number.isSafeInteger(mapping.generation) ||
+    mapping.generation < 1 ||
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+      mapping.versionId,
+    ) ||
+    !mapping.entryPath ||
+    mapping.entryPath.startsWith("/") ||
+    mapping.entryPath.includes("\\") ||
+    mapping.entryPath
+      .split("/")
+      .some((segment) => !segment || segment === "." || segment === "..")
+  ) {
+    throw new Error("Invalid AWS hostname mapping.");
+  }
+}
+
+export async function readAwsHostMapping(
+  hostname: string,
+  options: { allowWhenDisabled?: boolean } = {},
+): Promise<AwsHostMapping | null> {
+  const config = readAwsFrontendHostingConfig();
+  if (
+    (!(options.allowWhenDisabled && config.keyValueStoreArn) &&
+      (!config.enabled || config.problem !== null)) ||
+    !config.keyValueStoreArn
+  ) {
+    throw new Error(`AWS frontend hosting is not configured: ${config.problem ?? "disabled"}`);
+  }
+  const normalized = hostname.trim().toLowerCase();
+  if (!HOSTNAME_PATTERN.test(normalized)) return null;
+  try {
+    const result = await getClient().send(
+      new GetKeyCommand({ KvsARN: config.keyValueStoreArn, Key: hostKey(normalized) }),
+    );
+    if (!result.Value) return null;
+    const value: unknown = JSON.parse(result.Value);
+    if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+    const record = value as Record<string, unknown>;
+    if (record.hostname !== normalized || record.disabled === true) return null;
+    if (
+      typeof record.projectId !== "string" ||
+      typeof record.versionId !== "string" ||
+      typeof record.entryPath !== "string" ||
+      typeof record.spaFallback !== "boolean" ||
+      typeof record.generation !== "number" ||
+      !Number.isSafeInteger(record.generation) ||
+      record.generation < 1
+    ) {
+      return null;
+    }
+    const mapping: AwsHostMapping = {
+      hostname: normalized,
+      projectId: record.projectId,
+      versionId: record.versionId,
+      entryPath: record.entryPath,
+      spaFallback: record.spaFallback,
+      generation: record.generation,
+    };
+    validateHostnameMapping(mapping);
+    return mapping;
+  } catch (error) {
+    if (isMissingKey(error)) return null;
+    throw error;
+  }
+}
+
+export async function activateAwsHostnameMapping(
+  mapping: AwsHostMapping,
+): Promise<void> {
+  validateHostnameMapping(mapping);
+  const hostname = mapping.hostname.trim().toLowerCase();
+  await writeMapping(
+    hostKey(hostname),
+    JSON.stringify({
+      hostname,
+      projectId: mapping.projectId,
+      versionId: mapping.versionId,
+      entryPath: mapping.entryPath,
+      spaFallback: mapping.spaFallback,
+      generation: mapping.generation,
+    }),
+    { projectId: mapping.projectId },
+  );
+}
+
+export async function removeAwsHostnameMapping(
+  hostname: string,
+  projectId: string,
+  generation: number,
+  expectedVersionId?: string,
+): Promise<void> {
+  const normalized = hostname.trim().toLowerCase();
+  if (!HOSTNAME_PATTERN.test(normalized) || !mavlyHostname(projectId)) {
+    throw new Error("Invalid AWS hostname route removal.");
+  }
+  if (!Number.isSafeInteger(generation) || generation < 1) {
+    throw new Error("Invalid AWS hostname route removal.");
+  }
+  await writeMapping(
+    hostKey(normalized),
+    JSON.stringify({ hostname: normalized, projectId, generation, disabled: true }),
+    { projectId, allowWhenDisabled: true, expectedVersionId, allowSameGenerationOverride: true },
+  );
+}
+
+/** Probe a custom hostname or alias after activation. */
+export async function verifyAwsPublicHostname(input: {
+  hostname: string;
+  projectId: string;
+  versionId: string;
+}): Promise<boolean> {
+  const hostname = input.hostname.trim().toLowerCase();
+  if (!HOSTNAME_PATTERN.test(hostname)) return false;
+  try {
+    const response = await fetch(`https://${hostname}/`, {
+      method: "HEAD",
+      cache: "no-store",
+      redirect: "error",
+      signal: AbortSignal.timeout(8_000),
+    });
+    return (
+      response.status === 200 &&
+      response.headers.get("content-type")?.toLowerCase().startsWith("text/html") === true &&
+      response.headers.get("x-amz-meta-mavly-project-id") === input.projectId &&
+      response.headers.get("x-amz-meta-mavly-version-id") === input.versionId
+    );
   } catch {
     return false;
   }

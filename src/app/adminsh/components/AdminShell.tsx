@@ -51,6 +51,7 @@ const REAL_DATA_SECTIONS = new Set<AdminNavSection>([
   "Credits",
   "AI Usage & Cost",
   "Generation Monitor",
+  "Domains",
   "System Health",
   "Announcements",
   "Audit Logs",

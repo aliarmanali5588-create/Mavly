@@ -53,6 +53,8 @@ interface HarnessOptions {
   eligible?: (projectId: string) => boolean;
   resolve?: TenantServeDependencies["resolveTenant"];
   read?: TenantServeDependencies["readFile"];
+  resolveAlias?: TenantServeDependencies["resolveAlias"];
+  readAliasFile?: TenantServeDependencies["readAliasFile"];
 }
 
 function harness(options: HarnessOptions = {}) {
@@ -74,9 +76,19 @@ function harness(options: HarnessOptions = {}) {
       if (hostname === HOST_B) return { ok: true, data: tenant(PROJECT_B, HOST_B) };
       return { ok: true, data: null };
     },
+    resolveAlias: async (hostname) => {
+      calls.push({ kind: "resolveAlias", value: hostname });
+      if (options.resolveAlias) return options.resolveAlias(hostname);
+      return { ok: true, data: null };
+    },
     readFile: async (hostname, versionId, path) => {
       calls.push({ kind: "readFile", value: { hostname, versionId, path } });
       if (options.read) return options.read(hostname, versionId, path);
+      return { ok: true, data: file(path) };
+    },
+    readAliasFile: async (hostname, versionId, path) => {
+      calls.push({ kind: "readAliasFile", value: { hostname, versionId, path } });
+      if (options.readAliasFile) return options.readAliasFile(hostname, versionId, path);
       return { ok: true, data: file(path) };
     },
     log: () => {},

@@ -29,6 +29,13 @@ import type { AndroidCapability } from "@/lib/android/capability";
 import type { RuntimeSandboxStatus, RuntimeCheck } from "@/lib/runtime-sandbox/types";
 import type { DbRestorePoint } from "@/lib/undo-db-change";
 import type {
+  DomainActionAccepted,
+  ProjectDomainDetail,
+  ProjectDomainView,
+  ProjectDomainsWithCapability,
+  SubdomainAvailability,
+} from "@/lib/domains/types";
+import type {
   ProjectGroup,
   VcaasProject,
   VcaasProjectSummary,
@@ -905,15 +912,88 @@ export const vcaasApi = {
       proxy.delete(`${project(projectId)}/integrations/payments`),
   },
 
-  // ──────────────────────── Custom domain ─────────────────────────
-  // Final VCaaS endpoints: /vcaas/projects/{id}/domain
-  // ⚠️ PAID-PLAN FEATURE.
-  domain: {
-    /** PUT …/domain — attach a custom hostname (project must be deployed first). */
+  // ──────────────────────── Domains ────────────────────────────────
+  //
+  // The canonical `<project-id>.mavly.xyz` address is derived, not a row.
+  // Every call below reaches the authenticated project route; the server
+  // enforces ownership, deployment flags, plan limits and rate limits.
+  domains: {
+    /** GET …/domains — canonical address, attached domains and capability. */
+    overview: (projectId: string): Promise<VcaasResponse<ProjectDomainsWithCapability>> =>
+      proxy.get(`${project(projectId)}/domains`),
+
+    /** GET …/domains/availability?label= — is a Mavly alias available? */
+    availability: (
+      projectId: string,
+      label: string,
+    ): Promise<VcaasResponse<SubdomainAvailability>> =>
+      proxy.get(
+        `${project(projectId)}/domains/availability?label=${encodeURIComponent(label)}`,
+      ),
+
+    /** POST …/domains/subdomains — reserve `<label>.mavly.xyz`. */
+    reserveSubdomain: (
+      projectId: string,
+      label: string,
+    ): Promise<VcaasResponse<ProjectDomainView>> =>
+      proxy.post(`${project(projectId)}/domains/subdomains`, { label }),
+
+    /** POST …/domains/custom — attach a customer-owned hostname. */
+    addCustom: (
+      projectId: string,
+      hostname: string,
+    ): Promise<VcaasResponse<ProjectDomainDetail>> =>
+      proxy.post(`${project(projectId)}/domains/custom`, { hostname }),
+
+    /** GET …/domains/{id} — one domain plus its exact DNS instructions. */
+    get: (projectId: string, domainId: string): Promise<VcaasResponse<ProjectDomainDetail>> =>
+      proxy.get(`${project(projectId)}/domains/${encodeURIComponent(domainId)}`),
+
+    /** POST …/domains/{id}/verify — re-read the TXT ownership record. */
+    verify: (
+      projectId: string,
+      domainId: string,
+    ): Promise<VcaasResponse<DomainActionAccepted>> =>
+      proxy.post(`${project(projectId)}/domains/${encodeURIComponent(domainId)}/verify`, {}),
+
+    /** POST …/domains/{id}/retry — retry routing/SSL provisioning. */
+    retry: (
+      projectId: string,
+      domainId: string,
+    ): Promise<VcaasResponse<DomainActionAccepted>> =>
+      proxy.post(`${project(projectId)}/domains/${encodeURIComponent(domainId)}/retry`, {}),
+
+    /** POST …/domains/{id}/primary — make an active custom domain primary. */
+    primary: (
+      projectId: string,
+      domainId: string,
+    ): Promise<VcaasResponse<ProjectDomainView>> =>
+      proxy.post(`${project(projectId)}/domains/${encodeURIComponent(domainId)}/primary`, {}),
+
+    /** DELETE …/domains/{id} — remove routing, then the row. */
+    remove: (
+      projectId: string,
+      domainId: string,
+    ): Promise<VcaasResponse<DomainActionAccepted>> =>
+      proxy.delete(`${project(projectId)}/domains/${encodeURIComponent(domainId)}`),
+
+    /**
+     * Legacy catalog endpoints, kept so old callers compile. They are NOT the
+     * domain panel's API and remain unimplemented; use the methods above.
+     */
     set: (projectId: string, body: { hostname: string }): Promise<VcaasResponse<unknown>> =>
       proxy.put(`${project(projectId)}/domain`, body),
+    removeLegacy: (projectId: string): Promise<VcaasResponse<unknown>> =>
+      proxy.delete(`${project(projectId)}/domain`),
+  },
 
-    /** DELETE …/domain — remove the custom domain. */
+  /**
+   * Pre-existing copied catalog. Kept ONLY so legacy components compile; both
+   * routes still answer `503 BACKEND_NOT_CONFIGURED`. New work uses `domains`.
+   */
+  domain: {
+    set: (projectId: string, body: { hostname: string }): Promise<VcaasResponse<unknown>> =>
+      proxy.put(`${project(projectId)}/domain`, body),
     remove: (projectId: string): Promise<VcaasResponse<unknown>> =>
       proxy.delete(`${project(projectId)}/domain`),
   },

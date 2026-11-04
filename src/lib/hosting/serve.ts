@@ -26,7 +26,9 @@ import type { HostingEvent } from "./events";
 import { logHostingEvent } from "./events";
 import {
   isHostingStoreFailure,
+  readPublicDomainFile,
   readPublishedFile,
+  resolvePublicDomain,
   resolvePublishedTenant,
   type HostingStoreResult,
   type ResolvedPublishedTenant,
@@ -57,7 +59,20 @@ export interface TenantServeDependencies {
   runtimeEnabled: () => boolean;
   projectEligible: (projectId: string) => boolean;
   resolveTenant: (hostname: string) => Promise<HostingStoreResult<ResolvedPublishedTenant | null>>;
+  /**
+   * Resolve an additive Mavly alias (`<slug>.mavly.xyz`). The canonical
+   * `<project-id>.mavly.xyz` resolver above does not know aliases, so without
+   * this an alias reaches the runtime and 404s. Returns `null` when the hostname
+   * is not an active, verified alias.
+   */
+  resolveAlias: (hostname: string) => Promise<HostingStoreResult<ResolvedPublishedTenant | null>>;
   readFile: (
+    hostname: string,
+    versionId: string,
+    path: string,
+  ) => Promise<HostingStoreResult<StoredPublishedFile | null>>;
+  /** Read a file for an alias hostname (same gate as `resolveAlias`). */
+  readAliasFile: (
     hostname: string,
     versionId: string,
     path: string,
@@ -69,7 +84,9 @@ const DEFAULT_TENANT_SERVE_DEPENDENCIES: TenantServeDependencies = {
   runtimeEnabled: () => isSharedHostingRuntimeEnabled(),
   projectEligible: (projectId) => isSharedHostingProject(projectId),
   resolveTenant: resolvePublishedTenant,
+  resolveAlias: resolvePublicDomain,
   readFile: readPublishedFile,
+  readAliasFile: readPublicDomainFile,
   log: logHostingEvent,
 };
 
@@ -142,12 +159,40 @@ export async function serveTenantRequest(
     });
     return textResponse(503, "This site is temporarily unavailable.");
   }
-  if (!resolved.data) {
-    deps.log("tenant_unresolved", { host: tenant.hostname, reason: "not_published" });
-    return textResponse(404, "This site is not published.");
-  }
 
-  const version = resolved.data;
+  /**
+   * ═══ ALIAS FALLBACK ═══════════════════════════════════════════════════════
+   *
+   * `resolve_published_tenant` matches the canonical `<project-id>.mavly.xyz`
+   * hostname only. A human-readable alias (`<slug>.mavly.xyz`) is an additive
+   * domain row, so it resolves to nothing there and would 404 even while the
+   * row is active. Fall back to the domain resolver, which requires the row to
+   * be active with ready DNS and an active certificate.
+   *
+   * ⚠️ THE PROJECT MUST STILL BE IN THE SHARED COHORT. The alias resolver proves
+   * the domain is active; it does not prove the operator still wants this
+   * project served by the Next runtime. That check stays below and applies to
+   * both paths, so an alias cannot bypass the cohort off-switch.
+   */
+  let version = resolved.data;
+  let viaAlias = false;
+  if (!version) {
+    const alias = await deps.resolveAlias(tenant.hostname);
+    if (isHostingStoreFailure(alias)) {
+      deps.log("tenant_error", {
+        host: tenant.hostname,
+        stage: "resolve_alias",
+        code: alias.code,
+      });
+      return textResponse(503, "This site is temporarily unavailable.");
+    }
+    if (!alias.data) {
+      deps.log("tenant_unresolved", { host: tenant.hostname, reason: "not_published" });
+      return textResponse(404, "This site is not published.");
+    }
+    version = alias.data;
+    viaAlias = true;
+  }
 
   /**
    * ⚠️ THE COHORT IS A REAL OFF-SWITCH. The resolver proves what is published;
@@ -172,7 +217,9 @@ export async function serveTenantRequest(
   if (candidates.length === 0) return textResponse(404, "Not found");
 
   for (const candidate of candidates) {
-    const file = await deps.readFile(tenant.hostname, version.versionId, candidate.path);
+    const file = viaAlias
+      ? await deps.readAliasFile(tenant.hostname, version.versionId, candidate.path)
+      : await deps.readFile(tenant.hostname, version.versionId, candidate.path);
     if (isHostingStoreFailure(file)) {
       deps.log("tenant_error", {
         host: tenant.hostname,

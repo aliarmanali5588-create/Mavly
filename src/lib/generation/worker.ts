@@ -45,6 +45,7 @@ import {
   type AndroidBuildTickSummary,
 } from "@/lib/android/build-worker";
 import type { AwsPublicationTickSummary } from "@/lib/aws/publication-worker";
+import type { DomainTickSummary } from "@/lib/domains/worker";
 import { androidBuildConfig } from "@/lib/android/build-config";
 import {
   LEASE_RENEW_INTERVAL_MS,
@@ -87,6 +88,8 @@ export interface WorkerTickResult {
   androidBuild?: AndroidBuildTickSummary;
   /** Present only when this tick advanced the AWS static-publication queue. */
   awsPublication?: AwsPublicationTickSummary;
+  /** Present only when this tick advanced the domain-provisioning queue. */
+  domainProvisioning?: DomainTickSummary;
 }
 
 export interface WorkerVerificationSummary {
@@ -205,22 +208,41 @@ export async function runGenerationWorkerOnce(
     const awsPublication = verificationAdvanced || androidAdvanced
       ? null
       : await runAwsPublicationSafely(client);
+    const awsPublicationAdvanced =
+      awsPublication !== null &&
+      ["completed", "unpublished"].includes(awsPublication.status);
+    /**
+     * Domain provisioning is the last side queue. It runs only when nothing
+     * else advanced, so it can never delay a generation claim, verification,
+     * an Android build or a publication. A publication that just completed
+     * enqueues hostname routes; the following empty tick advances them.
+     */
+    const domainProvisioning =
+      verificationAdvanced || androidAdvanced || awsPublicationAdvanced
+        ? null
+        : await runDomainProvisioningSafely(client);
     const awsPublicationNeedsBackoff =
       awsPublication !== null &&
       ["error", "retry", "failed", "unavailable"].includes(awsPublication.status);
     const awsPublicationUnavailable = awsPublication?.status === "unavailable";
+    const domainNeedsBackoff =
+      domainProvisioning !== null &&
+      ["error", "retry", "failed", "unavailable"].includes(domainProvisioning.status);
     return {
-      status: awsPublicationUnavailable
-        ? "unavailable"
-        : awsPublicationNeedsBackoff
-          ? "error"
-          : "empty",
+      status:
+        awsPublicationUnavailable || domainProvisioning?.status === "unavailable"
+          ? "unavailable"
+          : awsPublicationNeedsBackoff || domainNeedsBackoff
+            ? "error"
+            : "empty",
       ...(awsPublicationNeedsBackoff ? { reason: "aws_publication_tick_failed" } : {}),
+      ...(domainNeedsBackoff ? { reason: "domain_provisioning_tick_failed" } : {}),
       recovered,
       ...(credits ? { credits } : {}),
       ...(verification ? { verification } : {}),
       ...(androidBuild ? { androidBuild } : {}),
       ...(awsPublication ? { awsPublication } : {}),
+      ...(domainProvisioning ? { domainProvisioning } : {}),
     };
   }
   if (parsed.status === "dead_letter") {
@@ -412,6 +434,28 @@ async function runAwsPublicationSafely(
   } catch {
     emitGenerationEvent("generation.worker_error", {
       reason: "aws_publication_tick_failed",
+    });
+    return { status: "error", reason: "unhandled" };
+  }
+}
+
+async function runDomainProvisioningSafely(
+  client: SupabaseClient,
+): Promise<DomainTickSummary | null> {
+  try {
+    const { runDomainProvisioningTick } = await import("@/lib/domains/worker");
+    const tick = await runDomainProvisioningTick({ client });
+    if (tick.status === "unavailable" && tick.reason === "disabled") return null;
+    if (tick.status === "empty") return null;
+    if (tick.status === "error") {
+      emitGenerationEvent("generation.worker_error", {
+        reason: "domain_provisioning_tick_failed",
+      });
+    }
+    return tick;
+  } catch {
+    emitGenerationEvent("generation.worker_error", {
+      reason: "domain_provisioning_tick_failed",
     });
     return { status: "error", reason: "unhandled" };
   }

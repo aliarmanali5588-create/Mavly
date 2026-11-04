@@ -220,6 +220,18 @@ import {
   updateProjectSecret,
   type ProjectSecretServiceFailure,
 } from "@/lib/project-secrets/service";
+import {
+  addCustomDomain,
+  checkSubdomain,
+  getProjectDomainDetail,
+  getProjectDomains,
+  requestDomainProvisioning,
+  requestDomainRemoval,
+  requestDomainVerification,
+  requestPrimaryDomain,
+  reserveSubdomain,
+  type DomainServiceFailure,
+} from "@/lib/domains/service";
 import { publicIntegrationCatalog } from "@/lib/integrations/contracts";
 import {
   disablePaymentsIntegration,
@@ -630,6 +642,39 @@ export async function handleMavlyVcaasRequest(input: MavlyRequest): Promise<Next
       if (method === "DELETE") {
         return deleteProjectSecretResponse(userId, projectId, secretId);
       }
+    }
+  }
+  /**
+   * ═══ DOMAINS ══════════════════════════════════════════════════════════════
+   *
+   * The canonical `<project-id>.mavly.xyz` address is derived from the project
+   * id and is NOT a row here. These routes manage additive Mavly aliases and
+   * customer-owned hostnames. Reads stay available when the feature is off;
+   * every write fails closed with the exact deployment reason.
+   */
+  if (action === "domains" && method === "GET") {
+    return projectDomainsResponse(projectId);
+  }
+  if (action === "domains/availability" && method === "GET") {
+    return domainAvailabilityResponse(query);
+  }
+  if (action === "domains/subdomains" && method === "POST") {
+    return reserveSubdomainResponse(projectId, body);
+  }
+  if (action === "domains/custom" && method === "POST") {
+    return addCustomDomainResponse(projectId, body);
+  }
+  if (action.startsWith("domains/")) {
+    const rest = action.slice("domains/".length).split("/");
+    const domainId = rest[0];
+    if (domainId && rest.length === 1) {
+      if (method === "GET") return projectDomainResponse(projectId, domainId);
+      if (method === "DELETE") return removeDomainResponse(projectId, domainId);
+    }
+    if (domainId && rest.length === 2 && method === "POST") {
+      if (rest[1] === "verify") return verifyDomainResponse(projectId, domainId);
+      if (rest[1] === "retry") return retryDomainResponse(projectId, domainId);
+      if (rest[1] === "primary") return primaryDomainResponse(projectId, domainId);
     }
   }
   if (action === "files/tree" && method === "GET") {
@@ -3739,6 +3784,94 @@ function toConversationMessage(row: MessageRow): ConversationMessage {
     createdAt: row.created_at,
     ...(row.restore_snapshot_id ? { restoreSnapshotId: row.restore_snapshot_id } : {}),
   };
+}
+
+function domainFailureResponse(failure: DomainServiceFailure): NextResponse {
+  return fail(
+    failure.status,
+    failure.code,
+    failure.error,
+    failure.retryAfterSeconds
+      ? { "retry-after": String(failure.retryAfterSeconds) }
+      : undefined,
+  );
+}
+
+async function projectDomainsResponse(projectId: string): Promise<NextResponse> {
+  const result = await getProjectDomains(projectId);
+  if (!result.ok) return domainFailureResponse(result as never);
+  return ok(result.data);
+}
+
+async function domainAvailabilityResponse(query: URLSearchParams): Promise<NextResponse> {
+  const result = await checkSubdomain(query.get("label") ?? "");
+  if (!result.ok) return domainFailureResponse(result as never);
+  return ok(result.data);
+}
+
+async function reserveSubdomainResponse(
+  projectId: string,
+  body: unknown,
+): Promise<NextResponse> {
+  const label = stringOf(recordOf(body).label) ?? "";
+  const result = await reserveSubdomain(projectId, label);
+  if (!result.ok) return domainFailureResponse(result as never);
+  return ok(result.data);
+}
+
+async function addCustomDomainResponse(
+  projectId: string,
+  body: unknown,
+): Promise<NextResponse> {
+  const hostname = stringOf(recordOf(body).hostname) ?? "";
+  const result = await addCustomDomain(projectId, hostname);
+  if (!result.ok) return domainFailureResponse(result as never);
+  return ok(result.data);
+}
+
+async function projectDomainResponse(
+  projectId: string,
+  domainId: string,
+): Promise<NextResponse> {
+  const result = await getProjectDomainDetail(projectId, domainId);
+  if (!result.ok) return domainFailureResponse(result as never);
+  return ok(result.data);
+}
+
+async function verifyDomainResponse(
+  projectId: string,
+  domainId: string,
+): Promise<NextResponse> {
+  const result = await requestDomainVerification(projectId, domainId);
+  if (!result.ok) return domainFailureResponse(result as never);
+  return ok(result.data);
+}
+
+async function retryDomainResponse(
+  projectId: string,
+  domainId: string,
+): Promise<NextResponse> {
+  const result = await requestDomainProvisioning(projectId, domainId);
+  if (!result.ok) return domainFailureResponse(result as never);
+  return ok(result.data);
+}
+
+async function removeDomainResponse(
+  projectId: string,
+  domainId: string,
+): Promise<NextResponse> {
+  const result = await requestDomainRemoval(projectId, domainId);
+  if (!result.ok) return domainFailureResponse(result as never);
+  return ok(result.data);
+}
+
+async function primaryDomainResponse(
+  projectId: string,
+  domainId: string,
+): Promise<NextResponse> {
+  const result = await requestPrimaryDomain(projectId, domainId);
+  if (!result.ok) return domainFailureResponse(result as never);
+  return ok(result.data);
 }
 
 function ok(data: unknown): NextResponse {

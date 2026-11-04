@@ -253,20 +253,47 @@ Resources:
           const request = event.request;
           const hostHeader = request.headers.host;
           const host = hostHeader && hostHeader.value ? hostHeader.value.toLowerCase() : '';
-           const match = /^([a-z](?:[a-z0-9]|-(?=[a-z0-9])){0,62})\.mavly\.xyz$/.exec(host);
-           if (!match) return notFound;
-           const projectId = match[1];
-           if (projectId.startsWith('xn--') || RESERVED[projectId] === true) return notFound;
+          const PROJECT_ID = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/;
+          const canonical = /^([a-z](?:[a-z0-9]|-(?=[a-z0-9])){0,62})\.mavly\.xyz$/.exec(host);
 
           let route;
+          let routeKey = null;
           try {
-            if (!await routes.exists(projectId)) return notFound;
-            route = await routes.get(projectId, { format: 'json' });
+            // 1) The canonical <project-id>.mavly.xyz key, unchanged.
+            if (canonical) {
+              const label = canonical[1];
+              if (!label.startsWith('xn--') && RESERVED[label] !== true && await routes.exists(label)) {
+                const candidate = await routes.get(label, { format: 'json' });
+                if (candidate && candidate.projectId === label) {
+                  route = candidate;
+                  routeKey = label;
+                }
+              }
+            }
+            // 2) An additive hostname-keyed route for an alias or custom domain.
+            if (!route) {
+              const hostKey = 'h:' + host;
+              if (await routes.exists(hostKey)) {
+                const candidate = await routes.get(hostKey, { format: 'json' });
+                if (candidate && candidate.hostname === host) {
+                  route = candidate;
+                  routeKey = hostKey;
+                }
+              }
+            }
           } catch (_) {
             return unavailable;
           }
-          if (!route || route.projectId !== projectId ||
-              !Number.isSafeInteger(route.generation) || route.generation < 1) {
+          if (!route || !routeKey) return notFound;
+          if (typeof route.projectId !== 'string' || route.projectId.length > 63 ||
+              !PROJECT_ID.test(route.projectId) || route.projectId.startsWith('xn--')) {
+            return notFound;
+          }
+          if (canonical && routeKey === canonical[1] && route.projectId !== canonical[1]) {
+            return notFound;
+          }
+          if (routeKey !== route.projectId && route.hostname !== host) return notFound;
+          if (!Number.isSafeInteger(route.generation) || route.generation < 1) {
             return notFound;
           }
           if (route.disabled === true) return notFound;
@@ -294,7 +321,7 @@ Resources:
             requested += '/index.html';
           }
 
-          request.uri = '/' + projectId + '/' + route.versionId + '/' + requested;
+          request.uri = '/' + route.projectId + '/' + route.versionId + '/' + requested;
           return request;
         }
   OriginAccessControl:

@@ -6,6 +6,7 @@ export type AdminNavSection =
   | "Generation Monitor"
   | "Projects"
   | "Credits"
+  | "Domains"
   | "Announcements"
   | "System Health"
   | "Audit Logs"

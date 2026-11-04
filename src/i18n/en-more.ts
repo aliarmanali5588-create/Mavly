@@ -441,7 +441,7 @@ export const enMore = {
       intro: "The address Mavly creates when you publish this project. It is derived from the project id and served by the configured static host.",
       notPublished: "Not published yet. Use Publish to create the Mavly address.",
       customTitle: "Custom domains",
-      customUnavailable: "Custom domains are not available in this Mavly build. No domain purchase, attachment or DNS verification is implemented, so this page does not pretend to manage one."
+      customUnavailable: "Custom domains are not enabled on this deployment. The Mavly address above still works; an operator enables custom domains and aliases separately."
     },
     projectSettings: {
       name: "Project name",

@@ -20,12 +20,18 @@ import {
 } from "./publication-store";
 import {
   activateAwsTenantMapping,
+  removeAwsHostnameMapping,
   removeAwsTenantMapping,
   restoreAwsTenantMapping,
   readAwsTenantMapping,
   verifyAwsTenantRoute,
   verifyAwsPublicTenantRouteRemoved,
 } from "./tenant-mapping";
+import {
+  enqueueProjectDomainRoutes,
+  listProjectDomainRoutes,
+  suspendProjectDomainRoutes,
+} from "@/lib/domains/store";
 import {
   AwsPublicationLeaseLostError,
   publishToS3,
@@ -350,6 +356,60 @@ export async function runAwsFrontendPublicationTick(input: {
     }
     if (!owner.data || owner.data.user_id !== unpublishClaim.ownerId) {
       return failUnpublishClaim(input.client, identity, "owner_mismatch", false);
+    }
+
+    /**
+     * ═══ DOMAIN ROUTES FIRST ════════════════════════════════════════════════
+     *
+     * An alias or custom hostname is served by an additive `h:<hostname>` KVS
+     * mapping. Unpublishing only the canonical project-id key would leave those
+     * hostnames serving a version this project no longer publishes. Remove each
+     * mapping before the canonical route, then reflect the suspension in the
+     * database. A migration-62 absence means no domain rows can exist; any other
+     * failure is retried rather than silently leaving a live route behind.
+     */
+    const routes = await listProjectDomainRoutes(input.client, unpublishClaim.projectId);
+    if (!routes.ok && (routes as { ok: false; code?: string }).code !== "MIGRATION_REQUIRED") {
+      console.error("[aws-publication] domain route lookup failed:", {
+        projectId: unpublishClaim.projectId,
+      });
+      return failUnpublishClaim(input.client, identity, "domain_route_lookup_failed", true);
+    }
+    if (routes.ok) {
+      for (const route of routes.data) {
+        if (route.routingProvider === "none" && route.routingGeneration < 1) continue;
+        try {
+          await removeAwsHostnameMapping(
+            route.hostname,
+            unpublishClaim.projectId,
+            Math.max(route.routingGeneration, unpublishClaim.routingGeneration, 1),
+            undefined,
+          );
+        } catch {
+          console.error("[aws-publication] domain route removal failed:", {
+            projectId: unpublishClaim.projectId,
+            domainId: route.id,
+          });
+          return failUnpublishClaim(
+            input.client,
+            identity,
+            "domain_route_removal_failed",
+            true,
+          );
+        }
+      }
+      const suspended = await suspendProjectDomainRoutes(
+        input.client,
+        unpublishClaim.projectId,
+      );
+      if (!suspended.ok && (suspended as { ok: false; code?: string }).code !== "MIGRATION_REQUIRED") {
+        return failUnpublishClaim(
+          input.client,
+          identity,
+          "domain_suspend_failed",
+          true,
+        );
+      }
     }
 
     try {
@@ -772,5 +832,19 @@ export async function runAwsFrontendPublicationTick(input: {
     versionId: claim.versionId,
     generation: claim.routingGeneration,
   });
+
+  /**
+   * A new active version changes what every alias/custom hostname must serve.
+   * Enqueue their routing jobs; the domain worker re-points and re-verifies each
+   * mapping on its own tick. This is best-effort only AFTER the publication is
+   * durably complete, so a domain-queue failure can never roll back a publish or
+   * report it as failed. The previous hostname mapping keeps serving the previous
+   * immutable version until the next tick updates it.
+   */
+  const routes = await enqueueProjectDomainRoutes(input.client, claim.projectId);
+  if (!routes.ok && (routes as { ok: false; code?: string }).code !== "MIGRATION_REQUIRED") {
+    console.error("[aws-publication] could not enqueue domain routes:", (routes as { ok: false; code?: string }).code);
+  }
+
   return { status: "completed", versionId: claim.versionId };
 }

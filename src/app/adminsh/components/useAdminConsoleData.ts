@@ -56,7 +56,7 @@ interface QueryState<T> {
  * `url` may be null, which parks the hook in a loading-free idle state — used
  * when a detail drawer is closed.
  */
-function useAdminQuery<T>(
+export function useAdminQuery<T>(
   url: string | null,
   options: { timeoutMs?: number; pollMs?: number; label: string }
 ): QueryState<T> {
