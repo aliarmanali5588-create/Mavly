@@ -407,10 +407,11 @@ export default function AdminDomainsPage() {
         <div className="flex items-start gap-2 text-[11px] text-muted-foreground px-1">
           <Lock className="w-3.5 h-3.5 mt-0.5 shrink-0" />
           <p>
-            Approving a custom hostname records the decision and an audit entry. It does not add a
-            CloudFront alias or issue a certificate; those remain operator actions, and a hostname
-            stays <span className="font-mono">provisioning</span> until the public probe confirms it
-            serves the published version.
+            Approving a custom hostname records the decision and an audit entry. It does not
+            attach the hostname at the hosting provider or issue a certificate; the domain
+            worker does that, and a hostname stays <span className="font-mono">provisioning</span>{" "}
+            until Vercel reports it verified and the public HTTPS probe confirms it serves the
+            published version.
           </p>
         </div>
       </div>

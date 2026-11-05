@@ -1,12 +1,28 @@
 # AWS FRONTEND HOSTING + NEON BACKEND IMPLEMENTATION CHECKLIST
 
-**Status**: IN PROGRESS  
-**Last Updated**: 2026-11-02  
-**Target Completion**: Production-ready repository  
+> **RETIRED / HISTORICAL — NOT INSTRUCTIONS.** Every AWS customer frontend hosting
+> item below describes an implementation that **no longer exists**. Mavly removed the
+> S3 publisher, the CloudFront KeyValueStore routing, the publication worker, its
+> eligibility code, the SDK dependencies and its environment variables. Vercel is the
+> only customer frontend hosting provider. Do not create these files, buckets,
+> distributions or variables. The AWS EC2 **generation** worker is unrelated and is
+> preserved; see `docs/runbooks/aws-generation-worker.md`. Current hosting documentation:
+> `docs/runbooks/vercel-customer-hosting.md` and
+> `docs/architecture/phase-17-domain-publishing.md`. The retirement is recorded by
+> `supabase/migrations/65_retire_aws_frontend_hosting.sql`.
+
+**Status**: SUPERSEDED (AWS frontend hosting removed; Neon parts remain as historical notes)  
+**Last Updated**: 2026-11-05  
+**Target Completion**: n/a  
 
 ---
 
-## PHASE 1: AWS FRONTEND INFRASTRUCTURE
+## PHASE 1: AWS FRONTEND INFRASTRUCTURE — RETIRED
+
+> Every file, package, bucket and flag named in Phases 1–4 was deleted with the AWS
+> frontend hosting stack. The unchecked items below are a historical record of that
+> retired design and are **not instructions**; `src/lib/aws/` no longer exists and no
+> `@aws-sdk` package is installed.
 
 ### 1.1 S3 Publisher Implementation
 - [ ] Create `src/lib/aws/config.ts` — AWS configuration parsing and validation
@@ -175,7 +191,10 @@
 
 ---
 
-## PHASE 5: TENANT HOSTING MIGRATION
+## PHASE 5: TENANT HOSTING MIGRATION (RETIRED — DO NOT EXECUTE)
+
+> The AWS S3/CloudFront tenant hosting described in Phases 5–7 was removed. The items
+> below are kept only as history; the flag names no longer exist in code or `.env.example`.
 
 ### 5.1 Legacy Preservation
 - [ ] Existing Supabase published files remain intact
@@ -193,8 +212,8 @@
 - [ ] Alert if fallback rate > 5%
 
 ### 5.3 Staged Rollout
-- [ ] Feature flag: `MAVLY_AWS_FRONTEND_HOSTING_ENABLED`
-- [ ] Cohort flag: `MAVLY_AWS_FRONTEND_HOSTING_PROJECTS`
+- [x] REMOVED — `MAVLY_AWS_FRONTEND_HOSTING_ENABLED` was deleted with the AWS hosting stack
+- [x] REMOVED — `MAVLY_AWS_FRONTEND_HOSTING_PROJECTS` was deleted with the AWS hosting stack
 - [ ] Begin with internal test projects (10%)
 - [ ] Monitor for 7 days
 - [ ] Expand to 50%, then 100%

@@ -228,7 +228,7 @@ Failure handling:
 
 1. **A hosting runtime for generated Next.js server code.** This repository has no approved
    runtime for generated app server code: Phase 5 full-stack hosting is Vercel-based and
-   off by default, customer Vercel publishing is retired, and Phase 13's E2B sandbox is a
+   off by default, customer frontend publishing is Vercel (Phase 16), and Phase 13's E2B sandbox is a
    React + Vite *dev-server preview*, not hosting. Per this task's constraints Vercel is not
    to be reintroduced. Consequence: the data API and auth endpoints are real and exercisable
    over HTTP, but a generated app cannot be served end-to-end inside this repository today.

@@ -19,9 +19,12 @@ export type DeploymentStatus =
 export type MavlyDomainStatus = "pending" | "verified" | "error";
 
 /**
- * `vercel` — one per-project Vercel deployment (legacy, still supported);
+ * `vercel` — one per-project Vercel deployment; the primary customer frontend
+ * hosting provider since Phase 16;
  * `shared` — an immutable published version served by Mavly's tenant runtime;
- * `aws` — an immutable version published to private S3 and routed by CloudFront.
+ * `aws` — an ARCHIVED historical publication. The AWS frontend hosting
+ * implementation was removed, so no new row uses `aws` and this deployment
+ * neither republishes nor rewrites such a row; it is display-only history.
  */
 export type DeploymentProvider = "vercel" | "shared" | "aws";
 
@@ -101,8 +104,7 @@ export async function getDeploymentRow(projectId: string): Promise<DeploymentSto
 export interface BeginDeploymentOptions {
   /**
    * Shared publishing keeps `last_published_at` describing the last SUCCESSFUL
-   * publication. A failed attempt must not rewrite the timestamp of the version
-   * that is still live. The legacy Vercel path keeps its existing behaviour.
+   * publication. A failed attempt must not rewrite the timestamp of the version     * that is still live. The Vercel path keeps its existing behaviour.
    */
   preserveLastPublishedAt?: boolean;
 }

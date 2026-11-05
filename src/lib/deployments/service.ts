@@ -14,6 +14,14 @@
  *   5. records the Vercel ids, build state and domain state in
  *      public.project_deployments.
  *
+ * ═══ PROVIDER SELECTION (PHASE 18) ═════════════════════════════════
+ *
+ * Vercel is the ONLY customer-generated frontend hosting platform. AWS customer
+ * frontend hosting (S3/CloudFront) was removed from this repository. A row that
+ * recorded an AWS publication is kept as a HISTORICAL record: it is never
+ * republished, never switched to Vercel silently and never deleted here. The AWS
+ * EC2 generation worker is unrelated to this module and is preserved.
+ *
  * ⚠️ ONLY STATIC FILES ARE PUBLISHED. Source that needs a framework build is
  * refused with an actionable message instead of being reported as a failed
  * build. Neither Mavly nor Vercel executes the imported source.
@@ -29,25 +37,6 @@ import {
   isSharedHostingRuntimeEnabled,
   sharedDeploymentName,
 } from "@/lib/hosting/config";
-import {
-  isAwsFrontendHostingProject,
-  readAwsFrontendHostingConfig,
-} from "@/lib/aws/config";
-import {
-  awsHostingEligibilityMessage,
-  isAwsHostingEligibilityReason,
-  type AwsHostingEligibilityReason,
-} from "@/lib/aws/eligibility";
-import { readAwsHostingEligibility } from "@/lib/aws/eligibility-store";
-import {
-  enqueueAwsFrontendPublication,
-  enqueueAwsFrontendUnpublish,
-  readAwsFrontendFencingSchemaVersion,
-  readAwsFrontendSchemaVersion,
-} from "@/lib/aws/publication-store";
-import {
-  verifyAwsPublicTenantRoute,
-} from "@/lib/aws/tenant-mapping";
 import { logHostingEvent } from "@/lib/hosting/events";
 import type { HostingEvent } from "@/lib/hosting/events";
 import { isFullstackHostingRequested } from "@/lib/hosting/fullstack-config";
@@ -61,6 +50,7 @@ import { enforceDeploymentApproval } from "@/lib/orchestration/approval-gate";
 import { contentTypeForPath } from "@/lib/hosting/published-version";
 import { verifySharedPublication } from "@/lib/hosting/serve";
 import type { SharedPublicationProbe } from "@/lib/hosting/serve";
+import { activateVercelPublication } from "@/lib/hosting/vercel-publication";
 import {
   activateSharedPublication,
   createPublishedVersion,
@@ -162,40 +152,6 @@ function fail(
 
 function fromVercel(failure: VercelFailure): DeploymentServiceResult<never> {
   return { ok: false, ...publicDeploymentFailure(failure) };
-}
-
-/**
- * Translate a database eligibility reason into a truthful API refusal.
- *
- * ⚠️ NO REASON EVER FALLS BACK TO A DIFFERENT HOSTING PROVIDER. If AWS hosting is
- * enabled on this deployment, an ineligible project is refused with its exact
- * reason rather than silently published elsewhere.
- */
-function awsEligibilityFailure(
-  reason: AwsHostingEligibilityReason,
-): DeploymentServiceResult<never> {
-  const message = awsHostingEligibilityMessage(reason);
-  switch (reason) {
-    case "project_not_found":
-      return fail(404, "PROJECT_NOT_FOUND", message);
-    case "ownership_mismatch":
-      return fail(403, "FORBIDDEN", message);
-    case "project_not_publishable":
-    case "generation_incomplete":
-      return fail(400, "VALIDATION", message);
-    case "plan_not_allowed":
-      return fail(403, "HOSTING_PLAN_REQUIRED", message);
-    case "project_limit_reached":
-      return fail(403, "HOSTING_LIMIT_REACHED", message);
-    case "user_suspended":
-      return fail(403, "ACCOUNT_SUSPENDED", message);
-    case "platform_hosting_disabled":
-      return fail(503, "HOSTING_DISABLED", message);
-    case "hosting_capacity_exceeded":
-      return fail(429, "HOSTING_CAPACITY_EXCEEDED", message, 60);
-    default:
-      return fail(500, "UNKNOWN", "Could not evaluate hosting eligibility.");
-  }
 }
 
 function storedStatusFor(readyState: string): StoredDeploymentStatus {
@@ -717,111 +673,6 @@ export async function publishSharedVersion(
   return { ok: true, data: wireDeploymentStatus(saved.data) };
 }
 
-async function enqueueAwsPublication(input: {
-  projectId: string;
-  site: StaticSite;
-  publishFiles: readonly StaticPublishFile[];
-}): Promise<DeploymentServiceResult<WireDeploymentStatus>> {
-  const { projectId, site, publishFiles } = input;
-  const schema = await readAwsFrontendSchemaVersion();
-  if (schema.ok === false) {
-    return fail(
-      schema.code === "MIGRATION_REQUIRED" ? 503 : 500,
-      schema.code === "MIGRATION_REQUIRED" ? "BACKEND_NOT_CONFIGURED" : "UNKNOWN",
-      schema.error,
-    );
-  }
-  if (schema.data < 51) {
-    return fail(
-      503,
-      "BACKEND_NOT_CONFIGURED",
-      "AWS frontend hosting is not installed. Apply migration 51_aws_frontend_deployment.sql.",
-    );
-  }
-  const fencingSchema = await readAwsFrontendFencingSchemaVersion();
-  if (fencingSchema.ok === false || fencingSchema.data < 56) {
-    return fail(
-      503,
-      "BACKEND_NOT_CONFIGURED",
-      "AWS frontend hosting hardening is not installed. Apply migration 56_aws_frontend_fencing_and_status.sql.",
-    );
-  }
-
-  const prepared = preparePublishedFiles(publishFiles, contentTypeForPath);
-  if (isHostingStoreFailure(prepared)) {
-    return fail(400, "VALIDATION", prepared.error);
-  }
-
-  const began = await beginDeployment(
-    projectId,
-    "",
-    "aws",
-    { preserveLastPublishedAt: true },
-  );
-  if (isDeploymentStoreFailure(began)) {
-    const migration = migrationFailure(began.code, began.error);
-    if (migration) return migration;
-    return began.code === "CONFLICT"
-      ? fail(409, "VALIDATION", began.error)
-      : fail(500, "UNKNOWN", "Could not start the AWS publish.");
-  }
-
-  const version = await createPublishedVersion({
-    projectId,
-    prepared: prepared.data,
-    entryPath: "index.html",
-    spaFallback: site.generated,
-  });
-  if (isHostingStoreFailure(version)) {
-    await updateDeploymentRow(projectId, {
-      status: "error",
-      error_code: "aws_version_store_failed",
-      error_message: "Mavly could not store the published website.",
-    });
-    const migration = migrationFailure(version.code, version.error);
-    if (migration) return migration;
-    return fail(500, "UNKNOWN", "Mavly could not store the published website.");
-  }
-
-  const queued = await enqueueAwsFrontendPublication({
-    projectId,
-    versionId: version.data.id,
-  });
-  if (queued.ok === false) {
-    await markPublishedVersionFailed(version.data.id);
-    await updateDeploymentRow(projectId, {
-      status: "error",
-      error_code: "aws_queue_failed",
-      error_message:
-        "Mavly could not queue the AWS publication.",
-    });
-    /**
-     * The enqueue RPC re-evaluates eligibility. A plan, suspension or capacity
-     * change between the service check and the transaction is reported with its
-     * exact reason instead of a generic database error.
-     */
-    const eligibilityReason = /HOSTING_NOT_ELIGIBLE:([a-z_]+)/i.exec(queued.error)?.[1];
-    if (isAwsHostingEligibilityReason(eligibilityReason)) {
-      return awsEligibilityFailure(eligibilityReason);
-    }
-    return fail(
-      queued.code === "MIGRATION_REQUIRED" ? 503 : 500,
-      queued.code === "MIGRATION_REQUIRED" ? "BACKEND_NOT_CONFIGURED" : "UNKNOWN",
-      queued.error,
-    );
-  }
-
-  const recorded = await getDeploymentRow(projectId);
-  if (isDeploymentStoreFailure(recorded) || !recorded.data) {
-    return fail(
-      500,
-      "UNKNOWN",
-      "The AWS publication was queued, but Mavly could not refresh its status.",
-    );
-  }
-  return { ok: true, data: wireDeploymentStatus(recorded.data) };
-}
-
 /**
  * Re-prove a pending shared publication. A transient lookup/read failure keeps
  * the row `pending` (and therefore non-successful) instead of inventing either a
@@ -900,74 +751,6 @@ async function unpublishSharedProject(
   }
 }
 
-async function unpublishAwsProject(
-  projectId: string,
-  lease: string,
-  previousStatus: StoredDeploymentStatus,
-  unpublishingRow: DeploymentRow,
-): Promise<DeploymentServiceResult<WireDeploymentStatus>> {
-  const queued = await enqueueAwsFrontendUnpublish({
-    projectId,
-    leaseUpdatedAt: lease,
-  });
-  if (queued.ok === false) {
-    const restoredStatus =
-      previousStatus === "unpublishing" ? "error" : previousStatus;
-    await releaseUnpublish(projectId, lease, restoredStatus as Exclude<StoredDeploymentStatus, "unpublishing" | "unpublished">, {
-      code: queued.code,
-      message: "Mavly could not queue the AWS route removal.",
-    });
-    return fail(
-      queued.code === "MIGRATION_REQUIRED" ? 503 : 500,
-      queued.code === "MIGRATION_REQUIRED" ? "BACKEND_NOT_CONFIGURED" : "UNKNOWN",
-      queued.error,
-    );
-  }
-  return { ok: true, data: wireDeploymentStatus(unpublishingRow) };
-}
-
-/**
- * Status for a shared row never consults Vercel: there is no Vercel project.
- * Terminal states are authoritative; a pending probe is retried at most once a
- * minute; a stale in-flight claim becomes an actionable failure.
- */
-async function awsDeploymentStatus(
-  projectId: string,
-  row: DeploymentRow,
-): Promise<DeploymentServiceResult<WireDeploymentStatus>> {
-  if (
-    row.status !== "ready" ||
-    !row.mavly_hostname ||
-    row.mavly_domain_status === "verified" ||
-    row.mavly_domain_status === "error" ||
-    !row.active_version_id ||
-    !domainCheckDue(row)
-  ) {
-    return { ok: true, data: wireDeploymentStatus(row) };
-  }
-
-  let verified = false;
-  try {
-    verified = await verifyAwsPublicTenantRoute({
-      projectId,
-      versionId: row.active_version_id,
-      hostname: row.mavly_hostname,
-    });
-  } catch {
-    return { ok: true, data: wireDeploymentStatus(row) };
-  }
-
-  return {
-    ok: true,
-    data: wireDeploymentStatus({
-      ...row,
-      mavly_domain_status: verified ? "verified" : "pending",
-      mavly_domain_error: null,
-      mavly_domain_checked_at: new Date().toISOString(),
-    }),
-  };
-}
-
 async function sharedDeploymentStatus(
   projectId: string,
   row: DeploymentRow,
@@ -1010,7 +793,7 @@ async function sharedDeploymentStatus(
    * after the operator turns shared hosting off (or removes this project from
    * the cohort), but the runtime answers 404 for the tenant host. Reporting
    * `success` and a live URL would be a lie, so the row is presented as an error
-   * the owner can act on (the legacy Vercel path remains available).
+   * the owner can act on (the Vercel publish path remains available).
    */
   if (!isSharedHostingRuntimeEnabled() || !isSharedHostingProject(projectId)) {
     return {
@@ -1088,98 +871,39 @@ export async function publishProject(
     return fail(500, "UNKNOWN", "Could not load the deployment status.");
   }
 
-  const awsConfig = readAwsFrontendHostingConfig();
-  if (awsConfig.enabled && awsConfig.problem !== null) {
-    return fail(
-      503,
-      "BACKEND_NOT_CONFIGURED",
-      `AWS frontend hosting is enabled but not fully configured (${awsConfig.problem}).`,
-    );
-  }
   /**
-   * ⚠️ THERE IS NO CUSTOMER PROJECT ALLOWLIST ANY MORE.
+   * ═══ PROVIDER SELECTION: VERCEL IS THE ONLY CUSTOMER HOSTING PLATFORM ════
    *
-   * `isAwsFrontendHostingProject` now answers only whether an OPTIONAL operator
-   * emergency restriction excludes this project. With no restriction configured
-   * it is `true` for every project, and the database eligibility RPC below is
-   * the authority. A new customer project never needs an environment-variable or
-   * administrator change to become publishable.
+   * AWS customer frontend hosting was removed. A row recorded as `provider =
+   * 'aws'` is preserved as historical data and is never republished, never
+   * silently switched to Vercel and never deleted. Migration to Vercel is an
+   * explicit, operator-reviewed action on that row; until it happens this
+   * endpoint refuses the publish with that exact reason.
    */
-  const awsRestrictionSatisfied = isAwsFrontendHostingProject(projectId);
-  const existingAwsDeployment = existing.data?.provider === "aws";
-  if (existingAwsDeployment && (!awsConfig.enabled || awsConfig.problem !== null)) {
+  if (existing.data?.provider === "aws") {
     return fail(
       503,
-      "BACKEND_NOT_CONFIGURED",
-      "This project already uses AWS hosting, but AWS hosting is no longer enabled on this deployment.",
-    );
-  }
-  if (awsConfig.enabled && !awsRestrictionSatisfied) {
-    return fail(
-      503,
-      "BACKEND_NOT_CONFIGURED",
-      "This project is outside the temporary AWS hosting restriction configured for this deployment.",
-    );
-  }
-  const aws =
-    existingAwsDeployment || (awsConfig.enabled && awsConfig.problem === null);
-
-  if (aws && existing.data?.provider === "vercel") {
-    return fail(
-      409,
-      "HOSTING_MIGRATION_REQUIRED",
-      "This project has an existing Vercel deployment. It must be migrated and verified before AWS hosting can replace it.",
-    );
-  }
-  if (aws && existing.data?.provider === "shared") {
-    return fail(
-      409,
-      "HOSTING_MIGRATION_REQUIRED",
-      "This project has an existing shared-hosting publication. It must be migrated and verified before AWS hosting can replace it.",
+      "HOSTING_PROVIDER_RETIRED",
+      "This project's website was published with AWS frontend hosting, which Mavly has retired. Its deployment history is preserved, but the project must be migrated to Vercel before it can be published again.",
     );
   }
 
   /**
-   * Which hosting path this project uses. Existing AWS mappings remain on AWS;
-   * a new AWS cohort does not silently replace a Vercel deployment.
+   * Shared hosting remains an explicit cohort, never an implicit fallback. It is
+   * checked before the Vercel path so an existing shared publication keeps its
+   * runtime instead of being republished to a second provider.
    */
   const shared = isSharedHostingProject(projectId);
-  if (aws && shared) {
-    return fail(
-      409,
-      "HOSTING_PROVIDER_CONFLICT",
-      "This project is configured for both AWS and shared hosting. Select exactly one hosting provider.",
-    );
-  }
 
   /**
-   * ⚠️ DATABASE-DRIVEN ELIGIBILITY. Ownership, suspension, completed source, the
-   * canonical billing plan, the published-site ceiling and platform capacity are
-   * evaluated server-side before any version row or queue record is written. The
-   * enqueue RPC repeats the check inside its own transaction, so a direct caller
-   * cannot bypass it.
-   */
-  if (aws) {
-    const eligibility = await readAwsHostingEligibility(projectId);
-    if (eligibility.ok === false) {
-      return fail(
-        eligibility.code === "MIGRATION_REQUIRED" ? 503 : 500,
-        eligibility.code === "MIGRATION_REQUIRED" ? "BACKEND_NOT_CONFIGURED" : "UNKNOWN",
-        eligibility.error,
-      );
-    }
-    if (!eligibility.data.eligible) {
-      return awsEligibilityFailure(eligibility.data.reason);
-    }
-  }
-
-  /**
-   * Vercel credentials are required only for the legacy path. A shared publish
-   * must work with no Vercel configuration at all — that is the migration's
+   * Vercel is the provider for every new publication, so its configuration is
+   * required unless this project is on shared hosting. A shared publish must
+   * work with no Vercel configuration at all — that is the shared runtime's
    * whole point.
    */
+
   let config: VercelDeploymentConfigResult | null = null;
-  if (!shared && !aws) {
+  if (!shared) {
     config = readVercelDeploymentConfig();
     if (isVercelDeploymentConfigFailure(config)) {
     /**
@@ -1275,14 +999,6 @@ export async function publishProject(
     return publishSharedVersion({
       projectId,
       hostname,
-      site: resolved.site,
-      publishFiles,
-    });
-  }
-
-  if (aws) {
-    return enqueueAwsPublication({
-      projectId,
       site: resolved.site,
       publishFiles,
     });
@@ -1448,6 +1164,56 @@ export async function publishProject(
         "[deployments] could not deactivate the previous shared version:",
         deactivated.code ?? "UNKNOWN",
       );
+    }
+  }
+
+  /**
+   * ═══ THE DOMAIN REGISTRY NEEDS AN ACTIVE PUBLISHED VERSION ═════════════════
+   *
+   * Migration 62 claims a domain job only when `active_version_id` points at an
+   * ACTIVE `project_published_versions` row. The shared path writes that pair;
+   * this path did not, so every custom-domain operation on a Vercel project
+   * failed with `DOMAIN_PROJECT_NOT_PUBLISHED`.
+   *
+   * The version below is the EXACT byte set this publish shipped, stored as an
+   * immutable version and activated through migration 64's owner-checked RPC —
+   * the same model the shared path uses, not a second registry.
+   *
+   * ⚠️ BEST-EFFORT ON PURPOSE. The site is already live on Vercel. A storage or
+   * migration failure is logged with its consequence and never turns a successful
+   * publish into a reported failure; the next publish records a version.
+   */
+  if (updated.data.status === "ready") {
+    const prepared = preparePublishedFiles(publishFiles, contentTypeForPath);
+    if (isHostingStoreFailure(prepared)) {
+      console.warn(
+        "[deployments] published version not recorded; custom domains will refuse until it is:",
+        prepared.code ?? "VALIDATION",
+      );
+    } else {
+      const version = await createPublishedVersion({
+        projectId,
+        prepared: prepared.data,
+        entryPath: "index.html",
+        spaFallback: resolved.site.generated,
+      });
+      if (isHostingStoreFailure(version)) {
+        console.warn(
+          "[deployments] published version not recorded; custom domains will refuse until it is:",
+          version.code ?? "UNKNOWN",
+        );
+      } else {
+        const activated = await activateVercelPublication({
+          projectId,
+          versionId: version.data.id,
+        });
+        if (isHostingStoreFailure(activated)) {
+          console.warn(
+            "[deployments] published version not activated; custom domains will refuse until it is:",
+            activated.code ?? "UNKNOWN",
+          );
+        }
+      }
     }
   }
 
@@ -1624,10 +1390,23 @@ export async function unpublishProject(
    * Vercel configuration at all.
    */
   const sharedRow = row.provider === "shared";
-  const awsRow = row.provider === "aws";
+
+  /**
+   * ⚠️ AN AWS ROW CANNOT BE TAKEN DOWN BY THIS DEPLOYMENT ANY MORE. The AWS
+   * publication implementation was removed; the row and its history stay. No
+   * claim is taken, so the real recorded status is preserved instead of a
+   * fabricated `unpublished`.
+   */
+  if (row.provider === "aws") {
+    return fail(
+      503,
+      "HOSTING_PROVIDER_RETIRED",
+      "This website was published with AWS frontend hosting, which Mavly has retired. Mavly can no longer take it down from here, and it has NOT been reported as unpublished. Contact Mavly support to remove the AWS route.",
+    );
+  }
 
   let config: VercelDeploymentConfigResult | null = null;
-  if (!sharedRow && !awsRow) {
+  if (!sharedRow) {
     config = readVercelDeploymentConfig();
     if (isVercelDeploymentConfigFailure(config)) {
       return fail(
@@ -1674,10 +1453,6 @@ export async function unpublishProject(
   if (sharedRow) {
     return unpublishSharedProject(projectId, lease, row);
   }
-  if (awsRow) {
-    return unpublishAwsProject(projectId, lease, row.status, claimed.data);
-  }
-
   if (!config || isVercelDeploymentConfigFailure(config)) {
     return fail(
       503,
@@ -1901,7 +1676,12 @@ export async function getProjectDeploymentStatus(
     return sharedDeploymentStatus(projectId, row.data);
   }
   if (row.data.provider === "aws") {
-    return awsDeploymentStatus(projectId, row.data);
+    /**
+     * The AWS provider is gone, so the recorded state is the only truth this
+     * deployment has. It is returned exactly as stored: a previously verified
+     * AWS site is not claimed to be down, and nothing here probes or rewrites it.
+     */
+    return { ok: true, data: wireDeploymentStatus(row.data) };
   }
 
   /**

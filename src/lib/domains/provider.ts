@@ -2,9 +2,10 @@
  * Provider-neutral domain routing adapter.
  *
  * The worker never talks to a hosting provider directly. It calls this
- * interface; the AWS implementation is the only one this repository supplies.
- * A deployment with no approved provider fails closed with `needsOperator`
- * instead of pretending a hostname is active.
+ * interface; Vercel is the only implementation this repository supplies, because
+ * the AWS CloudFront routing implementation was removed. A deployment with no
+ * usable Vercel configuration fails closed with `needsOperator` instead of
+ * pretending a hostname is active.
  */
 
 export interface DomainActivationInput {
@@ -18,18 +19,26 @@ export interface DomainActivationInput {
   /** Custom hostnames require an explicit operator/admin approval by default. */
   routingApproved: boolean;
   requireApproval: boolean;
+  /**
+   * The Vercel project id (or its deterministic name) that owns this project's
+   * deployment. Supplied by the domain worker from `project_deployments`; never
+   * by a client.
+   */
+  vercelProjectTarget?: string | null;
 }
 
 export interface DomainRemovalInput {
   hostname: string;
   projectId: string;
   generation: number;
+  /** See `DomainActivationInput.vercelProjectTarget`. */
+  vercelProjectTarget?: string | null;
 }
 
 export type DomainProviderOutcome =
   | {
       ok: true;
-      provider: "aws_cloudfront";
+      provider: "vercel";
       publicVerified: true;
       certificateReference: string | null;
     }
@@ -43,7 +52,7 @@ export type DomainProviderOutcome =
     };
 
 export interface DomainRoutingProvider {
-  readonly id: "aws_cloudfront";
+  readonly id: "vercel";
   provision(input: DomainActivationInput): Promise<DomainProviderOutcome>;
   remove(input: DomainRemovalInput): Promise<DomainProviderOutcome>;
 }

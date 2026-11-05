@@ -33,6 +33,7 @@ import type {
   ProjectDomainDetail,
   ProjectDomainView,
   ProjectDomainsWithCapability,
+  DomainDnsInstruction,
   SubdomainAvailability,
 } from "@/lib/domains/types";
 import type {
@@ -948,6 +949,24 @@ export const vcaasApi = {
     /** GET …/domains/{id} — one domain plus its exact DNS instructions. */
     get: (projectId: string, domainId: string): Promise<VcaasResponse<ProjectDomainDetail>> =>
       proxy.get(`${project(projectId)}/domains/${encodeURIComponent(domainId)}`),
+
+    /**
+     * GET …/domains/{id}/dns — the DNS records the hosting provider actually
+     * requires for this hostname. Read-only; it never changes domain state.
+     */
+    dnsRecords: (
+      projectId: string,
+      domainId: string,
+    ): Promise<
+      VcaasResponse<{
+        hostname: string;
+        configured: boolean;
+        verification: DomainDnsInstruction[];
+        routing: DomainDnsInstruction[];
+        notes: string[];
+        unavailableReason: string | null;
+      }>
+    > => proxy.get(`${project(projectId)}/domains/${encodeURIComponent(domainId)}/dns`),
 
     /** POST …/domains/{id}/verify — re-read the TXT ownership record. */
     verify: (

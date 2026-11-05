@@ -11,9 +11,10 @@ editor surfaces and settings dialogs of an AI app builder.
 > provider. Supabase
 > stores the generated source, conversation and run state; the workspace
 > previews the generated static `preview.html`, or an imported static site with an
-> `index.html` / `public/index.html` and local assets. An **opt-in,
-> off-by-default** publishing path can upload those static files to a Mavly-managed Vercel
-> account as a static site; it is not a dynamic backend host. A separate **opt-in,
+> `index.html` / `public/index.html` and local assets. Customer frontend publishing uploads
+> those static files to a Mavly-managed Vercel account as a static site; it is not a dynamic
+> backend host, and production activation still requires operator confirmation of Vercel's
+> platform eligibility. A separate **opt-in,
 > off-by-default** verification sandbox builds a generated App Router project inside an
 > isolated Vercel microVM, starts its validated production server on loopback and runs a
 > sandbox-local health check; `passed` requires all three to succeed. A separately opt-in,
@@ -47,8 +48,8 @@ audits listed at the end of this file; it is not a runtime dependency.
 | Preview | Sandboxed static `preview.html`, or an imported static `index.html` / `public/index.html` with local assets |
 | Supabase account connection | OAuth with PKCE, encrypted server-side tokens, organization/project discovery and one selected project |
 | Figma design reference | Personal access token validated with Figma, encrypted per project, and a bounded design summary injected into generation |
-| Customer publishing | Retired; no deployment provider is configured. Publish, unpublish, and deployment-status actions fail closed with `BACKEND_NOT_CONFIGURED` and do not claim a live deployment or success. Source editing, static preview, source export, generation, and restore points remain available. Historical deployment rows and migrations are preserved rather than destructively rewritten. |
-| Shared tenant hosting (opt-in, off by default) | Immutable published versions stored in Supabase and served at `<project-id>.mavly.xyz` by Mavly's own tenant runtime. Enabled per project cohort with `MAVLY_HOSTING_MODE=shared` + `MAVLY_SHARED_HOSTING_PROJECTS`; the legacy Vercel path remains the default. See [`MAVLY_SHARED_HOSTING.md`](MAVLY_SHARED_HOSTING.md). |
+| Customer publishing | Vercel is the customer frontend hosting platform (Phase 16). Publish creates or reuses one deterministic Vercel project, attaches and verifies `<project-id>.mavly.xyz`, uploads the validated static bytes and creates a production deployment; unpublish detaches the domain and removes the production deployments. AWS customer frontend hosting was removed; a `provider = 'aws'` site is archived history, refuses republish/unpublish with `503 HOSTING_PROVIDER_RETIRED`, and must be migrated to Vercel explicitly. Requires `MAVLY_VERCEL_DEPLOYMENTS_ENABLED`, server-only `VERCEL_API_TOKEN` and migration `63`. Source editing, static preview, source export, generation, and restore points remain available. |
+| Shared tenant hosting (opt-in, off by default) | Immutable published versions stored in Supabase and served at `<project-id>.mavly.xyz` by Mavly's own tenant runtime. Enabled per project cohort with `MAVLY_HOSTING_MODE=shared` + `MAVLY_SHARED_HOSTING_PROJECTS`; the per-project Vercel path remains the default. See [`MAVLY_SHARED_HOSTING.md`](MAVLY_SHARED_HOSTING.md). |
 | Durable generation worker (Render preserved, current fallback; AWS worker adapter added) | The Render Background Worker implementation remains in place as a preserved fallback and future reactivation target, but it is intentionally disabled while AWS hosts Mavly's active background workers. The existing `project_runs` queue, claims, leases, retries, recovery and safeguards remain unchanged. A minimal AWS worker adapter is provided at [`workers/aws-generation-worker.ts`](workers/aws-generation-worker.ts), and the AWS deployment runbook is at [`docs/runbooks/aws-generation-worker.md`](docs/runbooks/aws-generation-worker.md). Local development and Vercel previews keep the inline `after()` path. The root `render.yaml` and render worker files remain available for future reactivation without deletion. See [`docs/runbooks/render-generation-worker.md`](docs/runbooks/render-generation-worker.md). |
 | Verification sandbox (opt-in, off by default) | Worker-dispatched runs enqueue one durable verification for their completed run and immutable snapshot. A later worker tick installs and builds the project's source in a Vercel Sandbox microVM, starts the validated `next start` on `127.0.0.1`, and requests `/` from inside the sandbox. `passed` requires the build to exit `0`, the runtime to start and the local health response to be `2xx`/`3xx`; a build-only success is never `passed`. Unsupported formats return `unsupported_runtime`. Detached stages span ticks, every terminal path destroys the sandbox, and cleanup failure never overwrites the outcome. An optional bounded AI repair (default 1, hard cap 2) may create one new immutable snapshot after a source-level `build_failed`/`runtime_start_failed`/`health_check_failed`, then rebuild and recheck. Preview remains unavailable: no public provider URL is stored or returned. Requires `MAVLY_VERIFICATION_SANDBOX_ENABLED`, `MAVLY_VERIFICATION_SANDBOX_PROJECTS`, Vercel provider credentials, migrations `17` then `19`, and a human-run `npm install` for `@vercel/sandbox`. No generated code runs on a Mavly host. See [`docs/architecture/phase-4-runtime-verification.md`](docs/architecture/phase-4-runtime-verification.md). |
 | `/api/config` | `200 { "ok": true, "data": { "configured": false } }` |
@@ -153,13 +154,16 @@ browser ── src/lib/vcaas.ts (client catalog, same-origin only)
   with `POST …/agent/resume`, and `POST …/agent/stop` cooperatively cancels it. See
   [Generation reliability](#generation-reliability) and the
   [worker runbook](docs/runbooks/render-generation-worker.md).
-- **Publishing:** retired. The workspace does not expose a customer publish action, and
-  the deployment API returns `503 BACKEND_NOT_CONFIGURED` without creating a provider
-  deployment, changing a live URL, or reporting success. Source editing, static preview,
-  source export, generation, and restore points remain unchanged.
-- **Unpublishing:** unavailable until a replacement deployment provider is implemented.
-  The retired path does not call Vercel or claim that an external deployment was removed;
-  historical deployment rows and migrations are preserved.
+- **Publishing:** Vercel only (Phase 16/18). A publish requires ownership, a resolved
+  static entry point, the Vercel publishing configuration and migration 63. `ready` is
+  reported only after the provider reports the deployment ready **and** the Mavly hostname
+  is verified; the two states are tracked independently. AWS customer frontend hosting was
+  removed: a `provider = 'aws'` row is archived history, its status is returned exactly as
+  recorded, and publish/unpublish answer `503 HOSTING_PROVIDER_RETIRED`.
+- **Unpublishing:** real for Vercel and shared rows. The Mavly domain is detached and the
+  project's production deployments are removed. An archived AWS row is never reported as
+  unpublished, because this repository can no longer remove an AWS route. A provider
+  failure rolls the row back instead of claiming the site is down.
 - **Verification (opt-in):** after a worker-dispatched run completes, one verification row
   is enqueued for its immutable snapshot. A later worker tick re-validates the snapshot,
   uploads a manifest-validated copy into a Vercel Sandbox microVM with restricted egress,

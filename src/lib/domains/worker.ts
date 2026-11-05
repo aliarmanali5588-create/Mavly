@@ -4,7 +4,7 @@ import { readDomainConfig } from "./config";
 import { DomainDnsError, verifyOwnershipTxt } from "./dns";
 import { isValidPublicHostname } from "./hostname";
 import { emitDomainEvent } from "./observability";
-import { domainRoutingProvider } from "./aws-provider";
+import { domainRoutingProvider } from "./active-provider";
 import {
   claimDomainJob,
   completeDomainJob,
@@ -21,12 +21,12 @@ import type { DomainStatus } from "./types";
  *
  * The worker performs:
  *   verify   → read the TXT ownership record for a customer hostname
- *   provision→ write the CloudFront KVS hostname mapping, then HTTPS-probe it
- *   remove   → remove the hostname mapping
+ *   provision→ attach the hostname to the project's Vercel project, then probe it
+ *   remove   → detach the hostname from that Vercel project
  *
- * It does NOT add a CloudFront alias or issue an ACM certificate. Those are
- * operator actions; until they exist the public probe fails and the row stays
- * truthful (`provisioning`), never `active`.
+ * Vercel is the only routing provider; the AWS CloudFront implementation was
+ * removed. A row that still records `aws_cloudfront` is historical metadata and
+ * is never rewritten here.
  */
 
 export type DomainTickStatus = "empty" | "advanced" | "unavailable" | "error";
@@ -226,6 +226,32 @@ async function handleVerify(
   });
 }
 
+/**
+ * The Vercel project that owns this Mavly project's deployment, read with the
+ * worker's service client. Vercel attaches a hostname to a PROJECT, so the
+ * target is never guessed from the hostname and never supplied by a client.
+ * Only a `provider = 'vercel'` row is eligible; an AWS-archived row has no
+ * Vercel target and must not be routed through Vercel.
+ */
+async function vercelProjectTarget(
+  client: SupabaseClient,
+  projectId: string,
+): Promise<string | null> {
+  const { data, error } = await client
+    .from("project_deployments")
+    .select("provider,vercel_project_id,vercel_project_name")
+    .eq("project_id", projectId)
+    .maybeSingle();
+  if (error || !data || data.provider !== "vercel") return null;
+  if (typeof data.vercel_project_id === "string" && data.vercel_project_id) {
+    return data.vercel_project_id;
+  }
+  if (typeof data.vercel_project_name === "string" && data.vercel_project_name) {
+    return data.vercel_project_name;
+  }
+  return null;
+}
+
 async function handleProvision(
   client: SupabaseClient,
   claim: ClaimedDomainJob,
@@ -241,12 +267,19 @@ async function handleProvision(
       retryable: false,
     });
   }
+  /**
+   * ⚠️ RETRYABLE, NOT TERMINAL. A custom domain is registered before the first
+   * publish so the owner's choice is never discarded, and the publish that makes
+   * it routable can still be in flight (or was refused and will be retried). The
+   * bounded job backoff (15 s → 300 s, 10 attempts) waits for the published
+   * version instead of dead-lettering a domain the user can still publish.
+   */
   if (!claim.publication || !claim.publication.versionId) {
     return finishFailure(client, claim, {
       status: fallbackStatus,
       code: "DOMAIN_PROJECT_NOT_PUBLISHED",
       message: "Publish the project before provisioning this address.",
-      retryable: false,
+      retryable: true,
     });
   }
 
@@ -271,6 +304,7 @@ async function handleProvision(
     domainType: claim.domain.domainType,
     routingApproved: claim.domain.routingApproved,
     requireApproval: config.requireRoutingApproval,
+    vercelProjectTarget: await vercelProjectTarget(client, claim.projectId),
   });
 
   if (!outcome.ok) {
@@ -317,6 +351,23 @@ async function handleRemove(
     });
   }
 
+  /**
+   * ⚠️ THE AWS PROVIDER IS GONE. A row that still records `aws_cloudfront` was
+   * mapped through the removed CloudFront KeyValueStore. This deployment cannot
+   * remove that mapping, so it must never report the hostname as removed. The
+   * row keeps its history and is surfaced as a disabled address needing an
+   * operator.
+   */
+  if (claim.domain.routingProvider === "aws_cloudfront") {
+    return finishFailure(client, claim, {
+      status: "disabled",
+      code: "DOMAIN_ROUTING_PROVIDER_RETIRED",
+      message:
+        "This address was routed through AWS CloudFront, which Mavly has retired. An operator must remove the old AWS route; Mavly has not reported the address as removed.",
+      retryable: false,
+    });
+  }
+
   const provider = domainRoutingProvider();
   if (!provider) {
     return finishFailure(client, claim, {
@@ -332,6 +383,7 @@ async function handleRemove(
     hostname: claim.domain.hostname,
     projectId: claim.projectId,
     generation: Math.max(claim.domain.routingGeneration, claim.routingGeneration, 1),
+    vercelProjectTarget: await vercelProjectTarget(client, claim.projectId),
   });
   if (!outcome.ok) {
     return finishFailure(client, claim, {

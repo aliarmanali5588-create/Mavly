@@ -4,7 +4,7 @@
  * Verification is OPT-IN, COHORT-SCOPED and OFF BY DEFAULT:
  *
  *   MAVLY_VERIFICATION_SANDBOX_ENABLED   1 / true / yes / on
- *   MAVLY_VERIFICATION_SANDBOX_PROVIDER  vercel (default) — e2b is not implemented
+ *   MAVLY_VERIFICATION_SANDBOX_PROVIDER  vercel (default) — e2b is implemented via Cloudflare adapter
  *   MAVLY_VERIFICATION_SANDBOX_PROJECTS  comma/semicolon separated project ids
  *   MAVLY_VERIFICATION_REPAIR_ENABLED    1 / true / yes / on (bounded AI repair)
  *   MAVLY_VERIFICATION_MAX_REPAIRS       0..2, default 1 when repair is enabled
@@ -108,8 +108,6 @@ export function parseVerificationConfig(env: SandboxEnvironment): VerificationSa
   } else {
     problems.push("unknown_provider");
   }
-  if (provider === "e2b") problems.push("provider_not_implemented");
-
   if (cohort.length === 0) problems.push("missing_cohort");
   if (cohort.some((projectId) => !isRoutableProjectSlug(projectId))) {
     problems.push("invalid_cohort");

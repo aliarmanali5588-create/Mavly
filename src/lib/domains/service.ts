@@ -1,5 +1,3 @@
-import { readAwsFrontendHostingConfig } from "@/lib/aws/config";
-
 import { readDomainConfig } from "./config";
 import {
   hostnameProblemMessage,
@@ -9,7 +7,7 @@ import {
 } from "./hostname";
 import { buildDomainInstructions } from "./instructions";
 import { emitDomainEvent } from "./observability";
-import { domainRoutingProvider } from "./aws-provider";
+import { domainRoutingProvider } from "./active-provider";
 import {
   addCustomDomainRpc,
   checkSubdomainAvailability,
@@ -130,12 +128,9 @@ function storeFailure(
 export function domainCapability(): DomainCapability {
   const config = readDomainConfig();
   const provider = domainRoutingProvider();
-  const aws = readAwsFrontendHostingConfig();
   const providerProblem =
     config.enabled && config.provisioningEnabled && !provider
-      ? aws.enabled && aws.problem === null
-        ? "Domain routing is disabled on this deployment."
-        : `Domain routing is not configured: AWS frontend hosting is ${aws.problem ?? "disabled"}.`
+      ? "Domain routing is not configured on this deployment. Configure Vercel customer hosting first."
       : null;
 
   return {

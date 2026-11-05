@@ -2,8 +2,8 @@
  * Server-only domain-management configuration.
  *
  * ⚠️ OFF BY DEFAULT. Enabling any part of this subsystem requires the operator to
- * apply migration 62 and (for custom hosting) explicitly approve the CloudFront
- * distribution/ACM/routing changes. A missing prerequisite fails closed with a
+ * apply migration 62 and (for custom hosting) configure Vercel customer hosting
+ * and approve the DNS/routing changes. A missing prerequisite fails closed with a
  * structured reason; it never silently falls back to a different hosting path.
  *
  * The browser never reads this module. Do not import it from a client component.

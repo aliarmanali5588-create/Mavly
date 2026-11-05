@@ -6,9 +6,22 @@
 > versions and serves them from Mavly; it does not create or detach Vercel projects for
 > shared rows. Do not detach existing project domains as part of enabling it.
 
-**Status:** implemented, **disabled by default**, and limited to static sites. Publishing and
-unpublishing are both real Vercel operations; unpublishing detaches the Mavly project domain
-and removes the project's production deployments rather than hiding a URL.
+**Status:** implemented, **primary** customer frontend hosting, and limited to static sites.
+Publishing and unpublishing are both real Vercel operations; unpublishing detaches the
+Mavly project domain and removes the project's production deployments rather than hiding a
+URL.
+
+**Phase 16/18 cutover:** Vercel is the only customer frontend hosting provider. AWS
+customer frontend hosting (S3 + CloudFront) was removed from the repository, including its
+publication worker, routing, eligibility code, SDK dependencies and environment variables.
+A row that already has `provider = 'aws'` is preserved as history: publish and unpublish
+refuse it with `503 HOSTING_PROVIDER_RETIRED`, and its recorded status is returned
+unchanged. No site is switched silently. Apply
+`supabase/migrations/63_vercel_customer_frontend_hosting.sql` and
+`65_retire_aws_frontend_hosting.sql`; both are additive and never rewrite an existing
+row's provider. See
+[`docs/runbooks/vercel-customer-hosting.md`](docs/runbooks/vercel-customer-hosting.md).
+
 **Do not enable this in a production deployment until the eligibility prerequisite below is
 confirmed by the operator.**
 
@@ -70,7 +83,8 @@ state; the third widens the status constraint and records `last_unpublished_at`.
 `public.project_deployments` holds one row per Mavly project:
 
 - `project_id` — primary key and foreign key to `public.projects`, `on delete cascade`;
-- `provider` — currently only `vercel`;
+- `provider` — `vercel`, or `shared` for the tenant-runtime cohort; an archived `aws` row
+  is historical and can no longer be republished;
 - `vercel_project_id`, `vercel_project_name` — created server-side, never client-supplied;
 - `vercel_deployment_id` — latest deployment, used only for server-side status reads;
 - `status` — `queued`, `building`, `ready`, `error`, `canceled`, `unpublishing` or

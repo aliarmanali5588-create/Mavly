@@ -158,10 +158,7 @@ import {
   unpublishProject,
   wireDeploymentStatus,
 } from "@/lib/deployments/service";
-import {
-  isAwsFrontendHostingProject,
-  readAwsFrontendHostingConfig,
-} from "@/lib/aws/config";
+import { readVercelDeploymentConfig } from "@/lib/vercel/config";
 import {
   disableFullstackProject,
   fullstackDeployableSnapshots,
@@ -232,6 +229,7 @@ import {
   reserveSubdomain,
   type DomainServiceFailure,
 } from "@/lib/domains/service";
+import { getDomainDnsRecords } from "@/lib/domains/dns-service";
 import { publicIntegrationCatalog } from "@/lib/integrations/contracts";
 import {
   disablePaymentsIntegration,
@@ -671,6 +669,9 @@ export async function handleMavlyVcaasRequest(input: MavlyRequest): Promise<Next
       if (method === "GET") return projectDomainResponse(projectId, domainId);
       if (method === "DELETE") return removeDomainResponse(projectId, domainId);
     }
+    if (domainId && rest.length === 2 && method === "GET" && rest[1] === "dns") {
+      return domainDnsResponse(projectId, domainId);
+    }
     if (domainId && rest.length === 2 && method === "POST") {
       if (rest[1] === "verify") return verifyDomainResponse(projectId, domainId);
       if (rest[1] === "retry") return retryDomainResponse(projectId, domainId);
@@ -1074,6 +1075,7 @@ async function launchProjectResponse(userId: string, body: unknown): Promise<Nex
         runId: run.id,
         prompt,
         requestedModel: run.model,
+        createStatusClient: async () => createSupabaseServerClient(),
       }),
     );
   }
@@ -1387,17 +1389,24 @@ async function deployResponse(
   if (isDeploymentStoreFailure(deployment)) {
     return fail(500, "UNKNOWN", "Could not load the deployment status.");
   }
-  const awsConfig = readAwsFrontendHostingConfig();
-  const awsRouteAllowed =
+  /**
+   * ═══ PROVIDER CAPABILITY ═════════════════════════════════════════════════
+   *
+   * Vercel is the only customer hosting provider; AWS frontend hosting was
+   * removed. This pre-check only answers "is a hosting path reachable at all?";
+   * publishProject still re-checks ownership and configuration, and answers an
+   * archived AWS row with the exact retirement reason. A shared-cohort row keeps
+   * its runtime. A first publication therefore needs the Vercel configuration.
+   */
+  const hostingRouteAllowed =
     deployment.data?.provider === "aws" ||
-    (awsConfig.enabled &&
-      awsConfig.problem === null &&
-      isAwsFrontendHostingProject(projectId));
-  if (!awsRouteAllowed) {
+    deployment.data?.provider === "shared" ||
+    readVercelDeploymentConfig().ok;
+  if (!hostingRouteAllowed) {
     return fail(
       503,
       "BACKEND_NOT_CONFIGURED",
-      "Customer-app publishing is unavailable for this project. No deployment provider is configured.",
+      "Customer-app publishing is unavailable for this project. Vercel hosting is not configured on this deployment.",
     );
   }
 
@@ -1809,7 +1818,14 @@ async function unpublishResponse(userId: string, projectId: string): Promise<Nex
   if (isDeploymentStoreFailure(deployment)) {
     return fail(500, "UNKNOWN", "Could not load the deployment status.");
   }
-  if (deployment.data?.provider !== "aws") {
+  /**
+   * Vercel and shared rows have a real takedown path in `unpublishProject`. An
+   * archived AWS row is routed to the service so it answers with the exact
+   * retirement reason instead of a generic refusal; only an unknown provider is
+   * refused here, and the service itself decides what the takedown means.
+   */
+  const provider = deployment.data?.provider;
+  if (provider && provider !== "aws" && provider !== "vercel" && provider !== "shared") {
     return fail(
       503,
       "BACKEND_NOT_CONFIGURED",
@@ -1828,17 +1844,15 @@ async function deploymentStatusResponse(userId: string, projectId: string): Prom
   if (isDeploymentStoreFailure(deployment)) {
     return fail(500, "UNKNOWN", "Could not load the deployment status.");
   }
-  const awsConfig = readAwsFrontendHostingConfig();
-  const awsRouteAllowed =
+  const hostingRouteAllowed =
     deployment.data?.provider === "aws" ||
-    (awsConfig.enabled &&
-      awsConfig.problem === null &&
-      isAwsFrontendHostingProject(projectId));
-  if (!awsRouteAllowed) {
+    deployment.data?.provider === "shared" ||
+    readVercelDeploymentConfig().ok;
+  if (!hostingRouteAllowed) {
     return fail(
       503,
       "BACKEND_NOT_CONFIGURED",
-      "Customer-app deployment status is unavailable for this project.",
+      "Customer-app deployment status is unavailable for this project. Vercel hosting is not configured on this deployment.",
     );
   }
 
@@ -2427,6 +2441,7 @@ async function startAgentResponse(userId: string, projectId: string, body: unkno
         runId: run.id,
         prompt,
         requestedModel: run.model,
+        createStatusClient: async () => createSupabaseServerClient(),
       }).catch((error: unknown) => {
         emitGenerationEvent("generation.worker_error", {
           traceId: run.trace_id,
@@ -2592,6 +2607,7 @@ async function resumeAgentResponse(userId: string, projectId: string): Promise<N
         prompt: resumedRun.prompt,
         requestedModel: resumedRun.model,
         resume: true,
+        createStatusClient: async () => createSupabaseServerClient(),
       }).catch((error: unknown) => {
         emitGenerationEvent("generation.worker_error", {
           traceId: resumedRun.trace_id,
@@ -3826,6 +3842,15 @@ async function addCustomDomainResponse(
   const hostname = stringOf(recordOf(body).hostname) ?? "";
   const result = await addCustomDomain(projectId, hostname);
   if (!result.ok) return domainFailureResponse(result as never);
+  return ok(result.data);
+}
+
+async function domainDnsResponse(
+  projectId: string,
+  domainId: string,
+): Promise<NextResponse> {
+  const result = await getDomainDnsRecords(projectId, domainId);
+  if (!result.ok) return fail((result as { ok: false; status: number }).status, (result as { ok: false; code: string }).code, (result as { ok: false; error: string }).error);
   return ok(result.data);
 }
 

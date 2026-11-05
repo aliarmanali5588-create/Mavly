@@ -18,6 +18,8 @@ import { useT } from "@/i18n";
 import { getDomainProgress } from "@/lib/domain-status";
 import { engineOf, getPublishedHost } from "@/lib/project-status";
 import { usePrice } from "@/components/credits/CreditsProvider";
+import { hostnameProblemMessage, normalizeHostname } from "@/lib/domains/hostname";
+import { vcaasApi } from "@/lib/vcaas";
 import { cn } from "@/lib/utils";
 import type { DeploymentStatus, VcaasProject } from "@/lib/vcaas-types";
 import { DomainPendingBadge, DomainProgressCompact } from "./DomainProgress";
@@ -144,6 +146,18 @@ export function DeployControl({
     const domainProgress = getDomainProgress(domain);
 
     /**
+     * The publish DESTINATION. `mavly` is the canonical `<project-id>.mavly.xyz`
+     * address the publish path attaches itself. `custom` registers the hostname in
+     * the domain registry first, so a refused publish never discards the user's
+     * choice; the durable domain job then attaches it to the project's Vercel
+     * project and retries while DNS is still propagating.
+     */
+    const [domainChoice, setDomainChoice] = React.useState<"mavly" | "custom">("mavly");
+    const [customHostname, setCustomHostname] = React.useState(domain?.hostname ?? "");
+    const [domainError, setDomainError] = React.useState<string | null>(null);
+    const [connectingDomain, setConnectingDomain] = React.useState(false);
+
+    /**
      * The host the project serves on once published.
      *
      * ⚠️ SHARED WITH THE JUST-PUBLISHED DIALOG through `getPublishedHost`. The two
@@ -171,6 +185,40 @@ export function DeployControl({
                     : t("workspace.deploy.unpublishFailed"),
             );
             throw error;
+        }
+    }
+
+    async function handlePublishWithDomain() {
+        setDomainError(null);
+
+        if (domainChoice === "mavly") {
+            setOpen(false);
+            onDeploy();
+            return;
+        }
+
+        const parsed = normalizeHostname(customHostname);
+        if (!parsed.ok) {
+            setDomainError(
+                parsed.problem
+                    ? hostnameProblemMessage(parsed.problem)
+                    : "Enter a domain such as example.com or shop.example.com.",
+            );
+            return;
+        }
+
+        setConnectingDomain(true);
+        try {
+            const res = await vcaasApi.domains.addCustom(projectId, parsed.hostname);
+            if (!res.ok) {
+                setDomainError(res.error || "That domain could not be connected.");
+                return;
+            }
+            setOpen(false);
+            onDeploy();
+            onOpenDomain();
+        } finally {
+            setConnectingDomain(false);
         }
     }
 
@@ -265,13 +313,18 @@ export function DeployControl({
                         ) : null}
                         <Button
                             className="gap-2"
-                            disabled={isPublishing || isUnpublishing || isRunning || !!blockedReason}
+                            disabled={
+                                isPublishing ||
+                                isUnpublishing ||
+                                isRunning ||
+                                connectingDomain ||
+                                !!blockedReason
+                            }
                             onClick={() => {
-                                setOpen(false);
-                                onDeploy();
+                                void handlePublishWithDomain();
                             }}
                         >
-                            {isPublishing ? (
+                            {isPublishing || connectingDomain ? (
                                 <LoaderIcon className="size-4 animate-spin" aria-hidden />
                             ) : (
                                 <RocketIcon className="size-4" aria-hidden />
@@ -352,6 +405,148 @@ export function DeployControl({
                                 ) : null}
                             </div>
                         </div>
+                    </section>
+
+                    {/* ── Where people will find it ─────────────────────────── */}
+                    <section>
+                        <h3 className="text-2xs text-muted-foreground font-medium tracking-wider uppercase">
+                            Publish destination
+                        </h3>
+                        <p className="text-muted-foreground mt-1 text-xs leading-relaxed">
+                            Choose how people will reach this website.
+                        </p>
+
+                        <div
+                            role="radiogroup"
+                            aria-label="Publish destination"
+                            className="mt-2.5 grid gap-2"
+                        >
+                            <button
+                                type="button"
+                                role="radio"
+                                aria-checked={domainChoice === "mavly"}
+                                onClick={() => {
+                                    setDomainChoice("mavly");
+                                    setDomainError(null);
+                                }}
+                                className={cn(
+                                    "focus-visible:ring-ring flex w-full items-start gap-3 rounded-xl border p-3 text-left transition-colors focus-visible:ring-2 focus-visible:outline-none",
+                                    domainChoice === "mavly"
+                                        ? "border-primary/50 bg-primary-subtle/40"
+                                        : "hover:border-[var(--clay-line-strong)] hover:bg-accent/30",
+                                )}
+                            >
+                                <span
+                                    aria-hidden
+                                    className="bg-primary-subtle text-primary grid size-9 shrink-0 place-items-center rounded-lg"
+                                >
+                                    <GlobeIcon className="size-4" />
+                                </span>
+                                <span className="min-w-0 flex-1">
+                                    <span className="flex items-center gap-2 text-sm font-medium">
+                                        Use a Mavly subdomain
+                                        {domainChoice === "mavly" ? (
+                                            <CheckIcon
+                                                aria-hidden
+                                                className="text-primary size-3.5 shrink-0"
+                                            />
+                                        ) : null}
+                                    </span>
+                                    <span className="text-muted-foreground mt-0.5 block text-xs leading-relaxed">
+                                        Free, configured automatically, with HTTPS and no domain
+                                        purchase.
+                                    </span>
+                                    <span
+                                        data-selectable="true"
+                                        className="mt-1 block font-mono text-xs break-all"
+                                    >
+                                        {publishedHost}
+                                    </span>
+                                </span>
+                            </button>
+
+                            <button
+                                type="button"
+                                role="radio"
+                                aria-checked={domainChoice === "custom"}
+                                onClick={() => {
+                                    setDomainChoice("custom");
+                                    setDomainError(null);
+                                }}
+                                className={cn(
+                                    "focus-visible:ring-ring flex w-full items-start gap-3 rounded-xl border p-3 text-left transition-colors focus-visible:ring-2 focus-visible:outline-none",
+                                    domainChoice === "custom"
+                                        ? "border-primary/50 bg-primary-subtle/40"
+                                        : "hover:border-[var(--clay-line-strong)] hover:bg-accent/30",
+                                )}
+                            >
+                                <span
+                                    aria-hidden
+                                    className="bg-primary-subtle text-primary grid size-9 shrink-0 place-items-center rounded-lg"
+                                >
+                                    <RocketIcon className="size-4" />
+                                </span>
+                                <span className="min-w-0 flex-1">
+                                    <span className="flex items-center gap-2 text-sm font-medium">
+                                        Connect your own domain
+                                        {domainChoice === "custom" ? (
+                                            <CheckIcon
+                                                aria-hidden
+                                                className="text-primary size-3.5 shrink-0"
+                                            />
+                                        ) : null}
+                                    </span>
+                                    <span className="text-muted-foreground mt-0.5 block text-xs leading-relaxed">
+                                        Use a domain you already own. Mavly connects it to your Vercel
+                                        project and shows the exact DNS records to add.
+                                    </span>
+                                </span>
+                            </button>
+
+                            {domainChoice === "custom" ? (
+                                <div className="space-y-1.5">
+                                    <label
+                                        htmlFor="deploy-custom-domain"
+                                        className="text-muted-foreground text-2xs font-medium tracking-wider uppercase"
+                                    >
+                                        Your domain
+                                    </label>
+                                    <input
+                                        id="deploy-custom-domain"
+                                        data-selectable="true"
+                                        value={customHostname}
+                                        onChange={(event) => {
+                                            setCustomHostname(event.target.value);
+                                            setDomainError(null);
+                                        }}
+                                        placeholder="example.com"
+                                        autoComplete="off"
+                                        spellCheck={false}
+                                        className="border-[var(--clay-line)] bg-surface-sunken focus-visible:ring-ring h-9 w-full rounded-lg border px-3 font-mono text-sm focus-visible:ring-2 focus-visible:outline-none"
+                                    />
+                                    <p className="text-muted-foreground text-xs leading-relaxed">
+                                        Enter only the hostname — no https://, path or port. You add the
+                                        DNS records at your registrar; Mavly verifies them and never
+                                        changes your DNS for you.
+                                    </p>
+                                </div>
+                            ) : null}
+                        </div>
+
+                        {domainError ? (
+                            <p
+                                role="alert"
+                                className="border-destructive/30 bg-destructive/10 text-destructive mt-2 rounded-xl border p-3 text-xs leading-relaxed"
+                            >
+                                {domainError}
+                            </p>
+                        ) : null}
+
+                        <p className="text-muted-foreground mt-2 text-xs leading-relaxed">
+                            {domain?.hostname
+                                ? `This project already has ${domain.hostname} connected. Publishing again keeps it; manage or change it under Custom domain.`
+                                : "HTTPS is provisioned after the domain is verified. A custom domain stays pending until its DNS records are in place."}
+                        </p>
                     </section>
 
                     {/* ── What actually happens ─────────────────────────────── */}

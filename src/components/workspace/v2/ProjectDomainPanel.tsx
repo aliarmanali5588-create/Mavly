@@ -109,40 +109,73 @@ function RecordRow({
 }
 
 function Instructions({
+  projectId,
+  domainId,
   instructions,
   capability,
 }: {
+  projectId: string;
+  domainId: string;
   instructions: DomainDnsInstructions;
   capability: ProjectDomainsWithCapability["capability"];
 }) {
+  /**
+   * ⭐ THE PROVIDER'S RECORDS WIN WHEN IT HAS ANY.
+   *
+   * `instructions` is derived from platform configuration and is still the right
+   * fallback, but it cannot know what a specific Vercel project requires. The
+   * owner-scoped DNS endpoint returns exactly what Vercel reported for THIS
+   * hostname; a refusal (project not published yet, provider off) keeps the
+   * configured rows on screen instead of an empty table or a fake one.
+   */
+  const [live, setLive] = React.useState<DomainDnsInstructions | null>(null);
+  React.useEffect(() => {
+    let cancelled = false;
+    setLive(null);
+    void vcaasApi.domains.dnsRecords(projectId, domainId).then((response) => {
+      if (!cancelled && response.ok && response.data) setLive(response.data);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId, domainId]);
+
+  const shown = live ?? instructions;
+
   return (
     <div className="space-y-2 rounded-xl border border-[var(--clay-line)] bg-card p-3">
       <p className="text-sm font-medium">DNS records</p>
-      {instructions.verification.map((record) => (
+      {live ? (
+        <p className="text-muted-foreground text-xs leading-relaxed">
+          These are the records the hosting provider returned for this hostname. Add them at your
+          DNS provider, then use Verify DNS.
+        </p>
+      ) : null}
+      {shown.verification.map((record) => (
         <React.Fragment key={`${record.recordType}-${record.name}`}>
           <RecordRow label={`${record.recordType} name`} value={record.name} copyLabel="record name" />
           <RecordRow label={`${record.recordType} value`} value={record.value} copyLabel="record value" />
         </React.Fragment>
       ))}
-      {instructions.routing.map((record) => (
+      {shown.routing.map((record) => (
         <React.Fragment key={`${record.recordType}-${record.name}`}>
           <RecordRow
             label={`${record.recordType} name`}
-            value={record.name === "@" ? instructions.hostname : record.name}
+            value={record.name === "@" ? shown.hostname : record.name}
             copyLabel="record name"
           />
           <RecordRow label={`${record.recordType} value`} value={record.value} copyLabel="record value" />
         </React.Fragment>
       ))}
-      {instructions.notes.map((note) => (
+      {shown.notes.map((note) => (
         <p key={note} className="text-muted-foreground flex gap-1.5 text-xs leading-relaxed">
           <InfoIcon className="mt-0.5 size-3.5 shrink-0" aria-hidden />
           {note}
         </p>
       ))}
-      {instructions.unavailableReason ? (
+      {shown.unavailableReason ? (
         <Callout tone="warning" title="Routing is not configured yet">
-          {instructions.unavailableReason}
+          {shown.unavailableReason}
         </Callout>
       ) : null}
       {capability.requireRoutingApproval ? (
@@ -562,6 +595,8 @@ export function ProjectDomainPanel({
               </div>
               {detail.domainType === "custom" ? (
                 <Instructions
+                  projectId={projectId}
+                  domainId={detail.id}
                   instructions={detail.instructions}
                   capability={
                     capability ?? {

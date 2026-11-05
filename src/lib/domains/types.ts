@@ -53,6 +53,12 @@ export const DOMAIN_PUBLICATION_STATUSES = [
 ] as const;
 export type DomainPublicationStatus = (typeof DOMAIN_PUBLICATION_STATUSES)[number];
 
+/**
+ * `aws_cloudfront` is HISTORICAL metadata: the AWS routing implementation was
+ * removed, so this deployment never writes it again and cannot add or remove
+ * such a route. It stays in the vocabulary so an archived row is displayed
+ * truthfully instead of being re-labelled.
+ */
 export const DOMAIN_ROUTING_PROVIDERS = [
   "none",
   "aws_cloudfront",
@@ -121,7 +127,8 @@ export interface SubdomainAvailability {
 }
 
 export interface DomainDnsInstruction {
-  recordType: "TXT" | "CNAME" | "ALIAS" | "ANAME";
+  /** `A`/`AAAA` appear only when the hosting provider actually requires them. */
+  recordType: "TXT" | "CNAME" | "ALIAS" | "ANAME" | "A" | "AAAA";
   name: string;
   value: string;
   ttl: number;

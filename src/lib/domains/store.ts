@@ -438,7 +438,7 @@ export interface ClaimedDomainJob {
   userId: string;
   leaseToken: string;
   attemptCount: number;
-  /** The project's current AWS route generation (0 when none). */
+  /** The project's current routing generation (0 when none). */
   routingGeneration: number;
   domain: {
     id: string;
@@ -511,7 +511,7 @@ export async function claimDomainJob(
             versionId: str(publication.versionId) ?? "",
             entryPath: str(publication.entryPath) ?? "index.html",
             spaFallback: publication.spaFallback === true,
-            provider: str(publication.provider) ?? "aws",
+            provider: str(publication.provider) ?? "vercel",
             status: str(publication.status) ?? "queued",
             mavlyHostname: str(publication.mavlyHostname),
             routingGeneration: num(publication.routingGeneration),

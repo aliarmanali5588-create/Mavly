@@ -186,13 +186,13 @@ announcement banner: it extends the existing `admin_settings` registry with the
 plain-text `announcements.message`, adds an atomic admin-only enabled/message write
 RPC with audit logging, and adds the anonymous read-only banner RPC. It creates no
 new announcement table and fails closed on invalid or empty enabled messages.
-Apply `56_aws_frontend_fencing_and_status.sql` after 55 and after
-`51_aws_frontend_deployment.sql` before enabling AWS frontend publication: it adds
-the lease/generation/expected-version route-restore CAS, owner-scoped AWS route
-verification, protected AWS deployment mutation grants, the corrected enqueue
-transition, and schema marker 56. Migration 51 itself requires migrations 13, 14,
-15, 32 and 49; migration 56 does not depend on migration 20 and must not be
-rewritten if 51 has already been applied.
+**Historical: migrations 51/56/61 are applied and are NOT setup instructions.** They
+installed the AWS customer frontend hosting backend, which was removed (Phase 18). Their
+functions and triggers stay installed but are never called; do not re-enable AWS
+publishing and do not recreate its configuration. Apply
+`65_retire_aws_frontend_hosting.sql` after 64 to record the retirement and settle AWS
+publication attempts that can never finish; it deletes no row and changes no `provider`.
+Migrations 51, 56 and 61 must not be edited or re-applied.
 The worker's fenced completion is the authoritative verified-state write; owner status
 reads may re-probe a pending route but cannot mark it verified through a browser-callable RPC.
 Project-secret encryption also
@@ -316,10 +316,19 @@ install/Vite dev server/readiness probe/QA build, or the migrations against a da
   request reports the exact capability. No build row, log or artifact is fabricated. See
   `docs/architecture/phase-9-android.md`, `docs/runbooks/android.md` and
   `infra/android-build/README.md`.
-- **Customer Vercel publishing is retired** and is not a builder backend. The workspace
-  does not expose a publish action, and deployment routes fail closed instead of calling
-  Vercel or reporting success. Historical deployment rows and migrations are preserved;
-  no production database mutation or external takedown is performed by this removal.
+- **Vercel is the ONLY customer-generated frontend hosting platform (Phase 16/18).** A
+  new publication creates or reuses one deterministic Vercel project, attaches and
+  verifies `<project-id>.mavly.xyz` independently of the deployment state, uploads the
+  validated static bytes and creates a production deployment. It requires
+  `MAVLY_VERCEL_DEPLOYMENTS_ENABLED`, server-only `VERCEL_API_TOKEN` and migration
+  `63_vercel_customer_frontend_hosting.sql`. **AWS customer frontend hosting was removed
+  (Phase 18):** the S3 publisher, CloudFront KeyValueStore routing, publication worker,
+  eligibility code, AWS SDK dependencies and every AWS frontend hosting environment
+  variable are gone. A `provider = 'aws'` row is archived history: publish and unpublish
+  refuse it with `503 HOSTING_PROVIDER_RETIRED`, its status is returned exactly as
+  recorded, and nothing switches it to Vercel silently. Mavly-managed customer hosting
+  still requires operator confirmation of Vercel's "Vercel for Platforms" eligibility
+  before production activation.
 - **Shared tenant hosting is implemented but off by default** (`MAVLY_HOSTING_MODE=shared`
   plus an explicit `MAVLY_SHARED_HOSTING_PROJECTS` cohort). A shared publish stores an
   immutable version in `project_published_versions` / `project_published_files`, then
@@ -332,27 +341,34 @@ install/Vite dev server/readiness probe/QA build, or the migrations against a da
   runtime re-checks the configured cohort after resolution. Public access is limited to two
   `SECURITY DEFINER` RPCs; `project_files` is never served publicly, drafts never leak, and
   unpublish deactivates the mapping without deleting history. A publish on a database
-  missing migration 14/15 fails closed with `503 BACKEND_NOT_CONFIGURED` **before writing
-  any attempt state**. The legacy per-project Vercel path remains the default and its rows   keep their Vercel takedown behaviour. Wildcard DNS/TLS and Vercel plan eligibility are
+  missing migration 14/15 fails closed with `503 BACKEND_NOT_CONFIGURED` **before writing   any attempt state**. The per-project Vercel path is the customer hosting path and its
+   rows keep their Vercel takedown behaviour. Wildcard DNS/TLS and Vercel plan eligibility are
    still unverified operator prerequisites; see `MAVLY_SHARED_HOSTING.md`.
-- **AWS customer frontend hosting is implemented but OFF BY DEFAULT (Phase 15).** It
-   publishes an immutable static version to a private S3 bucket and routes
-   `<project-id>.mavly.xyz` through a CloudFront KeyValueStore on the existing EC2
-   generation worker and its existing durable publication queue. **Eligibility is
-   database-driven (migration 61), not an allowlist:** ownership, an unrestricted
-   account, a website with completed generated source, the canonical billing plan's
-   project ceiling, the published-site count and platform capacity are evaluated by
-   `public.aws_hosting_eligibility` on the server, and the worker re-checks with
-   `aws_hosting_worker_authorization`. `MAVLY_AWS_FRONTEND_HOSTING_PROJECTS` is now
-   only an optional emergency restriction; empty means every eligible project, and a
-   wildcard is refused. Publishing does not consume generation credits. Platform
-   capacity lives in `public.hosting_platform_settings` (service-role only), never in
-   a customer value or environment variable. Apply
-   `61_aws_hosting_eligibility.sql` after 57 before enabling automatic customer
-   onboarding. Existing Vercel/shared rows are never silently switched; customer-owned
-   custom domains remain out of scope. See
-   `docs/architecture/phase-15-aws-frontend-hosting.md` and
-   `docs/runbooks/aws-frontend-setup.md`.
+- **Domain publishing runs on the Vercel provider (Phase 17).** A publish records the
+  exact bytes it shipped as an immutable `project_published_versions` row and activates
+  it through migration 64's owner-checked `activate_vercel_publication`, which is what
+  lets migration 62's domain registry claim a job for a Vercel project at all. DNS
+  records for a custom domain are never hardcoded: `GET …/domains/{id}/dns` projects the
+  records Vercel actually returned for that hostname and never changes domain state. A
+  deployment `READY`, a Vercel-verified hostname and a live HTTPS certificate stay three
+  separate states. Migration 64 also derives `project_domains.routing_provider` from the
+  deployment instead of stamping `aws_cloudfront`. Nothing here is activated: Vercel
+  commercial eligibility is still unconfirmed, no live attach/DNS/certificate flow has
+  been exercised, and no automated check was run.
+- **AWS customer frontend hosting is REMOVED (Phase 15, superseded by Phase 16 and
+  deleted in Phase 18).** `src/lib/aws/`, the AWS domain-routing provider, the AWS
+  publication tick in the generation worker, `@aws-sdk/client-s3`,
+  `@aws-sdk/client-cloudfront-keyvaluestore`, the staging infrastructure template and
+  every AWS frontend hosting environment variable are gone. Do not recreate them, do not
+  reconnect AWS hosting and do not add another hosted builder backend. Existing AWS
+  deployment rows, published versions and their recorded `aws_cloudfront` routing
+  metadata are preserved as historical records and are never rewritten. Migrations 51,
+  56 and 61 stay applied with their functions intact but uncalled; migration
+  `65_retire_aws_frontend_hosting.sql` records the retirement and settles AWS attempts
+  that can never finish. The **AWS EC2 generation worker**
+  (`workers/aws-generation-worker.ts`, `infra/aws-generation-worker/`,
+  `MAVLY_AWS_WORKER`) is unrelated to frontend hosting and remains operational. See the
+  historical note in `docs/architecture/phase-15-aws-frontend-hosting.md`.
 - `src/lib/vcaas-server.ts` was deleted and must not be recreated. No Totalum host, key or
    forwarding remains.
 - Implemented paths authenticate, check `/api/vcaas` scope and project ownership, then use

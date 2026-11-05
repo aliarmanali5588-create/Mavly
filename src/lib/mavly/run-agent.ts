@@ -91,7 +91,6 @@ import {
   type RunFinishPatch,
   type RunRow,
 } from "./store";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
 import {
   dispatchModeForProject,
   generationWorkerConfig,
@@ -248,6 +247,13 @@ export interface RunAgentInput {
   budgetMs?: number;
   /** The durable worker context. Absent means the inline `after()` path. */
   worker?: WorkerRunContext;
+  /**
+   * Optional factory to create a Supabase client for account status checks.
+   * When absent and `guard.client` is null (inline path), the inline path must
+   * supply one via the `after()` call site. The worker path supplies its
+   * client through `WorkerRunContext.client`.
+   */
+  createStatusClient?: () => Promise<SupabaseClient>;
 }
 
 /**
@@ -986,7 +992,7 @@ async function assertRunOwned(input: RunAgentInput, guard: RunGuard): Promise<vo
     throw new RunSupersededError();
   }
 
-  const statusClient = guard.client ?? (await createSupabaseServerClient());
+  const statusClient = guard.client ?? (await input.createStatusClient?.());
   if (!statusClient) {
     throw new RunStoreError("Could not verify account status before continuing the run.");
   }

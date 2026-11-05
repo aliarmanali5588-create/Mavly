@@ -1,20 +1,49 @@
 {
-  "$schema": "./node_modules/wrangler/config-schema.json",
-  "name": "mavly-generation-worker",
-  "main": "workers/generation-scheduler.ts",
-  "compatibility_date": "2026-10-30",
-  "workers_dev": false,
-  "vars": {
-    "NODE_ENV": "production",
-    "MAVLY_CLOUDFLARE_WORKER": "true",
-    "MAVLY_CLOUDFLARE_WORKER_DISABLED": "true"
-  },
-  // Retained for rollback only. The scheduler no-ops while the disable flag is true.
-  "triggers": {
-    "crons": ["* * * * *"]
-  },
-  "observability": {
+  "name": "mavly-generation",
+  "main": "workers/cloudflare-generation-worker.ts",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers": [
+    {
+      "name": "GENERATION_WORKFLOW",
+      "binding": "GENERATION_WORKFLOW",
+      "class_name": "GenerationWorkflow",
+      "component": "src/lib/cloudflare/worker.ts"
+    }
+  ],
+  "cron": [
+    {
+      "binding": "GENERATION_WORKFLOW",
+      "schedule": "*/15 * * * *",
+      "max_messages": 25,
+      "trigger": "http",
+      "comment": "Every 15 minutes, claim up to 25 pending Cloudflare generation dispatches."
+    }
+  ],
+  "npm_compat": {
     "enabled": true,
-    "head_sampling_rate": 1
+    "plugins": []
+  },
+  "export": "vercel",
+  "functions": {
+    "generationTick": {
+      "handler": "workers/cloudflare-generation-worker.ts",
+      "name": "generationTick",
+      "runtime": "nodejs20"
+    },
+    "cronGenerationTick": {
+      "handler": "workers/cloudflare-generation-worker.ts",
+      "name": "cronGenerationTick",
+      "runtime": "nodejs20"
+    }
+  },
+  "env": {
+    "MAVLY_CLOUDFLARE_GENERATION_ENABLED": true,
+    "MAVLY_CLOUDFLARE_DISPATCH_SECRET": "",
+    "NEXT_PUBLIC_SUPABASE_URL": "",
+    "NEXT_PUBLIC_SUPABASE_ANON_KEY": "",
+    "SUPABASE_SERVICE_ROLE_KEY": "",
+    "OPENROUTER_API_KEY": "",
+    "E2B_API_KEY": "",
+    "E2B_VERIFICATION_TEMPLATE_ID": ""
   }
 }

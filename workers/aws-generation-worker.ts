@@ -41,22 +41,6 @@ function logTick(result: WorkerTickResult, durationMs: number): void {
       ...(result.runId ? { runId: result.runId } : {}),
       ...(result.reason ? { reason: result.reason } : {}),
       ...(result.errorClass ? { errorClass: result.errorClass } : {}),
-      ...(result.awsPublication
-        ? {
-            awsPublication: {
-              status: result.awsPublication.status,
-              ...(result.awsPublication.projectId
-                ? { projectId: result.awsPublication.projectId }
-                : {}),
-              ...(result.awsPublication.versionId
-                ? { versionId: result.awsPublication.versionId }
-                : {}),
-              ...(result.awsPublication.reason
-                ? { reason: result.awsPublication.reason }
-                : {}),
-            },
-          }
-        : {}),
       durationMs,
     }),
   );

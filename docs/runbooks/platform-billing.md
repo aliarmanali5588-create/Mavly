@@ -9,7 +9,9 @@ engine in migrations 31/32.
 
 ## Apply order
 
-Apply migrations through `56_aws_frontend_fencing_and_status.sql`, then apply:
+Apply migrations through `65_retire_aws_frontend_hosting.sql` (the historical AWS
+frontend-hosting migrations 51/56/61 stay applied but are no longer called;
+Vercel is the customer hosting provider), then apply:
 
 ```text
 supabase/migrations/57_platform_billing.sql

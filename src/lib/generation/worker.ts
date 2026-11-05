@@ -44,7 +44,6 @@ import {
   runAndroidBuildTick,
   type AndroidBuildTickSummary,
 } from "@/lib/android/build-worker";
-import type { AwsPublicationTickSummary } from "@/lib/aws/publication-worker";
 import type { DomainTickSummary } from "@/lib/domains/worker";
 import { androidBuildConfig } from "@/lib/android/build-config";
 import {
@@ -86,8 +85,6 @@ export interface WorkerTickResult {
   credits?: CreditReconciliation;
   /** Present only when this tick advanced the Android build queue instead. */
   androidBuild?: AndroidBuildTickSummary;
-  /** Present only when this tick advanced the AWS static-publication queue. */
-  awsPublication?: AwsPublicationTickSummary;
   /** Present only when this tick advanced the domain-provisioning queue. */
   domainProvisioning?: DomainTickSummary;
 }
@@ -205,43 +202,30 @@ export async function runGenerationWorkerOnce(
       androidBuild !== null &&
       androidBuild.status !== "empty" &&
       androidBuild.status !== "unavailable";
-    const awsPublication = verificationAdvanced || androidAdvanced
-      ? null
-      : await runAwsPublicationSafely(client);
-    const awsPublicationAdvanced =
-      awsPublication !== null &&
-      ["completed", "unpublished"].includes(awsPublication.status);
     /**
      * Domain provisioning is the last side queue. It runs only when nothing
-     * else advanced, so it can never delay a generation claim, verification,
-     * an Android build or a publication. A publication that just completed
-     * enqueues hostname routes; the following empty tick advances them.
+     * else advanced, so it can never delay a generation claim, verification or
+     * an Android build.
      */
     const domainProvisioning =
-      verificationAdvanced || androidAdvanced || awsPublicationAdvanced
+      verificationAdvanced || androidAdvanced
         ? null
         : await runDomainProvisioningSafely(client);
-    const awsPublicationNeedsBackoff =
-      awsPublication !== null &&
-      ["error", "retry", "failed", "unavailable"].includes(awsPublication.status);
-    const awsPublicationUnavailable = awsPublication?.status === "unavailable";
     const domainNeedsBackoff =
       domainProvisioning !== null &&
       ["error", "retry", "failed", "unavailable"].includes(domainProvisioning.status);
     return {
       status:
-        awsPublicationUnavailable || domainProvisioning?.status === "unavailable"
+        domainProvisioning?.status === "unavailable"
           ? "unavailable"
-          : awsPublicationNeedsBackoff || domainNeedsBackoff
+          : domainNeedsBackoff
             ? "error"
             : "empty",
-      ...(awsPublicationNeedsBackoff ? { reason: "aws_publication_tick_failed" } : {}),
       ...(domainNeedsBackoff ? { reason: "domain_provisioning_tick_failed" } : {}),
       recovered,
       ...(credits ? { credits } : {}),
       ...(verification ? { verification } : {}),
       ...(androidBuild ? { androidBuild } : {}),
-      ...(awsPublication ? { awsPublication } : {}),
       ...(domainProvisioning ? { domainProvisioning } : {}),
     };
   }
@@ -412,28 +396,6 @@ async function runAndroidBuildSafely(
     emitGenerationEvent("generation.worker_error", {
       workerId,
       reason: "android_build_tick_failed",
-    });
-    return { status: "error", reason: "unhandled" };
-  }
-}
-
-async function runAwsPublicationSafely(
-  client: SupabaseClient,
-): Promise<AwsPublicationTickSummary | null> {
-  try {
-    const { runAwsFrontendPublicationTick } = await import("@/lib/aws/publication-worker");
-    const tick = await runAwsFrontendPublicationTick({ client });
-    if (tick.status === "unavailable" && tick.reason === "disabled") return null;
-    if (tick.status === "empty") return null;
-    if (tick.status === "error") {
-      emitGenerationEvent("generation.worker_error", {
-        reason: "aws_publication_tick_failed",
-      });
-    }
-    return tick;
-  } catch {
-    emitGenerationEvent("generation.worker_error", {
-      reason: "aws_publication_tick_failed",
     });
     return { status: "error", reason: "unhandled" };
   }
