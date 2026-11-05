@@ -1012,7 +1012,7 @@ export async function publishProject(
     );
   }
 
-  const requestedName = vercelProjectName(config.config.projectPrefix, projectId, userId);
+  const requestedName = vercelProjectName(projectId, userId);
   const began = await beginDeployment(projectId, requestedName);
   if (isDeploymentStoreFailure(began)) {
     const migration = migrationFailure(began.code, began.error);

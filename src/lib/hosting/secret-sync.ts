@@ -133,7 +133,7 @@ async function removeProviderValue(
    * includes a hash of the caller's user id, so it cannot be chosen for another
    * tenant.
    */
-  const target = vercelProjectName(vercel.config.projectPrefix, projectId, userId);
+  const target = vercelProjectName(projectId, userId);
 
   const removed = await deleteVercelEnv(vercel.config, target, envId);
   if (isVercelFailure(removed)) {
@@ -277,11 +277,7 @@ export async function syncProjectSecretSaved(input: SecretSavedInput): Promise<v
      * includes a hash of the caller's user id, so another tenant's project is
      * not addressable.
      */
-    const targetProject = vercelProjectName(
-      vercel.config.projectPrefix,
-      input.projectId,
-      input.userId,
-    );
+    const targetProject = vercelProjectName(input.projectId, input.userId);
 
     const pushed = await upsertVercelEnv(vercel.config, targetProject, {
       key: input.secretName,

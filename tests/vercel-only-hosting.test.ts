@@ -127,7 +127,6 @@ test("Vercel configuration is still declared and never public", () => {
   const env = read(".env.example");
   assert.match(env, /^MAVLY_VERCEL_DEPLOYMENTS_ENABLED=/m);
   assert.match(env, /^VERCEL_API_TOKEN=/m);
-  assert.match(env, /^VERCEL_PROJECT_PREFIX=/m);
   assert.doesNotMatch(env, /NEXT_PUBLIC_VERCEL/);
 });
 

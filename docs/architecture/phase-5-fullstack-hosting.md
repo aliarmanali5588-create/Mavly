@@ -129,7 +129,6 @@ MAVLY_FULLSTACK_HOSTING_ENABLED=on
 MAVLY_FULLSTACK_HOSTING_PROJECTS=project-a,project-b   # explicit; '*' refused
 MAVLY_VERCEL_DEPLOYMENTS_ENABLED=on
 VERCEL_API_TOKEN=...
-VERCEL_PROJECT_PREFIX=mavly
 MAVLY_PROJECT_SECRETS_ENCRYPTION_KEY=...               # 32 bytes, base64
 ```
 
@@ -162,7 +161,7 @@ rows, RLS on `projects`, or existing static deployment rows.
   adopted automatically.
 - **Renamed/orphaned provider projects** are not adopted. Takedown refuses to
   claim success when the deterministic project cannot be found but the row could
-  describe a live site; an operator must intervene. `VERCEL_PROJECT_PREFIX` must
+  describe a live site; an operator must intervene. Vercel project names are
   stay stable for a project that already has a full-stack deployment.
 - **No UI for rollback, attempt history or database configuration.** They are
   authenticated project endpoints; the existing Deploy control drives deploy,

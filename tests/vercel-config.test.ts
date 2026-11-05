@@ -73,7 +73,6 @@ test("VERCEL_ORG_ID and VERCEL_TEAM_ID_SLUG are never used as the team id", () =
   );
   assert.equal(configured.ok, true);
   assert.equal(configured.config.teamId, null);
-  assert.equal(configured.config.projectPrefix, "mavly");
 
   const team = readVercelDeploymentConfig(
     env({ ...ENABLED, VERCEL_API_TOKEN: "secret-token", VERCEL_TEAM_ID: "team_123" }),

@@ -368,7 +368,7 @@ async function resolveHostingProject(
   projectId: string,
   userId: string,
 ): Promise<HostingProjectResolution> {
-  const name = vercelProjectName(config.projectPrefix, projectId, userId);
+  const name = vercelProjectName(projectId, userId);
   const project = await getVercelProject(config, name);
   if (isVercelFailure(project)) {
     return project.failure.status === 404
@@ -600,7 +600,7 @@ export async function publishFullstackProject(
    * The stored project ID is still preferred — it came from a provider
    * response — and is resolved below without trusting a name.
    */
-  const name = vercelProjectName(config.projectPrefix, projectId, userId);
+  const name = vercelProjectName(projectId, userId);
   const storedProjectId = existingState?.mapping.vercel_project_id ?? null;
   // Comparison only: this value decides whether the mapping needs a write. It
   // is never used to create, look up or target a provider project.

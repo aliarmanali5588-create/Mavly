@@ -160,7 +160,7 @@ test("the deploy target is the derived owner-bound name, not a row value", () =>
     "export async function publishFullstackProject(",
     "// ─────────────────────────────── status",
   );
-  assert.match(body, /const name = vercelProjectName\(config\.projectPrefix, projectId, userId\)/);
+  assert.match(body, /const name = vercelProjectName\(projectId, userId\)/);
   assert.match(body, /vercelProjectName: name/);
   assert.match(body, /const existingByName = await getVercelProject\(config, name\)/);
   assert.doesNotMatch(body, /storedName\s*\|\|\s*requestedName/);
@@ -201,10 +201,10 @@ test("a deployment id from another project is rejected on read and rollback", ()
 });
 
 test("the secret write-through targets the derived project name", () => {
-  assert.match(SECRET_SYNC, /vercelProjectName\(\s*vercel\.config\.projectPrefix,/);
+  assert.match(SECRET_SYNC, /vercelProjectName\(/);
   assert.match(
     SECRET_SYNC,
-    /const targetProject = vercelProjectName\(\s*vercel\.config\.projectPrefix,\s*input\.projectId,\s*input\.userId,?\s*\)/,
+    /const targetProject = vercelProjectName\(\s*input\.projectId,\s*input\.userId,?\s*\)/,
   );
   assert.doesNotMatch(
     SECRET_SYNC,

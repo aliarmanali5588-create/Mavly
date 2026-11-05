@@ -37,7 +37,6 @@ Server-only values. Never use a `NEXT_PUBLIC_` prefix and never commit real valu
 | `MAVLY_VERCEL_DEPLOYMENTS_ENABLED` | `1`/`true`/`yes`/`on` enables the Vercel path. |
 | `VERCEL_API_TOKEN` | Access token for the account/team that owns customer projects. |
 | `VERCEL_TEAM_ID` | Team that owns created projects; empty ⇒ the token's account. |
-| `VERCEL_PROJECT_PREFIX` | Prefix for deterministic project names (default `mavly`). |
 
 `VERCEL_TOKEN` / `VERCEL_TEAM_ID` / `VERCEL_PROJECT_ID` are also read by the **verification
 sandbox**. `VERCEL_API_TOKEN` is the publishing credential and is a separate value.

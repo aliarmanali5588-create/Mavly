@@ -14,7 +14,7 @@ App Router snapshot to Vercel's native runtime. Read
 - [ ] Migration `11` (project secrets) applied and
       `MAVLY_PROJECT_SECRETS_ENCRYPTION_KEY` (32 random bytes, base64) set.
 - [ ] Vercel publishing configured: `MAVLY_VERCEL_DEPLOYMENTS_ENABLED=on`,
-      `VERCEL_API_TOKEN`, `VERCEL_PROJECT_PREFIX` (default `mavly`).
+      `VERCEL_API_TOKEN`, Vercel project names are derived automatically from the authoritative Mavly project UUID (`mavly-<project-id>-<owner-hash>`) and are not operator-configurable.
 - [ ] Wildcard DNS/TLS for `<project-id>.mavly.xyz` already points at Vercel
       (the same prerequisite as static publishing).
 - [ ] You have a disposable Mavly account and a disposable generated project
@@ -54,10 +54,7 @@ missing item. A wildcard cohort (`*`) is refused. Do not overlap a project with
 `MAVLY_SHARED_HOSTING_PROJECTS`; the combination is refused because both claim
 `<project-id>.mavly.xyz`.
 
-> Keep `VERCEL_PROJECT_PREFIX` stable for a project that already has a full-stack
-> deployment. Mavly resolves provider projects by the deterministic,
-> owner-bound name; changing the prefix (or renaming the Vercel project outside
-> Mavly) makes the existing project unaddressable and requires operator recovery.
+> Vercel project names are deterministic (`mavly-<project-id>-<owner-hash>`) and not configurable. Mavly resolves provider projects by that owner-bound name and the stored Vercel project id; existing associations and deployed sites are preserved. Renaming a Vercel project outside Mavly can require operator recovery.
 
 ## 4. Smoke test (disposable tenant only)
 

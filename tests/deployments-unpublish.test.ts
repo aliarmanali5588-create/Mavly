@@ -29,7 +29,6 @@ import type { DeploymentRow } from "../src/lib/deployments/store";
 const CONFIG: VercelDeploymentConfig = {
   token: "tok_do_not_log",
   teamId: null,
-  projectPrefix: "mavly",
 };
 
 interface CapturedCall {

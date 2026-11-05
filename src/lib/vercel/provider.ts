@@ -730,25 +730,30 @@ export async function getVercelDeployment(
 }
 
 /**
- * A deterministic, tenant-isolated Vercel project name.
+ * A deterministic, tenant-isolated Vercel project name derived from the
+ * authoritative Mavly project UUID.
  *
- * The Mavly project id is globally unique, but it is also short and guessable.
- * The owner-bound hash keeps two different Mavly accounts from ever sharing a
- * Vercel project even if a project row were somehow recreated, and it keeps the
- * name stable across republishes. The result is always a valid Vercel name.
+ * The Mavly project id is globally unique (Supabase primary key). The
+ * owner-bound hash keeps two different Mavly accounts from ever sharing a
+ * Vercel project and keeps the name stable across republishes and retries.
+ * The result is always a valid Vercel name (`[a-z0-9-]`, max 100 chars).
+ *
+ * ⚠️ THE PREFIX IS NOT CONFIGURABLE. Removing the manual prefix prevents an
+ * operator from accidentally pointing existing deployments at a different host
+ * and keeps the name deterministic from the project identity alone.
  */
-export function vercelProjectName(prefix: string, projectId: string, userId: string): string {
+export function vercelProjectName(projectId: string, userId: string): string {
   const suffix = createHash("sha256")
     .update(`${userId}\u0000${projectId}`, "utf8")
     .digest("hex")
     .slice(0, 8);
 
-  const base = `${prefix}-${projectId}`
+  const base = `mavly-${projectId}`
     .toLowerCase()
     .replace(/[^a-z0-9-]/g, "-")
     .replace(/-+/g, "-")
     .replace(/^-+|-+$/g, "")
-    .slice(0, 90)
+    .slice(0, 91)
     .replace(/-+$/g, "");
 
   return `${base || "mavly-project"}-${suffix}`;
